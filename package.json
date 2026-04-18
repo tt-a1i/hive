@@ -1,0 +1,45 @@
+{
+  "name": "hive",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "bin": {
+    "hive": "dist/src/cli/hive.js",
+    "team": "dist/src/cli/team.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/hive.ts",
+    "build": "tsc -p tsconfig.json",
+    "check": "pnpm exec biome check .",
+    "format": "pnpm exec biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "commander": "^14.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "jsdom": "^26.1.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}
