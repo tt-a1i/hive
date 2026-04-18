@@ -194,38 +194,113 @@
         <span class="text-ter">3 agents · 1 active</span>
       </div>
 
-      <!-- ===== ORCHESTRATOR PTY (left of main) ===== -->
-      <div class="w-2/5 min-w-[420px] border-r border-d flex flex-col pt-8">
+      <!-- ===== ORCHESTRATOR PTY (left of main) =====
+           注意：这个区域在真实实现里 = xterm.js 直接渲染 PTY 输出。
+           下面的 HTML 是模拟 CC 在终端跑起来的真实视觉效果（标签、工具调用块、底部状态栏、bypass permissions 等）。
+      -->
+      <div class="w-2/5 min-w-[480px] border-r border-d flex flex-col pt-8">
         <div class="px-4 py-2 flex items-center gap-2 border-b border-d bg-s1 shrink-0">
           <span class="text-lg">👑</span>
           <div class="flex-1">
             <div class="font-medium">Queen</div>
-            <div class="text-ter text-[11px] mono">Orchestrator · claude (CC)</div>
+            <div class="text-ter text-[11px] mono">Orchestrator · claude</div>
           </div>
           <span class="role-badge bg-s3 text-sec">orch</span>
         </div>
 
-        <div class="flex-1 p-3 scroll-y">
-          <div class="pty-area p-4 mono text-[12px] text-pri">
-            <div class="pty-line"><span class="accent">user&gt;</span> 帮我给项目加一个用户登录功能</div>
-            <div class="pty-line text-sec mt-2">Queen: 好的，我先看一下项目结构……</div>
-            <div class="pty-line text-sec">  <span style="color:#A371F7">Read</span> package.json</div>
-            <div class="pty-line text-sec">  <span style="color:#A371F7">Read</span> src/index.ts</div>
-            <div class="pty-line text-sec mt-2">这是一个 Express + TS 项目，目前没有 auth。</div>
-            <div class="pty-line text-sec">我把任务拆成 4 步，更新到 tasks.md：</div>
-            <div class="pty-line text-sec">  <span style="color:#A371F7">Edit</span> tasks.md</div>
-            <div class="pty-line text-sec mt-2">现在派单给 Alice 写 schema，让 Bob 准备测试桩。</div>
-            <div class="pty-line mt-2"><span style="color:#3FB950">$</span> team send Alice "设计 users 表 schema 和 JWT payload 结构"</div>
-            <div class="pty-line text-ter">→ dispatched (msg_id: m_8a4f2)</div>
-            <div class="pty-line mt-1"><span style="color:#3FB950">$</span> team send Bob "为后续 /login 接口准备 vitest 桩"</div>
-            <div class="pty-line text-ter">→ dispatched (msg_id: m_8a4f3)</div>
-            <div class="pty-line text-sec mt-3">等他俩回报。</div>
-            <div class="pty-line text-pri mt-3"><span class="accent">user&gt;</span> <span class="bg-s3 inline-block w-2 h-4 align-middle"></span></div>
+        <!-- PTY shell (xterm.js renders here in real impl) -->
+        <div class="flex-1 p-2 bg-s1 flex flex-col min-h-0">
+          <!-- xterm tab strip (CC 顶部那行) -->
+          <div class="bg-[#0E1116] border border-d rounded-t flex items-center text-[11px] mono shrink-0">
+            <div class="px-3 py-1.5 bg-[#1a1f24] border-r border-d text-pri flex items-center gap-2 rounded-tl">
+              <span style="color:#D4A72C">✶</span>
+              <span>Claude Code</span>
+              <span class="text-ter ml-1">×</span>
+            </div>
+            <div class="flex-1"></div>
+            <div class="px-3 text-ter">⌘ ⊞ ◧</div>
           </div>
-        </div>
 
-        <div class="px-3 py-2 border-t border-d bg-s1 shrink-0">
-          <div class="bg-s2 rounded px-3 py-1.5 text-xs text-ter mono">&gt; 输入消息发给 Queen…</div>
+          <!-- xterm body -->
+          <div class="bg-[#0E1116] border-x border-d flex-1 scroll-y px-4 py-3 mono text-[12px]" style="line-height:1.5">
+
+            <!-- assistant turn -->
+            <div class="text-pri">我看下项目结构再决定怎么拆。</div>
+
+            <div class="mt-2 text-pri">
+              <span class="text-ter">●</span> <span style="color:#7EE787">Read</span><span class="text-ter">(package.json)</span>
+              <div class="text-ter ml-3 text-[11px]">  ⎿  Read 1820 chars</div>
+            </div>
+
+            <div class="mt-1 text-pri">
+              <span class="text-ter">●</span> <span style="color:#7EE787">Read</span><span class="text-ter">(src/index.ts)</span>
+              <div class="text-ter ml-3 text-[11px]">  ⎿  Read 47 lines</div>
+            </div>
+
+            <div class="mt-1 text-pri">
+              <span class="text-ter">●</span> <span style="color:#7EE787">Glob</span><span class="text-ter">(src/**/*.ts)</span>
+              <div class="text-ter ml-3 text-[11px]">  ⎿  Found 12 files</div>
+            </div>
+
+            <div class="mt-3 text-pri">Express + TS，没有 auth 模块。我把任务拆成 4 步，更新 tasks.md。</div>
+
+            <div class="mt-2 text-pri">
+              <span class="text-ter">●</span> <span style="color:#FF7B72">Edit</span><span class="text-ter">(tasks.md)</span>
+              <div class="text-ter ml-3 text-[11px]">  ⎿  Updated tasks.md with 4 additions</div>
+            </div>
+
+            <div class="mt-3 text-pri">现在派 Alice 写 schema，Bob 提前准备测试桩。</div>
+
+            <div class="mt-2 text-pri">
+              <span class="text-ter">●</span> <span style="color:#79C0FF">Bash</span>
+              <div class="ml-3 mt-0.5">
+                <div class="text-pri text-[11.5px]">team send Alice "设计 users 表 schema 和 JWT payload 结构"</div>
+                <div class="text-ter text-[11px] mt-0.5">  ⎿  ✓ dispatched (msg_id: m_8a4f2)</div>
+              </div>
+            </div>
+
+            <div class="mt-1 text-pri">
+              <span class="text-ter">●</span> <span style="color:#79C0FF">Bash</span>
+              <div class="ml-3 mt-0.5">
+                <div class="text-pri text-[11.5px]">team send Bob "为后续 /login 接口准备 vitest 桩"</div>
+                <div class="text-ter text-[11px] mt-0.5">  ⎿  ✓ dispatched (msg_id: m_8a4f3)</div>
+              </div>
+            </div>
+
+            <div class="mt-3 text-pri">已派单。等他们回报后再决定下一步。</div>
+
+            <div class="mt-3 text-ter italic text-[11.5px]">✶ Cogitated for 12s · 2 shells running</div>
+          </div>
+
+          <!-- xterm input prompt (CC 底部输入区) -->
+          <div class="bg-[#0E1116] border-x border-d px-4 py-2 mono text-[12px] shrink-0" style="line-height:1.4">
+            <div class="text-pri">
+              <span class="text-ter">&gt;</span>
+              <span class="bg-s4 inline-block w-2 h-3.5 align-middle ml-1"></span>
+            </div>
+          </div>
+
+          <!-- CC 状态栏第一行：模型 + 上下文 + 用量 -->
+          <div class="bg-[#0E1116] border-x border-d px-4 py-1 mono text-[10.5px] text-ter flex items-center gap-3 shrink-0">
+            <span><span class="text-sec">[Opus 1M]</span></span>
+            <span style="color:#D4A72C">▮▮▮</span>
+            <span>11%</span>
+            <span class="text-ter">|</span>
+            <span style="color:#79C0FF">▮▮▮▮▮▮▮▮</span>
+            <span>67% <span class="text-ter">(26m / 5h)</span></span>
+            <span class="text-ter">|</span>
+            <span>7d: 21% <span class="text-ter">(5d 19h)</span></span>
+          </div>
+
+          <!-- CC 状态栏第二行：bypass permissions / shell count -->
+          <div class="bg-[#0E1116] border border-d border-t-0 rounded-b px-4 py-1 mono text-[10.5px] flex items-center gap-2 shrink-0">
+            <span style="color:#F85149">▶▶</span>
+            <span style="color:#F85149">bypass permissions on</span>
+            <span class="text-ter">·</span>
+            <span class="text-sec">2 shells</span>
+            <div class="flex-1"></div>
+            <span class="text-ter">A</span>
+          </div>
         </div>
       </div>
 
@@ -244,7 +319,7 @@
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
             <!-- WORKER: Alice (working) -->
-            <div class="card p-4">
+            <div class="card p-4" onclick="openWorker('alice')">
               <div class="flex items-start gap-3">
                 <div class="text-3xl leading-none">🐝</div>
                 <div class="flex-1 min-w-0">
@@ -410,9 +485,122 @@
 
 </div>
 
+<!-- ===== WORKER DETAIL MODAL (点 worker 卡片弹出) ===== -->
+<div id="workerModal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background:rgba(0,0,0,0.7)" onclick="closeWorker(event)">
+  <div class="bg-s1 border border-d rounded-lg shadow-2xl flex flex-col" style="width:760px;height:78vh;" onclick="event.stopPropagation()">
+    <!-- modal header -->
+    <div class="px-4 py-3 border-b border-d flex items-center gap-3 shrink-0">
+      <span class="text-2xl">🐝</span>
+      <div>
+        <div class="font-medium">Alice</div>
+        <div class="text-ter text-[11px] mono">Coder · claude · 32s working</div>
+      </div>
+      <span class="role-badge" style="background:#1c3d5a;color:#4C9AFF">Coder</span>
+      <div class="flex-1"></div>
+      <button class="text-xs text-sec hover:text-pri px-2 py-1 rounded hover:bg-s3">stop</button>
+      <button class="text-xs text-sec hover:text-pri px-2 py-1 rounded hover:bg-s3">restart</button>
+      <button onclick="closeWorker()" class="text-sec hover:text-pri text-lg leading-none px-2">×</button>
+    </div>
+
+    <!-- xterm 区域（跟 orch 完全同款，只是内容不同） -->
+    <div class="flex-1 p-2 bg-s1 flex flex-col min-h-0">
+      <div class="bg-[#0E1116] border border-d rounded-t flex items-center text-[11px] mono shrink-0">
+        <div class="px-3 py-1.5 bg-[#1a1f24] border-r border-d text-pri flex items-center gap-2 rounded-tl">
+          <span style="color:#D4A72C">✶</span>
+          <span>Claude Code</span>
+          <span class="text-ter ml-1">×</span>
+        </div>
+        <div class="flex-1"></div>
+        <div class="px-3 text-ter">⌘ ⊞ ◧</div>
+      </div>
+
+      <div class="bg-[#0E1116] border-x border-d flex-1 scroll-y px-4 py-3 mono text-[12px]" style="line-height:1.5">
+        <!-- 系统注入的派单 prompt（worker 收到的第一条消息） -->
+        <div class="text-ter text-[11.5px] italic">
+          [Hive 系统消息：来自 @Queen 的派单]<br>
+          你的角色：后端工程师，专精 schema 设计…<br>
+          完成后必须执行 `team report &lt;结论&gt;` --success<br>
+          ─────<br>
+          任务：设计 users 表 schema 和 JWT payload 结构
+        </div>
+
+        <div class="mt-3 text-pri">好的，先看一下当前的数据层结构。</div>
+
+        <div class="mt-2 text-pri">
+          <span class="text-ter">●</span> <span style="color:#7EE787">Read</span><span class="text-ter">(src/db/schema.ts)</span>
+          <div class="text-ter ml-3 text-[11px]">  ⎿  Read 24 lines</div>
+        </div>
+
+        <div class="mt-1 text-pri">
+          <span class="text-ter">●</span> <span style="color:#7EE787">Glob</span><span class="text-ter">(drizzle/**/*.sql)</span>
+          <div class="text-ter ml-3 text-[11px]">  ⎿  Found 3 migration files</div>
+        </div>
+
+        <div class="mt-3 text-pri">用 Drizzle 风格定义 users 表 + jwt_payload 类型。</div>
+
+        <div class="mt-2 text-pri">
+          <span class="text-ter">●</span> <span style="color:#FF7B72">Write</span><span class="text-ter">(src/db/schema.ts)</span>
+          <div class="text-ter ml-3 text-[11px]">  ⎿  Updated with 18 additions</div>
+        </div>
+
+        <div class="mt-2 text-pri">
+          <span class="text-ter">●</span> <span style="color:#FF7B72">Write</span><span class="text-ter">(src/auth/types.ts)</span>
+          <div class="text-ter ml-3 text-[11px]">  ⎿  Created file (12 lines)</div>
+        </div>
+
+        <div class="mt-3 text-ter italic text-[11.5px]">✶ Cogitated for 8s · 1 shell running</div>
+      </div>
+
+      <div class="bg-[#0E1116] border-x border-d px-4 py-2 mono text-[12px] shrink-0" style="line-height:1.4">
+        <div class="text-pri">
+          <span class="text-ter">&gt;</span>
+          <span class="bg-s4 inline-block w-2 h-3.5 align-middle ml-1"></span>
+        </div>
+      </div>
+
+      <div class="bg-[#0E1116] border-x border-d px-4 py-1 mono text-[10.5px] text-ter flex items-center gap-3 shrink-0">
+        <span><span class="text-sec">[Sonnet 4.6]</span></span>
+        <span style="color:#79C0FF">▮▮</span>
+        <span>4%</span>
+        <span class="text-ter">|</span>
+        <span style="color:#79C0FF">▮▮▮▮</span>
+        <span>32% <span class="text-ter">(12m / 5h)</span></span>
+      </div>
+
+      <div class="bg-[#0E1116] border border-d border-t-0 rounded-b px-4 py-1 mono text-[10.5px] flex items-center gap-2 shrink-0">
+        <span style="color:#F85149">▶▶</span>
+        <span style="color:#F85149">bypass permissions on</span>
+        <span class="text-ter">·</span>
+        <span class="text-sec">1 shell</span>
+        <div class="flex-1"></div>
+        <span class="text-ter">A</span>
+      </div>
+    </div>
+
+    <div class="px-4 py-2 border-t border-d text-[11px] text-ter shrink-0 flex items-center gap-3">
+      <span>cwd: <span class="mono text-sec">~/projects/my-app</span></span>
+      <span>·</span>
+      <span>pid: <span class="mono text-sec">48721</span></span>
+      <span>·</span>
+      <span>queue: <span class="mono text-sec">0</span></span>
+    </div>
+  </div>
+</div>
+
 <script>
   function toggleDrawer() {
     document.getElementById('drawer').classList.toggle('open');
+  }
+  function openWorker(id) {
+    const m = document.getElementById('workerModal');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+  function closeWorker(e) {
+    if (e && e.currentTarget !== e.target && !e.currentTarget.contains(e.target)) return;
+    const m = document.getElementById('workerModal');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
   }
 </script>
 
