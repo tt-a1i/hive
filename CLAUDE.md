@@ -31,6 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 汇报回灌 | worker 调 `team report` → 系统作为系统消息注入 orch 的 stdin |
 | 路由信息 | 每个 PTY 注入 env: `HIVE_PORT + HIVE_PROJECT_ID + HIVE_AGENT_ID` |
 | `team` CLI 部署 | **PATH prepend** 注入到 PTY env（不全局安装），自带 `<hive-pkg>/bin/team`，零污染用户系统 |
+| Crash 恢复模型 | **不重放 PTY transcript**（数据噪、token 爆、易重复执行工具）；走"摘要换班"——重启后注入 messages + tasks.md + worker 状态拼装的前情摘要到新 agent stdin |
 | 兜底 | **不做静默检测、不做心跳**——worker 必须显式 report，否则视为未完成 |
 | 任务图 | 每个 workspace 的项目根 `tasks.md`（GFM task list），文件 watch 同步 UI |
 | 工作目录隔离 | **不做 worktree**，所有 agent 共享对应 workspace 根，冲突由 orch 拆分负责 |
