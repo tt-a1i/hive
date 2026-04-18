@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hive · Main Layout Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --surface-0: #1F2428;
+      --surface-1: #24292E;
+      --surface-2: #2D3339;
+      --surface-3: #353C43;
+      --surface-4: #3E464E;
+      --border:    #30363D;
+      --border-bright: #444C56;
+      --text-primary:   #E6EDF3;
+      --text-secondary: #8B949E;
+      --text-tertiary:  #6E7681;
+      --accent:       #0084FF;
+      --accent-hover: #339DFF;
+      --status-green:  #3FB950;
+      --status-orange: #D29922;
+      --status-red:    #F85149;
+      --status-blue:   #4C9AFF;
+      --status-purple: #A371F7;
+      --status-gold:   #D4A72C;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--surface-0);
+      color: var(--text-primary);
+      font-size: 13px;
+      overflow: hidden;
+    }
+    .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .bg-s0 { background: var(--surface-0); }
+    .bg-s1 { background: var(--surface-1); }
+    .bg-s2 { background: var(--surface-2); }
+    .bg-s3 { background: var(--surface-3); }
+    .bg-s4 { background: var(--surface-4); }
+    .text-pri { color: var(--text-primary); }
+    .text-sec { color: var(--text-secondary); }
+    .text-ter { color: var(--text-tertiary); }
+    .border-d  { border-color: var(--border); }
+    .border-b1 { border-color: var(--border-bright); }
+    .accent    { color: var(--accent); }
+    .bg-accent { background: var(--accent); }
+    .ring-accent { box-shadow: inset 0 0 0 1px var(--accent); }
+
+    .scroll-y { overflow-y: auto; }
+    .scroll-y::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll-y::-webkit-scrollbar-thumb { background: var(--surface-4); border-radius: 4px; }
+
+    .ws-row { transition: background 0.12s; cursor: pointer; }
+    .ws-row:hover { background: var(--surface-2); }
+    .ws-row.active {
+      background: var(--surface-2);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .dot {
+      display: inline-block;
+      width: 7px; height: 7px; border-radius: 50%;
+      vertical-align: middle;
+    }
+    .pulse-green { background: var(--status-green); animation: pulse 1.6s ease-in-out infinite; }
+    .pulse-orange { background: var(--status-orange); animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    /* Worker card */
+    .card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .card:hover {
+      border-color: var(--border-bright);
+      transform: translateY(-1px);
+    }
+
+    /* PTY mock */
+    .pty-area {
+      background: #0E1116;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .pty-line { line-height: 1.6; }
+    .role-badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    /* Drawer */
+    .drawer {
+      transform: translateX(100%);
+      transition: transform 0.25s ease-out;
+    }
+    .drawer.open { transform: translateX(0); }
+  </style>
+</head>
+<body>
+
+<div class="flex flex-col h-full">
+
+  <!-- ================= TOP BAR ================= -->
+  <header class="bg-s1 border-b border-d flex items-center px-4 h-11 shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="text-lg">🐝</span>
+      <span class="font-semibold">Hive</span>
+      <span class="text-ter text-xs">v0.1 mockup</span>
+    </div>
+    <div class="flex-1"></div>
+    <div class="flex items-center gap-1">
+      <button onclick="toggleDrawer()" class="px-3 py-1 rounded hover:bg-s3 text-sec hover:text-pri text-xs flex items-center gap-1">
+        📋 Task Graph
+      </button>
+      <button class="px-3 py-1 rounded hover:bg-s3 text-sec hover:text-pri text-xs">⚙️ Settings</button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN ================= -->
+  <div class="flex-1 flex min-h-0">
+
+    <!-- ===== SIDEBAR: WORKSPACES ===== -->
+    <aside class="bg-s1 border-r border-d w-56 shrink-0 flex flex-col">
+      <div class="px-3 py-2 text-ter text-[10px] uppercase tracking-wider font-medium">Workspaces</div>
+
+      <div class="flex-1 scroll-y">
+        <!-- Active workspace -->
+        <div class="ws-row active px-3 py-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-pri">my-app</span>
+            <span class="dot pulse-green" title="1 worker working"></span>
+          </div>
+          <div class="text-ter text-[11px] mt-0.5 truncate">~/projects/my-app</div>
+          <div class="text-ter text-[10px] mt-0.5 mono">main</div>
+        </div>
+
+        <!-- Other workspaces -->
+        <div class="ws-row px-3 py-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-pri">web-revamp</span>
+            <span class="dot pulse-orange" title="awaiting input"></span>
+          </div>
+          <div class="text-ter text-[11px] mt-0.5 truncate">~/code/web-revamp</div>
+          <div class="text-ter text-[10px] mt-0.5 mono">feat/login</div>
+        </div>
+
+        <div class="ws-row px-3 py-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-pri">internal-tools</span>
+          </div>
+          <div class="text-ter text-[11px] mt-0.5 truncate">~/work/tools</div>
+          <div class="text-ter text-[10px] mt-0.5 mono">main</div>
+        </div>
+
+        <div class="ws-row px-3 py-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-sec">experiments</span>
+            <span class="text-ter text-[10px]">empty</span>
+          </div>
+          <div class="text-ter text-[11px] mt-0.5 truncate">~/play/test</div>
+        </div>
+      </div>
+
+      <button class="m-2 px-3 py-2 rounded text-xs text-sec hover:text-pri hover:bg-s3 border border-dashed border-d flex items-center justify-center gap-1.5">
+        <span class="text-base leading-none">+</span> Add Workspace
+      </button>
+    </aside>
+
+    <!-- ===== ACTIVE WORKSPACE VIEW ===== -->
+    <section class="flex-1 flex min-h-0 relative">
+
+      <!-- Sub-header: workspace context -->
+      <div class="absolute top-0 left-0 right-0 h-8 bg-s0 border-b border-d flex items-center px-4 text-xs text-sec z-10">
+        <span class="font-medium text-pri">my-app</span>
+        <span class="mx-2 text-ter">·</span>
+        <span class="mono text-ter">~/projects/my-app</span>
+        <span class="mx-2 text-ter">·</span>
+        <span class="mono text-ter">main</span>
+        <div class="flex-1"></div>
+        <span class="text-ter">3 agents · 1 active</span>
+      </div>
+
+      <!-- ===== ORCHESTRATOR PTY (left of main) ===== -->
+      <div class="w-2/5 min-w-[420px] border-r border-d flex flex-col pt-8">
+        <div class="px-4 py-2 flex items-center gap-2 border-b border-d bg-s1 shrink-0">
+          <span class="text-lg">👑</span>
+          <div class="flex-1">
+            <div class="font-medium">Queen</div>
+            <div class="text-ter text-[11px] mono">Orchestrator · claude (CC)</div>
+          </div>
+          <span class="role-badge bg-s3 text-sec">orch</span>
+        </div>
+
+        <div class="flex-1 p-3 scroll-y">
+          <div class="pty-area p-4 mono text-[12px] text-pri">
+            <div class="pty-line"><span class="accent">user&gt;</span> 帮我给项目加一个用户登录功能</div>
+            <div class="pty-line text-sec mt-2">Queen: 好的，我先看一下项目结构……</div>
+            <div class="pty-line text-sec">  <span style="color:#A371F7">Read</span> package.json</div>
+            <div class="pty-line text-sec">  <span style="color:#A371F7">Read</span> src/index.ts</div>
+            <div class="pty-line text-sec mt-2">这是一个 Express + TS 项目，目前没有 auth。</div>
+            <div class="pty-line text-sec">我把任务拆成 4 步，更新到 tasks.md：</div>
+            <div class="pty-line text-sec">  <span style="color:#A371F7">Edit</span> tasks.md</div>
+            <div class="pty-line text-sec mt-2">现在派单给 Alice 写 schema，让 Bob 准备测试桩。</div>
+            <div class="pty-line mt-2"><span style="color:#3FB950">$</span> team send Alice "设计 users 表 schema 和 JWT payload 结构"</div>
+            <div class="pty-line text-ter">→ dispatched (msg_id: m_8a4f2)</div>
+            <div class="pty-line mt-1"><span style="color:#3FB950">$</span> team send Bob "为后续 /login 接口准备 vitest 桩"</div>
+            <div class="pty-line text-ter">→ dispatched (msg_id: m_8a4f3)</div>
+            <div class="pty-line text-sec mt-3">等他俩回报。</div>
+            <div class="pty-line text-pri mt-3"><span class="accent">user&gt;</span> <span class="bg-s3 inline-block w-2 h-4 align-middle"></span></div>
+          </div>
+        </div>
+
+        <div class="px-3 py-2 border-t border-d bg-s1 shrink-0">
+          <div class="bg-s2 rounded px-3 py-1.5 text-xs text-ter mono">&gt; 输入消息发给 Queen…</div>
+        </div>
+      </div>
+
+      <!-- ===== WORKER GRID (right of main) ===== -->
+      <div class="flex-1 flex flex-col pt-8 min-w-0">
+        <div class="px-4 py-2 flex items-center gap-3 border-b border-d bg-s1 shrink-0">
+          <span class="font-medium">Workers</span>
+          <span class="text-ter text-xs">3</span>
+          <div class="flex-1"></div>
+          <button class="px-2.5 py-1 rounded text-xs bg-accent text-white hover:opacity-90 flex items-center gap-1">
+            <span class="text-sm leading-none">+</span> Add Worker
+          </button>
+        </div>
+
+        <div class="flex-1 p-4 scroll-y">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+            <!-- WORKER: Alice (working) -->
+            <div class="card p-4">
+              <div class="flex items-start gap-3">
+                <div class="text-3xl leading-none">🐝</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-pri">Alice</span>
+                    <span class="role-badge" style="background:#1c3d5a;color:#4C9AFF">Coder</span>
+                  </div>
+                  <div class="text-ter text-[11px] mono mt-0.5">claude</div>
+                </div>
+                <span class="dot pulse-green" title="working"></span>
+              </div>
+              <div class="mt-3 flex items-center gap-2 text-xs">
+                <span style="color:var(--status-green)">●</span>
+                <span class="text-pri">working</span>
+                <span class="text-ter">· 32s</span>
+              </div>
+              <div class="mt-2 text-xs text-sec line-clamp-2">
+                「设计 users 表 schema 和 JWT payload 结构」
+              </div>
+              <div class="mt-3 flex items-center justify-between text-[10px] text-ter">
+                <span>队列: 0</span>
+                <span>last: 2s ago</span>
+              </div>
+            </div>
+
+            <!-- WORKER: Bob (idle) -->
+            <div class="card p-4">
+              <div class="flex items-start gap-3">
+                <div class="text-3xl leading-none">🐛</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-pri">Bob</span>
+                    <span class="role-badge" style="background:#3a2c1c;color:#D29922">Tester</span>
+                  </div>
+                  <div class="text-ter text-[11px] mono mt-0.5">codex</div>
+                </div>
+                <span class="dot" style="background:var(--text-tertiary)" title="idle"></span>
+              </div>
+              <div class="mt-3 flex items-center gap-2 text-xs">
+                <span class="text-ter">○</span>
+                <span class="text-sec">idle</span>
+              </div>
+              <div class="mt-2 text-xs text-ter italic">尚未派单</div>
+              <div class="mt-3 flex items-center justify-between text-[10px] text-ter">
+                <span>队列: 0</span>
+                <span>—</span>
+              </div>
+            </div>
+
+            <!-- WORKER: Eve (done last task) -->
+            <div class="card p-4">
+              <div class="flex items-start gap-3">
+                <div class="text-3xl leading-none">🦉</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-medium text-pri">Eve</span>
+                    <span class="role-badge" style="background:#3a1f3a;color:#A371F7">Reviewer</span>
+                  </div>
+                  <div class="text-ter text-[11px] mono mt-0.5">claude</div>
+                </div>
+                <span class="dot" style="background:var(--status-blue)" title="done"></span>
+              </div>
+              <div class="mt-3 flex items-center gap-2 text-xs">
+                <span style="color:var(--status-blue)">✓</span>
+                <span class="text-pri">done</span>
+                <span class="text-ter">· 1m ago</span>
+              </div>
+              <div class="mt-2 text-xs text-sec line-clamp-2">
+                ✓ 「review schema 草稿」 — approved with 2 comments
+              </div>
+              <div class="mt-3 flex items-center justify-between text-[10px] text-ter">
+                <span>队列: 0</span>
+                <span>artifact: notes.md</span>
+              </div>
+            </div>
+
+            <!-- ADD CARD -->
+            <div class="card p-4 border-dashed flex flex-col items-center justify-center text-ter hover:text-sec min-h-[140px]">
+              <div class="text-2xl mb-1">+</div>
+              <div class="text-xs">Add Worker</div>
+              <div class="text-[10px] mt-1 text-ter">Coder · Reviewer · Tester · Architect · Custom</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TASK GRAPH DRAWER (right slide-in) ===== -->
+      <aside id="drawer" class="drawer absolute top-0 right-0 bottom-0 w-[400px] bg-s1 border-l border-d shadow-2xl z-20 flex flex-col">
+        <div class="px-4 py-3 border-b border-d flex items-center gap-2 shrink-0">
+          <span class="text-lg">📋</span>
+          <span class="font-medium">tasks.md</span>
+          <span class="text-ter text-[11px] mono">~/projects/my-app/tasks.md</span>
+          <div class="flex-1"></div>
+          <button class="text-xs text-sec hover:text-pri px-2 py-1 rounded hover:bg-s3">edit raw</button>
+          <button onclick="toggleDrawer()" class="text-sec hover:text-pri text-lg leading-none px-2">×</button>
+        </div>
+        <div class="flex-1 scroll-y p-4 text-sm">
+          <ul class="space-y-2">
+            <li class="flex items-start gap-2">
+              <input type="checkbox" checked class="mt-1 accent-blue-500"/>
+              <div class="flex-1">
+                <span class="text-ter line-through">设计 users 表 schema</span>
+                <span class="text-[11px] text-ter ml-2">@Alice</span>
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <input type="checkbox" class="mt-1 accent-blue-500"/>
+              <div class="flex-1">
+                <span class="text-pri">实现登录接口</span>
+                <span class="text-[11px] text-ter ml-2">@Alice</span>
+                <ul class="ml-4 mt-1 space-y-1.5">
+                  <li class="flex items-start gap-2">
+                    <input type="checkbox" class="mt-1 accent-blue-500"/>
+                    <span class="text-sec text-[12px]">POST /login</span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <input type="checkbox" class="mt-1 accent-blue-500"/>
+                    <span class="text-sec text-[12px]">POST /logout</span>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <input type="checkbox" class="mt-1 accent-blue-500"/>
+                    <span class="text-sec text-[12px]">JWT 中间件</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <input type="checkbox" class="mt-1 accent-blue-500"/>
+              <div class="flex-1">
+                <span class="text-pri">为 /login 写单元测试</span>
+                <span class="text-[11px] text-ter ml-2">@Bob</span>
+              </div>
+            </li>
+            <li class="flex items-start gap-2">
+              <input type="checkbox" class="mt-1 accent-blue-500"/>
+              <div class="flex-1">
+                <span class="text-pri">code review</span>
+                <span class="text-[11px] text-ter ml-2">@Eve</span>
+              </div>
+            </li>
+          </ul>
+          <div class="mt-6 text-ter text-[11px]">
+            提示：orch 用 Edit 工具直接改这份 markdown；用户也能在这里点击勾选/编辑。
+          </div>
+        </div>
+      </aside>
+
+    </section>
+
+  </div>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="bg-s1 border-t border-d h-6 flex items-center px-3 text-[10px] text-ter mono shrink-0 gap-3">
+    <span>Hive runtime · 127.0.0.1:5731</span>
+    <span>·</span>
+    <span>4 workspaces</span>
+    <span>·</span>
+    <span>3 agents alive</span>
+    <div class="flex-1"></div>
+    <span>● connected</span>
+  </footer>
+
+</div>
+
+<script>
+  function toggleDrawer() {
+    document.getElementById('drawer').classList.toggle('open');
+  }
+</script>
+
+</body>
+</html>
