@@ -32,6 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 路由信息 | 每个 PTY 注入 env: `HIVE_PORT + HIVE_PROJECT_ID + HIVE_AGENT_ID` |
 | `team` CLI 部署 | **PATH prepend** 注入到 PTY env（不全局安装），自带 `<hive-pkg>/bin/team`，零污染用户系统 |
 | Crash 恢复模型 | 4 种场景明确（§3.5.1：单崩 / 主动停 / 正常 exit / runtime 重启）。两层引擎：**Layer A** 用 CLI 原生 session resume（CC `--resume <id>`），完整恢复对话；**Layer B** fallback 摘要换班（拼装 messages + tasks.md + worker 状态注入 stdin）。Hive runtime 重启**不自动启动** agent，提供 [Restart] / [Restart All] 按钮 |
+| Agent 状态机 | 仅 `working` / `idle` / `stopped` 三态（§3.6）。状态完全由协议事件驱动：send → working、report → idle（pending_count 归零时）、PTY exit → stopped。**不做超时/卡死检测，不增加心跳**；卡死的 agent 持续显示 working，由用户手动判断 |
 | 兜底 | **不做静默检测、不做心跳**——worker 必须显式 report，否则视为未完成 |
 | 任务图 | 每个 workspace 的项目根 `tasks.md`（GFM task list），文件 watch 同步 UI |
 | 工作目录隔离 | **不做 worktree**，所有 agent 共享对应 workspace 根，冲突由 orch 拆分负责 |
