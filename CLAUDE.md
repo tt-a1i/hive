@@ -21,14 +21,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 主题 | 决策 |
 |---|---|
-| 形态 | Web app（浏览器 + 本地 Node runtime，绑定 127.0.0.1） |
-| Orch 与 Worker 关系 | 都是 PTY 里的 CLI 子进程，差异只在角色 prompt + 工具白名单 |
+| 形态 | Web app（浏览器 + 本地 Node runtime，绑定 127.0.0.1，**常驻服务，不绑定项目目录**） |
+| Workspace 模型 | sidebar 多 workspace（cmux 风格），主区一次只看一个，所有 PTY 后台并行 |
+| 添加 workspace | OS 系统目录选择器 + 手动粘贴路径，持久化到 SQLite |
+| Orch 与 Worker 关系 | 都是 PTY 里的 CLI 子进程，每个 agent 隶属于一个 workspace；差异只在角色 prompt + 工具白名单 |
+| 跨 workspace | 完全隔离：不能跨 workspace 派单/查询/通信 |
 | 通信协议 | `team` CLI 子命令（`team send` / `team report` / `team list`），异步无阻塞 |
-| 派单传输 | 系统拦截 `team send` → 把消息以约定 prompt 模板注入目标 worker 的 stdin |
-| 汇报回灌 | worker 调 `team report` → 系统把汇报作为系统消息注入 orch 的 stdin |
+| 派单传输 | 系统拦截 `team send` → 按约定 prompt 模板注入目标 worker 的 stdin |
+| 汇报回灌 | worker 调 `team report` → 系统作为系统消息注入 orch 的 stdin |
+| 路由信息 | 每个 PTY 注入 env: `HIVE_PORT + HIVE_PROJECT_ID + HIVE_AGENT_ID` |
 | 兜底 | **不做静默检测、不做心跳**——worker 必须显式 report，否则视为未完成 |
-| 任务图 | 项目根目录的 `tasks.md`（GFM task list），文件 watch 同步 UI；orch 用普通 Read/Edit 工具操作 |
-| 工作目录隔离 | **不做 worktree**，所有 agent 共享项目根，冲突由 orch 拆分负责 |
+| 任务图 | 每个 workspace 的项目根 `tasks.md`（GFM task list），文件 watch 同步 UI |
+| 工作目录隔离 | **不做 worktree**，所有 agent 共享对应 workspace 根，冲突由 orch 拆分负责 |
 | 默认权限 | YOLO 模式（自动跳过 CLI agent 的权限确认） |
 
 ## 参考项目
