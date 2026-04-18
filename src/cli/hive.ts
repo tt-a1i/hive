@@ -1,0 +1,64 @@
+import { once } from 'node:events'
+
+import { createApp } from '../server/app.js'
+import { createRuntimeStore } from '../server/runtime-store.js'
+
+interface RunHiveCommandResult {
+  port: number
+  close: () => Promise<void>
+}
+
+const parsePort = (argv: string[]) => {
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== '--port') {
+      continue
+    }
+
+    const value = argv[index + 1]
+    if (!value) {
+      throw new Error('Usage: hive [--port <port>]')
+    }
+
+    const port = Number.parseInt(value, 10)
+    if (Number.isNaN(port) || port < 0) {
+      throw new Error(`Invalid port: ${value}`)
+    }
+
+    return port
+  }
+
+  return 3000
+}
+
+export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResult> => {
+  const port = parsePort(argv)
+  const app = createApp({ store: createRuntimeStore() })
+
+  app.server.listen(port, '127.0.0.1')
+  await once(app.server, 'listening')
+
+  const address = app.server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Server did not bind to an inet port')
+  }
+
+  console.log(`Hive running at http://127.0.0.1:${address.port}`)
+
+  return {
+    port: address.port,
+    close: async () => {
+      await new Promise<void>((resolve, reject) => {
+        app.server.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+      })
+    },
+  }
+}
+
+export type { RunHiveCommandResult }
