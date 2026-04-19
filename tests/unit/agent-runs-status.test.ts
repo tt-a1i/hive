@@ -4,6 +4,12 @@ import { describe, expect, test } from 'vitest'
 
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 
+const outputBus = {
+  clear: () => {},
+  publish: () => {},
+  subscribe: () => () => {},
+}
+
 const sessionStore = {
   clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
@@ -42,6 +48,7 @@ describe('agent run status model (unit)', () => {
             status: 'starting',
           }
         },
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},

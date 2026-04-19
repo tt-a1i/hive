@@ -11,11 +11,19 @@ import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
 const tempDirs: string[] = []
+const outputBus = {
+  clear: () => {},
+  publish: () => {},
+  subscribe: () => () => {},
+}
 
 const createFakeAgentManager = (): AgentManager => {
   const runs = new Map<string, AgentRunSnapshot>()
 
   return {
+    getOutputBus() {
+      return outputBus
+    },
     getRun(runId) {
       const run = runs.get(runId)
       if (!run) {

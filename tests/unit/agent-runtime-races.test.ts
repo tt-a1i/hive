@@ -4,6 +4,12 @@ import { describe, expect, test, vi } from 'vitest'
 
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 
+const outputBus = {
+  clear: () => {},
+  publish: () => {},
+  subscribe: () => () => {},
+}
+
 const sessionStore = {
   clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
@@ -35,6 +41,7 @@ describe('agent runtime races (unit)', () => {
             status: 'starting',
           }
         },
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
@@ -82,6 +89,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'exited',
         }),
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: stopSpy,
         writeInput: () => {},
@@ -124,6 +132,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'starting',
         }),
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: () => {},
         writeInput: (_runId, text) => {
@@ -177,6 +186,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'starting',
         }),
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},

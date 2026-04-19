@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { type IPty, spawn } from 'node-pty'
+import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
 type RunStatus = 'starting' | 'running' | 'exited' | 'error'
 
@@ -32,6 +33,7 @@ interface AgentRunRecord extends AgentRunSnapshot {
 }
 
 interface AgentManager {
+  getOutputBus: () => PtyOutputBus
   startAgent: (input: StartAgentInput) => Promise<AgentRunSnapshot>
   writeInput: (runId: string, text: string) => void
   getRun: (runId: string) => AgentRunSnapshot
@@ -42,15 +44,16 @@ interface AgentManager {
 const createRunId = () => randomUUID()
 const MAX_RUN_OUTPUT_LENGTH = 1_000_000
 
-export const createAgentManager = (): AgentManager => {
+export const createAgentManager = ({
+  ptyOutputBus = createPtyOutputBus(),
+}: {
+  ptyOutputBus?: PtyOutputBus
+} = {}): AgentManager => {
   const runs = new Map<string, AgentRunRecord>()
 
   const getRunRecord = (runId: string) => {
     const run = runs.get(runId)
-    if (!run) {
-      throw new Error(`Run not found: ${runId}`)
-    }
-
+    if (!run) throw new Error(`Run not found: ${runId}`)
     return run
   }
 
@@ -67,13 +70,11 @@ export const createAgentManager = (): AgentManager => {
   })
 
   const finishRun = (run: AgentRunRecord, exitCode: number | null) => {
-    if ((run.status === 'exited' || run.status === 'error') && run.exitCode !== null) {
-      return
-    }
-
+    if ((run.status === 'exited' || run.status === 'error') && run.exitCode !== null) return
     run.status = exitCode === 0 ? 'exited' : 'error'
     run.exitCode = exitCode
     run.onExit?.({ runId: run.runId, exitCode })
+    ptyOutputBus.clear(run.runId)
   }
 
   const attachPty = (run: AgentRunRecord, pty: IPty) => {
@@ -98,27 +99,23 @@ export const createAgentManager = (): AgentManager => {
     }
 
     pty.onData((chunk) => {
-      if (run.status === 'starting') {
-        run.status = 'running'
-      }
+      if (run.status === 'starting') run.status = 'running'
       run.output += chunk
-      if (run.output.length > MAX_RUN_OUTPUT_LENGTH) {
+      if (run.output.length > MAX_RUN_OUTPUT_LENGTH)
         run.output = run.output.slice(-MAX_RUN_OUTPUT_LENGTH)
-      }
+      ptyOutputBus.publish(run.runId, chunk)
     })
 
-    pty.onExit((event) => {
-      finishRun(run, event.exitCode)
-    })
+    pty.onExit((event) => finishRun(run, event.exitCode))
   }
 
   return {
+    getOutputBus() {
+      return ptyOutputBus
+    },
     async startAgent(input) {
       const runId = createRunId()
-      const env = {
-        ...process.env,
-        ...input.env,
-      }
+      const env = { ...process.env, ...input.env }
 
       const run: AgentRunRecord = {
         runId,
@@ -137,9 +134,7 @@ export const createAgentManager = (): AgentManager => {
         },
       }
 
-      if (input.onExit) {
-        run.onExit = input.onExit
-      }
+      if (input.onExit) run.onExit = input.onExit
 
       runs.set(runId, run)
 
@@ -174,9 +169,7 @@ export const createAgentManager = (): AgentManager => {
 
     stopRun(runId) {
       const run = getRunRecord(runId)
-      if (run.status === 'exited' || run.status === 'error') {
-        return
-      }
+      if (run.status === 'exited' || run.status === 'error') return
       run.process.stop()
     },
   }

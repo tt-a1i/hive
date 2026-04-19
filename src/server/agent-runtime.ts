@@ -14,6 +14,7 @@ import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { type AgentTokenRegistry, createAgentTokenRegistry } from './agent-tokens.js'
 import { withClaudeResumeArgs } from './claude-session-support.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
+import type { PtyOutputBus } from './pty-output-bus.js'
 
 interface StartAgentOptions {
   hivePort: string
@@ -28,6 +29,7 @@ export interface AgentRuntime {
   ) => void
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
   getLiveRun: (runId: string) => LiveAgentRun
+  getPtyOutputBus: () => PtyOutputBus
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   peekAgentToken: (agentId: string) => string | undefined
   startAgent: (
@@ -110,6 +112,10 @@ export const createAgentRuntime = (
         throw new Error(`Live run not found: ${runId}`)
       }
       return syncRun(run)
+    },
+    getPtyOutputBus() {
+      if (!agentManager) throw new Error('Agent manager is required for PTY output subscriptions')
+      return agentManager.getOutputBus()
     },
     listAgentRuns(agentId) {
       return listRunsWithFallback(registry, agentRunStore.listAgentRuns(agentId), agentId)

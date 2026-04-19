@@ -114,4 +114,34 @@ describe('agent manager (unit)', () => {
     expect(snapshot.output).toContain('IN:hello from hive')
     expect(snapshot.status).toBe('exited')
   })
+
+  test('exposes an output bus that streams PTY chunks to subscribers', async () => {
+    const dir = join(tmpdir(), `hive-agent-${Date.now()}-bus`)
+    mkdirSync(dir, { recursive: true })
+    tempDirs.push(dir)
+
+    const scriptPath = join(dir, 'print-env.js')
+    writeFileSync(
+      scriptPath,
+      ['console.log(process.env.HIVE_PROJECT_ID)', 'setTimeout(() => process.exit(0), 10)'].join(
+        '\n'
+      )
+    )
+
+    const manager = createAgentManager()
+    const run = await manager.startAgent({
+      agentId: 'worker-3',
+      command: process.execPath,
+      args: [scriptPath],
+      cwd: dir,
+      env: { HIVE_PROJECT_ID: 'workspace-bus' },
+    })
+    const received: string[] = []
+    manager.getOutputBus().subscribe(run.runId, (chunk) => received.push(chunk))
+
+    await waitFor(() => {
+      expect(manager.getRun(run.runId).status).toBe('exited')
+      expect(received.join('')).toContain('workspace-bus')
+    })
+  })
 })

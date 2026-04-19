@@ -10,6 +10,12 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createAgentRunStore } from '../../src/server/agent-run-store.js'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 
+const outputBus = {
+  clear: () => {},
+  publish: () => {},
+  subscribe: () => () => {},
+}
+
 const sessionStore = {
   clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
@@ -47,6 +53,7 @@ describe('agent runtime stability (unit)', () => {
           runId: 'run-1',
           status: 'running',
         }),
+        getOutputBus: () => outputBus,
         removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
