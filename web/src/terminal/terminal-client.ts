@@ -1,11 +1,13 @@
 type TerminalControlServerMessage =
   | { type: 'error'; message: string }
   | { type: 'exit'; code: number | null }
+  | { type: 'restore'; snapshot: string }
 
 interface TerminalClientOptions {
   onError: (message: string) => void
   onExit: (code: number | null) => void
   onOutput: (chunk: string) => void
+  onRestore: (snapshot: string) => void
   runId: string
 }
 
@@ -25,6 +27,7 @@ export const createTerminalClient = ({
   onError,
   onExit,
   onOutput,
+  onRestore,
   runId,
 }: TerminalClientOptions): TerminalClient => {
   const ioSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/io`))
@@ -37,6 +40,12 @@ export const createTerminalClient = ({
     const message = JSON.parse(String(event.data)) as TerminalControlServerMessage
     if (message.type === 'exit') onExit(message.code)
     if (message.type === 'error') onError(message.message)
+    if (message.type === 'restore') {
+      onRestore(message.snapshot)
+      if (controlSocket.readyState === controlSocket.OPEN) {
+        controlSocket.send(JSON.stringify({ type: 'restore_complete' }))
+      }
+    }
   }
 
   return {

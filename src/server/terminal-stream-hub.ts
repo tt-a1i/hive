@@ -5,13 +5,17 @@ import {
   parseTerminalControlMessage,
   serializeTerminalError,
   serializeTerminalExit,
+  serializeTerminalRestore,
 } from './terminal-protocol.js'
+import { TerminalStateMirror } from './terminal-state-mirror.js'
 
 interface RunSockets {
   controlSockets: Set<WebSocket>
   exitInterval: ReturnType<typeof setInterval> | null
   ioSockets: Set<WebSocket>
-  outputUnsubscribe?: () => void
+  exited: boolean
+  mirror: TerminalStateMirror
+  outputUnsubscribe: (() => void) | null
 }
 
 export interface TerminalStreamHub {
@@ -26,8 +30,27 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   const getState = (runId: string) => {
     let state = runSockets.get(runId)
     if (!state) {
-      state = { controlSockets: new Set(), exitInterval: null, ioSockets: new Set() }
+      // runId is already globally unique, so it is equivalent to the plan's workspaceId:runId key.
+      state = {
+        controlSockets: new Set(),
+        exitInterval: null,
+        exited: false,
+        ioSockets: new Set(),
+        mirror: new TerminalStateMirror(),
+        outputUnsubscribe: null,
+      }
       runSockets.set(runId, state)
+      const liveRun = store.getLiveRun(runId)
+      if (liveRun.output.length > 0) {
+        state.mirror.write(liveRun.output)
+      }
+      const nextState = state
+      nextState.outputUnsubscribe = store.getPtyOutputBus().subscribe(runId, (chunk) => {
+        nextState.mirror.write(chunk)
+        for (const client of nextState.ioSockets) {
+          if (client.readyState === client.OPEN) client.send(chunk)
+        }
+      })
     }
     return state
   }
@@ -35,9 +58,10 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   const cleanupRun = (runId: string) => {
     const state = runSockets.get(runId)
     if (!state) return
-    if (state.controlSockets.size > 0 || state.ioSockets.size > 0) return
+    if (state.controlSockets.size > 0 || state.ioSockets.size > 0 || !state.exited) return
     state.outputUnsubscribe?.()
     if (state.exitInterval) clearInterval(state.exitInterval)
+    state.mirror.dispose()
     runSockets.delete(runId)
   }
 
@@ -47,11 +71,15 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       try {
         const run = store.getLiveRun(runId)
         if (run.status !== 'exited' && run.status !== 'error') return
+        state.exited = true
+        state.outputUnsubscribe?.()
+        state.outputUnsubscribe = null
         const payload = serializeTerminalExit(run.exitCode)
         for (const socket of state.controlSockets)
           if (socket.readyState === socket.OPEN) socket.send(payload)
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.exitInterval = null
+        cleanupRun(runId)
       } catch {
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.exitInterval = null
@@ -64,11 +92,20 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       const state = getState(runId)
       state.controlSockets.add(socket)
       startExitWatcher(runId, state)
+      void state.mirror
+        .getSnapshot()
+        .then((snapshot) => {
+          if (socket.readyState === socket.OPEN) socket.send(serializeTerminalRestore(snapshot))
+        })
+        .catch(() => {
+          if (socket.readyState === socket.OPEN) socket.send(serializeTerminalRestore(''))
+        })
       socket.on('message', (raw) => {
         try {
           const message = parseTerminalControlMessage(raw as Buffer | string)
           if (message.type === 'resize') store.resizeAgentRun(runId, message.cols, message.rows)
           if (message.type === 'stop') store.stopAgentRun(runId)
+          if (message.type === 'restore_complete') return
         } catch (error) {
           socket.send(
             serializeTerminalError(
@@ -85,10 +122,6 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     attachIo(runId, socket) {
       const state = getState(runId)
       state.ioSockets.add(socket)
-      state.outputUnsubscribe ??= store.getPtyOutputBus().subscribe(runId, (chunk) => {
-        for (const client of state.ioSockets)
-          if (client.readyState === client.OPEN) client.send(chunk)
-      })
       socket.on('message', (raw) => {
         store.writeRunInput(runId, raw.toString())
       })
@@ -101,6 +134,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       for (const [runId, state] of runSockets) {
         state.outputUnsubscribe?.()
         if (state.exitInterval) clearInterval(state.exitInterval)
+        state.mirror.dispose()
         for (const socket of [...state.ioSockets, ...state.controlSockets]) socket.close()
         runSockets.delete(runId)
       }

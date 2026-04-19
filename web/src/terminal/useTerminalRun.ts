@@ -50,6 +50,9 @@ export const useTerminalRun = (runId: string) => {
           onOutput(chunk) {
             nextTerminal.write(chunk)
           },
+          onRestore(snapshot) {
+            nextTerminal.write(snapshot)
+          },
           runId,
         })
         inputSubscription = nextTerminal.onData((chunk) => client?.sendInput(chunk))

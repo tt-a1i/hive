@@ -7,6 +7,7 @@ type TerminalControlClientMessage =
 type TerminalControlServerMessage =
   | { type: 'error'; message: string }
   | { type: 'exit'; code: number | null }
+  | { type: 'restore'; snapshot: string }
 
 const asInteger = (value: unknown): number | undefined => {
   return typeof value === 'number' && Number.isInteger(value) ? value : undefined
@@ -45,6 +46,10 @@ export const serializeTerminalError = (message: string): string => {
 
 export const serializeTerminalExit = (code: number | null): string => {
   return JSON.stringify({ type: 'exit', code } satisfies TerminalControlServerMessage)
+}
+
+export const serializeTerminalRestore = (snapshot: string): string => {
+  return JSON.stringify({ type: 'restore', snapshot } satisfies TerminalControlServerMessage)
 }
 
 export type { TerminalControlClientMessage, TerminalControlServerMessage }

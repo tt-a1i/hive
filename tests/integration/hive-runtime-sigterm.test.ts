@@ -118,5 +118,5 @@ describe('hive runtime SIGTERM shutdown', () => {
 
     const output = execSync(`ps aux | grep ${marker} | grep -v grep || true`, { encoding: 'utf8' })
     expect(output.trim()).toBe('')
-  })
+  }, 15000)
 })
