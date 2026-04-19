@@ -3,6 +3,7 @@ import type { Database } from 'better-sqlite3'
 export interface AgentLaunchConfigInput {
   command: string
   args?: string[]
+  resumedSessionId?: string | null
   resumeArgsTemplate?: string | null
   sessionIdCapture?: { pattern: string; source: 'claude_project_jsonl_dir' } | null
 }
@@ -72,9 +73,17 @@ interface AgentRunRow {
 }
 
 export const createAgentRunStore = (db: Database | undefined) => {
+  let closed = false
   const initialize = () => {}
 
+  const close = () => {
+    closed = true
+  }
+
   const listLaunchConfigs = () => {
+    if (closed) {
+      return []
+    }
     if (!db) {
       return []
     }
@@ -105,6 +114,9 @@ export const createAgentRunStore = (db: Database | undefined) => {
     agentId: string,
     input: AgentLaunchConfigInput
   ) => {
+    if (closed) {
+      return
+    }
     const createdAt = Date.now()
     db?.prepare(
       `INSERT INTO agent_launch_configs (
@@ -145,6 +157,9 @@ export const createAgentRunStore = (db: Database | undefined) => {
     exitCode: number | null = null,
     endedAt: number | null = null
   ) => {
+    if (closed) {
+      return
+    }
     db?.prepare(
       `INSERT INTO agent_runs (run_id, agent_id, pid, status, exit_code, started_at, ended_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -157,12 +172,18 @@ export const createAgentRunStore = (db: Database | undefined) => {
     exitCode: number | null,
     endedAt: number | null
   ) => {
+    if (closed) {
+      return
+    }
     db?.prepare(
       'UPDATE agent_runs SET status = ?, exit_code = ?, ended_at = ?, updated_at = ? WHERE run_id = ?'
     ).run(status, exitCode, endedAt, Date.now(), runId)
   }
 
   const listAgentRuns = (agentId: string) => {
+    if (closed) {
+      return []
+    }
     if (!db) {
       return []
     }
@@ -187,6 +208,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
   }
 
   return {
+    close,
     initialize,
     insertAgentRun,
     listAgentRuns,

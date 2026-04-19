@@ -35,6 +35,7 @@ interface AgentManager {
   startAgent: (input: StartAgentInput) => Promise<AgentRunSnapshot>
   writeInput: (runId: string, text: string) => void
   getRun: (runId: string) => AgentRunSnapshot
+  removeRun: (runId: string) => void
   stopRun: (runId: string) => void
 }
 
@@ -165,6 +166,10 @@ export const createAgentManager = (): AgentManager => {
 
     getRun(runId) {
       return toSnapshot(getRunRecord(runId))
+    },
+
+    removeRun(runId) {
+      runs.delete(runId)
     },
 
     stopRun(runId) {

@@ -7,6 +7,7 @@ interface AgentSessionRow {
 }
 
 export interface AgentSessionStore {
+  clearLastSessionId: (workspaceId: string, agentId: string) => void
   getLastSessionId: (workspaceId: string, agentId: string) => string | undefined
   setLastSessionId: (workspaceId: string, agentId: string, sessionId: string) => void
 }
@@ -25,6 +26,20 @@ export const createAgentSessionStore = (db: Database | undefined): AgentSessionS
   }
 
   return {
+    clearLastSessionId(workspaceId, agentId) {
+      if (db) {
+        db.transaction(() => {
+          db.prepare('DELETE FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?').run(
+            workspaceId,
+            agentId
+          )
+          db.prepare(
+            'UPDATE workers SET last_session_id = NULL WHERE id = ? AND workspace_id = ?'
+          ).run(agentId, workspaceId)
+        })()
+      }
+      lastSessionIds.delete(`${workspaceId}:${agentId}`)
+    },
     getLastSessionId(workspaceId, agentId) {
       return lastSessionIds.get(`${workspaceId}:${agentId}`)
     },

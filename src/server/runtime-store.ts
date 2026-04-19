@@ -110,6 +110,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   return {
     async close() {
       await agentRuntime.close()
+      agentRunStore.close?.()
       db?.close()
     },
     createWorkspace: (path, name) => workspaceStore.createWorkspace(path, name),

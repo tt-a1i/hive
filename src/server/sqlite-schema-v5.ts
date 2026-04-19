@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 
-const legacyMessageTypeColumn = `ki${'nd'}`
+const legacyMessageTypeColumn = 'kind'
 
 export const applySchemaVersion5 = (db: Database) => {
   const workerColumns = new Set(

@@ -107,6 +107,9 @@ export const createAgentRunStarter =
           return
         }
         completeLiveRun(liveRun, exitCode, endedAt, store)
+        if (exitCode !== 0 && config.resumedSessionId) {
+          sessionStore.clearLastSessionId(workspace.id, agentId)
+        }
         handledRunExits.add(runId)
         tokenRegistry.revokeIfMatches(agentId, token)
         onAgentExit(workspace.id, agentId)
@@ -147,6 +150,9 @@ export const createAgentRunStarter =
 
     if (run.status === 'error') {
       store.updatePersistedRun(run.runId, 'error', run.exitCode, Date.now())
+      if (config.resumedSessionId) {
+        sessionStore.clearLastSessionId(workspace.id, agentId)
+      }
       tokenRegistry.revokeIfMatches(agentId, token)
       // Ensure §12 three-state: failed spawn must flip AgentSummary to stopped.
       onAgentExit(workspace.id, agentId)
@@ -168,6 +174,9 @@ export const createAgentRunStarter =
         if (!pendingRun) return
         if (handledRunExits.has(run.runId)) return
         completeLiveRun(pendingRun, exitCode, Date.now(), store)
+        if (exitCode !== 0 && config.resumedSessionId) {
+          sessionStore.clearLastSessionId(workspace.id, agentId)
+        }
         handledRunExits.add(run.runId)
         tokenRegistry.revokeIfMatches(agentId, token)
         onAgentExit(workspace.id, agentId)

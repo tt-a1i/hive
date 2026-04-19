@@ -6,11 +6,10 @@ import {
   createWorker,
   createWorkspace,
   getWorkspaceTasks,
-  initializeUiSession,
   listWorkers,
-  listWorkspaces,
   saveWorkspaceTasks,
 } from './api.js'
+import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceForm } from './WorkspaceForm.js'
 import { WorkspaceList } from './WorkspaceList.js'
@@ -27,26 +26,7 @@ export const App = () => {
   const [workerName, setWorkerName] = useState('')
   const [workerRole, setWorkerRole] = useState<WorkerRole>('coder')
 
-  useEffect(() => {
-    let cancelled = false
-    void initializeUiSession()
-      .then(() => listWorkspaces())
-      .then((items) => {
-        if (!cancelled) {
-          setWorkspaces(items)
-          setActiveWorkspaceId(items[0]?.id ?? null)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWorkspaces([])
-          setActiveWorkspaceId(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
 
   useEffect(() => {
     if (!activeWorkspaceId || workersByWorkspaceId[activeWorkspaceId]) {

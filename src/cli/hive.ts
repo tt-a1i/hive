@@ -50,11 +50,15 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
     throw new Error('Server did not bind to an inet port')
   }
 
-  console.log(`Hive running at http://127.0.0.1:${address.port}`)
+  let closePromise: Promise<void> | null = null
+  const close = async () => {
+    if (closePromise) {
+      return closePromise
+    }
 
-  return {
-    port: address.port,
-    close: async () => {
+    closePromise = (async () => {
+      process.off('SIGTERM', gracefulShutdown)
+      process.off('SIGINT', gracefulShutdown)
       await app.store.close()
       await new Promise<void>((resolve, reject) => {
         app.server.close((error) => {
@@ -66,7 +70,30 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
           resolve()
         })
       })
-    },
+    })()
+
+    return closePromise
+  }
+
+  const gracefulShutdown = () => {
+    void close()
+      .then(() => {
+        process.exit(0)
+      })
+      .catch((error) => {
+        console.error(error)
+        process.exit(1)
+      })
+  }
+
+  process.once('SIGTERM', gracefulShutdown)
+  process.once('SIGINT', gracefulShutdown)
+
+  console.log(`Hive running at http://127.0.0.1:${address.port}`)
+
+  return {
+    port: address.port,
+    close,
     store: app.store,
   }
 }

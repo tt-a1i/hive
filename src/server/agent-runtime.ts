@@ -120,7 +120,8 @@ export const createAgentRuntime = (
     async startAgent(workspace, agentId, input) {
       const config = withClaudeResumeArgs(
         launchCache.get(workspace.id, agentId),
-        sessionStore.getLastSessionId(workspace.id, agentId)
+        sessionStore.getLastSessionId(workspace.id, agentId),
+        workspace.path
       )
       launchCache.setWorkspaceId(agentId, workspace.id)
       return startLiveRun(workspace, agentId, config, input.hivePort)

@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url'
+
 const REQUIRED_ENV_KEYS = [
   'HIVE_PORT',
   'HIVE_PROJECT_ID',
@@ -138,4 +140,15 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   throw new Error('Unsupported team command')
+}
+
+const isMainModule = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false
+
+if (isMainModule) {
+  void runTeamCommand(process.argv.slice(2)).catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exit(1)
+  })
 }

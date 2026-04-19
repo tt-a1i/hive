@@ -3,6 +3,7 @@ import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-stor
 type PersistedRunStatus = PersistedAgentRun['status']
 
 export interface AgentRunStorePort {
+  close?: () => void
   initialize?: () => void
   insertAgentRun: (
     runId: string,
@@ -29,6 +30,7 @@ export interface AgentRunStorePort {
 }
 
 export interface AgentSessionStorePort {
+  clearLastSessionId: (workspaceId: string, agentId: string) => void
   getLastSessionId: (workspaceId: string, agentId: string) => string | undefined
   setLastSessionId: (workspaceId: string, agentId: string, sessionId: string) => void
 }
