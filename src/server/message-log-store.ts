@@ -12,6 +12,11 @@ export interface MessageLogRecord {
   workspaceId: string
 }
 
+export interface MessageLogHandle {
+  kind: 'db' | 'memory'
+  sequence: number
+}
+
 interface RecoveryMessageBase {
   createdAt: number
   text: string
@@ -54,7 +59,8 @@ interface MessageRow {
 }
 
 export const createMessageLogStore = (db: Database | undefined) => {
-  const memoryMessages: MessageLogRecord[] = []
+  let memorySequence = 0
+  const memoryMessages = new Map<number, MessageLogRecord>()
 
   const initialize = () => {}
 
@@ -68,14 +74,16 @@ export const createMessageLogStore = (db: Database | undefined) => {
       .all() as MessageKindRow[]
   }
 
-  const insertMessage = (input: MessageLogRecord) => {
+  const insertMessage = (input: MessageLogRecord): MessageLogHandle => {
     if (!db) {
-      memoryMessages.push(input)
-      return
+      memorySequence += 1
+      memoryMessages.set(memorySequence, input)
+      return { kind: 'memory', sequence: memorySequence }
     }
 
-    db?.prepare(
-      `INSERT INTO messages (
+    const result = db
+      .prepare(
+        `INSERT INTO messages (
          workspace_id,
          worker_id,
          type,
@@ -86,17 +94,28 @@ export const createMessageLogStore = (db: Database | undefined) => {
          artifacts,
          created_at
        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      input.workspaceId,
-      input.workerId,
-      input.type,
-      input.fromAgentId ?? null,
-      input.toAgentId ?? null,
-      input.text,
-      input.status ?? null,
-      input.artifacts ? JSON.stringify(input.artifacts) : null,
-      input.createdAt
-    )
+      )
+      .run(
+        input.workspaceId,
+        input.workerId,
+        input.type,
+        input.fromAgentId ?? null,
+        input.toAgentId ?? null,
+        input.text,
+        input.status ?? null,
+        input.artifacts ? JSON.stringify(input.artifacts) : null,
+        input.createdAt
+      )
+    return { kind: 'db', sequence: Number(result.lastInsertRowid) }
+  }
+
+  const deleteMessage = (handle: MessageLogHandle) => {
+    if (handle.kind === 'memory') {
+      memoryMessages.delete(handle.sequence)
+      return
+    }
+
+    db?.prepare('DELETE FROM messages WHERE sequence = ?').run(handle.sequence)
   }
 
   const parseArtifacts = (value: string | null) => {
@@ -112,7 +131,7 @@ export const createMessageLogStore = (db: Database | undefined) => {
 
   const listMessagesForRecovery = (workspaceId: string, sinceMs: number) => {
     if (!db) {
-      return memoryMessages
+      return Array.from(memoryMessages.values())
         .filter((message) => message.workspaceId === workspaceId && message.createdAt >= sinceMs)
         .map((message) => {
           if (message.type === 'user_input') {
@@ -195,6 +214,7 @@ export const createMessageLogStore = (db: Database | undefined) => {
   }
 
   return {
+    deleteMessage,
     initialize,
     insertMessage,
     listMessageKinds,

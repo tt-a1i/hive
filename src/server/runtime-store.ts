@@ -104,6 +104,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   )
   const teamOps = createTeamOperations({
     agentRuntime,
+    deleteMessage: messageLogStore.deleteMessage,
     insertMessage: messageLogStore.insertMessage,
     workspaceStore,
   })

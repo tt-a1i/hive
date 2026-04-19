@@ -14,6 +14,7 @@ describe('team atomicity', () => {
     const insertMessage = vi.fn(() => {
       throw new Error('insert message failed')
     })
+    const deleteMessage = vi.fn()
     const writeSendPrompt = vi.fn()
     const markTaskDispatched = vi.fn()
     const ops = createTeamOperations({
@@ -22,6 +23,7 @@ describe('team atomicity', () => {
         writeReportPrompt: vi.fn(),
         writeUserInputPrompt: vi.fn(),
       } as never,
+      deleteMessage,
       insertMessage,
       workspaceStore: {
         getAgent: store.getAgent,
@@ -52,8 +54,9 @@ describe('team atomicity', () => {
       })
     )
     expect(store.listMessagesForRecovery(workspace.id, 0)).toEqual([])
-    expect(writeSendPrompt).toHaveBeenCalledTimes(1)
+    expect(writeSendPrompt).not.toHaveBeenCalled()
     expect(insertMessage).toHaveBeenCalledTimes(1)
+    expect(deleteMessage).not.toHaveBeenCalled()
     expect(markTaskDispatched).not.toHaveBeenCalled()
   })
 
