@@ -86,3 +86,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 每个里程碑用 `superpowers:requesting-code-review` 自检
 - `harnessed:*` 系列做完成前的 QA 闸门
 - Brainstorming 已完成，**spec 有变更先在对话里跟 user 达成一致**再改文档
+
+## TDD 纪律（重点摘，全文见 `AGENTS.md` §3）
+
+TDD 不是拖慢效率，假 TDD 才是。两条硬规则：
+
+1. **集成测试（`tests/server/*` + `tests/cli/*`）禁止 mock PTY / node-pty**——违者按假测试删，不改名。要测单纯逻辑去 `tests/unit/`。
+2. **每条 assert 必须自问一遍："产品代码完全写反，这断言还能过吗？"** 过得了就是假测试：`not.toThrow()` × N、恒真数组、trivially 过的 not.toContain、断言自己喂进去的 mock 调用——看见即删。
