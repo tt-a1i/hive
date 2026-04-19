@@ -14,6 +14,7 @@ export interface AgentSummary {
   id: string
   workspaceId: string
   name: string
+  description: string
   role: WorkerRole | 'orchestrator'
   status: AgentStatus
   pendingTaskCount: number
@@ -25,4 +26,17 @@ export interface TeamListItem {
   role: WorkerRole
   status: AgentStatus
   pendingTaskCount: number
+}
+
+/**
+ * Wire payload shape for /api/workspaces/:id/team and worker-creation responses.
+ * Per AGENTS.md §8 + spec §3.3 line 162-179, HTTP JSON is snake_case.
+ * Internal TS code uses TeamListItem (camelCase); serializers/deserializers convert.
+ */
+export interface TeamListItemPayload {
+  id: string
+  name: string
+  role: WorkerRole
+  status: AgentStatus
+  pending_task_count: number
 }

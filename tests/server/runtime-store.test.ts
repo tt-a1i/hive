@@ -73,7 +73,7 @@ describe('runtime store', () => {
     })
 
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.reportTask(workspace.id, worker.id)
+    store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
     expect(updatedWorker.pendingTaskCount).toBe(0)
@@ -109,5 +109,22 @@ describe('runtime store', () => {
         pendingTaskCount: 0,
       },
     ])
+  })
+
+  test('rejects duplicate worker names within the same workspace', () => {
+    const store = createRuntimeStore()
+
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    expect(() =>
+      store.addWorker(workspace.id, {
+        name: 'Alice',
+        role: 'tester',
+      })
+    ).toThrow('Worker name already exists: Alice')
   })
 })

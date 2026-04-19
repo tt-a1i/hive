@@ -1,0 +1,40 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { createAgentManager } from '../../src/server/agent-manager.js'
+import { createApp } from '../../src/server/app.js'
+import { createRuntimeStore } from '../../src/server/runtime-store.js'
+
+interface TestServerContext {
+  baseUrl: string
+  close: () => Promise<void>
+  dataDir: string
+  store: ReturnType<typeof createRuntimeStore>
+}
+
+export const startTestServer = async (): Promise<TestServerContext> => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'hive-test-server-'))
+  const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+  const app = createApp({ store })
+
+  await new Promise<void>((resolve) => {
+    app.server.listen(0, '127.0.0.1', () => resolve())
+  })
+
+  const address = app.server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Server did not bind to an inet port')
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    async close() {
+      await store.close()
+      await new Promise<void>((resolve) => app.server.close(() => resolve()))
+      rmSync(dataDir, { force: true, recursive: true })
+    },
+    dataDir,
+    store,
+  }
+}

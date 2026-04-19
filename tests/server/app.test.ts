@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest'
+
+import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
@@ -11,7 +13,7 @@ afterEach(() => {
 })
 
 const startServer = async () => {
-  const store = createRuntimeStore()
+  const store = createRuntimeStore({ agentManager: createAgentManager() })
   const app = createApp({ store })
 
   await new Promise<void>((resolve) => {
@@ -65,7 +67,7 @@ describe('runtime http app', () => {
     })
   })
 
-  test('GET /api/workspaces/:id/team returns worker team list', async () => {
+  test('GET /api/ui/workspaces/:id/team returns worker team list for the UI', async () => {
     const { store, baseUrl } = await startServer()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, {
@@ -74,7 +76,9 @@ describe('runtime http app', () => {
     })
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
 
-    const response = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/team`)
+    const response = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
+      headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+    })
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual([
@@ -83,9 +87,39 @@ describe('runtime http app', () => {
         name: 'Alice',
         role: 'coder',
         status: 'working',
-        pendingTaskCount: 1,
+        pending_task_count: 1,
       },
     ])
+  })
+
+  test('GET /api/workspaces/:id/team rejects anonymous callers', async () => {
+    const { store, baseUrl } = await startServer()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    const response = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/team`)
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Missing agent identity' })
+  })
+
+  test('GET /api/ui/workspaces/:id/team rejects non-browser requests', async () => {
+    const { store, baseUrl } = await startServer()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    const response = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`)
+
+    expect(response.status).toBe(403)
+    await expect(response.json()).resolves.toEqual({
+      error: 'UI endpoint requires same-origin browser request',
+    })
   })
 
   test('POST /api/workspaces/:id/workers creates a worker', async () => {
@@ -101,11 +135,10 @@ describe('runtime http app', () => {
     expect(response.status).toBe(201)
     await expect(response.json()).resolves.toEqual({
       id: expect.any(String),
-      workspaceId: workspace.id,
       name: 'Alice',
       role: 'coder',
       status: 'idle',
-      pendingTaskCount: 0,
+      pending_task_count: 0,
     })
     expect(store.listWorkers(workspace.id)).toEqual([
       {
@@ -121,18 +154,77 @@ describe('runtime http app', () => {
   test('POST /api/team/send and /api/team/report update worker state', async () => {
     const { store, baseUrl } = await startServer()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
+    if (!orchestrator) {
+      throw new Error('Expected default orchestrator')
+    }
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
     })
 
+    store.recordUserInput(workspace.id, orchestrator.id, 'bootstrap')
+
+    const workerStartResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          command: '/bin/bash',
+          args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+        }),
+      }
+    )
+    expect(workerStartResponse.status).toBe(204)
+
+    const orchConfigResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/config`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          command: '/bin/bash',
+          args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+        }),
+      }
+    )
+    expect(orchConfigResponse.status).toBe(204)
+
+    const workerRunStart = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hive_port: '4010' }),
+      }
+    )
+    if (workerRunStart.status !== 201) {
+      throw new Error(`worker start failed: ${await workerRunStart.text()}`)
+    }
+    expect(workerRunStart.status).toBe(201)
+
+    const orchRunStart = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hive_port: '4010' }),
+      }
+    )
+    expect(orchRunStart.status).toBe(201)
+
+    const orchestratorToken = store.peekAgentToken(orchestrator.id)
+    const workerToken = store.peekAgentToken(worker.id)
+
     const sendResponse = await fetch(`${baseUrl}/api/team/send`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        projectId: workspace.id,
-        fromAgentId: 'orch-1',
-        to: worker.id,
+        project_id: workspace.id,
+        from_agent_id: orchestrator.id,
+        token: orchestratorToken,
+        to: 'Alice',
         text: 'Implement feature',
       }),
     })
@@ -144,8 +236,9 @@ describe('runtime http app', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        projectId: workspace.id,
-        fromAgentId: worker.id,
+        project_id: workspace.id,
+        from_agent_id: worker.id,
+        token: workerToken,
         result: 'Done',
         status: 'success',
         artifacts: [],
@@ -154,5 +247,25 @@ describe('runtime http app', () => {
 
     expect(reportResponse.status).toBe(202)
     expect(store.getWorker(workspace.id, worker.id).status).toBe('idle')
+  })
+
+  test('POST /api/workspaces/:id/workers rejects duplicate worker names in one workspace', async () => {
+    const { store, baseUrl } = await startServer()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    const response = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Alice', role: 'tester' }),
+    })
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      error: 'Worker name already exists: Alice',
+    })
   })
 })

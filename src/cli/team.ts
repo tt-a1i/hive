@@ -1,4 +1,9 @@
-const REQUIRED_ENV_KEYS = ['HIVE_PORT', 'HIVE_PROJECT_ID', 'HIVE_AGENT_ID'] as const
+const REQUIRED_ENV_KEYS = [
+  'HIVE_PORT',
+  'HIVE_PROJECT_ID',
+  'HIVE_AGENT_ID',
+  'HIVE_AGENT_TOKEN',
+] as const
 
 type HiveEnvKey = (typeof REQUIRED_ENV_KEYS)[number]
 
@@ -6,6 +11,7 @@ interface HiveEnv {
   HIVE_PORT: string
   HIVE_PROJECT_ID: string
   HIVE_AGENT_ID: string
+  HIVE_AGENT_TOKEN: string
 }
 
 type ReportStatus = 'success' | 'failed'
@@ -23,6 +29,8 @@ const getHiveEnv = (): HiveEnv => {
 }
 
 const getBaseUrl = (env: HiveEnv) => `http://127.0.0.1:${env.HIVE_PORT}`
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const postJson = async (url: string, body: unknown) => {
   const response = await fetch(url, {
@@ -85,6 +93,10 @@ export const runTeamCommand = async (argv: string[]) => {
   if (command === 'list') {
     const response = await fetch(`${baseUrl}/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
       method: 'GET',
+      headers: {
+        'x-hive-agent-id': env.HIVE_AGENT_ID,
+        'x-hive-agent-token': env.HIVE_AGENT_TOKEN,
+      },
     })
 
     if (!response.ok) {
@@ -96,15 +108,16 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'send') {
-    const [workerId, task] = args
-    if (!workerId || !task) {
-      throw new Error('Usage: team send <worker-id> <task>')
+    const [workerName, task] = args
+    if (!workerName || !task || uuidPattern.test(workerName)) {
+      throw new Error('Usage: team send <worker-name> <task>')
     }
 
     await postJson(`${baseUrl}/api/team/send`, {
-      projectId: env.HIVE_PROJECT_ID,
-      fromAgentId: env.HIVE_AGENT_ID,
-      to: workerId,
+      project_id: env.HIVE_PROJECT_ID,
+      from_agent_id: env.HIVE_AGENT_ID,
+      token: env.HIVE_AGENT_TOKEN,
+      to: workerName,
       text: task,
     })
     return
@@ -114,8 +127,9 @@ export const runTeamCommand = async (argv: string[]) => {
     const report = parseReportArgs(args)
 
     await postJson(`${baseUrl}/api/team/report`, {
-      projectId: env.HIVE_PROJECT_ID,
-      fromAgentId: env.HIVE_AGENT_ID,
+      project_id: env.HIVE_PROJECT_ID,
+      from_agent_id: env.HIVE_AGENT_ID,
+      token: env.HIVE_AGENT_TOKEN,
       result: report.result,
       status: report.status,
       artifacts: report.artifacts,

@@ -1,40 +1,41 @@
 // @vitest-environment jsdom
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
+import { startTestServer } from '../helpers/test-server.js'
 
-afterEach(() => {
-  vi.restoreAllMocks()
+let cleanupServer: (() => Promise<void>) | undefined
+const nativeFetch = globalThis.fetch
+
+beforeEach(async () => {
+  const server = await startTestServer()
+  cleanupServer = server.close
+  await nativeFetch(`${server.baseUrl}/api/workspaces`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Alpha', path: '/tmp/hive-alpha' }),
+  })
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const value =
+      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    const url = value.startsWith('http') ? value : `${server.baseUrl}${value}`
+    const headers = new Headers(init?.headers)
+    headers.set('referer', `${server.baseUrl}/app`)
+    headers.set('sec-fetch-mode', 'same-origin')
+    return nativeFetch(url, { ...init, headers })
+  })
 })
 
-describe('worker flow', () => {
+afterEach(async () => {
+  vi.restoreAllMocks()
+  await cleanupServer?.()
+  cleanupServer = undefined
+})
+
+describe('worker flow with real server', () => {
   test('can create a worker for the active workspace', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [{ id: 'ws-1', name: 'Alpha', path: '/tmp/hive-alpha' }],
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          id: 'worker-1',
-          workspaceId: 'ws-1',
-          name: 'Alice',
-          role: 'coder',
-          status: 'idle',
-          pendingTaskCount: 0,
-        }),
-      })
-
-    vi.stubGlobal('fetch', fetchMock)
-
     render(<App />)
 
     await waitFor(() => {
@@ -53,12 +54,6 @@ describe('worker flow', () => {
       expect(screen.getByText('Alice')).toBeInTheDocument()
       expect(screen.getByText('coder')).toBeInTheDocument()
       expect(screen.getByText('idle')).toBeInTheDocument()
-    })
-
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/workspaces/ws-1/workers', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Alice', role: 'coder' }),
     })
   })
 })

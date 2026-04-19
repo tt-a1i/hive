@@ -1,11 +1,13 @@
 import { once } from 'node:events'
 
+import { createAgentManager } from '../server/agent-manager.js'
 import { createApp } from '../server/app.js'
-import { createRuntimeStore } from '../server/runtime-store.js'
+import { createRuntimeStore, type RuntimeStore } from '../server/runtime-store.js'
 
 interface RunHiveCommandResult {
   port: number
   close: () => Promise<void>
+  store: RuntimeStore
 }
 
 const parsePort = (argv: string[]) => {
@@ -32,7 +34,13 @@ const parsePort = (argv: string[]) => {
 
 export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResult> => {
   const port = parsePort(argv)
-  const app = createApp({ store: createRuntimeStore() })
+  const dataDir = process.env.HIVE_DATA_DIR
+  const app = createApp({
+    store: createRuntimeStore({
+      agentManager: createAgentManager(),
+      ...(dataDir ? { dataDir } : {}),
+    }),
+  })
 
   app.server.listen(port, '127.0.0.1')
   await once(app.server, 'listening')
@@ -47,6 +55,7 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
   return {
     port: address.port,
     close: async () => {
+      await app.store.close()
       await new Promise<void>((resolve, reject) => {
         app.server.close((error) => {
           if (error) {
@@ -58,6 +67,7 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
         })
       })
     },
+    store: app.store,
   }
 }
 

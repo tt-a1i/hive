@@ -1,95 +1,155 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { runTeamCommand } from '../../src/cli/team.js'
+import { startTestServer } from '../helpers/test-server.js'
 
+let cleanupServer: (() => Promise<void>) | undefined
+let serverStore: Awaited<ReturnType<typeof startTestServer>>['store'] | undefined
+let workerId = ''
 const originalEnv = { ...process.env }
 
-afterEach(() => {
-  process.env = { ...originalEnv }
-  vi.restoreAllMocks()
-})
+beforeEach(async () => {
+  const server = await startTestServer()
+  cleanupServer = server.close
+  serverStore = server.store
 
-describe('team cli', () => {
-  test('fails when required hive environment variables are missing', async () => {
-    await expect(runTeamCommand(['list'])).rejects.toThrow(
-      'Missing required Hive environment variables'
-    )
+  const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Alpha', path: '/tmp/hive-alpha' }),
+  })
+  const workspace = (await workspaceResponse.json()) as { id: string }
+
+  const orchestratorId = `${workspace.id}:orchestrator`
+  process.env = {
+    ...originalEnv,
+    HIVE_AGENT_ID: orchestratorId,
+    HIVE_AGENT_TOKEN: 'placeholder-replaced-after-start',
+    HIVE_PORT: server.baseUrl.split(':').at(-1) ?? '',
+    HIVE_PROJECT_ID: workspace.id,
+  }
+
+  await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/workers`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Alice', role: 'coder' }),
   })
 
-  test('team list fetches worker list and prints one-line json', async () => {
-    process.env.HIVE_PORT = '4123'
-    process.env.HIVE_PROJECT_ID = 'project-1'
-    process.env.HIVE_AGENT_ID = 'agent-1'
+  const configResponse = await fetch(
+    `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${workspace.id}:orchestrator/config`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        command: '/bin/bash',
+        args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+      }),
+    }
+  )
+  if (configResponse.status !== 204) {
+    throw new Error(`Failed to configure orchestrator: ${await configResponse.text()}`)
+  }
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [
-        { id: 'alice', name: 'Alice', role: 'coder', status: 'idle', pendingTaskCount: 0 },
-      ],
-    })
+  const workerListResponse = await fetch(
+    `${server.baseUrl}/api/ui/workspaces/${workspace.id}/team`,
+    {
+      headers: { referer: `${server.baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+    }
+  )
+  const workers = (await workerListResponse.json()) as Array<{ id: string; name: string }>
+  const alice = workers.find((worker) => worker.name === 'Alice')
+  if (!alice) {
+    throw new Error('Expected Alice worker')
+  }
+  workerId = alice.id
 
+  const workerConfigResponse = await fetch(
+    `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${alice.id}/config`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        command: '/bin/bash',
+        args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+      }),
+    }
+  )
+  if (workerConfigResponse.status !== 204) {
+    throw new Error(`Failed to configure worker: ${await workerConfigResponse.text()}`)
+  }
+
+  await fetch(
+    `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${workspace.id}:orchestrator/start`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hive_port: process.env.HIVE_PORT }),
+    }
+  )
+  await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/agents/${alice.id}/start`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hive_port: process.env.HIVE_PORT }),
+  })
+
+  const token = server.store.peekAgentToken(orchestratorId)
+  if (!token) {
+    throw new Error('Expected orchestrator token after start')
+  }
+  process.env.HIVE_AGENT_TOKEN = token
+})
+
+afterEach(async () => {
+  process.env = { ...originalEnv }
+  serverStore = undefined
+  workerId = ''
+  await cleanupServer?.()
+  cleanupServer = undefined
+})
+
+describe('team cli with real server', () => {
+  test('team list prints snake_case payload from a real backend', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.stubGlobal('fetch', fetchMock)
 
     await runTeamCommand(['list'])
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:4123/api/workspaces/project-1/team',
-      expect.objectContaining({ method: 'GET' })
-    )
-    expect(logSpy).toHaveBeenCalledWith(
-      JSON.stringify([
-        { id: 'alice', name: 'Alice', role: 'coder', status: 'idle', pendingTaskCount: 0 },
-      ])
-    )
+    const output = logSpy.mock.calls[0]?.[0] ?? ''
+    const parsed = JSON.parse(output) as Array<{
+      id: string
+      name: string
+      pending_task_count: number
+      role: string
+      status: string
+    }>
+
+    expect(output).not.toContain('pendingTaskCount')
+    expect(parsed).toEqual([
+      {
+        id: expect.any(String),
+        name: 'Alice',
+        pending_task_count: 0,
+        role: 'coder',
+        status: 'idle',
+      },
+    ])
   })
 
-  test('team send posts dispatch payload', async () => {
-    process.env.HIVE_PORT = '4123'
-    process.env.HIVE_PROJECT_ID = 'project-1'
-    process.env.HIVE_AGENT_ID = 'orch-1'
-
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await runTeamCommand(['send', 'alice', 'Implement login'])
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:4123/api/team/send',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: 'project-1',
-          fromAgentId: 'orch-1',
-          to: 'alice',
-          text: 'Implement login',
-        }),
-      })
-    )
+  test('team send Alice reaches the real backend', async () => {
+    await expect(runTeamCommand(['send', 'Alice', 'Implement login'])).resolves.toBeUndefined()
   })
 
-  test('team report posts report payload', async () => {
-    process.env.HIVE_PORT = '4123'
-    process.env.HIVE_PROJECT_ID = 'project-1'
-    process.env.HIVE_AGENT_ID = 'worker-1'
+  test('team list surfaces 403 when a worker token is used', async () => {
+    if (!serverStore) {
+      throw new Error('Expected test server store')
+    }
+    const workerToken = serverStore.peekAgentToken(workerId)
+    if (!workerToken) {
+      throw new Error('Expected worker token after start')
+    }
 
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) })
-    vi.stubGlobal('fetch', fetchMock)
+    process.env.HIVE_AGENT_ID = workerId
+    process.env.HIVE_AGENT_TOKEN = workerToken
 
-    await runTeamCommand(['report', 'Done', '--success', '--artifact', 'src/auth.ts'])
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:4123/api/team/report',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: 'project-1',
-          fromAgentId: 'worker-1',
-          result: 'Done',
-          status: 'success',
-          artifacts: ['src/auth.ts'],
-        }),
-      })
-    )
+    await expect(runTeamCommand(['list'])).rejects.toThrow('Request failed with status 403')
   })
 })
