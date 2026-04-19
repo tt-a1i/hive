@@ -55,6 +55,7 @@ describe('agent runtime stability (unit)', () => {
         }),
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

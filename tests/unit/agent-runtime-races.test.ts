@@ -43,6 +43,7 @@ describe('agent runtime races (unit)', () => {
         },
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },
@@ -91,6 +92,7 @@ describe('agent runtime races (unit)', () => {
         }),
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: stopSpy,
         writeInput: () => {},
       },
@@ -134,6 +136,7 @@ describe('agent runtime races (unit)', () => {
         }),
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: (_runId, text) => {
           writes.push(text)
@@ -188,6 +191,7 @@ describe('agent runtime races (unit)', () => {
         }),
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

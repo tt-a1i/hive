@@ -1,6 +1,9 @@
 import type { FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
+import { listTerminalRuns, type TerminalRunSummary } from './api.js'
+import { TerminalView } from './terminal/TerminalView.js'
 
 type WorkspaceDetailProps = {
   workspace: WorkspaceSummary | undefined
@@ -29,6 +32,27 @@ export const WorkspaceDetail = ({
   onWorkerRoleChange,
   onWorkerSubmit,
 }: WorkspaceDetailProps) => {
+  const [terminalRuns, setTerminalRuns] = useState<TerminalRunSummary[]>([])
+  const workspaceId = workspace?.id ?? null
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setTerminalRuns([])
+      return
+    }
+    let cancelled = false
+    void listTerminalRuns(workspaceId)
+      .then((runs) => {
+        if (!cancelled) setTerminalRuns(runs)
+      })
+      .catch(() => {
+        if (!cancelled) setTerminalRuns([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId])
+
   if (!workspace) {
     return null
   }
@@ -81,6 +105,14 @@ export const WorkspaceDetail = ({
       ) : (
         <p>Worker cards coming next</p>
       )}
+
+      {terminalRuns.map((run) => (
+        <TerminalView
+          key={run.run_id}
+          runId={run.run_id}
+          title={`${run.agent_name} (${run.status})`}
+        />
+      ))}
     </section>
   )
 }

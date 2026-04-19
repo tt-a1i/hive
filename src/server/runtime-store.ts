@@ -12,6 +12,7 @@ import { createAgentRuntime } from './agent-runtime.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
 import { createMessageLogStore, type RecoveryMessage } from './message-log-store.js'
+import type { PtyOutputBus } from './pty-output-bus.js'
 import { initializeRuntimeDatabase } from './sqlite-schema.js'
 import {
   createTeamOperations,
@@ -44,6 +45,13 @@ interface RuntimeStore {
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
   getWorker: (workspaceId: string, workerId: string) => AgentSummary
   getAgent: (workspaceId: string, agentId: string) => AgentSummary
+  getPtyOutputBus: () => PtyOutputBus
+  listTerminalRuns: (workspaceId: string) => Array<{
+    agent_id: string
+    agent_name: string
+    run_id: string
+    status: string
+  }>
   configureAgentLaunch: (
     workspaceId: string,
     agentId: string,
@@ -59,6 +67,8 @@ interface RuntimeStore {
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   peekAgentToken: (agentId: string) => string | undefined
+  resizeAgentRun: (runId: string, cols: number, rows: number) => void
+  writeRunInput: (runId: string, text: string) => void
   getUiToken: () => string
   stopAgentRun: (runId: string) => void
   validateAgentToken: (agentId: string, token: string | undefined) => boolean
@@ -125,6 +135,19 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     getWorkspaceSnapshot: (workspaceId) => workspaceStore.getWorkspaceSnapshot(workspaceId),
     getWorker: (workspaceId, workerId) => workspaceStore.getWorker(workspaceId, workerId),
     getAgent: (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId),
+    getPtyOutputBus() {
+      if (!agentManager) throw new Error('Agent manager is required for PTY output subscriptions')
+      return agentManager.getOutputBus()
+    },
+    listTerminalRuns(workspaceId) {
+      return workspaceStore.getWorkspaceSnapshot(workspaceId).agents.flatMap((agent) => {
+        const run = agentRuntime.getActiveRunByAgentId(workspaceId, agent.id)
+        if (!run) return []
+        return [
+          { agent_id: agent.id, agent_name: agent.name, run_id: run.runId, status: run.status },
+        ]
+      })
+    },
     configureAgentLaunch(workspaceId, agentId, input) {
       workspaceStore.getAgent(workspaceId, agentId)
       agentRuntime.configureAgentLaunch(workspaceId, agentId, input)
@@ -154,6 +177,11 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     listMessagesForRecovery: (workspaceId, sinceMs) =>
       messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
     peekAgentToken: (agentId) => agentRuntime.peekAgentToken(agentId),
+    resizeAgentRun: (runId, cols, rows) => agentRuntime.resizeAgentRun(runId, cols, rows),
+    writeRunInput(runId, text) {
+      if (!agentManager) throw new Error('Agent manager is required for PTY stdin writes')
+      agentManager.writeInput(runId, text)
+    },
     getUiToken: () => uiAuth.getToken(),
     stopAgentRun: (runId) => agentRuntime.stopAgentRun(runId),
     validateAgentToken: (agentId, token) => agentRuntime.validateAgentToken(agentId, token),

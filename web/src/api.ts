@@ -60,6 +60,23 @@ export const listWorkers = async (workspaceId: string): Promise<TeamListItem[]> 
   return payload.map(fromPayload)
 }
 
+export interface TerminalRunSummary {
+  agent_id: string
+  agent_name: string
+  run_id: string
+  status: string
+}
+
+export const listTerminalRuns = async (workspaceId: string): Promise<TerminalRunSummary[]> => {
+  const response = await fetch(`/api/ui/workspaces/${workspaceId}/runs`, { mode: 'same-origin' })
+
+  if (!response.ok) {
+    throw new Error('Failed to load terminal runs')
+  }
+
+  return (await response.json()) as TerminalRunSummary[]
+}
+
 export const createWorker = async (
   workspaceId: string,
   input: Pick<AgentSummary, 'name'> & { role: WorkerRole }

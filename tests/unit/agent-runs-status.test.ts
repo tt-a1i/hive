@@ -50,6 +50,7 @@ describe('agent run status model (unit)', () => {
         },
         getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

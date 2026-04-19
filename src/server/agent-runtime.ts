@@ -32,6 +32,7 @@ export interface AgentRuntime {
   getPtyOutputBus: () => PtyOutputBus
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   peekAgentToken: (agentId: string) => string | undefined
+  resizeAgentRun: (runId: string, cols: number, rows: number) => void
   startAgent: (
     workspace: WorkspaceSummary,
     agentId: string,
@@ -67,14 +68,13 @@ export const createAgentRuntime = (
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
   const tokenRegistry = createAgentTokenRegistry()
-
-  const syncRun = (run: LiveAgentRun) => {
-    if (!agentManager) {
-      return run
-    }
-    const snapshot = agentManager.getRun(run.runId)
-    return syncPersistedRun(run, snapshot, agentRunStore)
+  const requireManager = () => {
+    if (!agentManager) throw new Error('Agent manager is required for PTY terminal operations')
+    return agentManager
   }
+
+  const syncRun = (run: LiveAgentRun) =>
+    agentManager ? syncPersistedRun(run, agentManager.getRun(run.runId), agentRunStore) : run
   const stdinDispatcher = createAgentStdinDispatcher({
     agentManager,
     getWorkspaceId: launchCache.getWorkspaceId,
@@ -108,20 +108,20 @@ export const createAgentRuntime = (
     },
     getLiveRun(runId) {
       const run = registry.get(runId)
-      if (!run) {
-        throw new Error(`Live run not found: ${runId}`)
-      }
+      if (!run) throw new Error(`Live run not found: ${runId}`)
       return syncRun(run)
     },
     getPtyOutputBus() {
-      if (!agentManager) throw new Error('Agent manager is required for PTY output subscriptions')
-      return agentManager.getOutputBus()
+      return requireManager().getOutputBus()
     },
     listAgentRuns(agentId) {
       return listRunsWithFallback(registry, agentRunStore.listAgentRuns(agentId), agentId)
     },
     peekAgentToken(agentId) {
       return tokenRegistry.peek(agentId)
+    },
+    resizeAgentRun(runId, cols, rows) {
+      requireManager().resizeRun(runId, cols, rows)
     },
     async startAgent(workspace, agentId, input) {
       const config = withClaudeResumeArgs(

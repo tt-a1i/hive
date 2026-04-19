@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { type IPty, spawn } from 'node-pty'
+import {
+  finishAgentRun,
+  MAX_RUN_OUTPUT_LENGTH,
+  toAgentRunSnapshot,
+} from './agent-manager-support.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
 type RunStatus = 'starting' | 'running' | 'exited' | 'error'
@@ -26,6 +31,7 @@ interface AgentRunRecord extends AgentRunSnapshot {
   process: {
     isStopped: () => boolean
     pid: number | null
+    resize: (cols: number, rows: number) => void
     stop: () => void
     write: (text: string) => void
   }
@@ -34,6 +40,7 @@ interface AgentRunRecord extends AgentRunSnapshot {
 
 interface AgentManager {
   getOutputBus: () => PtyOutputBus
+  resizeRun: (runId: string, cols: number, rows: number) => void
   startAgent: (input: StartAgentInput) => Promise<AgentRunSnapshot>
   writeInput: (runId: string, text: string) => void
   getRun: (runId: string) => AgentRunSnapshot
@@ -42,7 +49,6 @@ interface AgentManager {
 }
 
 const createRunId = () => randomUUID()
-const MAX_RUN_OUTPUT_LENGTH = 1_000_000
 
 export const createAgentManager = ({
   ptyOutputBus = createPtyOutputBus(),
@@ -57,32 +63,15 @@ export const createAgentManager = ({
     return run
   }
 
-  const toSnapshot = (run: AgentRunRecord): AgentRunSnapshot => ({
-    runId: run.runId,
-    agentId: run.agentId,
-    pid: run.process.pid,
-    status:
-      run.process.isStopped() && run.status !== 'exited' && run.status !== 'error'
-        ? 'error'
-        : run.status,
-    output: run.output,
-    exitCode: run.exitCode,
-  })
-
-  const finishRun = (run: AgentRunRecord, exitCode: number | null) => {
-    if ((run.status === 'exited' || run.status === 'error') && run.exitCode !== null) return
-    run.status = exitCode === 0 ? 'exited' : 'error'
-    run.exitCode = exitCode
-    run.onExit?.({ runId: run.runId, exitCode })
-    ptyOutputBus.clear(run.runId)
-  }
-
   const attachPty = (run: AgentRunRecord, pty: IPty) => {
     run.process = {
       isStopped() {
         return run.status === 'exited' || run.status === 'error'
       },
       pid: pty.pid,
+      resize(cols, rows) {
+        pty.resize(cols, rows)
+      },
       stop() {
         try {
           pty.kill()
@@ -106,7 +95,7 @@ export const createAgentManager = ({
       ptyOutputBus.publish(run.runId, chunk)
     })
 
-    pty.onExit((event) => finishRun(run, event.exitCode))
+    pty.onExit((event) => finishAgentRun(run, event.exitCode, ptyOutputBus))
   }
 
   return {
@@ -129,6 +118,7 @@ export const createAgentManager = ({
             return false
           },
           pid: null,
+          resize() {},
           stop() {},
           write() {},
         },
@@ -152,7 +142,11 @@ export const createAgentManager = ({
         run.exitCode = 1
       }
 
-      return toSnapshot(run)
+      return toAgentRunSnapshot(run)
+    },
+
+    resizeRun(runId, cols, rows) {
+      getRunRecord(runId).process.resize(cols, rows)
     },
 
     writeInput(runId, text) {
@@ -160,7 +154,7 @@ export const createAgentManager = ({
     },
 
     getRun(runId) {
-      return toSnapshot(getRunRecord(runId))
+      return toAgentRunSnapshot(getRunRecord(runId))
     },
 
     removeRun(runId) {
@@ -175,4 +169,4 @@ export const createAgentManager = ({
   }
 }
 
-export type { AgentManager, AgentRunSnapshot, RunStatus, StartAgentInput }
+export type { AgentManager, AgentRunRecord, AgentRunSnapshot, RunStatus, StartAgentInput }

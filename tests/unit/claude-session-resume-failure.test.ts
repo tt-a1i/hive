@@ -9,6 +9,12 @@ import { createAgentSessionStore } from '../../src/server/agent-session-store.js
 import { encodeClaudeProjectPath } from '../../src/server/claude-session-support.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 
+const outputBus = {
+  clear: () => {},
+  publish: () => {},
+  subscribe: () => () => {},
+}
+
 const tempDirs: string[] = []
 
 const createClaudeSessionRoot = (cwd: string, sessionId: string) => {
@@ -76,7 +82,9 @@ describe('claude session resume failure', () => {
             status: runId === 'run-1' ? 'error' : 'starting',
           }
         },
+        getOutputBus: () => outputBus,
         removeRun: () => {},
+        resizeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

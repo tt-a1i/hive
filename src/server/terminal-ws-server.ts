@@ -1,0 +1,73 @@
+import type { IncomingMessage, Server } from 'node:http'
+
+import { WebSocketServer } from 'ws'
+
+import type { RuntimeStore } from './runtime-store.js'
+import { createTerminalStreamHub } from './terminal-stream-hub.js'
+import { readCookie } from './ui-auth-helpers.js'
+
+const matchTerminalPath = (pathname: string) => {
+  const match = /^\/ws\/terminal\/(?<runId>[^/]+)\/(?<channel>io|control)$/.exec(pathname)
+  const groups = match?.groups
+  if (!groups?.runId || !groups.channel) return null
+  return {
+    channel: groups.channel as 'control' | 'io',
+    runId: decodeURIComponent(groups.runId),
+  }
+}
+
+const rejectUpgrade = (
+  socket: Parameters<Server['on']>[1] extends (...args: infer T) => void ? T[1] : never,
+  status: string
+) => {
+  socket.write(`HTTP/1.1 ${status}\r\n\r\n`)
+  socket.destroy()
+}
+
+export const createTerminalWebSocketServer = (server: Server, store: RuntimeStore) => {
+  const ioWss = new WebSocketServer({ noServer: true })
+  const controlWss = new WebSocketServer({ noServer: true })
+  const hub = createTerminalStreamHub(store)
+
+  const validateUpgradeSession = (request: IncomingMessage) => {
+    const token = readCookie(
+      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+      'hive_ui_token'
+    )
+    return store.validateUiToken(token)
+  }
+
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
+    const match = matchTerminalPath(pathname)
+    if (!match) {
+      rejectUpgrade(socket, '404 Not Found')
+      return
+    }
+    if (!validateUpgradeSession(request)) {
+      rejectUpgrade(socket, '401 Unauthorized')
+      return
+    }
+
+    try {
+      store.getLiveRun(match.runId)
+    } catch {
+      rejectUpgrade(socket, '404 Not Found')
+      return
+    }
+
+    const wss = match.channel === 'io' ? ioWss : controlWss
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      if (match.channel === 'io') hub.attachIo(match.runId, ws)
+      else hub.attachControl(match.runId, ws)
+    })
+  })
+
+  server.on('close', () => {
+    hub.close()
+    ioWss.close()
+    controlWss.close()
+  })
+
+  return { close: () => hub.close() }
+}

@@ -4,6 +4,7 @@ import { HttpError } from './http-errors.js'
 import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { createTasksFileService, type TasksFileService } from './tasks-file.js'
+import { createTerminalWebSocketServer } from './terminal-ws-server.js'
 
 interface CreateAppOptions {
   store: RuntimeStore
@@ -47,6 +48,7 @@ export const createApp = ({
       sendJson(response, 500, { error: message })
     }
   })
+  createTerminalWebSocketServer(server, store)
 
   return { server, store }
 }

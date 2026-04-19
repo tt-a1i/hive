@@ -3,6 +3,24 @@ import type { ConfigureAgentLaunchBody, RouteDefinition } from './route-types.js
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 
 export const runtimeRoutes: RouteDefinition[] = [
+  route('GET', '/api/ui/workspaces/:workspaceId/runs', ({ params, request, response, store }) => {
+    const workspaceId = getRequiredParam(
+      response,
+      params,
+      'workspaceId',
+      'Workspace id is required'
+    )
+    if (!workspaceId) {
+      return
+    }
+
+    requireUiTokenFromRequest(
+      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+      store.validateUiToken
+    )
+
+    sendJson(response, 200, store.listTerminalRuns(workspaceId))
+  }),
   route(
     'POST',
     '/api/workspaces/:workspaceId/agents/:agentId/config',
