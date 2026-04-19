@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
@@ -27,10 +28,11 @@ const setupHive = async (): Promise<HiveContext> => {
   process.env.HIVE_DATA_DIR = dataDir
   const hive = await runHiveCommand(['--port', '0'])
   const baseUrl = `http://127.0.0.1:${hive.port}`
+  const uiCookie = await getUiCookie(baseUrl)
 
   const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: uiCookie },
     body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
   })
   const workspace = (await workspaceResponse.json()) as { id: string }
@@ -38,7 +40,7 @@ const setupHive = async (): Promise<HiveContext> => {
 
   const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: uiCookie },
     body: JSON.stringify({ name: 'Alice', role: 'coder' }),
   })
   const worker = (await workerResponse.json()) as { id: string; name: string }
@@ -46,7 +48,7 @@ const setupHive = async (): Promise<HiveContext> => {
   for (const agentId of [orchestratorId, worker.id]) {
     await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/config`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({
         command: '/bin/bash',
         args: ['-lc', `"${process.execPath}" "${passiveScript}"`],
@@ -54,7 +56,7 @@ const setupHive = async (): Promise<HiveContext> => {
     })
     await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/start`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({ hive_port: String(hive.port) }),
     })
   }

@@ -18,6 +18,7 @@ import {
   type DispatchTaskInput,
   type ReportTaskInput,
 } from './team-operations.js'
+import { createUiAuth } from './ui-auth.js'
 import { createWorkspaceStore, type WorkerInput, type WorkspaceRecord } from './workspace-store.js'
 
 interface RuntimeStore {
@@ -58,8 +59,10 @@ interface RuntimeStore {
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   peekAgentToken: (agentId: string) => string | undefined
+  getUiToken: () => string
   stopAgentRun: (runId: string) => void
   validateAgentToken: (agentId: string, token: string | undefined) => boolean
+  validateUiToken: (token: string | undefined) => boolean
 }
 
 interface RuntimeStoreOptions {
@@ -86,6 +89,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   const messageLogStore = createMessageLogStore(db)
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
+  const uiAuth = createUiAuth()
 
   messageLogStore.initialize()
   agentRunStore.initialize()
@@ -148,7 +152,9 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     listMessagesForRecovery: (workspaceId, sinceMs) =>
       messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
     peekAgentToken: (agentId) => agentRuntime.peekAgentToken(agentId),
+    getUiToken: () => uiAuth.getToken(),
     stopAgentRun: (runId) => agentRuntime.stopAgentRun(runId),
     validateAgentToken: (agentId, token) => agentRuntime.validateAgentToken(agentId, token),
+    validateUiToken: (token) => uiAuth.validate(token),
   }
 }

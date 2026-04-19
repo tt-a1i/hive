@@ -93,28 +93,28 @@ export const createAgentRunStarter =
       },
       onExit: ({ runId, exitCode }: { runId: string; exitCode: number | null }) => {
         const endedAt = Date.now()
-        registry.pendingExitCodes.set(runId, exitCode)
+        registry.setPendingExitCode(runId, exitCode)
         const liveRun = registry.get(runId)
         if (!liveRun) {
           if (abortedRunIds.has(runId)) {
-            registry.pendingExitCodes.delete(runId)
+            registry.clearPendingExitCode(runId)
           }
           tokenRegistry.revokeIfMatches(agentId, token)
           return
         }
         if (handledRunExits.has(runId)) {
-          registry.pendingExitCodes.delete(runId)
+          registry.clearPendingExitCode(runId)
           return
         }
         completeLiveRun(liveRun, exitCode, endedAt, store)
         handledRunExits.add(runId)
         tokenRegistry.revokeIfMatches(agentId, token)
         onAgentExit(workspace.id, agentId)
-        registry.getExitEntry(runId)?.resolve()
+        registry.resolveExit(runId)
         // pendingExitCodes was only needed for the insert-before-exit race; after the
         // live-run path completes it's dead weight. liveRuns + runExitPromises are kept
         // so post-exit getLiveRun/close still work (bounded by agent start count).
-        registry.pendingExitCodes.delete(runId)
+        registry.clearPendingExitCode(runId)
       },
     }
 
@@ -137,7 +137,7 @@ export const createAgentRunStarter =
       store.insertAgentRun(run.runId, agentId, startedAt, run.pid, liveRun.status, liveRun.exitCode)
     } catch (error) {
       abortedRunIds.add(run.runId)
-      registry.pendingExitCodes.delete(run.runId)
+      registry.clearPendingExitCode(run.runId)
       tokenRegistry.revokeIfMatches(agentId, token)
       agentManager.stopRun(run.runId)
       throw error
@@ -150,8 +150,8 @@ export const createAgentRunStarter =
       tokenRegistry.revokeIfMatches(agentId, token)
       // Ensure §12 three-state: failed spawn must flip AgentSummary to stopped.
       onAgentExit(workspace.id, agentId)
-      registry.getExitEntry(run.runId)?.resolve()
-      registry.pendingExitCodes.delete(run.runId)
+      registry.resolveExit(run.runId)
+      registry.clearPendingExitCode(run.runId)
       return liveRun
     }
 
@@ -161,8 +161,8 @@ export const createAgentRunStarter =
       })
     }
 
-    if (registry.pendingExitCodes.has(run.runId)) {
-      const exitCode = registry.pendingExitCodes.get(run.runId) ?? null
+    if (registry.hasPendingExitCode(run.runId)) {
+      const exitCode = registry.getPendingExitCode(run.runId) ?? null
       queueMicrotask(() => {
         const pendingRun = registry.get(run.runId)
         if (!pendingRun) return
@@ -171,8 +171,8 @@ export const createAgentRunStarter =
         handledRunExits.add(run.runId)
         tokenRegistry.revokeIfMatches(agentId, token)
         onAgentExit(workspace.id, agentId)
-        registry.getExitEntry(run.runId)?.resolve()
-        registry.pendingExitCodes.delete(run.runId)
+        registry.resolveExit(run.runId)
+        registry.clearPendingExitCode(run.runId)
       })
     }
 

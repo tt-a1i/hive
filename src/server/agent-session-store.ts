@@ -29,21 +29,23 @@ export const createAgentSessionStore = (db: Database | undefined): AgentSessionS
       return lastSessionIds.get(`${workspaceId}:${agentId}`)
     },
     setLastSessionId(workspaceId, agentId, sessionId) {
-      lastSessionIds.set(`${workspaceId}:${agentId}`, sessionId)
       const updatedAt = Date.now()
-      db?.prepare(
-        `INSERT INTO agent_sessions (agent_id, workspace_id, last_session_id, updated_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(workspace_id, agent_id) DO UPDATE SET
-           workspace_id = excluded.workspace_id,
-           last_session_id = excluded.last_session_id,
-           updated_at = excluded.updated_at`
-      ).run(agentId, workspaceId, sessionId, updatedAt)
-      db?.prepare('UPDATE workers SET last_session_id = ? WHERE id = ? AND workspace_id = ?').run(
-        sessionId,
-        agentId,
-        workspaceId
-      )
+      if (db) {
+        db.transaction(() => {
+          db.prepare(
+            `INSERT INTO agent_sessions (agent_id, workspace_id, last_session_id, updated_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(workspace_id, agent_id) DO UPDATE SET
+               workspace_id = excluded.workspace_id,
+               last_session_id = excluded.last_session_id,
+               updated_at = excluded.updated_at`
+          ).run(agentId, workspaceId, sessionId, updatedAt)
+          db.prepare(
+            'UPDATE workers SET last_session_id = ? WHERE id = ? AND workspace_id = ?'
+          ).run(sessionId, agentId, workspaceId)
+        })()
+      }
+      lastSessionIds.set(`${workspaceId}:${agentId}`, sessionId)
     },
   }
 }

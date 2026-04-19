@@ -12,10 +12,15 @@ beforeEach(async () => {
   const server = await startTestServer()
   cleanupServer = server.close
   serverStore = server.store
+  const uiSessionResponse = await fetch(`${server.baseUrl}/api/ui/session`)
+  const uiCookie = uiSessionResponse.headers.get('set-cookie')
+  if (!uiCookie) {
+    throw new Error('Expected UI session cookie')
+  }
 
   const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: uiCookie },
     body: JSON.stringify({ name: 'Alpha', path: '/tmp/hive-alpha' }),
   })
   const workspace = (await workspaceResponse.json()) as { id: string }
@@ -31,7 +36,7 @@ beforeEach(async () => {
 
   await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/workers`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: uiCookie },
     body: JSON.stringify({ name: 'Alice', role: 'coder' }),
   })
 
@@ -39,7 +44,7 @@ beforeEach(async () => {
     `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${workspace.id}:orchestrator/config`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({
         command: '/bin/bash',
         args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
@@ -50,10 +55,15 @@ beforeEach(async () => {
     throw new Error(`Failed to configure orchestrator: ${await configResponse.text()}`)
   }
 
+  const sessionResponse = await fetch(`${server.baseUrl}/api/ui/session`)
+  const cookie = sessionResponse.headers.get('set-cookie')
+  if (!cookie) {
+    throw new Error('Expected UI session cookie')
+  }
   const workerListResponse = await fetch(
     `${server.baseUrl}/api/ui/workspaces/${workspace.id}/team`,
     {
-      headers: { referer: `${server.baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+      headers: { cookie },
     }
   )
   const workers = (await workerListResponse.json()) as Array<{ id: string; name: string }>
@@ -67,7 +77,7 @@ beforeEach(async () => {
     `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${alice.id}/config`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({
         command: '/bin/bash',
         args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
@@ -82,13 +92,13 @@ beforeEach(async () => {
     `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${workspace.id}:orchestrator/start`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
       body: JSON.stringify({ hive_port: process.env.HIVE_PORT }),
     }
   )
   await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/agents/${alice.id}/start`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: uiCookie },
     body: JSON.stringify({ hive_port: process.env.HIVE_PORT }),
   })
 

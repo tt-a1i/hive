@@ -6,6 +6,7 @@ import {
   createWorker,
   createWorkspace,
   getWorkspaceTasks,
+  initializeUiSession,
   listWorkers,
   listWorkspaces,
   saveWorkspaceTasks,
@@ -28,12 +29,20 @@ export const App = () => {
 
   useEffect(() => {
     let cancelled = false
-    void listWorkspaces().then((items) => {
-      if (!cancelled) {
-        setWorkspaces(items)
-        setActiveWorkspaceId(items[0]?.id ?? null)
-      }
-    })
+    void initializeUiSession()
+      .then(() => listWorkspaces())
+      .then((items) => {
+        if (!cancelled) {
+          setWorkspaces(items)
+          setActiveWorkspaceId(items[0]?.id ?? null)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspaces([])
+          setActiveWorkspaceId(null)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -44,11 +53,17 @@ export const App = () => {
       return
     }
     let cancelled = false
-    void listWorkers(activeWorkspaceId).then((items) => {
-      if (!cancelled) {
-        setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: items }))
-      }
-    })
+    void listWorkers(activeWorkspaceId)
+      .then((items) => {
+        if (!cancelled) {
+          setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: items }))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: [] }))
+        }
+      })
     return () => {
       cancelled = true
     }

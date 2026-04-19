@@ -1,4 +1,3 @@
-import { ForbiddenError } from './http-errors.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type {
   CreateWorkerBody,
@@ -10,6 +9,7 @@ import type {
 import type { RuntimeStore } from './runtime-store.js'
 import { authenticateCliAgent, requireCommandForRole } from './team-authz.js'
 import { serializeTeamListItem } from './team-list-serializer.js'
+import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 
 const getSerializedWorker = (
   workspaceId: string,
@@ -23,42 +23,19 @@ const getSerializedWorker = (
   return serializeTeamListItem(worker)
 }
 
-const requireUiOrigin = (
-  host: string | undefined,
-  origin: string | undefined,
-  referer: string | undefined,
-  secFetchMode: string | undefined
-) => {
-  if (!host) {
-    throw new ForbiddenError('UI endpoint requires same-origin browser request')
-  }
-
-  if (secFetchMode !== 'cors' && secFetchMode !== 'same-origin') {
-    throw new ForbiddenError('UI endpoint requires same-origin browser request')
-  }
-
-  const expectedOrigin = `http://${host}`
-  const trustedValues = [origin, referer].filter(
-    (value): value is string => typeof value === 'string'
-  )
-  const isSameOrigin = trustedValues.some((value) => {
-    try {
-      const url = new URL(value)
-      return url.origin === expectedOrigin
-    } catch {
-      return false
-    }
-  })
-  if (!isSameOrigin) {
-    throw new ForbiddenError('UI endpoint requires same-origin browser request')
-  }
-}
-
 export const workspaceRoutes: RouteDefinition[] = [
-  route('GET', '/api/workspaces', ({ response, store }) => {
+  route('GET', '/api/workspaces', ({ request, response, store }) => {
+    requireUiTokenFromRequest(
+      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+      store.validateUiToken
+    )
     sendJson(response, 200, store.listWorkspaces())
   }),
   route('POST', '/api/workspaces', async ({ request, response, store }) => {
+    requireUiTokenFromRequest(
+      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+      store.validateUiToken
+    )
     const body = await readJsonBody<CreateWorkspaceBody>(request)
     sendJson(response, 201, store.createWorkspace(body.path, body.name))
   }),
@@ -73,13 +50,9 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiOrigin(
-      typeof request.headers.host === 'string' ? request.headers.host : undefined,
-      typeof request.headers.origin === 'string' ? request.headers.origin : undefined,
-      typeof request.headers.referer === 'string' ? request.headers.referer : undefined,
-      typeof request.headers['sec-fetch-mode'] === 'string'
-        ? request.headers['sec-fetch-mode']
-        : undefined
+    requireUiTokenFromRequest(
+      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+      store.validateUiToken
     )
 
     sendJson(response, 200, store.listWorkers(workspaceId).map(serializeTeamListItem))
@@ -122,6 +95,11 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
+      requireUiTokenFromRequest(
+        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+        store.validateUiToken
+      )
+
       const body = await readJsonBody<CreateWorkerBody>(request)
       const worker = store.addWorker(workspaceId, body)
       sendJson(response, 201, getSerializedWorker(workspaceId, worker.id, store.listWorkers))
@@ -140,6 +118,11 @@ export const workspaceRoutes: RouteDefinition[] = [
       if (!workspaceId) {
         return
       }
+
+      requireUiTokenFromRequest(
+        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+        store.validateUiToken
+      )
 
       const body = await readJsonBody<UserInputBody>(request)
       store.recordUserInput(workspaceId, `${workspaceId}:orchestrator`, body.text)
@@ -165,6 +148,11 @@ export const workspaceRoutes: RouteDefinition[] = [
       if (!workspaceId || !agentId) {
         return
       }
+
+      requireUiTokenFromRequest(
+        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
+        store.validateUiToken
+      )
 
       const body = await readJsonBody<LaunchAgentBody>(request)
       sendJson(

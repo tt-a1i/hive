@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const originalEnv = { ...process.env }
@@ -56,9 +57,10 @@ describe('team send CLI side effects (R1.3)', () => {
     const hive = await runHiveCommand(['--port', '0'])
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
@@ -66,7 +68,7 @@ describe('team send CLI side effects (R1.3)', () => {
 
       const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alice', role: 'coder' }),
       })
       const worker = (await workerResponse.json()) as { id: string }
@@ -74,7 +76,7 @@ describe('team send CLI side effects (R1.3)', () => {
       const configure = async (agentId: string, scriptPath: string) =>
         fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/config`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
@@ -83,7 +85,7 @@ describe('team send CLI side effects (R1.3)', () => {
       const startAgent = async (agentId: string) =>
         fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/start`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         })
 
@@ -111,7 +113,7 @@ describe('team send CLI side effects (R1.3)', () => {
 
       await waitFor(async () => {
         const runResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-          headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+          headers: { cookie: uiCookie },
         })
         expect(runResponse.status).toBe(200)
         const team = (await runResponse.json()) as Array<{

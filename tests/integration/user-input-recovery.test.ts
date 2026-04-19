@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { buildRecoverySummary } from '../../src/server/recovery-summary.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
@@ -28,16 +29,17 @@ describe('user input recovery', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string; name: string }
 
       const inputResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/user-input`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ text: '请继续实现登录' }),
       })
 

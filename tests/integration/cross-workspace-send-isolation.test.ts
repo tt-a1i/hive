@@ -44,6 +44,11 @@ describe('cross workspace send isolation', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiSessionResponse = await fetch(`${baseUrl}/api/ui/session`)
+      const uiCookie = uiSessionResponse.headers.get('set-cookie')
+      if (!uiCookie) {
+        throw new Error('Expected UI session cookie')
+      }
       const workspaceAPath = join(dataDir, 'workspace-a')
       const workspaceBPath = join(dataDir, 'workspace-b')
       mkdirSync(workspaceAPath, { recursive: true })
@@ -63,7 +68,7 @@ describe('cross workspace send isolation', () => {
       const createWorkspace = async (name: string, path: string) => {
         const response = await fetch(`${baseUrl}/api/workspaces`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ name, path }),
         })
         return (await response.json()) as { id: string }
@@ -75,7 +80,7 @@ describe('cross workspace send isolation', () => {
       const addWorker = async (workspaceId: string) => {
         const response = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/workers`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ name: 'Alice', role: 'coder' }),
         })
         return (await response.json()) as { id: string }
@@ -87,7 +92,7 @@ describe('cross workspace send isolation', () => {
       const config = async (workspaceId: string, agentId: string, scriptPath: string) => {
         await fetch(`${baseUrl}/api/workspaces/${workspaceId}/agents/${agentId}/config`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
@@ -104,7 +109,7 @@ describe('cross workspace send isolation', () => {
           `${baseUrl}/api/workspaces/${workspaceId}/agents/${agentId}/start`,
           {
             method: 'POST',
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', cookie: uiCookie },
             body: JSON.stringify({ hive_port: String(hive.port) }),
           }
         )
@@ -129,8 +134,12 @@ describe('cross workspace send isolation', () => {
 
       await waitFor(
         async () => {
-          const responseA = await fetch(`${baseUrl}/api/runtime/runs/${runA.runId}`)
-          const responseB = await fetch(`${baseUrl}/api/runtime/runs/${runB.runId}`)
+          const responseA = await fetch(`${baseUrl}/api/runtime/runs/${runA.runId}`, {
+            headers: { cookie: uiCookie },
+          })
+          const responseB = await fetch(`${baseUrl}/api/runtime/runs/${runB.runId}`, {
+            headers: { cookie: uiCookie },
+          })
           const bodyA = (await responseA.json()) as { output: string }
           const bodyB = (await responseB.json()) as { output: string }
 

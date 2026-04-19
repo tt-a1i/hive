@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const servers: Array<{ close: () => void }> = []
 
@@ -37,8 +38,9 @@ describe('runtime http app', () => {
   test('GET /api/workspaces returns current workspace list', async () => {
     const { store, baseUrl } = await startServer()
     store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const cookie = await getUiCookie(baseUrl)
 
-    const response = await fetch(`${baseUrl}/api/workspaces`)
+    const response = await fetch(`${baseUrl}/api/workspaces`, { headers: { cookie } })
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual([
@@ -52,10 +54,11 @@ describe('runtime http app', () => {
 
   test('POST /api/workspaces creates workspace', async () => {
     const { baseUrl } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
 
     const response = await fetch(`${baseUrl}/api/workspaces`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ path: '/tmp/hive-beta', name: 'Beta' }),
     })
 
@@ -76,8 +79,14 @@ describe('runtime http app', () => {
     })
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
 
+    const sessionResponse = await fetch(`${baseUrl}/api/ui/session`)
+    const cookie = sessionResponse.headers.get('set-cookie')
+    if (!cookie) {
+      throw new Error('Expected UI session cookie')
+    }
+
     const response = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-      headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+      headers: { cookie },
     })
 
     expect(response.status).toBe(200)
@@ -118,17 +127,28 @@ describe('runtime http app', () => {
 
     expect(response.status).toBe(403)
     await expect(response.json()).resolves.toEqual({
-      error: 'UI endpoint requires same-origin browser request',
+      error: 'UI endpoint requires valid UI token',
     })
+  })
+
+  test('GET /api/ui/session issues HttpOnly UI cookie', async () => {
+    const { baseUrl } = await startServer()
+
+    const response = await fetch(`${baseUrl}/api/ui/session`)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('set-cookie')).toContain('HttpOnly')
+    expect(response.headers.get('set-cookie')).toContain('SameSite=Strict')
   })
 
   test('POST /api/workspaces/:id/workers creates a worker', async () => {
     const { store, baseUrl } = await startServer()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const cookie = await getUiCookie(baseUrl)
 
     const response = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ name: 'Alice', role: 'coder' }),
     })
 
@@ -154,6 +174,7 @@ describe('runtime http app', () => {
   test('POST /api/team/send and /api/team/report update worker state', async () => {
     const { store, baseUrl } = await startServer()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const cookie = await getUiCookie(baseUrl)
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
       throw new Error('Expected default orchestrator')
@@ -169,7 +190,7 @@ describe('runtime http app', () => {
       `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({
           command: '/bin/bash',
           args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
@@ -182,7 +203,7 @@ describe('runtime http app', () => {
       `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/config`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({
           command: '/bin/bash',
           args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
@@ -195,7 +216,7 @@ describe('runtime http app', () => {
       `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ hive_port: '4010' }),
       }
     )
@@ -208,7 +229,7 @@ describe('runtime http app', () => {
       `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/start`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ hive_port: '4010' }),
       }
     )
@@ -252,6 +273,7 @@ describe('runtime http app', () => {
   test('POST /api/workspaces/:id/workers rejects duplicate worker names in one workspace', async () => {
     const { store, baseUrl } = await startServer()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const cookie = await getUiCookie(baseUrl)
     store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
@@ -259,7 +281,7 @@ describe('runtime http app', () => {
 
     const response = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ name: 'Alice', role: 'tester' }),
     })
 

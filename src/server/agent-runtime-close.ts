@@ -17,4 +17,8 @@ export const closeAgentRuntime = async (
   }
 
   await Promise.all(registry.listExitEntries().map((entry) => entry.promise))
+
+  for (const run of registry.list()) {
+    registry.remove(run.runId)
+  }
 }

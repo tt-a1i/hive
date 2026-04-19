@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const originalEnv = { ...process.env }
@@ -51,23 +52,24 @@ describe('team report cli', () => {
     const hive = await runHiveCommand(['--port', '0'])
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
       const orchestratorId = `${workspace.id}:orchestrator`
       const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alice', role: 'coder' }),
       })
       const worker = (await workerResponse.json()) as { id: string }
 
       await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({
           command: '/bin/bash',
           args: ['-lc', `"${process.execPath}" "${orchScript}"`],
@@ -77,7 +79,7 @@ describe('team report cli', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -87,7 +89,7 @@ describe('team report cli', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
@@ -99,7 +101,7 @@ describe('team report cli', () => {
       }
       await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ hive_port: String(hive.port) }),
       })
 
@@ -117,7 +119,9 @@ describe('team report cli', () => {
       await runTeamCommand(['report', 'Done via CLI', '--success', '--artifact', 'src/auth.ts'])
 
       await waitFor(async () => {
-        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${run.runId}`)
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${run.runId}`, {
+          headers: { cookie: uiCookie },
+        })
         const body = (await runResponse.json()) as { output: string }
         expect(body.output).toContain('Done via CLI')
         expect(body.output).toContain('src/auth.ts')

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
@@ -58,9 +59,10 @@ describe('user input stdin injection', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
@@ -68,7 +70,7 @@ describe('user input stdin injection', () => {
 
       await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({
           command: '/bin/bash',
           args: ['-lc', `"${process.execPath}" "${orchScript}"`],
@@ -79,7 +81,7 @@ describe('user input stdin injection', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -87,14 +89,16 @@ describe('user input stdin injection', () => {
 
       const inputResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/user-input`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ text: '请继续实现登录' }),
       })
 
       expect(inputResponse.status).toBe(202)
 
       await waitFor(async () => {
-        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`)
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+          headers: { cookie: uiCookie },
+        })
         const run = (await runResponse.json()) as { output: string }
         expect(run.output).toContain('ORCH:请继续实现登录')
       })

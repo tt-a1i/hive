@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { createTasksFileService } from '../../src/server/tasks-file.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const servers: Array<{ close: () => void }> = []
@@ -53,15 +54,18 @@ const startServer = async () => {
 describe('tasks api', () => {
   test('GET returns current tasks.md content and PUT persists updates', async () => {
     const { baseUrl, workspace } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
 
-    const initialResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`)
+    const initialResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+      headers: { cookie },
+    })
 
     expect(initialResponse.status).toBe(200)
     await expect(initialResponse.json()).resolves.toEqual({ content: '' })
 
     const updateResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ content: '- [ ] implement login\n' }),
     })
 
@@ -70,7 +74,9 @@ describe('tasks api', () => {
       content: '- [ ] implement login\n',
     })
 
-    const readBackResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`)
+    const readBackResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+      headers: { cookie },
+    })
 
     await expect(readBackResponse.json()).resolves.toEqual({
       content: '- [ ] implement login\n',

@@ -12,13 +12,16 @@ const nativeFetch = globalThis.fetch
 beforeEach(async () => {
   const server = await startTestServer()
   cleanupServer = server.close
+  let cookie = ''
+  await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
+    cookie = response.headers.get('set-cookie') ?? ''
+  })
   vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
     const value =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
     const url = value.startsWith('http') ? value : `${server.baseUrl}${value}`
     const headers = new Headers(init?.headers)
-    headers.set('referer', `${server.baseUrl}/app`)
-    headers.set('sec-fetch-mode', 'same-origin')
+    headers.set('cookie', cookie)
     return nativeFetch(url, { ...init, headers })
   })
 })

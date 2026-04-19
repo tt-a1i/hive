@@ -11,9 +11,14 @@ export interface LiveRunRegistry {
   deleteExitEntry: (runId: string) => void
   get: (runId: string) => LiveAgentRun | undefined
   getExitEntry: (runId: string) => RunExitEntry | undefined
+  clearPendingExitCode: (runId: string) => void
+  getPendingExitCode: (runId: string) => number | null | undefined
+  hasPendingExitCode: (runId: string) => boolean
   list: () => LiveAgentRun[]
   listExitEntries: () => RunExitEntry[]
-  pendingExitCodes: Map<string, number | null>
+  remove: (runId: string) => void
+  resolveExit: (runId: string) => void
+  setPendingExitCode: (runId: string, exitCode: number | null) => void
 }
 
 export const createLiveRunRegistry = (): LiveRunRegistry => {
@@ -35,11 +40,20 @@ export const createLiveRunRegistry = (): LiveRunRegistry => {
     deleteExitEntry(runId) {
       runExitPromises.delete(runId)
     },
+    clearPendingExitCode(runId) {
+      pendingExitCodes.delete(runId)
+    },
     get(runId) {
       return liveRuns.get(runId)
     },
     getExitEntry(runId) {
       return runExitPromises.get(runId)
+    },
+    getPendingExitCode(runId) {
+      return pendingExitCodes.get(runId)
+    },
+    hasPendingExitCode(runId) {
+      return pendingExitCodes.has(runId)
     },
     list() {
       return Array.from(liveRuns.values())
@@ -47,6 +61,16 @@ export const createLiveRunRegistry = (): LiveRunRegistry => {
     listExitEntries() {
       return Array.from(runExitPromises.values())
     },
-    pendingExitCodes,
+    remove(runId) {
+      liveRuns.delete(runId)
+      pendingExitCodes.delete(runId)
+      runExitPromises.delete(runId)
+    },
+    resolveExit(runId) {
+      runExitPromises.get(runId)?.resolve()
+    },
+    setPendingExitCode(runId, exitCode) {
+      pendingExitCodes.set(runId, exitCode)
+    },
   }
 }

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
@@ -29,13 +30,14 @@ describe('hive cli end to end', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
 
-      const listBefore = await fetch(`${baseUrl}/api/workspaces`)
+      const listBefore = await fetch(`${baseUrl}/api/workspaces`, { headers: { cookie: uiCookie } })
       expect(listBefore.status).toBe(200)
 
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       expect(workspaceResponse.status).toBe(201)
@@ -46,7 +48,7 @@ describe('hive cli end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
@@ -56,7 +58,7 @@ describe('hive cli end to end', () => {
       expect(configResponse.status).toBe(204)
 
       const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-        headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+        headers: { cookie: uiCookie },
       })
       expect(teamResponse.status).toBe(200)
 
@@ -64,7 +66,7 @@ describe('hive cli end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -75,11 +77,14 @@ describe('hive cli end to end', () => {
       expect(startResponse.status).toBe(201)
       const startPayload = (await startResponse.json()) as { runId: string }
 
-      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`)
+      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+        headers: { cookie: uiCookie },
+      })
       expect(runResponse.status).toBe(200)
 
       const stopResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}/stop`, {
         method: 'POST',
+        headers: { cookie: uiCookie },
       })
 
       expect(stopResponse.status).toBe(202)

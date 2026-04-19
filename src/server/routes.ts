@@ -11,10 +11,12 @@ import type {
 import { runtimeRoutes } from './routes-runtime.js'
 import { taskRoutes } from './routes-tasks.js'
 import { teamRoutes } from './routes-team.js'
+import { uiRoutes } from './routes-ui.js'
 import { workspaceRoutes } from './routes-workspaces.js'
 
 const routes: RouteDefinition[] = [
   ...workspaceRoutes,
+  ...uiRoutes,
   ...taskRoutes,
   ...runtimeRoutes,
   ...teamRoutes,

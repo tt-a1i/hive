@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 
@@ -53,9 +54,10 @@ describe('hive bin dir', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       expect(workspaceResponse.status).toBe(201)
@@ -66,7 +68,7 @@ describe('hive bin dir', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
@@ -76,7 +78,7 @@ describe('hive bin dir', () => {
       expect(configResponse.status).toBe(204)
 
       const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-        headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+        headers: { cookie: uiCookie },
       })
       expect(teamResponse.status).toBe(200)
 
@@ -84,7 +86,7 @@ describe('hive bin dir', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -96,7 +98,9 @@ describe('hive bin dir', () => {
       const payload = (await startResponse.json()) as { runId: string }
 
       await waitFor(async () => {
-        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`)
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`, {
+          headers: { cookie: uiCookie },
+        })
 
         expect(runResponse.status).toBe(200)
         await expect(runResponse.json()).resolves.toEqual(
@@ -108,7 +112,9 @@ describe('hive bin dir', () => {
         )
       })
 
-      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`)
+      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`, {
+        headers: { cookie: uiCookie },
+      })
 
       expect(runResponse.status).toBe(200)
       await expect(runResponse.json()).resolves.toEqual(

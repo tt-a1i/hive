@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const servers: Array<{ close: () => void }> = []
@@ -44,12 +45,14 @@ describe('agent launch config api', () => {
     if (!address || typeof address === 'string') {
       throw new Error('Server did not bind to an inet port')
     }
+    const baseUrl = `http://127.0.0.1:${address.port}`
+    const cookie = await getUiCookie(baseUrl)
 
     const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/config`,
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestrator.id}/config`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ command: 'node', args: ['script.js'] }),
       }
     )

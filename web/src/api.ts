@@ -14,6 +14,13 @@ const fromPayload = (payload: TeamListItemPayload): TeamListItem => ({
   pendingTaskCount: payload.pending_task_count,
 })
 
+export const initializeUiSession = async (): Promise<void> => {
+  const response = await fetch('/api/ui/session', { mode: 'same-origin' })
+  if (!response.ok) {
+    throw new Error('Failed to initialize UI session')
+  }
+}
+
 export const listWorkspaces = async (): Promise<WorkspaceSummary[]> => {
   const response = await fetch('/api/workspaces')
 
@@ -42,7 +49,6 @@ export const createWorkspace = async (
 
 export const listWorkers = async (workspaceId: string): Promise<TeamListItem[]> => {
   const response = await fetch(`/api/ui/workspaces/${workspaceId}/team`, {
-    headers: { referer: window.location.href },
     mode: 'same-origin',
   })
 

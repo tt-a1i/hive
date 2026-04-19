@@ -66,9 +66,14 @@ describe('team protocol end to end', () => {
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
+      const sessionResponse = await fetch(`${baseUrl}/api/ui/session`)
+      const cookie = sessionResponse.headers.get('set-cookie')
+      if (!cookie) {
+        throw new Error('Expected UI session cookie')
+      }
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
       })
       expect(workspaceResponse.status).toBe(201)
@@ -77,7 +82,7 @@ describe('team protocol end to end', () => {
 
       const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ name: 'Alice', role: 'coder' }),
       })
       expect(workerResponse.status).toBe(201)
@@ -87,7 +92,7 @@ describe('team protocol end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${orchScript}"`],
@@ -100,7 +105,7 @@ describe('team protocol end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({
             command: '/bin/bash',
             args: ['-lc', `"${process.execPath}" "${workerScript}"`],
@@ -113,7 +118,7 @@ describe('team protocol end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -123,7 +128,7 @@ describe('team protocol end to end', () => {
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', cookie },
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
@@ -158,7 +163,7 @@ describe('team protocol end to end', () => {
 
       await waitFor(async () => {
         const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-          headers: { referer: `${baseUrl}/app`, 'sec-fetch-mode': 'same-origin' },
+          headers: { cookie },
         })
         expect(teamResponse.status).toBe(200)
         const team = (await teamResponse.json()) as Array<{
