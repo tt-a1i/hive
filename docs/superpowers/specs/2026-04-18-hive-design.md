@@ -759,6 +759,10 @@ messages {
 4. 按角色硬编码白名单允许/拒绝命令
 5. **跨 workspace 调用一律拒绝**（agent 只能操作自己 workspace 内的同事）
 
+**UI 端点鉴权**：浏览器侧的只读 UI 端点（如 `GET /api/ui/workspaces/:id/team`）不走 `HIVE_AGENT_TOKEN`，而是先通过 `GET /api/ui/session` bootstrap 一个 `hive_ui_token` cookie。该 cookie 由 server 设置为 `HttpOnly; SameSite=Strict`，后续 UI 请求靠浏览器自动回带 cookie 完成校验。这个 token 的目标是把 UI 流量和 CLI/agent 流量分开，避免继续走“匿名放行”或“只看 Origin/Referer”的脆弱路径。
+
+**信任边界说明**：`hive_ui_token` 只是在 **loopback + 同机进程互信** 假设下的轻量隔离手段，不是跨进程的强鉴权边界。也就是说，它能降低普通浏览器外请求误入 UI 端点的概率，但不能把同机恶意进程视为彻底隔离对象。MVP 接受这个边界；更强的 UI 会话鉴权不在 M2 范围内。
+
 ```
 orchestrator: { send, list, report, help }
 worker:       { report, help }
