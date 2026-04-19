@@ -83,8 +83,10 @@ describe('claude session resume failure', () => {
           }
         },
         getOutputBus: () => outputBus,
+        pauseRun: () => {},
         removeRun: () => {},
         resizeRun: () => {},
+        resumeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

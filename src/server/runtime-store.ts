@@ -67,7 +67,9 @@ interface RuntimeStore {
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   peekAgentToken: (agentId: string) => string | undefined
+  pauseTerminalRun: (runId: string) => void
   resizeAgentRun: (runId: string, cols: number, rows: number) => void
+  resumeTerminalRun: (runId: string) => void
   writeRunInput: (runId: string, text: string) => void
   getUiToken: () => string
   stopAgentRun: (runId: string) => void
@@ -177,7 +179,9 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     listMessagesForRecovery: (workspaceId, sinceMs) =>
       messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
     peekAgentToken: (agentId) => agentRuntime.peekAgentToken(agentId),
+    pauseTerminalRun: (runId) => agentRuntime.pauseRun(runId),
     resizeAgentRun: (runId, cols, rows) => agentRuntime.resizeAgentRun(runId, cols, rows),
+    resumeTerminalRun: (runId) => agentRuntime.resumeRun(runId),
     writeRunInput(runId, text) {
       if (!agentManager) throw new Error('Agent manager is required for PTY stdin writes')
       agentManager.writeInput(runId, text)

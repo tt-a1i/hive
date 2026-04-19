@@ -29,7 +29,9 @@ vi.mock('@xterm/xterm', () => ({
       return { dispose() {} }
     }
     open() {}
-    write() {}
+    write(_chunk?: string, callback?: () => void) {
+      callback?.()
+    }
     dispose() {}
   },
 }))

@@ -1,6 +1,7 @@
 import type WebSocket from 'ws'
 
 import type { RuntimeStore } from './runtime-store.js'
+import { createTerminalOutputFlow } from './terminal-flow-control.js'
 import {
   parseTerminalControlMessage,
   serializeTerminalError,
@@ -9,63 +10,87 @@ import {
 } from './terminal-protocol.js'
 import { TerminalStateMirror } from './terminal-state-mirror.js'
 
-interface RunSockets {
-  controlSockets: Set<WebSocket>
-  exitInterval: ReturnType<typeof setInterval> | null
-  ioSockets: Set<WebSocket>
+interface ViewerState {
+  clientId: string
+  controlSocket: WebSocket | null
+  flowState: ReturnType<typeof createTerminalOutputFlow> | null
+  ioSocket: WebSocket | null
+}
+
+interface RunState {
+  backpressuredViewerIds: Set<string>
   exited: boolean
+  exitInterval: ReturnType<typeof setInterval> | null
   mirror: TerminalStateMirror
   outputUnsubscribe: (() => void) | null
+  viewers: Map<string, ViewerState>
 }
 
 export interface TerminalStreamHub {
-  attachControl: (runId: string, socket: WebSocket) => void
-  attachIo: (runId: string, socket: WebSocket) => void
+  attachControl: (runId: string, clientId: string, socket: WebSocket) => void
+  attachIo: (runId: string, clientId: string, socket: WebSocket) => void
   close: () => void
 }
 
 export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub => {
-  const runSockets = new Map<string, RunSockets>()
+  const runStates = new Map<string, RunState>()
 
-  const getState = (runId: string) => {
-    let state = runSockets.get(runId)
+  const maybeResumeRun = (runId: string, state: RunState, clientId: string) => {
+    if (!state.backpressuredViewerIds.delete(clientId)) return
+    if (state.backpressuredViewerIds.size === 0) store.resumeTerminalRun(runId)
+  }
+
+  const cleanupRun = (runId: string) => {
+    const state = runStates.get(runId)
+    if (!state?.exited || state.viewers.size > 0) return
+    state.outputUnsubscribe?.()
+    if (state.exitInterval) clearInterval(state.exitInterval)
+    state.mirror.dispose()
+    runStates.delete(runId)
+  }
+
+  const getOrCreateViewer = (state: RunState, clientId: string) => {
+    let viewer = state.viewers.get(clientId)
+    if (!viewer) {
+      viewer = { clientId, controlSocket: null, flowState: null, ioSocket: null }
+      state.viewers.set(clientId, viewer)
+    }
+    return viewer
+  }
+
+  const getOrCreateState = (runId: string) => {
+    let state = runStates.get(runId)
     if (!state) {
-      // runId is already globally unique, so it is equivalent to the plan's workspaceId:runId key.
       state = {
-        controlSockets: new Set(),
-        exitInterval: null,
+        backpressuredViewerIds: new Set(),
         exited: false,
-        ioSockets: new Set(),
+        exitInterval: null,
+        // runId is globally unique, so it is semantically equivalent to workspaceId:runId.
         mirror: new TerminalStateMirror(),
         outputUnsubscribe: null,
+        viewers: new Map(),
       }
-      runSockets.set(runId, state)
+      runStates.set(runId, state)
       const liveRun = store.getLiveRun(runId)
-      if (liveRun.output.length > 0) {
-        state.mirror.write(liveRun.output)
-      }
+      if (liveRun.output.length > 0) state.mirror.write(liveRun.output)
       const nextState = state
       nextState.outputUnsubscribe = store.getPtyOutputBus().subscribe(runId, (chunk) => {
         nextState.mirror.write(chunk)
-        for (const client of nextState.ioSockets) {
-          if (client.readyState === client.OPEN) client.send(chunk)
-        }
+        for (const viewer of nextState.viewers.values()) viewer.flowState?.enqueue(chunk)
       })
     }
     return state
   }
 
-  const cleanupRun = (runId: string) => {
-    const state = runSockets.get(runId)
-    if (!state) return
-    if (state.controlSockets.size > 0 || state.ioSockets.size > 0 || !state.exited) return
-    state.outputUnsubscribe?.()
-    if (state.exitInterval) clearInterval(state.exitInterval)
-    state.mirror.dispose()
-    runSockets.delete(runId)
+  const cleanupViewer = (runId: string, state: RunState, clientId: string) => {
+    const viewer = state.viewers.get(clientId)
+    if (!viewer || viewer.controlSocket || viewer.ioSocket) return
+    state.viewers.delete(clientId)
+    maybeResumeRun(runId, state, clientId)
+    cleanupRun(runId)
   }
 
-  const startExitWatcher = (runId: string, state: RunSockets) => {
+  const startExitWatcher = (runId: string, state: RunState) => {
     if (state.exitInterval) return
     state.exitInterval = setInterval(() => {
       try {
@@ -75,8 +100,11 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         state.outputUnsubscribe?.()
         state.outputUnsubscribe = null
         const payload = serializeTerminalExit(run.exitCode)
-        for (const socket of state.controlSockets)
-          if (socket.readyState === socket.OPEN) socket.send(payload)
+        for (const viewer of state.viewers.values()) {
+          const controlSocket = viewer.controlSocket
+          if (controlSocket && controlSocket.readyState === controlSocket.OPEN)
+            controlSocket.send(payload)
+        }
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.exitInterval = null
         cleanupRun(runId)
@@ -88,9 +116,10 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   }
 
   return {
-    attachControl(runId, socket) {
-      const state = getState(runId)
-      state.controlSockets.add(socket)
+    attachControl(runId, clientId, socket) {
+      const state = getOrCreateState(runId)
+      const viewer = getOrCreateViewer(state, clientId)
+      viewer.controlSocket = socket
       startExitWatcher(runId, state)
       void state.mirror
         .getSnapshot()
@@ -103,6 +132,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       socket.on('message', (raw) => {
         try {
           const message = parseTerminalControlMessage(raw as Buffer | string)
+          if (message.type === 'output_ack') viewer.flowState?.ack(message.bytes)
           if (message.type === 'resize') store.resizeAgentRun(runId, message.cols, message.rows)
           if (message.type === 'stop') store.stopAgentRun(runId)
           if (message.type === 'restore_complete') return
@@ -115,28 +145,47 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         }
       })
       socket.on('close', () => {
-        state.controlSockets.delete(socket)
-        cleanupRun(runId)
+        if (viewer.controlSocket === socket) viewer.controlSocket = null
+        cleanupViewer(runId, state, clientId)
       })
     },
-    attachIo(runId, socket) {
-      const state = getState(runId)
-      state.ioSockets.add(socket)
+    attachIo(runId, clientId, socket) {
+      const state = getOrCreateState(runId)
+      const viewer = getOrCreateViewer(state, clientId)
+      viewer.ioSocket = socket
+      viewer.flowState?.close()
+      viewer.flowState = createTerminalOutputFlow(socket, {
+        onBackpressureChange(backpressured) {
+          if (backpressured) {
+            const wasEmpty = state.backpressuredViewerIds.size === 0
+            state.backpressuredViewerIds.add(clientId)
+            if (wasEmpty) store.pauseTerminalRun(runId)
+            return
+          }
+          maybeResumeRun(runId, state, clientId)
+        },
+      })
       socket.on('message', (raw) => {
         store.writeRunInput(runId, raw.toString())
       })
       socket.on('close', () => {
-        state.ioSockets.delete(socket)
-        cleanupRun(runId)
+        if (viewer.ioSocket === socket) viewer.ioSocket = null
+        viewer.flowState?.close()
+        viewer.flowState = null
+        cleanupViewer(runId, state, clientId)
       })
     },
     close() {
-      for (const [runId, state] of runSockets) {
+      for (const [runId, state] of runStates) {
         state.outputUnsubscribe?.()
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.mirror.dispose()
-        for (const socket of [...state.ioSockets, ...state.controlSockets]) socket.close()
-        runSockets.delete(runId)
+        for (const viewer of state.viewers.values()) {
+          viewer.flowState?.close()
+          viewer.ioSocket?.close()
+          viewer.controlSocket?.close()
+        }
+        runStates.delete(runId)
       }
     },
   }

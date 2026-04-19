@@ -16,6 +16,10 @@ const matchTerminalPath = (pathname: string) => {
   }
 }
 
+const getClientId = (url: URL) => {
+  return url.searchParams.get('clientId')?.trim() || 'legacy'
+}
+
 const rejectUpgrade = (
   socket: Parameters<Server['on']>[1] extends (...args: infer T) => void ? T[1] : never,
   status: string
@@ -38,7 +42,8 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
   }
 
   server.on('upgrade', (request, socket, head) => {
-    const pathname = new URL(request.url ?? '/', 'http://127.0.0.1').pathname
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    const pathname = url.pathname
     const match = matchTerminalPath(pathname)
     if (!match) {
       rejectUpgrade(socket, '404 Not Found')
@@ -58,8 +63,9 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
 
     const wss = match.channel === 'io' ? ioWss : controlWss
     wss.handleUpgrade(request, socket, head, (ws) => {
-      if (match.channel === 'io') hub.attachIo(match.runId, ws)
-      else hub.attachControl(match.runId, ws)
+      const clientId = getClientId(url)
+      if (match.channel === 'io') hub.attachIo(match.runId, clientId, ws)
+      else hub.attachControl(match.runId, clientId, ws)
     })
   })
 

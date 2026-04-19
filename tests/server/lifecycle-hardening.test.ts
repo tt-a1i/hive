@@ -51,8 +51,10 @@ const createAgentManagerWithDuplicatedOnExit = (): AgentManager => {
   return {
     getRun: manager.getRun,
     getOutputBus: manager.getOutputBus,
+    pauseRun: manager.pauseRun,
     removeRun: manager.removeRun,
     resizeRun: manager.resizeRun,
+    resumeRun: manager.resumeRun,
     stopRun: manager.stopRun,
     writeInput: manager.writeInput,
     startAgent(input) {

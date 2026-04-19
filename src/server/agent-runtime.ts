@@ -1,63 +1,19 @@
-import type { WorkspaceSummary } from '../shared/types.js'
 import { createAgentLaunchCache } from './agent-launch-cache.js'
 import type { AgentManager } from './agent-manager.js'
 import { createAgentRunStarter } from './agent-run-starter.js'
-import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
 import { syncPersistedRun } from './agent-run-sync.js'
 import { getActiveRunByAgent } from './agent-runtime-active-run.js'
 import { closeAgentRuntime } from './agent-runtime-close.js'
+import type { AgentRuntime } from './agent-runtime-contract.js'
+import { createAgentRuntimeFlowAdapter } from './agent-runtime-flow-adapter.js'
 import { listRunsWithFallback } from './agent-runtime-list-runs.js'
 import type { AgentRunStorePort, AgentSessionStorePort } from './agent-runtime-ports.js'
 import { stopLiveRun } from './agent-runtime-stop-run.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
-import { type AgentTokenRegistry, createAgentTokenRegistry } from './agent-tokens.js'
+import { createAgentTokenRegistry } from './agent-tokens.js'
 import { withClaudeResumeArgs } from './claude-session-support.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
-import type { PtyOutputBus } from './pty-output-bus.js'
-
-interface StartAgentOptions {
-  hivePort: string
-}
-
-export interface AgentRuntime {
-  close: () => Promise<void>
-  configureAgentLaunch: (
-    workspaceId: string,
-    agentId: string,
-    input: AgentLaunchConfigInput
-  ) => void
-  getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
-  getLiveRun: (runId: string) => LiveAgentRun
-  getPtyOutputBus: () => PtyOutputBus
-  listAgentRuns: (agentId: string) => PersistedAgentRun[]
-  peekAgentToken: (agentId: string) => string | undefined
-  resizeAgentRun: (runId: string, cols: number, rows: number) => void
-  startAgent: (
-    workspace: WorkspaceSummary,
-    agentId: string,
-    input: StartAgentOptions
-  ) => Promise<LiveAgentRun>
-  stopAgentRun: (runId: string) => void
-  validateAgentToken: AgentTokenRegistry['validate']
-  writeReportPrompt: (
-    workspaceId: string,
-    workerName: string,
-    workerId: string,
-    text: string,
-    status: string,
-    artifacts: string[],
-    input?: { requireActiveRun?: boolean }
-  ) => void
-  writeSendPrompt: (
-    workspaceId: string,
-    workerId: string,
-    fromAgentName: string,
-    workerDescription: string,
-    text: string
-  ) => void
-  writeUserInputPrompt: (workspaceId: string, text: string) => void
-}
 
 export const createAgentRuntime = (
   agentManager: AgentManager | undefined,
@@ -72,6 +28,7 @@ export const createAgentRuntime = (
     if (!agentManager) throw new Error('Agent manager is required for PTY terminal operations')
     return agentManager
   }
+  const flowAdapter = createAgentRuntimeFlowAdapter(requireManager)
 
   const syncRun = (run: LiveAgentRun) =>
     agentManager ? syncPersistedRun(run, agentManager.getRun(run.runId), agentRunStore) : run
@@ -112,16 +69,22 @@ export const createAgentRuntime = (
       return syncRun(run)
     },
     getPtyOutputBus() {
-      return requireManager().getOutputBus()
+      return flowAdapter.getOutputBus()
     },
     listAgentRuns(agentId) {
       return listRunsWithFallback(registry, agentRunStore.listAgentRuns(agentId), agentId)
+    },
+    pauseRun(runId) {
+      flowAdapter.pauseRun(runId)
     },
     peekAgentToken(agentId) {
       return tokenRegistry.peek(agentId)
     },
     resizeAgentRun(runId, cols, rows) {
-      requireManager().resizeRun(runId, cols, rows)
+      flowAdapter.resizeRun(runId, cols, rows)
+    },
+    resumeRun(runId) {
+      flowAdapter.resumeRun(runId)
     },
     async startAgent(workspace, agentId, input) {
       const config = withClaudeResumeArgs(
@@ -147,3 +110,5 @@ export const createAgentRuntime = (
     },
   }
 }
+
+export type { AgentRuntime }

@@ -24,7 +24,9 @@ const createFakeAgentManager = (): AgentManager => {
     getOutputBus() {
       return outputBus
     },
+    pauseRun() {},
     resizeRun() {},
+    resumeRun() {},
     getRun(runId) {
       const run = runs.get(runId)
       if (!run) {

@@ -47,8 +47,8 @@ export const useTerminalRun = (runId: string) => {
           onExit() {
             setStatus('stopped')
           },
-          onOutput(chunk) {
-            nextTerminal.write(chunk)
+          onOutput(chunk, acknowledge) {
+            nextTerminal.write(chunk, () => acknowledge(new TextEncoder().encode(chunk).byteLength))
           },
           onRestore(snapshot) {
             nextTerminal.write(snapshot)
