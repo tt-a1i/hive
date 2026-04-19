@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -32,6 +32,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  cleanup()
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
@@ -56,7 +57,7 @@ describe('worker flow with real server', () => {
     await waitFor(() => {
       expect(screen.getByText('Alice')).toBeInTheDocument()
       expect(screen.getByText('coder')).toBeInTheDocument()
-      expect(screen.getByText('idle')).toBeInTheDocument()
+      expect(screen.getByText('stopped')).toBeInTheDocument()
     })
   })
 })

@@ -157,7 +157,7 @@ describe('runtime http app', () => {
       id: expect.any(String),
       name: 'Alice',
       role: 'coder',
-      status: 'idle',
+      status: 'stopped',
       pending_task_count: 0,
     })
     expect(store.listWorkers(workspace.id)).toEqual([
@@ -165,7 +165,7 @@ describe('runtime http app', () => {
         id: expect.any(String),
         name: 'Alice',
         role: 'coder',
-        status: 'idle',
+        status: 'stopped',
         pendingTaskCount: 0,
       },
     ])

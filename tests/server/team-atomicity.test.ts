@@ -1,29 +1,60 @@
-import { describe, expect, test } from 'vitest'
-
+import { describe, expect, test, vi } from 'vitest'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { createTeamOperations } from '../../src/server/team-operations.js'
 
 describe('team atomicity', () => {
-  test('dispatchTask rolls back pending count and message when PTY write fails', () => {
+  test('dispatchTask does not bump pending count when message insert fails after PTY write', () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-
-    store.configureAgentLaunch(workspace.id, worker.id, { command: '/bin/bash', args: [] })
+    const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
+    if (!orchestrator) {
+      throw new Error('Expected orchestrator')
+    }
+    const insertMessage = vi.fn(() => {
+      throw new Error('insert message failed')
+    })
+    const writeSendPrompt = vi.fn()
+    const markTaskDispatched = vi.fn()
+    const ops = createTeamOperations({
+      agentRuntime: {
+        writeSendPrompt,
+        writeReportPrompt: vi.fn(),
+        writeUserInputPrompt: vi.fn(),
+      } as never,
+      insertMessage,
+      workspaceStore: {
+        getAgent: store.getAgent,
+        getWorker: store.getWorker,
+        getWorkerByName: (workspaceId: string, workerName: string) => {
+          const worker = store
+            .getWorkspaceSnapshot(workspaceId)
+            .agents.find((agent) => agent.name === workerName && agent.role !== 'orchestrator')
+          if (!worker) {
+            throw new Error(`Worker not found: ${workerName}`)
+          }
+          return worker
+        },
+        markTaskDispatched,
+        markTaskReported: vi.fn(),
+      } as never,
+    })
 
     expect(() =>
-      store.dispatchTask(workspace.id, worker.id, 'Implement login', {
-        fromAgentId: `${workspace.id}:orchestrator`,
-      })
-    ).toThrow()
+      ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
+    ).toThrow(/insert message failed/)
 
     expect(store.listWorkers(workspace.id)).toContainEqual(
       expect.objectContaining({
         id: worker.id,
         pendingTaskCount: 0,
-        status: 'idle',
+        status: 'stopped',
       })
     )
     expect(store.listMessagesForRecovery(workspace.id, 0)).toEqual([])
+    expect(writeSendPrompt).toHaveBeenCalledTimes(1)
+    expect(insertMessage).toHaveBeenCalledTimes(1)
+    expect(markTaskDispatched).not.toHaveBeenCalled()
   })
 
   test('reportTask with requireActiveRun throws and leaves pending count + messages untouched when orch run is absent', () => {

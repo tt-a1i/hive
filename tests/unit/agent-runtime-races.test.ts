@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 
 const sessionStore = {
+  clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
   setLastSessionId: () => {},
 }
@@ -34,6 +35,7 @@ describe('agent runtime races (unit)', () => {
             status: 'starting',
           }
         },
+        removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },
@@ -80,6 +82,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'exited',
         }),
+        removeRun: () => {},
         stopRun: stopSpy,
         writeInput: () => {},
       },
@@ -121,6 +124,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'starting',
         }),
+        removeRun: () => {},
         stopRun: () => {},
         writeInput: (_runId, text) => {
           writes.push(text)
@@ -173,6 +177,7 @@ describe('agent runtime races (unit)', () => {
           runId: 'run-1',
           status: 'starting',
         }),
+        removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },

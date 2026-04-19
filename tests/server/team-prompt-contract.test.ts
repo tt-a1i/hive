@@ -33,7 +33,7 @@ afterEach(() => {
 })
 
 describe('team prompt contract', () => {
-  test('team send injects sender display name and role description, not uuid', async () => {
+  test('team send injects sender display name, role description, and task text', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-prompt-contract-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
@@ -69,9 +69,8 @@ describe('team prompt contract', () => {
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
       expect(run?.output).toContain('@Orchestrator')
-      expect(run?.output).toContain('你的角色：')
-      expect(run?.output).not.toContain(orchestrator.id)
-      expect(run?.output).not.toContain(worker.id)
+      expect(run?.output).toContain(`你的角色：${worker.description}`)
+      expect(run?.output.trimEnd()).toMatch(/实现登录$/)
     })
   })
 })

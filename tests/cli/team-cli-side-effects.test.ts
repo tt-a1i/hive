@@ -133,7 +133,6 @@ describe('team send CLI side effects (R1.3)', () => {
         expect(run?.output).toContain('@Orchestrator')
         expect(run?.output).toContain('你的角色：')
         expect(run?.output).toContain('实现登录')
-        expect(run?.output).not.toContain(worker.id)
         // The injected prompt must not leak any UUID (worker id or workspace id).
         const injected = (run?.output ?? '').replace(/^WRK:/gm, '')
         expect(injected).not.toMatch(uuidPattern)

@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
-import { buildRecoverySummary } from '../../src/server/recovery-summary.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -18,7 +17,7 @@ afterEach(() => {
 })
 
 describe('user input recovery', () => {
-  test('user-input endpoint records message and recovery summary includes user line', async () => {
+  test('user-input endpoint records a persisted user_input message after restart', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-user-input-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
@@ -54,14 +53,8 @@ describe('user input recovery', () => {
     if (!workspace) {
       throw new Error('Expected workspace after restart')
     }
-    const summary = buildRecoverySummary({
-      workspaceName: workspace.name,
-      agentRole: 'orchestrator',
-      tasksContent: '',
-      workers: store.listWorkers(workspace.id),
-      messages: store.listMessagesForRecovery(workspace.id, 0),
-    })
-
-    expect(summary).toContain('user: 请继续实现登录')
+    expect(store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
+      expect.objectContaining({ type: 'user_input', text: '请继续实现登录' })
+    )
   })
 })

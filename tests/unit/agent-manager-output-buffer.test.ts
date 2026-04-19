@@ -19,6 +19,6 @@ describe('agent manager output buffer (unit)', () => {
 
     const snapshot = manager.getRun(run.runId)
     expect(snapshot.output.length).toBeLessThanOrEqual(1_000_000)
-    expect(snapshot.output.endsWith('z'.repeat(100))).toBe(true)
+    expect(snapshot.output.slice(-100)).toBe('z'.repeat(100))
   })
 })

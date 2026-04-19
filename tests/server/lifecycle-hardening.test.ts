@@ -14,6 +14,7 @@ import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
 const sessionStore = {
+  clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
   setLastSessionId: () => {},
 }
@@ -49,6 +50,7 @@ const createAgentManagerWithDuplicatedOnExit = (): AgentManager => {
 
   return {
     getRun: manager.getRun,
+    removeRun: manager.removeRun,
     stopRun: manager.stopRun,
     writeInput: manager.writeInput,
     startAgent(input) {
@@ -95,7 +97,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
 
     await waitFor(() => {
       const snapshot = store.getLiveRun(run.runId)
-      expect(['exited', 'error']).toContain(snapshot.status)
+      expect(snapshot.status).toBe('exited')
     })
 
     await store.close()
@@ -109,7 +111,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
 
     expect(rows.length).toBeGreaterThan(0)
     for (const row of rows) {
-      expect(['exited', 'error']).toContain(row.status)
+      expect(row.status).toBe('exited')
       expect(row.ended_at).toEqual(expect.any(Number))
       expect(row.pid).toEqual(expect.any(Number))
     }
@@ -148,7 +150,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     const run = await runtime.startAgent(workspace, worker.id, { hivePort: '4010' })
 
     await waitFor(() => {
-      expect(runtime.getLiveRun(run.runId).output).toContain('started')
+      expect(runtime.getLiveRun(run.runId).status).toBe('running')
     })
 
     runtime.stopAgentRun(run.runId)
@@ -159,11 +161,17 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     })
 
     expect(onAgentExitSpy).toHaveBeenCalledTimes(1)
+    expect(
+      db
+        .prepare('SELECT status, ended_at FROM agent_runs WHERE run_id = ?')
+        .all(run.runId) as Array<{ ended_at: number | null; status: string }>
+    ).toEqual([{ ended_at: expect.any(Number), status: 'exited' }])
 
     // Worker should be marked stopped in workspace-level summary.
     expect(workspaceStore.getWorker(workspace.id, worker.id).status).toBe('stopped')
 
     await runtime.close()
+    agentRunStore.close?.()
     db.close()
   })
 
@@ -223,5 +231,44 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
       .filter((m) => m.type === 'send')
     expect(sendMessages).toEqual([])
     expect(store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(0)
+
+    await store.close()
+  })
+
+  test('close removes agent-manager run records after PTY shutdown', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const script = join(workspacePath, 'long-running.js')
+    writeFileSync(
+      script,
+      "process.stdin.resume(); setInterval(() => {}, 1000); console.log('started')\n"
+    )
+
+    const agentManager = createAgentManager()
+    const store = createRuntimeStore({ agentManager, dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: [script],
+    })
+
+    const run = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+
+    await waitFor(() => {
+      expect(store.getLiveRun(run.runId).status).toBe('running')
+    })
+
+    store.stopAgentRun(run.runId)
+    await waitFor(() => {
+      expect(store.getLiveRun(run.runId).status).toBe('exited')
+    })
+    await waitFor(() => {
+      expect(store.peekAgentToken(worker.id)).toBeUndefined()
+    })
+
+    await store.close()
+
+    expect(() => agentManager.getRun(run.runId)).toThrow(/Run not found/)
   })
 })

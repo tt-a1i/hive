@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-
 import { runTeamCommand } from '../../src/cli/team.js'
 import { startTestServer } from '../helpers/test-server.js'
 
@@ -132,7 +131,6 @@ describe('team cli with real server', () => {
       status: string
     }>
 
-    expect(output).not.toContain('pendingTaskCount')
     expect(parsed).toEqual([
       {
         id: expect.any(String),
@@ -145,7 +143,23 @@ describe('team cli with real server', () => {
   })
 
   test('team send Alice reaches the real backend', async () => {
+    if (!serverStore) {
+      throw new Error('Expected test server store')
+    }
+
     await expect(runTeamCommand(['send', 'Alice', 'Implement login'])).resolves.toBeUndefined()
+
+    const workspaceId = process.env.HIVE_PROJECT_ID
+    if (!workspaceId) {
+      throw new Error('Expected workspace id')
+    }
+
+    const worker = serverStore.getWorker(workspaceId, workerId)
+    expect(worker.pendingTaskCount).toBe(1)
+    expect(worker.status).toBe('working')
+    expect(serverStore.listMessagesForRecovery(workspaceId, 0)).toContainEqual(
+      expect.objectContaining({ type: 'send', to: workerId, text: 'Implement login' })
+    )
   })
 
   test('team list surfaces 403 when a worker token is used', async () => {

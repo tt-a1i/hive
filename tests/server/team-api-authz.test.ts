@@ -197,7 +197,10 @@ describe('team API authz (R1.4)', () => {
       // that exists alongside. Create a second workspace via the same runtime.
       const secondResponse = await fetch(`${ctxA.baseUrl}/api/workspaces`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          cookie: await getUiCookie(ctxA.baseUrl),
+        },
         body: JSON.stringify({ name: 'Beta', path: '/tmp/hive-authz-beta' }),
       })
       const secondWorkspace = (await secondResponse.json()) as { id: string }

@@ -11,6 +11,7 @@ import { createAgentRunStore } from '../../src/server/agent-run-store.js'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 
 const sessionStore = {
+  clearLastSessionId: () => {},
   getLastSessionId: () => undefined,
   setLastSessionId: () => {},
 }
@@ -46,6 +47,7 @@ describe('agent runtime stability (unit)', () => {
           runId: 'run-1',
           status: 'running',
         }),
+        removeRun: () => {},
         stopRun: () => {},
         writeInput: () => {},
       },
@@ -69,7 +71,7 @@ describe('agent runtime stability (unit)', () => {
 
     const snapshot = runtime.getLiveRun(run.runId)
     expect(snapshot.output.length).toBeLessThanOrEqual(1_000_000)
-    expect(snapshot.output.endsWith('a'.repeat(100))).toBe(true)
+    expect(snapshot.output.slice(-100)).toBe('a'.repeat(100))
   })
 
   test('invalid args_json falls back to empty args and warns', () => {
