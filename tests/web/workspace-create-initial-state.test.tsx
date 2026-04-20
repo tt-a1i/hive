@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -8,6 +12,7 @@ import { startTestServer } from '../helpers/test-server.js'
 
 let cleanupServer: (() => Promise<void>) | undefined
 const nativeFetch = globalThis.fetch
+const tempDirs: string[] = []
 
 beforeEach(async () => {
   const server = await startTestServer()
@@ -31,17 +36,24 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 describe('workspace create initial state', () => {
-  test('newly created workspace immediately has local tasks state so UI does not error', async () => {
+  test('newly created workspace immediately shows independent tasks state', async () => {
     render(<App />)
+    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-workspace-create-initial-'))
+    tempDirs.push(workspacePath)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
+    })
 
     fireEvent.change(screen.getByLabelText('Workspace Name'), {
       target: { value: 'Alpha' },
     })
     fireEvent.change(screen.getByLabelText('Workspace Path'), {
-      target: { value: '/tmp/hive-alpha' },
+      target: { value: workspacePath },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Create Workspace' }))
 
@@ -50,5 +62,6 @@ describe('workspace create initial state', () => {
     })
 
     expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('')
+    expect(screen.getByText(workspacePath)).toBeInTheDocument()
   })
 })
