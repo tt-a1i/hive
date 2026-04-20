@@ -47,6 +47,29 @@ export const createWorkspace = async (
   return (await response.json()) as WorkspaceSummary
 }
 
+export const getActiveWorkspaceId = async (): Promise<string | null> => {
+  const response = await fetch('/api/settings/app-state/active_workspace_id')
+
+  if (!response.ok) {
+    throw new Error('Failed to load active workspace')
+  }
+
+  const payload = (await response.json()) as { key: string; value: string | null }
+  return payload.value
+}
+
+export const saveActiveWorkspaceId = async (workspaceId: string | null): Promise<void> => {
+  const response = await fetch('/api/settings/app-state/active_workspace_id', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ value: workspaceId }),
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to save active workspace')
+  }
+}
+
 export const listWorkers = async (workspaceId: string): Promise<TeamListItem[]> => {
   const response = await fetch(`/api/ui/workspaces/${workspaceId}/team`, {
     mode: 'same-origin',

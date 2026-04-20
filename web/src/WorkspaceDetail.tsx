@@ -1,53 +1,26 @@
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
-import { listTerminalRuns, type TerminalRunSummary } from './api.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
-import { TerminalView } from './terminal/TerminalView.js'
 
 type WorkspaceDetailProps = {
+  onCreateWorker: (name: string, role: WorkerRole) => void
   workspace: WorkspaceSummary | undefined
   workers: TeamListItem[]
-  workerName: string
-  workerRole: WorkerRole
   onTasksSubmit: (event: FormEvent<HTMLFormElement>) => void
-  onWorkerNameChange: (value: string) => void
-  onWorkerRoleChange: (value: WorkerRole) => void
-  onWorkerSubmit: (event: FormEvent<HTMLFormElement>) => void
 }
 
 export const WorkspaceDetail = ({
+  onCreateWorker,
   workspace,
   workers,
-  workerName,
-  workerRole,
   onTasksSubmit,
-  onWorkerNameChange,
-  onWorkerRoleChange,
-  onWorkerSubmit,
 }: WorkspaceDetailProps) => {
-  const [terminalRuns, setTerminalRuns] = useState<TerminalRunSummary[]>([])
+  const [workerName, setWorkerName] = useState('')
+  const [workerRole, setWorkerRole] = useState<WorkerRole>('coder')
   const workspaceId = workspace?.id ?? null
   const tasksFile = useTasksFile(workspaceId)
-
-  useEffect(() => {
-    if (!workspaceId) {
-      setTerminalRuns([])
-      return
-    }
-    let cancelled = false
-    void listTerminalRuns(workspaceId)
-      .then((runs) => {
-        if (!cancelled) setTerminalRuns(runs)
-      })
-      .catch(() => {
-        if (!cancelled) setTerminalRuns([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [workspaceId])
 
   if (!workspace) {
     return null
@@ -87,14 +60,18 @@ export const WorkspaceDetail = ({
         </form>
       ) : null}
       <h3>Orchestrator</h3>
-      <form onSubmit={onWorkerSubmit}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          onCreateWorker(workerName, workerRole)
+          setWorkerName('')
+          setWorkerRole('coder')
+        }}
+      >
         <div>
           <label>
             Worker Name
-            <input
-              value={workerName}
-              onChange={(event) => onWorkerNameChange(event.target.value)}
-            />
+            <input value={workerName} onChange={(event) => setWorkerName(event.target.value)} />
           </label>
         </div>
         <div>
@@ -102,7 +79,7 @@ export const WorkspaceDetail = ({
             Worker Role
             <input
               value={workerRole}
-              onChange={(event) => onWorkerRoleChange(event.target.value as WorkerRole)}
+              onChange={(event) => setWorkerRole(event.target.value as WorkerRole)}
             />
           </label>
         </div>
@@ -120,14 +97,6 @@ export const WorkspaceDetail = ({
       ) : (
         <p>Worker cards coming next</p>
       )}
-
-      {terminalRuns.map((run) => (
-        <TerminalView
-          key={run.run_id}
-          runId={run.run_id}
-          title={`${run.agent_name} (${run.status})`}
-        />
-      ))}
     </section>
   )
 }

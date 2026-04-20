@@ -1,12 +1,13 @@
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
-import { createWorker, createWorkspace, listWorkers } from './api.js'
+import { createWorker, createWorkspace, listWorkers, saveActiveWorkspaceId } from './api.js'
+import { Sidebar } from './sidebar/Sidebar.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceForm } from './WorkspaceForm.js'
-import { WorkspaceList } from './WorkspaceList.js'
+import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 
 export const App = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
@@ -16,10 +17,18 @@ export const App = () => {
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useState<Record<string, TeamListItem[]>>(
     {}
   )
-  const [workerName, setWorkerName] = useState('')
-  const [workerRole, setWorkerRole] = useState<WorkerRole>('coder')
+  const [mountedWorkspaceIds, setMountedWorkspaceIds] = useState<string[]>([])
+  const [showWorkspaceForm, setShowWorkspaceForm] = useState(false)
+  const activeWorkspaceSaveQueue = useRef(Promise.resolve())
 
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
+
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    setMountedWorkspaceIds((current) =>
+      current.includes(activeWorkspaceId) ? current : [...current, activeWorkspaceId]
+    )
+  }, [activeWorkspaceId])
 
   useEffect(() => {
     if (!activeWorkspaceId || workersByWorkspaceId[activeWorkspaceId]) {
@@ -43,21 +52,27 @@ export const App = () => {
   }, [activeWorkspaceId, workersByWorkspaceId])
 
   const activeWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
-  const activeWorkers = activeWorkspaceId ? (workersByWorkspaceId[activeWorkspaceId] ?? []) : []
+
+  const selectWorkspace = (workspaceId: string | null) => {
+    setActiveWorkspaceId(workspaceId)
+    activeWorkspaceSaveQueue.current = activeWorkspaceSaveQueue.current
+      .catch(() => {})
+      .then(() => saveActiveWorkspaceId(workspaceId))
+  }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     void createWorkspace({ name, path }).then((workspace) => {
       setWorkspaces((current) => (current === null ? [workspace] : [...current, workspace]))
-      setActiveWorkspaceId(workspace.id)
+      selectWorkspace(workspace.id)
       setWorkersByWorkspaceId((current) => ({ ...current, [workspace.id]: [] }))
+      setShowWorkspaceForm(false)
       setName('')
       setPath('')
     })
   }
 
-  const handleWorkerSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleCreateWorker = (workerName: string, workerRole: WorkerRole) => {
     if (!activeWorkspaceId) {
       return
     }
@@ -66,8 +81,6 @@ export const App = () => {
         ...current,
         [activeWorkspaceId]: [...(current[activeWorkspaceId] ?? []), worker],
       }))
-      setWorkerName('')
-      setWorkerRole('coder')
     })
   }
 
@@ -76,23 +89,35 @@ export const App = () => {
   return (
     <main>
       <h1>Hive</h1>
-      <WorkspaceList workspaces={workspaces} onSelect={setActiveWorkspaceId} />
-      <WorkspaceForm
-        name={name}
-        path={path}
-        onNameChange={setName}
-        onPathChange={setPath}
-        onSubmit={handleSubmit}
+      <Sidebar
+        activeWorkspaceId={activeWorkspaceId}
+        workspaces={workspaces}
+        onCreateClick={() => setShowWorkspaceForm(true)}
+        onSelectWorkspace={selectWorkspace}
       />
+      {showWorkspaceForm || !activeWorkspace ? (
+        <WorkspaceForm
+          name={name}
+          path={path}
+          onNameChange={setName}
+          onPathChange={setPath}
+          onSubmit={handleSubmit}
+        />
+      ) : null}
+      {workspaces
+        ?.filter((workspace) => mountedWorkspaceIds.includes(workspace.id))
+        .map((workspace) => (
+          <WorkspaceTerminalPanels
+            key={`terminal-${workspace.id}`}
+            hidden={workspace.id !== activeWorkspaceId}
+            workspaceId={workspace.id}
+          />
+        ))}
       <WorkspaceDetail
         workspace={activeWorkspace}
-        workers={activeWorkers}
-        workerName={workerName}
-        workerRole={workerRole}
+        workers={activeWorkspace ? (workersByWorkspaceId[activeWorkspace.id] ?? []) : []}
+        onCreateWorker={handleCreateWorker}
         onTasksSubmit={handleTasksSubmit}
-        onWorkerNameChange={setWorkerName}
-        onWorkerRoleChange={setWorkerRole}
-        onWorkerSubmit={handleWorkerSubmit}
       />
     </main>
   )
