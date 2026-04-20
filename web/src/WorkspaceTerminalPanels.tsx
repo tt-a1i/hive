@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { listTerminalRuns, type TerminalRunSummary } from './api.js'
 import { TerminalView } from './terminal/TerminalView.js'
 
+const REFRESH_INTERVAL_MS = 500
+
 type WorkspaceTerminalPanelsProps = {
   hidden?: boolean
   workspaceId: string
@@ -16,15 +18,20 @@ export const WorkspaceTerminalPanels = ({
 
   useEffect(() => {
     let cancelled = false
-    void listTerminalRuns(workspaceId)
-      .then((runs) => {
-        if (!cancelled) setTerminalRuns(runs)
-      })
-      .catch(() => {
-        if (!cancelled) setTerminalRuns([])
-      })
+    const loadRuns = () => {
+      void listTerminalRuns(workspaceId)
+        .then((runs) => {
+          if (!cancelled) setTerminalRuns(runs)
+        })
+        .catch(() => {
+          if (!cancelled) setTerminalRuns([])
+        })
+    }
+    loadRuns()
+    const interval = window.setInterval(loadRuns, REFRESH_INTERVAL_MS)
     return () => {
       cancelled = true
+      window.clearInterval(interval)
     }
   }, [workspaceId])
 

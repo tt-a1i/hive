@@ -62,6 +62,7 @@ describe('tasks watcher websocket', () => {
       })
       expect(workspaceResponse.status).toBe(201)
       const workspace = (await workspaceResponse.json()) as { id: string }
+      await server.store.startWorkspaceWatch(workspace.id)
       const socket = await openSocket(toWsUrl(server.baseUrl, `/ws/tasks/${workspace.id}`), cookie)
       const messages: string[] = []
       socket.on('message', (chunk) => messages.push(chunk.toString()))
