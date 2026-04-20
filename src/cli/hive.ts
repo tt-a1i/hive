@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { once } from 'node:events'
 
 import { createAgentManager } from '../server/agent-manager.js'
@@ -43,7 +45,12 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
   })
 
   app.server.listen(port, '127.0.0.1')
-  await once(app.server, 'listening')
+  await Promise.race([
+    once(app.server, 'listening'),
+    once(app.server, 'error').then(([error]) => {
+      throw error
+    }),
+  ])
 
   const address = app.server.address()
   if (!address || typeof address === 'string') {
@@ -59,7 +66,6 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
     closePromise = (async () => {
       process.off('SIGTERM', gracefulShutdown)
       process.off('SIGINT', gracefulShutdown)
-      await app.store.close()
       await new Promise<void>((resolve, reject) => {
         app.server.close((error) => {
           if (error) {
@@ -70,6 +76,7 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
           resolve()
         })
       })
+      await app.store.close()
     })()
 
     return closePromise
@@ -99,3 +106,10 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
 }
 
 export type { RunHiveCommandResult }
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runHiveCommand(process.argv.slice(2)).catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
+}
