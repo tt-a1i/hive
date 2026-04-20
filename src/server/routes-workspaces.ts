@@ -25,17 +25,11 @@ const getSerializedWorker = (
 
 export const workspaceRoutes: RouteDefinition[] = [
   route('GET', '/api/workspaces', ({ request, response, store }) => {
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
     sendJson(response, 200, store.listWorkspaces())
   }),
   route('POST', '/api/workspaces', async ({ request, response, store }) => {
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
     const body = await readJsonBody<CreateWorkspaceBody>(request)
     sendJson(response, 201, store.createWorkspace(body.path, body.name))
   }),
@@ -50,10 +44,7 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
 
     sendJson(response, 200, store.listWorkers(workspaceId).map(serializeTeamListItem))
   }),
@@ -95,10 +86,7 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<CreateWorkerBody>(request)
       const worker = store.addWorker(workspaceId, body)
@@ -119,10 +107,7 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<UserInputBody>(request)
       store.recordUserInput(workspaceId, `${workspaceId}:orchestrator`, body.text)
@@ -149,10 +134,7 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<LaunchAgentBody>(request)
       sendJson(

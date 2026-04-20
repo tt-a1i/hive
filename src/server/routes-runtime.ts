@@ -14,10 +14,7 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
 
     sendJson(response, 200, store.listTerminalRuns(workspaceId))
   }),
@@ -41,10 +38,7 @@ export const runtimeRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<ConfigureAgentLaunchBody>(request)
       store.configureAgentLaunch(
@@ -62,10 +56,7 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
 
     store.stopAgentRun(runId)
     sendJson(response, 202, { ok: true })
@@ -76,10 +67,7 @@ export const runtimeRoutes: RouteDefinition[] = [
       return
     }
 
-    requireUiTokenFromRequest(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      store.validateUiToken
-    )
+    requireUiTokenFromRequest(request, store.validateUiToken)
 
     sendJson(response, 200, store.getLiveRun(runId))
   }),

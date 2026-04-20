@@ -136,6 +136,17 @@ describe('team API authz (R1.4)', () => {
     }
   })
 
+  test('rejects caller without UI cookie for UI team endpoint (403)', async () => {
+    const ctx = await setupHive()
+    try {
+      const response = await fetch(`${ctx.baseUrl}/api/ui/workspaces/${ctx.workspaceId}/team`)
+      expect(response.status).toBe(403)
+      expect(await response.json()).toEqual({ error: 'UI endpoint requires valid UI token' })
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
   test('rejects worker that invokes CLI team list endpoint (403)', async () => {
     const ctx = await setupHive()
     try {

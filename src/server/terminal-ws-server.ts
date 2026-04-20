@@ -34,10 +34,10 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
   const hub = createTerminalStreamHub(store)
 
   const validateUpgradeSession = (request: IncomingMessage) => {
-    const token = readCookie(
-      typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-      'hive_ui_token'
-    )
+    const cookieHeader = Array.isArray(request.headers.cookie)
+      ? request.headers.cookie.join('; ')
+      : request.headers.cookie
+    const token = readCookie(cookieHeader, 'hive_ui_token')
     return store.validateUiToken(token)
   }
 

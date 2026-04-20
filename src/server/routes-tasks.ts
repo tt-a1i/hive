@@ -17,10 +17,7 @@ export const taskRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const workspace = store.getWorkspaceSnapshot(workspaceId)
       sendJson(response, 200, { content: tasksFileService.readTasks(workspace.summary.path) })
@@ -40,10 +37,7 @@ export const taskRoutes: RouteDefinition[] = [
         return
       }
 
-      requireUiTokenFromRequest(
-        typeof request.headers.cookie === 'string' ? request.headers.cookie : undefined,
-        store.validateUiToken
-      )
+      requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<{ content: string }>(request)
       const workspace = store.getWorkspaceSnapshot(workspaceId)
