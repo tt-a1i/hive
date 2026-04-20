@@ -11,8 +11,10 @@ import { createAgentSessionStore } from './agent-session-store.js'
 import { createMessageLogStore, type RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import { openRuntimeDatabase } from './runtime-database.js'
+import { buildRuntimeRestartPolicy } from './runtime-restart-policy.js'
 import type { SettingsStore } from './settings-store.js'
 import { createSettingsStore } from './settings-store.js'
+import { createTasksFileService } from './tasks-file.js'
 import {
   createTeamOperations,
   type DispatchTaskInput,
@@ -95,11 +97,18 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
   const settings = createSettingsStore(db)
+  const tasksFileService = createTasksFileService()
   const uiAuth = createUiAuth()
 
   messageLogStore.initialize()
   agentRunStore.initialize()
   const workspaceStore = createWorkspaceStore(db, messageLogStore.listMessageKinds())
+  const restartPolicy = buildRuntimeRestartPolicy({
+    agentRunStore,
+    messageLogStore,
+    tasksFileService,
+    workspaceStore,
+  })
   const agentRuntime = createAgentRuntime(
     agentManager,
     agentRunStore,
@@ -107,7 +116,8 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     settings.getCommandPreset,
     (workspaceId, agentId) => {
       workspaceStore.markAgentStopped(workspaceId, agentId)
-    }
+    },
+    restartPolicy
   )
   const teamOps = createTeamOperations({
     agentRuntime,

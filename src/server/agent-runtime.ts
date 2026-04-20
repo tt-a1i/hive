@@ -14,13 +14,15 @@ import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { createAgentTokenRegistry } from './agent-tokens.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
+import { createNoopRestartPolicy, type RestartPolicy } from './restart-policy.js'
 
 export const createAgentRuntime = (
   agentManager: AgentManager | undefined,
   agentRunStore: AgentRunStorePort,
   sessionStore: AgentSessionStorePort,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined,
-  onAgentExit: (workspaceId: string, agentId: string) => void
+  onAgentExit: (workspaceId: string, agentId: string) => void,
+  restartPolicy: RestartPolicy = createNoopRestartPolicy()
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
@@ -47,6 +49,7 @@ export const createAgentRuntime = (
     sessionStore,
     tokenRegistry,
     getCommandPreset,
+    restartPolicy,
   })
 
   return {
