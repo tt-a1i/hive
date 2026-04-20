@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 
 const runtimePort = Number.parseInt(process.env.HIVE_RUNTIME_PORT ?? '4010', 10)
+const webPort = Number.parseInt(process.env.HIVE_WEB_PORT ?? '5180', 10)
 
 export default defineConfig({
   root: 'web',
@@ -9,7 +10,8 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 5173,
+    port: webPort,
+    strictPort: true,
     proxy: {
       '/api': `http://127.0.0.1:${runtimePort}`,
       '/ws': {
