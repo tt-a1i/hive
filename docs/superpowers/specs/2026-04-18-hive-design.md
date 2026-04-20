@@ -4,7 +4,7 @@
 **状态**：Draft / Pending review
 **作者**：brainstorming session
 
-> **版本说明（v0.2.0-m2）**：本文中的 `[M2 scope 调整]` / `[M2 实现说明]` 是 `v0.2.0-m2` 的正式规范内容，不是临时 release note。M2 签收以这些正文修订后的边界为准；延后到 `M2.5 / M3` 的事项，均以正文标注为准。
+> **[M2 实现说明] 版本说明（v0.2.0-m2）**：本文中的 `[M2 scope 调整]` / `[M2 实现说明]` 是 `v0.2.0-m2` 的正式规范内容，不是临时 release note。M2 签收以这些正文修订后的边界为准；延后到 `M2.5 / M3` 的事项，均以正文标注为准。
 
 ---
 
@@ -365,7 +365,7 @@ Hive 实现机制：
 
 - `command_presets` 表加两个字段（详见 §7.1）：`resume_args_template` 和 `session_id_capture`
 - `agents` 表加 `last_session_id`
-- M2 **未实现** Layer B；Layer B 调整为 **M2.5 / M3 前置**（兜底通用）
+> **[M2 scope 调整]** Layer B 在 M2 的实现要点中仍只保留目标设计，实际交付延后到 **M2.5 / M3 前置**。
 - MVP **CC 必做 Layer A**（最常用）
 - Codex / OpenCode / Gemini 的 Layer A 配置作为实现期调研任务，搞不定就走 Layer B 兜底
 
@@ -424,7 +424,7 @@ UI 想展示的 worker 状态必须跟协议能力对齐——只看 working / i
 
 UI 卡片右下角的"队列: N" 直接读 `pending_task_count`（即"已 send 但未 report 的派单数"）。这跟 §3.3 提到的 per-agent 串行队列共用同一个数据源——队列里有几个派单等着执行，N 就是几。
 
-> **说明**：`pending_task_count` 与 `status` 是两个正交维度。worker 因 crash / stop 进入 `stopped` 后，队列长度仍可能 > 0（例如还有未 report 的派单）。UI 允许出现 `stopped + pending_task_count>0`，直到用户 restart 该 worker 或人工处理积压任务。
+> **[M2 实现说明]** `pending_task_count` 与 `status` 是两个正交维度。worker 因 crash / stop 进入 `stopped` 后，队列长度仍可能 > 0（例如还有未 report 的派单）。UI 允许出现 `stopped + pending_task_count>0`，直到用户 restart 该 worker 或人工处理积压任务。
 
 ---
 
