@@ -6,7 +6,12 @@ import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { withPresetResumeArgs } from './preset-launch-support.js'
-import { captureSessionIdForCapture, snapshotSessionIdsForCapture } from './session-capture.js'
+import {
+  captureSessionIdForCapture,
+  getSessionCaptureEnvironment,
+  type SessionCaptureSnapshot,
+  snapshotSessionIdsForCapture,
+} from './session-capture.js'
 
 const resolveHiveBinDir = () => {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
@@ -32,10 +37,15 @@ export const buildAgentRunBootstrap = (
     sessionStore.getLastSessionId(workspace.id, agentId),
     workspace.path
   )
+  const sessionCaptureSnapshot = snapshotSessionIdsForCapture(
+    workspace.path,
+    startConfig.sessionIdCapture
+  )
   return {
-    knownSessionIds: snapshotSessionIdsForCapture(workspace.path, startConfig.sessionIdCapture),
+    sessionCaptureSnapshot,
     startConfig,
     startEnv: {
+      ...getSessionCaptureEnvironment(sessionCaptureSnapshot),
       HIVE_PORT: '',
       HIVE_PROJECT_ID: workspace.id,
       HIVE_AGENT_ID: agentId,
@@ -47,22 +57,22 @@ export const buildAgentRunBootstrap = (
 
 export const startAgentRunCapture = ({
   agentId,
-  knownSessionIds,
+  sessionCaptureSnapshot,
   sessionStore,
   startConfig,
   workspace,
 }: {
   agentId: string
-  knownSessionIds: Set<string> | undefined
+  sessionCaptureSnapshot: SessionCaptureSnapshot | undefined
   sessionStore: AgentSessionStorePort
   startConfig: AgentLaunchConfigInput
   workspace: WorkspaceSummary
 }) => {
-  if (!knownSessionIds || !startConfig.sessionIdCapture) return
+  if (!sessionCaptureSnapshot || !startConfig.sessionIdCapture) return
   void captureSessionIdForCapture(
     workspace.path,
     startConfig.sessionIdCapture,
-    knownSessionIds,
+    sessionCaptureSnapshot,
     (sessionId) => {
       sessionStore.setLastSessionId(workspace.id, agentId, sessionId)
     }

@@ -41,7 +41,7 @@ export const createAgentRunStarter =
   ) => {
     if (!agentManager) throw new Error('Agent manager is required to start agents')
 
-    const { knownSessionIds, startConfig, startEnv } = buildAgentRunBootstrap(
+    const { sessionCaptureSnapshot, startConfig, startEnv } = buildAgentRunBootstrap(
       workspace,
       agentId,
       config,
@@ -125,7 +125,7 @@ export const createAgentRunStarter =
       return liveRun
     }
 
-    startAgentRunCapture({ agentId, knownSessionIds, sessionStore, startConfig, workspace })
+    startAgentRunCapture({ agentId, sessionCaptureSnapshot, sessionStore, startConfig, workspace })
     queueMicrotask(() => {
       restartPolicy.injectPostStartMessage({
         agentId,

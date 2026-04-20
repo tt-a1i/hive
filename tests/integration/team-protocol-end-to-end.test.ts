@@ -9,13 +9,17 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
 const tempDirs: string[] = []
 
-const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
+const waitFor = async (
+  assertion: () => Promise<void> | void,
+  timeoutMs = 2000,
+  intervalMs = 25
+) => {
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
 
   while (Date.now() <= deadline) {
     try {
-      assertion()
+      await assertion()
       return
     } catch (error) {
       lastError = error
