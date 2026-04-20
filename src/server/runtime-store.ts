@@ -1,27 +1,13 @@
 import type { AgentSummary, TeamListItem, WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
-import {
-  type AgentLaunchConfigInput,
-  createAgentRunStore,
-  type PersistedAgentRun,
-} from './agent-run-store.js'
-import { createAgentRuntime } from './agent-runtime.js'
+import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
-import { createAgentSessionStore } from './agent-session-store.js'
-import { createMessageLogStore, type RecoveryMessage } from './message-log-store.js'
+import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
-import { openRuntimeDatabase } from './runtime-database.js'
-import { buildRuntimeRestartPolicy } from './runtime-restart-policy.js'
+import { createRuntimeStoreLifecycle, createRuntimeStoreServices } from './runtime-store-helpers.js'
 import type { SettingsStore } from './settings-store.js'
-import { createSettingsStore } from './settings-store.js'
-import { createTasksFileService } from './tasks-file.js'
-import {
-  createTeamOperations,
-  type DispatchTaskInput,
-  type ReportTaskInput,
-} from './team-operations.js'
-import { createUiAuth } from './ui-auth.js'
-import { createWorkspaceStore, type WorkerInput, type WorkspaceRecord } from './workspace-store.js'
+import type { DispatchTaskInput, ReportTaskInput } from './team-operations.js'
+import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 
 interface RuntimeStore {
   close: () => Promise<void>
@@ -63,8 +49,10 @@ interface RuntimeStore {
     agentId: string,
     input: StartAgentOptions
   ) => Promise<LiveAgentRun>
+  startWorkspaceWatch: (workspaceId: string) => Promise<void>
   getLiveRun: (runId: string) => LiveAgentRun
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
+  registerTasksListener: (listener: (workspaceId: string, content: string) => void) => () => void
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   peekAgentToken: (agentId: string) => string | undefined
@@ -91,110 +79,50 @@ interface StartAgentOptions {
 export type { RuntimeStore }
 
 export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeStore => {
-  const agentManager = options.agentManager
-  const db = openRuntimeDatabase(options.dataDir)
-  const messageLogStore = createMessageLogStore(db)
-  const agentRunStore = createAgentRunStore(db)
-  const agentSessionStore = createAgentSessionStore(db)
-  const settings = createSettingsStore(db)
-  const tasksFileService = createTasksFileService()
-  const uiAuth = createUiAuth()
-
-  messageLogStore.initialize()
-  agentRunStore.initialize()
-  const workspaceStore = createWorkspaceStore(db, messageLogStore.listMessageKinds())
-  const restartPolicy = buildRuntimeRestartPolicy({
-    agentRunStore,
-    messageLogStore,
-    tasksFileService,
-    workspaceStore,
-  })
-  const agentRuntime = createAgentRuntime(
-    agentManager,
-    agentRunStore,
-    agentSessionStore,
-    settings.getCommandPreset,
-    (workspaceId, agentId) => {
-      workspaceStore.markAgentStopped(workspaceId, agentId)
-    },
-    restartPolicy
+  const services = createRuntimeStoreServices(options)
+  const lifecycle = createRuntimeStoreLifecycle(
+    options.agentManager ? { agentManager: options.agentManager, services } : { services }
   )
-  const teamOps = createTeamOperations({
-    agentRuntime,
-    deleteMessage: messageLogStore.deleteMessage,
-    insertMessage: messageLogStore.insertMessage,
-    workspaceStore,
-  })
   return {
-    async close() {
-      await agentRuntime.close()
-      agentRunStore.close?.()
-      db?.close()
+    close: lifecycle.close,
+    createWorkspace: (path, name) => {
+      const workspace = services.workspaceStore.createWorkspace(path, name)
+      void lifecycle.startWorkspaceWatch(workspace.id)
+      return workspace
     },
-    createWorkspace: (path, name) => workspaceStore.createWorkspace(path, name),
-    listWorkspaces: () => workspaceStore.listWorkspaces(),
-    addWorker: (workspaceId, input) => workspaceStore.addWorker(workspaceId, input),
-    recordUserInput: teamOps.recordUserInput,
-    dispatchTask: teamOps.dispatchTask,
-    dispatchTaskByWorkerName: teamOps.dispatchTaskByWorkerName,
-    reportTask: teamOps.reportTask,
-    listWorkers: (workspaceId) => workspaceStore.listWorkers(workspaceId),
-    getWorkspaceSnapshot: (workspaceId) => workspaceStore.getWorkspaceSnapshot(workspaceId),
-    getWorker: (workspaceId, workerId) => workspaceStore.getWorker(workspaceId, workerId),
-    getAgent: (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId),
-    getPtyOutputBus() {
-      if (!agentManager) throw new Error('Agent manager is required for PTY output subscriptions')
-      return agentManager.getOutputBus()
-    },
-    listTerminalRuns(workspaceId) {
-      return workspaceStore.getWorkspaceSnapshot(workspaceId).agents.flatMap((agent) => {
-        const run = agentRuntime.getActiveRunByAgentId(workspaceId, agent.id)
-        if (!run) return []
-        return [
-          { agent_id: agent.id, agent_name: agent.name, run_id: run.runId, status: run.status },
-        ]
-      })
-    },
-    configureAgentLaunch(workspaceId, agentId, input) {
-      workspaceStore.getAgent(workspaceId, agentId)
-      agentRuntime.configureAgentLaunch(workspaceId, agentId, input)
-    },
-    async startAgent(workspaceId, agentId, input) {
-      workspaceStore.getAgent(workspaceId, agentId)
-      workspaceStore.markAgentStarted(workspaceId, agentId)
-      try {
-        const run = await agentRuntime.startAgent(
-          workspaceStore.getWorkspaceSnapshot(workspaceId).summary,
-          agentId,
-          input
-        )
-        if (run.status === 'error') {
-          workspaceStore.markAgentStopped(workspaceId, agentId)
-        }
-        return run
-      } catch (error) {
-        workspaceStore.markAgentStopped(workspaceId, agentId)
-        throw error
-      }
-    },
-    getLiveRun: (runId) => agentRuntime.getLiveRun(runId),
+    listWorkspaces: () => services.workspaceStore.listWorkspaces(),
+    addWorker: (workspaceId, input) => services.workspaceStore.addWorker(workspaceId, input),
+    recordUserInput: services.teamOps.recordUserInput,
+    dispatchTask: services.teamOps.dispatchTask,
+    dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
+    reportTask: services.teamOps.reportTask,
+    listWorkers: (workspaceId) => services.workspaceStore.listWorkers(workspaceId),
+    getWorkspaceSnapshot: (workspaceId) =>
+      services.workspaceStore.getWorkspaceSnapshot(workspaceId),
+    getWorker: (workspaceId, workerId) => services.workspaceStore.getWorker(workspaceId, workerId),
+    getAgent: (workspaceId, agentId) => services.workspaceStore.getAgent(workspaceId, agentId),
+    getPtyOutputBus: lifecycle.getPtyOutputBus,
+    listTerminalRuns: lifecycle.listTerminalRuns,
+    configureAgentLaunch: lifecycle.configureAgentLaunch,
+    startAgent: lifecycle.startAgent,
+    startWorkspaceWatch: lifecycle.startWorkspaceWatch,
+    getLiveRun: (runId) => services.agentRuntime.getLiveRun(runId),
     getActiveRunByAgentId: (workspaceId, agentId) =>
-      agentRuntime.getActiveRunByAgentId(workspaceId, agentId),
-    listAgentRuns: (agentId) => agentRuntime.listAgentRuns(agentId),
+      services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId),
+    registerTasksListener: lifecycle.registerTasksListener,
+    listAgentRuns: (agentId) => services.agentRuntime.listAgentRuns(agentId),
     listMessagesForRecovery: (workspaceId, sinceMs) =>
-      messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
-    peekAgentToken: (agentId) => agentRuntime.peekAgentToken(agentId),
-    pauseTerminalRun: (runId) => agentRuntime.pauseRun(runId),
-    resizeAgentRun: (runId, cols, rows) => agentRuntime.resizeAgentRun(runId, cols, rows),
-    resumeTerminalRun: (runId) => agentRuntime.resumeRun(runId),
-    settings,
-    writeRunInput(runId, text) {
-      if (!agentManager) throw new Error('Agent manager is required for PTY stdin writes')
-      agentManager.writeInput(runId, text)
-    },
-    getUiToken: () => uiAuth.getToken(),
-    stopAgentRun: (runId) => agentRuntime.stopAgentRun(runId),
-    validateAgentToken: (agentId, token) => agentRuntime.validateAgentToken(agentId, token),
-    validateUiToken: (token) => uiAuth.validate(token),
+      services.messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
+    peekAgentToken: (agentId) => services.agentRuntime.peekAgentToken(agentId),
+    pauseTerminalRun: (runId) => services.agentRuntime.pauseRun(runId),
+    resizeAgentRun: (runId, cols, rows) => services.agentRuntime.resizeAgentRun(runId, cols, rows),
+    resumeTerminalRun: (runId) => services.agentRuntime.resumeRun(runId),
+    settings: services.settings,
+    writeRunInput: lifecycle.writeRunInput,
+    getUiToken: () => services.uiAuth.getToken(),
+    stopAgentRun: (runId) => services.agentRuntime.stopAgentRun(runId),
+    validateAgentToken: (agentId, token) =>
+      services.agentRuntime.validateAgentToken(agentId, token),
+    validateUiToken: (token) => services.uiAuth.validate(token),
   }
 }
