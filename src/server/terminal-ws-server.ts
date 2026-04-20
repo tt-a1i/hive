@@ -3,6 +3,7 @@ import type { IncomingMessage, Server } from 'node:http'
 import { WebSocketServer } from 'ws'
 
 import type { RuntimeStore } from './runtime-store.js'
+import { createTasksWebSocketServer } from './tasks-websocket-server.js'
 import { createTerminalStreamHub } from './terminal-stream-hub.js'
 import { readCookie } from './ui-auth-helpers.js'
 
@@ -31,7 +32,11 @@ const rejectUpgrade = (
 export const createTerminalWebSocketServer = (server: Server, store: RuntimeStore) => {
   const ioWss = new WebSocketServer({ noServer: true })
   const controlWss = new WebSocketServer({ noServer: true })
+  const tasksWss = createTasksWebSocketServer(server, store)
   const hub = createTerminalStreamHub(store)
+  const disposeTasksListener = store.registerTasksListener((workspaceId, content) => {
+    tasksWss.publish(workspaceId, content)
+  })
 
   const validateUpgradeSession = (request: IncomingMessage) => {
     const cookieHeader = Array.isArray(request.headers.cookie)
@@ -46,6 +51,9 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
     const pathname = url.pathname
     const match = matchTerminalPath(pathname)
     if (!match) {
+      if (/^\/ws\/tasks\/.+/.test(pathname)) {
+        return
+      }
       rejectUpgrade(socket, '404 Not Found')
       return
     }
@@ -70,9 +78,11 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
   })
 
   server.on('close', () => {
+    disposeTasksListener()
     hub.close()
     ioWss.close()
     controlWss.close()
+    tasksWss.close()
   })
 
   return { close: () => hub.close() }

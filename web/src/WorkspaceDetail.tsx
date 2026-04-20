@@ -3,16 +3,14 @@ import { useEffect, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
 import { listTerminalRuns, type TerminalRunSummary } from './api.js'
+import { useTasksFile } from './tasks/useTasksFile.js'
 import { TerminalView } from './terminal/TerminalView.js'
 
 type WorkspaceDetailProps = {
   workspace: WorkspaceSummary | undefined
-  tasksLoaded: boolean
-  tasks: string
   workers: TeamListItem[]
   workerName: string
   workerRole: WorkerRole
-  onTasksChange: (value: string) => void
   onTasksSubmit: (event: FormEvent<HTMLFormElement>) => void
   onWorkerNameChange: (value: string) => void
   onWorkerRoleChange: (value: WorkerRole) => void
@@ -21,12 +19,9 @@ type WorkspaceDetailProps = {
 
 export const WorkspaceDetail = ({
   workspace,
-  tasksLoaded,
-  tasks,
   workers,
   workerName,
   workerRole,
-  onTasksChange,
   onTasksSubmit,
   onWorkerNameChange,
   onWorkerRoleChange,
@@ -34,6 +29,7 @@ export const WorkspaceDetail = ({
 }: WorkspaceDetailProps) => {
   const [terminalRuns, setTerminalRuns] = useState<TerminalRunSummary[]>([])
   const workspaceId = workspace?.id ?? null
+  const tasksFile = useTasksFile(workspaceId)
 
   useEffect(() => {
     if (!workspaceId) {
@@ -60,14 +56,33 @@ export const WorkspaceDetail = ({
   return (
     <section>
       <p>{workspace.path}</p>
-      {tasksLoaded ? (
-        <form onSubmit={onTasksSubmit}>
+      {tasksFile.loaded ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void tasksFile.onSave().then(() => onTasksSubmit(event))
+          }}
+        >
           <div>
             <label>
               Tasks Markdown
-              <textarea value={tasks} onChange={(event) => onTasksChange(event.target.value)} />
+              <textarea
+                value={tasksFile.content}
+                onChange={(event) => tasksFile.onChange(event.target.value)}
+              />
             </label>
           </div>
+          {tasksFile.hasConflict ? (
+            <div>
+              <p>文件已在外部变化</p>
+              <button type="button" onClick={tasksFile.onReload}>
+                Reload
+              </button>
+              <button type="button" onClick={tasksFile.onKeepLocal}>
+                Keep Local
+              </button>
+            </div>
+          ) : null}
           <button type="submit">Save Tasks</button>
         </form>
       ) : null}
