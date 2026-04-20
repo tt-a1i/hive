@@ -13,6 +13,8 @@ import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
 import { createMessageLogStore, type RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
+import type { SettingsStore } from './settings-store.js'
+import { createSettingsStore } from './settings-store.js'
 import { initializeRuntimeDatabase } from './sqlite-schema.js'
 import {
   createTeamOperations,
@@ -70,6 +72,7 @@ interface RuntimeStore {
   pauseTerminalRun: (runId: string) => void
   resizeAgentRun: (runId: string, cols: number, rows: number) => void
   resumeTerminalRun: (runId: string) => void
+  settings: SettingsStore
   writeRunInput: (runId: string, text: string) => void
   getUiToken: () => string
   stopAgentRun: (runId: string) => void
@@ -101,6 +104,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   const messageLogStore = createMessageLogStore(db)
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
+  const settings = createSettingsStore(db)
   const uiAuth = createUiAuth()
 
   messageLogStore.initialize()
@@ -182,6 +186,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     pauseTerminalRun: (runId) => agentRuntime.pauseRun(runId),
     resizeAgentRun: (runId, cols, rows) => agentRuntime.resizeAgentRun(runId, cols, rows),
     resumeTerminalRun: (runId) => agentRuntime.resumeRun(runId),
+    settings,
     writeRunInput(runId, text) {
       if (!agentManager) throw new Error('Agent manager is required for PTY stdin writes')
       agentManager.writeInput(runId, text)

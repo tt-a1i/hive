@@ -9,6 +9,7 @@ import type {
   WorkerRole,
 } from './route-types.js'
 import { runtimeRoutes } from './routes-runtime.js'
+import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
 import { teamRoutes } from './routes-team.js'
 import { uiRoutes } from './routes-ui.js'
@@ -17,6 +18,7 @@ import { workspaceRoutes } from './routes-workspaces.js'
 const routes: RouteDefinition[] = [
   ...workspaceRoutes,
   ...uiRoutes,
+  ...settingsRoutes,
   ...taskRoutes,
   ...runtimeRoutes,
   ...teamRoutes,
