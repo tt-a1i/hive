@@ -1,6 +1,7 @@
 import type { Database } from 'better-sqlite3'
-import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
+import type { AgentSummary } from '../shared/types.js'
 import { getDefaultRoleDescription } from './role-templates.js'
+import type { WorkspaceRecord } from './workspace-store-contract.js'
 import {
   applyPendingTaskCount,
   createOrchestrator,
@@ -10,11 +11,6 @@ import {
   type WorkspaceRow,
   type WorkspaceSummaryRow,
 } from './workspace-store-support.js'
-
-export interface WorkspaceRecord {
-  summary: WorkspaceSummary
-  agents: AgentSummary[]
-}
 
 const createWorkerSummary = (
   workspaceId: string,

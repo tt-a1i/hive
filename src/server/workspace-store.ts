@@ -1,95 +1,41 @@
 import { randomUUID } from 'node:crypto'
 import type { Database } from 'better-sqlite3'
-import type { AgentSummary, TeamListItem, WorkerRole, WorkspaceSummary } from '../shared/types.js'
+
+import type { AgentSummary } from '../shared/types.js'
 import { ConflictError } from './http-errors.js'
 import { getDefaultRoleDescription } from './role-templates.js'
+import type { WorkerInput, WorkspaceRecord, WorkspaceStore } from './workspace-store-contract.js'
+import { hydrateWorkspaceFromDb, seedWorkspacesFromDb } from './workspace-store-hydration.js'
 import {
-  hydrateWorkspaceFromDb,
-  seedWorkspacesFromDb,
-  type WorkspaceRecord,
-} from './workspace-store-hydration.js'
+  getAgentRecord,
+  getWorkerByNameRecord,
+  getWorkerRecord,
+  markAgentStarted,
+  markAgentStopped,
+  markTaskDispatched,
+  markTaskReported,
+} from './workspace-store-mutations.js'
 import {
   createOrchestrator,
-  getStatusFromPendingCount,
   isWorkerAgent,
   type MessageKindRecord,
 } from './workspace-store-support.js'
 
-interface WorkerInput {
-  description?: string
-  name: string
-  role: WorkerRole
-}
-
-export interface WorkspaceStore {
-  addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
-  createWorkspace: (path: string, name: string) => WorkspaceSummary
-  getAgent: (workspaceId: string, agentId: string) => AgentSummary
-  getWorker: (workspaceId: string, workerId: string) => AgentSummary
-  getWorkerByName: (workspaceId: string, workerName: string) => AgentSummary
-  getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
-  listWorkers: (workspaceId: string) => TeamListItem[]
-  listWorkspaces: () => WorkspaceSummary[]
-  markAgentStarted: (workspaceId: string, agentId: string) => void
-  markAgentStopped: (workspaceId: string, agentId: string) => void
-  markTaskDispatched: (workspaceId: string, workerId: string) => void
-  markTaskReported: (workspaceId: string, workerId: string) => void
-}
-
-export type { WorkerInput, WorkspaceRecord }
+export type { WorkerInput, WorkspaceRecord, WorkspaceStore }
 
 export const createWorkspaceStore = (
   db: Database | undefined,
   messageKinds: MessageKindRecord[]
 ): WorkspaceStore => {
   const workspaces = new Map<string, WorkspaceRecord>()
-
-  const loadWorkspaceFromDb = (workspaceId: string) => {
-    hydrateWorkspaceFromDb(db, workspaces, messageKinds, workspaceId)
-  }
+  seedWorkspacesFromDb(db, workspaces, messageKinds)
 
   const getWorkspace = (workspaceId: string) => {
-    loadWorkspaceFromDb(workspaceId)
+    hydrateWorkspaceFromDb(db, workspaces, messageKinds, workspaceId)
     const workspace = workspaces.get(workspaceId)
-    if (!workspace) {
-      throw new Error(`Workspace not found: ${workspaceId}`)
-    }
+    if (!workspace) throw new Error(`Workspace not found: ${workspaceId}`)
     return workspace
   }
-
-  const getAgent = (workspaceId: string, agentId: string) => {
-    const agent = getWorkspace(workspaceId).agents.find((item) => item.id === agentId)
-    if (!agent) {
-      throw new Error(`Agent not found: ${agentId}`)
-    }
-    return agent
-  }
-
-  const getWorker = (workspaceId: string, workerId: string) => {
-    const worker = getAgent(workspaceId, workerId)
-    if (!isWorkerAgent(worker)) {
-      throw new Error(`Worker not found: ${workerId}`)
-    }
-    return worker
-  }
-
-  const getWorkerByName = (workspaceId: string, workerName: string) => {
-    const worker = getWorkspace(workspaceId).agents.find(
-      (item) => item.name === workerName && isWorkerAgent(item)
-    )
-    if (!worker) {
-      throw new Error(`Worker not found: ${workerName}`)
-    }
-    return worker
-  }
-
-  const setPendingCount = (workspaceId: string, workerId: string, pendingTaskCount: number) => {
-    const worker = getWorker(workspaceId, workerId)
-    worker.pendingTaskCount = pendingTaskCount
-    worker.status = getStatusFromPendingCount(pendingTaskCount)
-  }
-
-  seedWorkspacesFromDb(db, workspaces, messageKinds)
 
   return {
     addWorker(workspaceId, input) {
@@ -97,7 +43,6 @@ export const createWorkspaceStore = (
       if (workspace.agents.some((agent) => agent.name === input.name && isWorkerAgent(agent))) {
         throw new ConflictError(`Worker name already exists: ${input.name}`)
       }
-
       const worker: AgentSummary = {
         id: randomUUID(),
         workspaceId,
@@ -124,9 +69,10 @@ export const createWorkspaceStore = (
       workspaces.set(summary.id, { summary, agents: [createOrchestrator(summary.id)] })
       return summary
     },
-    getAgent,
-    getWorker,
-    getWorkerByName,
+    getAgent: (workspaceId, agentId) => getAgentRecord(workspaces, workspaceId, agentId),
+    getWorker: (workspaceId, workerId) => getWorkerRecord(workspaces, workspaceId, workerId),
+    getWorkerByName: (workspaceId, workerName) =>
+      getWorkerByNameRecord(workspaces, workspaceId, workerName),
     getWorkspaceSnapshot: getWorkspace,
     listWorkers(workspaceId) {
       return getWorkspace(workspaceId)
@@ -142,24 +88,11 @@ export const createWorkspaceStore = (
     listWorkspaces() {
       return Array.from(workspaces.values(), (workspace) => workspace.summary)
     },
-    markAgentStarted(workspaceId, agentId) {
-      const agent = getAgent(workspaceId, agentId)
-      agent.status = getStatusFromPendingCount(agent.pendingTaskCount)
-    },
-    markAgentStopped(workspaceId, agentId) {
-      getAgent(workspaceId, agentId).status = 'stopped'
-    },
-    markTaskDispatched(workspaceId, workerId) {
-      const worker = getWorker(workspaceId, workerId)
-      setPendingCount(workspaceId, workerId, worker.pendingTaskCount + 1)
-    },
-    markTaskReported(workspaceId, workerId) {
-      const worker = getWorker(workspaceId, workerId)
-      const pendingTaskCount = Math.max(0, worker.pendingTaskCount - 1)
-      worker.pendingTaskCount = pendingTaskCount
-      if (worker.status !== 'stopped') {
-        worker.status = getStatusFromPendingCount(pendingTaskCount)
-      }
-    },
+    markAgentStarted: (workspaceId, agentId) => markAgentStarted(workspaces, workspaceId, agentId),
+    markAgentStopped: (workspaceId, agentId) => markAgentStopped(workspaces, workspaceId, agentId),
+    markTaskDispatched: (workspaceId, workerId) =>
+      markTaskDispatched(workspaces, workspaceId, workerId),
+    markTaskReported: (workspaceId, workerId) =>
+      markTaskReported(workspaces, workspaceId, workerId),
   }
 }
