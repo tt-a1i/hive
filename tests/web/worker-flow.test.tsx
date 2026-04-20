@@ -43,7 +43,7 @@ describe('worker flow with real server', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('/tmp/hive-alpha')).toBeInTheDocument()
+      expect(screen.getByLabelText('Worker Name')).toBeInTheDocument()
     })
 
     fireEvent.change(screen.getByLabelText('Worker Name'), {

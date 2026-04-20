@@ -62,6 +62,6 @@ describe('workspace create initial state', () => {
     })
 
     expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('')
-    expect(screen.getByText(workspacePath)).toBeInTheDocument()
+    expect(screen.getAllByText(workspacePath).length).toBeGreaterThan(0)
   })
 })

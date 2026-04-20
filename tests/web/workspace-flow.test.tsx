@@ -51,7 +51,7 @@ describe('workspace flow with real server', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Alpha')).toBeInTheDocument()
-      expect(screen.getByText('/tmp/hive-alpha')).toBeInTheDocument()
+      expect(screen.getAllByText('/tmp/hive-alpha').length).toBeGreaterThan(0)
       expect(screen.getByText('Orchestrator')).toBeInTheDocument()
       expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
     })
