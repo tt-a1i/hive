@@ -78,6 +78,7 @@ describe('schema version', () => {
     expect(workerColumns.has('last_session_id')).toBe(true)
     expect(agentRunColumns.has('pid')).toBe(true)
     expect(agentRunColumns.has('ended_at')).toBe(true)
+    expect(launchConfigColumns.has('command_preset_id')).toBe(true)
     expect(launchConfigColumns.has('resume_args_template')).toBe(true)
     expect(launchConfigColumns.has('session_id_capture_json')).toBe(true)
     expect(commandPresetColumns).toEqual(

@@ -2,8 +2,9 @@ import type { Database } from 'better-sqlite3'
 
 import { applySchemaVersion5 } from './sqlite-schema-v5.js'
 import { applySchemaVersion7 } from './sqlite-schema-v7.js'
+import { applySchemaVersion8 } from './sqlite-schema-v8.js'
 
-export const CURRENT_SCHEMA_VERSION = 7
+export const CURRENT_SCHEMA_VERSION = 8
 
 export const initializeRuntimeDatabase = (db: Database) => {
   db.exec(`
@@ -47,6 +48,7 @@ export const initializeRuntimeDatabase = (db: Database) => {
       agent_id TEXT NOT NULL,
       command TEXT NOT NULL,
       args_json TEXT NOT NULL,
+      command_preset_id TEXT,
       resume_args_template TEXT,
       session_id_capture_json TEXT,
       created_at INTEGER NOT NULL,
@@ -153,5 +155,10 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(7)) {
     applySchemaVersion7(db)
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(7, Date.now())
+  }
+
+  if (!appliedVersions.has(8)) {
+    applySchemaVersion8(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(8, Date.now())
   }
 }
