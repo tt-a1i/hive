@@ -1,6 +1,3 @@
-import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
-import Database from 'better-sqlite3'
 import type { AgentSummary, TeamListItem, WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
 import {
@@ -13,9 +10,9 @@ import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
 import { createMessageLogStore, type RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
+import { openRuntimeDatabase } from './runtime-database.js'
 import type { SettingsStore } from './settings-store.js'
 import { createSettingsStore } from './settings-store.js'
-import { initializeRuntimeDatabase } from './sqlite-schema.js'
 import {
   createTeamOperations,
   type DispatchTaskInput,
@@ -93,14 +90,7 @@ export type { RuntimeStore }
 
 export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeStore => {
   const agentManager = options.agentManager
-  const db = options.dataDir
-    ? (() => {
-        mkdirSync(options.dataDir, { recursive: true })
-        const database = new Database(join(options.dataDir, 'runtime.sqlite'))
-        initializeRuntimeDatabase(database)
-        return database
-      })()
-    : undefined
+  const db = openRuntimeDatabase(options.dataDir)
   const messageLogStore = createMessageLogStore(db)
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
@@ -114,6 +104,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     agentManager,
     agentRunStore,
     agentSessionStore,
+    settings.getCommandPreset,
     (workspaceId, agentId) => {
       workspaceStore.markAgentStopped(workspaceId, agentId)
     }

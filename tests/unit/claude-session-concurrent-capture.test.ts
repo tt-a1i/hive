@@ -8,7 +8,7 @@ import {
   captureClaudeSessionId,
   encodeClaudeProjectPath,
   resetClaudeSessionClaimsForTests,
-} from '../../src/server/claude-session-support.js'
+} from '../../src/server/session-capture-claude.js'
 
 const tempDirs: string[] = []
 

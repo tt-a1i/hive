@@ -6,7 +6,7 @@ import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 import { createAgentSessionStore } from '../../src/server/agent-session-store.js'
-import { encodeClaudeProjectPath } from '../../src/server/claude-session-support.js'
+import { encodeClaudeProjectPath } from '../../src/server/session-capture-claude.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 
 const outputBus = {
@@ -110,6 +110,7 @@ describe('claude session resume failure', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 

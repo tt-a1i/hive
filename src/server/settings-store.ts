@@ -18,6 +18,7 @@ export interface SettingsStore {
   deleteCommandPreset: (id: string) => void
   deleteRoleTemplate: (id: string) => void
   getAppState: (key: string) => AppStateRecord | undefined
+  getCommandPreset: (id: string) => CommandPresetRecord | undefined
   listCommandPresets: () => CommandPresetRecord[]
   listRoleTemplates: () => RoleTemplateRecord[]
   setAppState: (key: string, value: AppStateValue) => void
@@ -45,6 +46,7 @@ export const createSettingsStore = (db: Database | undefined): SettingsStore => 
     deleteCommandPreset: commandPresetStore.remove,
     deleteRoleTemplate: roleTemplateStore.remove,
     getAppState: appStateStore.get,
+    getCommandPreset: commandPresetStore.get,
     listCommandPresets: commandPresetStore.list,
     listRoleTemplates: roleTemplateStore.list,
     setAppState: appStateStore.set,

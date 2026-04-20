@@ -3,17 +3,20 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
-
+import { withPresetResumeArgs } from '../../src/server/claude-session-support.js'
 import {
   captureClaudeSessionId,
-  claudeSessionExists,
   encodeClaudeProjectPath,
+  hasClaudeSessionFile,
   resetClaudeSessionClaimsForTests,
   snapshotClaudeSessionIds,
-  withClaudeResumeArgs,
-} from '../../src/server/claude-session-support.js'
+} from '../../src/server/session-capture-claude.js'
 
 const tempDirs: string[] = []
+const presetCapture = {
+  source: 'claude_project_jsonl_dir' as const,
+  pattern: '~/.claude/projects/{encoded_cwd}/*.jsonl',
+}
 
 const createTempRoot = () => {
   const root = join(tmpdir(), `hive-claude-session-${crypto.randomUUID()}`)
@@ -106,27 +109,32 @@ describe('claude session support', () => {
     expect(captured).toEqual(['44444444-4444-4444-8444-444444444444'])
   })
 
-  test('withClaudeResumeArgs returns original config when no last session exists', () => {
+  test('withPresetResumeArgs returns original config when no last session exists', () => {
     const config = {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
       resumeArgsTemplate: '--resume {session_id}',
+      sessionIdCapture: presetCapture,
     }
 
-    expect(withClaudeResumeArgs(config, undefined)).toBe(config)
+    expect(withPresetResumeArgs(config, null, undefined)).toBe(config)
   })
 
-  test('withClaudeResumeArgs adds resume args when the session file exists', () => {
+  test('withPresetResumeArgs adds resume args when the session file exists', () => {
     const root = createTempRoot()
     const cwd = '/tmp/project-f'
     writeSession(root, cwd, '55555555-5555-4555-8555-555555555555')
 
     expect(
-      withClaudeResumeArgs(
+      withPresetResumeArgs(
         {
           command: 'claude',
           args: ['--dangerously-skip-permissions'],
+        },
+        {
           resumeArgsTemplate: '--resume {session_id}',
+          sessionIdCapture: presetCapture,
+          yoloArgsTemplate: null,
         },
         '55555555-5555-4555-8555-555555555555',
         cwd
@@ -137,19 +145,45 @@ describe('claude session support', () => {
     })
   })
 
-  test('withClaudeResumeArgs returns original config when the session file is stale', () => {
+  test('withPresetResumeArgs returns original config when the session file is stale', () => {
     createTempRoot()
     const config = {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
       resumeArgsTemplate: '--resume {session_id}',
+      sessionIdCapture: presetCapture,
     }
 
     expect(
-      withClaudeResumeArgs(config, '66666666-6666-4666-8666-666666666666', '/tmp/project-g')
+      withPresetResumeArgs(config, null, '66666666-6666-4666-8666-666666666666', '/tmp/project-g')
     ).toBe(config)
-    expect(claudeSessionExists('/tmp/project-g', '66666666-6666-4666-8666-666666666666')).toBe(
+    expect(hasClaudeSessionFile('/tmp/project-g', '66666666-6666-4666-8666-666666666666')).toBe(
       false
     )
+  })
+
+  test('withPresetResumeArgs skips resume when capture source is unsupported', () => {
+    const config = {
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+    }
+    const result = withPresetResumeArgs(
+      config,
+      {
+        resumeArgsTemplate: '--resume {session_id}',
+        sessionIdCapture: {
+          source: 'stdout_regex',
+          pattern: 'Session ID: ([a-f0-9-]+)',
+        },
+        yoloArgsTemplate: null,
+      },
+      '77777777-7777-4777-8777-777777777777',
+      '/tmp/project-h'
+    )
+
+    expect(result).toMatchObject({
+      args: ['--dangerously-skip-permissions'],
+    })
+    expect(result).not.toHaveProperty('resumedSessionId')
   })
 })

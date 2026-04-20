@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { Database } from 'better-sqlite3'
 
 import { ConflictError } from './http-errors.js'
+import { parseSessionIdCapture, type SessionIdCaptureConfig } from './session-capture.js'
 
 export interface CommandPresetRecord {
   id: string
@@ -11,7 +12,7 @@ export interface CommandPresetRecord {
   args: string[]
   env: Record<string, string>
   resumeArgsTemplate: string | null
-  sessionIdCapture: Record<string, unknown> | null
+  sessionIdCapture: SessionIdCaptureConfig | null
   yoloArgsTemplate: string[] | null
   isBuiltin: boolean
 }
@@ -22,7 +23,7 @@ export interface CommandPresetInput {
   args: string[]
   env: Record<string, string>
   resumeArgsTemplate: string | null
-  sessionIdCapture: Record<string, unknown> | null
+  sessionIdCapture: SessionIdCaptureConfig | null
   yoloArgsTemplate: string[] | null
 }
 
@@ -44,12 +45,14 @@ const parseEnv = (value: string | null) => {
     : {}
 }
 
-const parseJsonBlob = (value: string | null) =>
-  value ? (JSON.parse(value) as Record<string, unknown>) : null
+const parseJsonBlob = (value: string | null) => {
+  if (!value) return null
+  return parseSessionIdCapture(JSON.parse(value))
+}
 
 const serializeArgs = (args: string[]) => JSON.stringify(args)
 const serializeEnv = (env: Record<string, string>) => JSON.stringify(env)
-const serializeBlob = (value: Record<string, unknown> | null) =>
+const serializeBlob = (value: SessionIdCaptureConfig | null) =>
   value ? JSON.stringify(value) : null
 const serializeYolo = (value: string[] | null) => (value ? JSON.stringify(value) : null)
 
@@ -76,6 +79,17 @@ const toRecord = (row: {
 })
 
 export const createCommandPresetStore = (db: Database | undefined) => {
+  const get = (id: string) => {
+    if (!db) return undefined
+    const row = db
+      .prepare(
+        `SELECT id, display_name, command, args, env, resume_args_template, session_id_capture, yolo_args_template, is_builtin
+         FROM command_presets WHERE id = ?`
+      )
+      .get(id)
+    return row ? toRecord(row as Parameters<typeof toRecord>[0]) : undefined
+  }
+
   const list = () => {
     if (!db) return []
     return db
@@ -141,5 +155,5 @@ export const createCommandPresetStore = (db: Database | undefined) => {
     db?.prepare('DELETE FROM command_presets WHERE id = ?').run(id)
   }
 
-  return { create, list, remove, update }
+  return { create, get, list, remove, update }
 }

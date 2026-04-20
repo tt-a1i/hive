@@ -43,6 +43,7 @@ export interface LaunchAgentBody {
 export interface ConfigureAgentLaunchBody {
   command: string
   args?: string[]
+  command_preset_id?: string | null
 }
 
 export interface RouteContext {

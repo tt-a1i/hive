@@ -40,6 +40,7 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
       const normalized = {
         command: input.command,
         args: input.args ?? [],
+        commandPresetId: input.commandPresetId ?? null,
         resumeArgsTemplate: input.resumeArgsTemplate ?? null,
         sessionIdCapture: input.sessionIdCapture ?? null,
       }

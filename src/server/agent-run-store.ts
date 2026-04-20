@@ -1,11 +1,15 @@
 import type { Database } from 'better-sqlite3'
 
+import type { SessionIdCaptureConfig } from './session-capture.js'
+import { parseSessionIdCapture } from './session-capture.js'
+
 export interface AgentLaunchConfigInput {
   command: string
   args?: string[]
+  commandPresetId?: string | null
   resumedSessionId?: string | null
   resumeArgsTemplate?: string | null
-  sessionIdCapture?: { pattern: string; source: 'claude_project_jsonl_dir' } | null
+  sessionIdCapture?: SessionIdCaptureConfig | null
 }
 
 export interface PersistedAgentRun {
@@ -38,28 +42,14 @@ interface LaunchConfigRow {
   agent_id: string
   command: string
   args_json: string
+  command_preset_id: string | null
   resume_args_template: string | null
   session_id_capture_json: string | null
 }
 
 const parseSessionIdCaptureJson = (value: string | null) => {
-  if (!value) {
-    return null
-  }
-
-  const parsed = JSON.parse(value) as unknown
-  if (
-    parsed &&
-    typeof parsed === 'object' &&
-    'source' in parsed &&
-    'pattern' in parsed &&
-    parsed.source === 'claude_project_jsonl_dir' &&
-    typeof parsed.pattern === 'string'
-  ) {
-    return parsed as { pattern: string; source: 'claude_project_jsonl_dir' }
-  }
-
-  return null
+  if (!value) return null
+  return parseSessionIdCapture(JSON.parse(value))
 }
 
 interface AgentRunRow {
@@ -90,7 +80,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
 
     return db
       .prepare(
-        `SELECT workspace_id, agent_id, command, args_json, resume_args_template, session_id_capture_json
+        `SELECT workspace_id, agent_id, command, args_json, command_preset_id, resume_args_template, session_id_capture_json
          FROM agent_launch_configs ORDER BY updated_at ASC`
       )
       .all()
@@ -101,6 +91,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
           config: {
             command: typedRow.command,
             args: parseArgsJson(typedRow.args_json, typedRow.agent_id),
+            commandPresetId: typedRow.command_preset_id,
             resumeArgsTemplate: typedRow.resume_args_template,
             sessionIdCapture: parseSessionIdCaptureJson(typedRow.session_id_capture_json),
           },
@@ -124,23 +115,26 @@ export const createAgentRunStore = (db: Database | undefined) => {
          agent_id,
          command,
          args_json,
+         command_preset_id,
          resume_args_template,
          session_id_capture_json,
          created_at,
          updated_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(workspace_id, agent_id) DO UPDATE SET
-         command = excluded.command,
-         args_json = excluded.args_json,
-         resume_args_template = excluded.resume_args_template,
-         session_id_capture_json = excluded.session_id_capture_json,
-         updated_at = excluded.updated_at`
+          command = excluded.command,
+          args_json = excluded.args_json,
+          command_preset_id = excluded.command_preset_id,
+          resume_args_template = excluded.resume_args_template,
+          session_id_capture_json = excluded.session_id_capture_json,
+          updated_at = excluded.updated_at`
     ).run(
       workspaceId,
       agentId,
       input.command,
       JSON.stringify(input.args ?? []),
+      input.commandPresetId ?? null,
       input.resumeArgsTemplate ?? null,
       input.sessionIdCapture ? JSON.stringify(input.sessionIdCapture) : null,
       createdAt,

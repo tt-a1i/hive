@@ -62,6 +62,7 @@ describe('agent runtime races (unit)', () => {
         },
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 
@@ -109,6 +110,7 @@ describe('agent runtime races (unit)', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 
@@ -160,6 +162,7 @@ describe('agent runtime races (unit)', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 
@@ -216,6 +219,7 @@ describe('agent runtime races (unit)', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 

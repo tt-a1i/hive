@@ -72,6 +72,7 @@ describe('agent runtime stability (unit)', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 
@@ -95,6 +96,7 @@ describe('agent runtime stability (unit)', () => {
         agent_id TEXT NOT NULL,
         command TEXT NOT NULL,
         args_json TEXT NOT NULL,
+        command_preset_id TEXT,
         resume_args_template TEXT,
         session_id_capture_json TEXT,
         created_at INTEGER NOT NULL,
@@ -108,12 +110,13 @@ describe('agent runtime stability (unit)', () => {
          agent_id,
          command,
          args_json,
+          command_preset_id,
          resume_args_template,
          session_id_capture_json,
          created_at,
          updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run('ws-1', 'agent-1', '/bin/bash', '{bad json', null, null, Date.now(), Date.now())
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run('ws-1', 'agent-1', '/bin/bash', '{bad json', null, null, null, Date.now(), Date.now())
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const store = createAgentRunStore(db)
@@ -126,6 +129,7 @@ describe('agent runtime stability (unit)', () => {
         config: {
           command: '/bin/bash',
           args: [],
+          commandPresetId: null,
           resumeArgsTemplate: null,
           sessionIdCapture: null,
         },

@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { getClaudeSessionFilePath } from '../../src/server/claude-session-support.js'
+import { getClaudeSessionFilePath } from '../../src/server/session-capture-claude.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 

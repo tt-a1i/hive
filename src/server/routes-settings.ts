@@ -1,5 +1,6 @@
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
+import type { SessionIdCaptureConfig } from './session-capture.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 
 type CommandPresetBody = {
@@ -8,7 +9,7 @@ type CommandPresetBody = {
   args: string[]
   env: Record<string, string>
   resume_args_template: string | null
-  session_id_capture: Record<string, unknown> | null
+  session_id_capture: SessionIdCaptureConfig | null
   yolo_args_template: string[] | null
 }
 
@@ -28,7 +29,7 @@ const serializeCommandPreset = (preset: {
   args: string[]
   env: Record<string, string>
   resumeArgsTemplate: string | null
-  sessionIdCapture: Record<string, unknown> | null
+  sessionIdCapture: SessionIdCaptureConfig | null
   yoloArgsTemplate: string[] | null
   isBuiltin: boolean
 }) => ({

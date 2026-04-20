@@ -140,6 +140,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
       createAgentManagerWithDuplicatedOnExit(),
       agentRunStore,
       sessionStore,
+      () => undefined,
       onAgentExitSpy
     )
     const workspace = workspaceStore.createWorkspace(workspacePath, 'Alpha')

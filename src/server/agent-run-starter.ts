@@ -1,5 +1,6 @@
 import { delimiter, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
 import type { WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
 import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
@@ -7,13 +8,10 @@ import { completeLiveRun } from './agent-run-sync.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import type { AgentTokenRegistry } from './agent-tokens.js'
-import {
-  captureClaudeSessionId,
-  getDefaultClaudeSessionCapture,
-  isClaudeCommand,
-  snapshotClaudeSessionIds,
-} from './claude-session-support.js'
+import type { CommandPresetRecord } from './command-preset-store.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
+import { withPresetResumeArgs } from './preset-launch-support.js'
+import { captureSessionIdForCapture, snapshotSessionIdsForCapture } from './session-capture.js'
 
 type PersistedRunStatus = PersistedAgentRun['status']
 
@@ -40,6 +38,7 @@ interface AgentRunStarterInput {
   }
   sessionStore: AgentSessionStorePort
   tokenRegistry: AgentTokenRegistry
+  getCommandPreset: (id: string) => CommandPresetRecord | undefined
 }
 
 const resolveHiveBinDir = () => {
@@ -60,6 +59,7 @@ export const createAgentRunStarter =
     store,
     sessionStore,
     tokenRegistry,
+    getCommandPreset,
   }: AgentRunStarterInput) =>
   async (
     workspace: WorkspaceSummary,
@@ -69,20 +69,24 @@ export const createAgentRunStarter =
   ) => {
     if (!agentManager) throw new Error('Agent manager is required to start agents')
 
-    const effectiveSessionCapture =
-      config.sessionIdCapture ??
-      (isClaudeCommand(config.command) ? getDefaultClaudeSessionCapture() : null)
-    const knownClaudeSessionIds =
-      effectiveSessionCapture?.source === 'claude_project_jsonl_dir'
-        ? snapshotClaudeSessionIds(workspace.path)
-        : undefined
+    const preset = config.commandPresetId ? getCommandPreset(config.commandPresetId) : undefined
+    const startConfig = withPresetResumeArgs(
+      config,
+      preset,
+      sessionStore.getLastSessionId(workspace.id, agentId),
+      workspace.path
+    )
+    const knownSessionIds = snapshotSessionIdsForCapture(
+      workspace.path,
+      startConfig.sessionIdCapture
+    )
     const handledRunExits = new Set<string>()
     const abortedRunIds = new Set<string>()
     const startedAt = Date.now()
     const token = tokenRegistry.issue(agentId)
     const startInput = {
       agentId,
-      command: config.command,
+      command: startConfig.command,
       cwd: workspace.path,
       env: {
         HIVE_PORT: hivePort,
@@ -107,7 +111,7 @@ export const createAgentRunStarter =
           return
         }
         completeLiveRun(liveRun, exitCode, endedAt, store)
-        if (exitCode !== 0 && config.resumedSessionId) {
+        if (exitCode !== 0 && startConfig.resumedSessionId) {
           sessionStore.clearLastSessionId(workspace.id, agentId)
         }
         handledRunExits.add(runId)
@@ -124,7 +128,7 @@ export const createAgentRunStarter =
     let run: Awaited<ReturnType<AgentManager['startAgent']>>
     try {
       run = await agentManager.startAgent(
-        config.args ? { ...startInput, args: config.args } : startInput
+        startConfig.args ? { ...startInput, args: startConfig.args } : startInput
       )
     } catch (error) {
       tokenRegistry.revokeIfMatches(agentId, token)
@@ -150,7 +154,7 @@ export const createAgentRunStarter =
 
     if (run.status === 'error') {
       store.updatePersistedRun(run.runId, 'error', run.exitCode, Date.now())
-      if (config.resumedSessionId) {
+      if (startConfig.resumedSessionId) {
         sessionStore.clearLastSessionId(workspace.id, agentId)
       }
       tokenRegistry.revokeIfMatches(agentId, token)
@@ -161,10 +165,15 @@ export const createAgentRunStarter =
       return liveRun
     }
 
-    if (knownClaudeSessionIds) {
-      void captureClaudeSessionId(workspace.path, knownClaudeSessionIds, (sessionId) => {
-        sessionStore.setLastSessionId(workspace.id, agentId, sessionId)
-      })
+    if (knownSessionIds && startConfig.sessionIdCapture) {
+      void captureSessionIdForCapture(
+        workspace.path,
+        startConfig.sessionIdCapture,
+        knownSessionIds,
+        (sessionId) => {
+          sessionStore.setLastSessionId(workspace.id, agentId, sessionId)
+        }
+      )
     }
 
     if (registry.hasPendingExitCode(run.runId)) {
@@ -174,7 +183,7 @@ export const createAgentRunStarter =
         if (!pendingRun) return
         if (handledRunExits.has(run.runId)) return
         completeLiveRun(pendingRun, exitCode, Date.now(), store)
-        if (exitCode !== 0 && config.resumedSessionId) {
+        if (exitCode !== 0 && startConfig.resumedSessionId) {
           sessionStore.clearLastSessionId(workspace.id, agentId)
         }
         handledRunExits.add(run.runId)

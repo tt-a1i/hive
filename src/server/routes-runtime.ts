@@ -41,11 +41,11 @@ export const runtimeRoutes: RouteDefinition[] = [
       requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<ConfigureAgentLaunchBody>(request)
-      store.configureAgentLaunch(
-        workspaceId,
-        agentId,
-        body.args ? { args: body.args, command: body.command } : { command: body.command }
-      )
+      store.configureAgentLaunch(workspaceId, agentId, {
+        command: body.command,
+        commandPresetId: body.command_preset_id ?? null,
+        ...(body.args ? { args: body.args } : {}),
+      })
       response.statusCode = 204
       response.end()
     }

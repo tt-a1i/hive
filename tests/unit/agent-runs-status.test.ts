@@ -67,6 +67,7 @@ describe('agent run status model (unit)', () => {
         updatePersistedRun: () => {},
       },
       sessionStore,
+      () => undefined,
       () => {}
     )
 

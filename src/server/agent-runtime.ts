@@ -12,13 +12,14 @@ import { stopLiveRun } from './agent-runtime-stop-run.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { createAgentTokenRegistry } from './agent-tokens.js'
-import { withClaudeResumeArgs } from './claude-session-support.js'
+import type { CommandPresetRecord } from './command-preset-store.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
 
 export const createAgentRuntime = (
   agentManager: AgentManager | undefined,
   agentRunStore: AgentRunStorePort,
   sessionStore: AgentSessionStorePort,
+  getCommandPreset: (id: string) => CommandPresetRecord | undefined,
   onAgentExit: (workspaceId: string, agentId: string) => void
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
@@ -45,6 +46,7 @@ export const createAgentRuntime = (
     store: agentRunStore,
     sessionStore,
     tokenRegistry,
+    getCommandPreset,
   })
 
   return {
@@ -87,13 +89,13 @@ export const createAgentRuntime = (
       flowAdapter.resumeRun(runId)
     },
     async startAgent(workspace, agentId, input) {
-      const config = withClaudeResumeArgs(
-        launchCache.get(workspace.id, agentId),
-        sessionStore.getLastSessionId(workspace.id, agentId),
-        workspace.path
-      )
       launchCache.setWorkspaceId(agentId, workspace.id)
-      return startLiveRun(workspace, agentId, config, input.hivePort)
+      return startLiveRun(
+        workspace,
+        agentId,
+        launchCache.get(workspace.id, agentId),
+        input.hivePort
+      )
     },
     stopAgentRun(runId) {
       stopLiveRun(agentManager, registry, syncRun, runId)
