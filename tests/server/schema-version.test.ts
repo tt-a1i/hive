@@ -54,6 +54,21 @@ describe('schema version', () => {
         (column) => column.name
       )
     )
+    const commandPresetColumns = new Set(
+      (db.prepare('PRAGMA table_info(command_presets)').all() as Array<{ name: string }>).map(
+        (column) => column.name
+      )
+    )
+    const roleTemplateColumns = new Set(
+      (db.prepare('PRAGMA table_info(role_templates)').all() as Array<{ name: string }>).map(
+        (column) => column.name
+      )
+    )
+    const appStateColumns = new Set(
+      (db.prepare('PRAGMA table_info(app_state)').all() as Array<{ name: string }>).map(
+        (column) => column.name
+      )
+    )
     const messageColumns = new Set(
       (db.prepare('PRAGMA table_info(messages)').all() as Array<{ name: string }>).map(
         (column) => column.name
@@ -65,7 +80,51 @@ describe('schema version', () => {
     expect(agentRunColumns.has('ended_at')).toBe(true)
     expect(launchConfigColumns.has('resume_args_template')).toBe(true)
     expect(launchConfigColumns.has('session_id_capture_json')).toBe(true)
+    expect(commandPresetColumns).toEqual(
+      new Set([
+        'id',
+        'display_name',
+        'command',
+        'args',
+        'env',
+        'resume_args_template',
+        'session_id_capture',
+        'yolo_args_template',
+        'is_builtin',
+        'created_at',
+        'updated_at',
+      ])
+    )
+    expect(roleTemplateColumns).toEqual(
+      new Set([
+        'id',
+        'name',
+        'role_type',
+        'description',
+        'default_command',
+        'default_args',
+        'default_env',
+        'is_builtin',
+        'created_at',
+        'updated_at',
+      ])
+    )
+    expect(appStateColumns).toEqual(new Set(['key', 'value', 'updated_at']))
     expect(messageColumns.has('kind')).toBe(false)
+
+    const presetCount = db
+      .prepare('SELECT COUNT(*) AS count FROM command_presets WHERE is_builtin = 1')
+      .get() as { count: number }
+    const roleTemplateCount = db
+      .prepare('SELECT COUNT(*) AS count FROM role_templates WHERE is_builtin = 1')
+      .get() as { count: number }
+    const appState = db
+      .prepare('SELECT key, value FROM app_state WHERE key = ?')
+      .get('active_workspace_id') as { key: string; value: string | null } | undefined
+
+    expect(presetCount.count).toBe(4)
+    expect(roleTemplateCount.count).toBe(4)
+    expect(appState).toEqual({ key: 'active_workspace_id', value: null })
 
     db.close()
   })
