@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
 import { createWorker, createWorkspace, listWorkers, saveActiveWorkspaceId } from './api.js'
+import { MainLayout } from './layout/MainLayout.js'
 import { Sidebar } from './sidebar/Sidebar.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
@@ -87,14 +88,16 @@ export const App = () => {
   const handleTasksSubmit = (event: FormEvent<HTMLFormElement>) => event.preventDefault()
 
   return (
-    <main>
-      <h1>Hive</h1>
-      <Sidebar
-        activeWorkspaceId={activeWorkspaceId}
-        workspaces={workspaces}
-        onCreateClick={() => setShowWorkspaceForm(true)}
-        onSelectWorkspace={selectWorkspace}
-      />
+    <MainLayout
+      sidebar={
+        <Sidebar
+          activeWorkspaceId={activeWorkspaceId}
+          workspaces={workspaces}
+          onCreateClick={() => setShowWorkspaceForm(true)}
+          onSelectWorkspace={selectWorkspace}
+        />
+      }
+    >
       {showWorkspaceForm || !activeWorkspace ? (
         <WorkspaceForm
           name={name}
@@ -119,6 +122,6 @@ export const App = () => {
         onCreateWorker={handleCreateWorker}
         onTasksSubmit={handleTasksSubmit}
       />
-    </main>
+    </MainLayout>
   )
 }

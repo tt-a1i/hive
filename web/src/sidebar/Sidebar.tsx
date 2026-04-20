@@ -14,8 +14,11 @@ export const Sidebar = ({
   workspaces,
 }: SidebarProps) => {
   return (
-    <aside aria-label="Workspace sidebar">
-      <div>
+    <aside aria-label="Workspace sidebar" className="flex h-full flex-col">
+      <div className="p-4 border-b border-border">
+        <h1 className="text-xl font-bold">Hive</h1>
+      </div>
+      <div className="p-4 flex items-center justify-between">
         <strong>Workspaces</strong>
         <button type="button" onClick={onCreateClick} aria-label="New workspace">
           +

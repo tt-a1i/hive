@@ -1,9 +1,11 @@
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 const runtimePort = Number.parseInt(process.env.HIVE_RUNTIME_PORT ?? '4010', 10)
 const webPort = Number.parseInt(process.env.HIVE_WEB_PORT ?? '5180', 10)
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   root: 'web',
   build: {
     outDir: 'dist',

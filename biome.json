@@ -1,7 +1,15 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
   "files": {
-    "includes": ["**", "!dist", "!**/dist", "!coverage", "!node_modules", "!docs/mockups"],
+    "includes": [
+      "**",
+      "!dist",
+      "!**/dist",
+      "!coverage",
+      "!node_modules",
+      "!docs/mockups",
+      "!**/*.css"
+    ],
     "ignoreUnknown": true
   },
   "formatter": {
@@ -30,5 +38,26 @@
       "semicolons": "asNeeded",
       "trailingCommas": "es5"
     }
-  }
+  },
+  "css": {
+    "parser": {
+      "cssModules": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "css": {
+        "parser": {
+          "allowWrongLineComments": true
+        }
+      },
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
 }

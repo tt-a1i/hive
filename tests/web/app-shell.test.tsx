@@ -34,17 +34,20 @@ afterEach(async () => {
 })
 
 describe('app shell with real server', () => {
-  test('renders hive title and empty workspace form from a real backend', async () => {
+  test('renders hive title, empty workspace form, and expected Tailwind classes from a real backend', async () => {
     render(<App />)
 
     expect(screen.getByText('Hive')).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(screen.getByText('No workspaces yet')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
     })
+    expect(screen.getByLabelText('Workspace Name')).toHaveValue('')
+    expect(screen.getByLabelText('Workspace Path')).toHaveValue('')
 
-    expect(screen.getByLabelText('Workspace Name')).toBeInTheDocument()
-    expect(screen.getByLabelText('Workspace Path')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
+    const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
+    expect(sidebar).toBeInTheDocument()
+    expect(sidebar.parentElement).toHaveClass('w-64', 'bg-surface-1', 'border-border')
+    expect(sidebar.closest('.h-screen')).toHaveClass('bg-surface-0', 'text-text-primary')
   })
 })

@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  /* Light Mode (default) Surface hierarchy */
+  --color-surface-0: #FFFFFF;
+  --color-surface-1: #F9FAFB;
+  --color-surface-2: #F3F4F6;
+  --color-surface-3: #E5E7EB;
+  --color-surface-4: #D1D5DB;
+
+  /* Light Borders */
+  --color-border: #E5E7EB;
+  --color-border-bright: #D1D5DB;
+  --color-border-focus: #0084FF;
+  --color-divider: #F3F4F6;
+
+  /* Light Text */
+  --color-text-primary: #111827;
+  --color-text-secondary: #4B5563;
+  --color-text-tertiary: #9CA3AF;
+
+  /* Accent / brand */
+  --color-accent: #0084FF;
+  --color-accent-hover: #339DFF;
+  --color-accent-fg: #FFFFFF;
+
+  /* Status colors */
+  --color-status-green: #3FB950;
+  --color-status-orange: #D29922;
+  --color-status-red: #F85149;
+
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@layer base {
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Dark Surface hierarchy */
+      --color-surface-0: #1F2428;
+      --color-surface-1: #24292E;
+      --color-surface-2: #2D3339;
+      --color-surface-3: #353C43;
+      --color-surface-4: #3E464E;
+
+      /* Dark Borders */
+      --color-border: #30363D;
+      --color-border-bright: #444C56;
+      --color-border-focus: #0084FF;
+      --color-divider: #141820;
+
+      /* Dark Text */
+      --color-text-primary: #E6EDF3;
+      --color-text-secondary: #8B949E;
+      --color-text-tertiary: #6E7681;
+    }
+  }
+
+  /* Support manual class-based dark mode switching */
+  .dark {
+    /* Dark Surface hierarchy */
+    --color-surface-0: #1F2428;
+    --color-surface-1: #24292E;
+    --color-surface-2: #2D3339;
+    --color-surface-3: #353C43;
+    --color-surface-4: #3E464E;
+
+    /* Dark Borders */
+    --color-border: #30363D;
+    --color-border-bright: #444C56;
+    --color-border-focus: #0084FF;
+    --color-divider: #141820;
+
+    /* Dark Text */
+    --color-text-primary: #E6EDF3;
+    --color-text-secondary: #8B949E;
+    --color-text-tertiary: #6E7681;
+  }
+}
+
+html, body {
+  @apply bg-surface-0 text-text-primary h-full m-0 p-0 overflow-hidden font-sans;
+}
+
+#root {
+  @apply h-full;
+}
