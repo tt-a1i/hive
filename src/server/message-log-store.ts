@@ -7,7 +7,7 @@ export interface MessageLogRecord {
   status?: string
   text: string
   toAgentId?: string
-  type: 'user_input' | 'send' | 'report'
+  type: 'user_input' | 'send' | 'report' | 'system_env_sync' | 'system_recovery_summary'
   workerId: string
   workspaceId: string
 }
@@ -54,7 +54,7 @@ interface MessageRow {
   status: string | null
   text: string | null
   to_agent_id: string | null
-  type: 'user_input' | 'send' | 'report'
+  type: 'user_input' | 'send' | 'report' | 'system_env_sync' | 'system_recovery_summary'
   worker_id: string
 }
 
@@ -70,7 +70,12 @@ export const createMessageLogStore = (db: Database | undefined) => {
     }
 
     return db
-      .prepare('SELECT workspace_id, worker_id, type FROM messages ORDER BY sequence ASC')
+      .prepare(
+        `SELECT workspace_id, worker_id, type
+         FROM messages
+         WHERE type IN ('send', 'report')
+         ORDER BY sequence ASC`
+      )
       .all() as MessageKindRow[]
   }
 
@@ -157,6 +162,10 @@ export const createMessageLogStore = (db: Database | undefined) => {
             return recoveryMessage
           }
 
+          if (message.type !== 'report') {
+            return null
+          }
+
           return {
             artifacts: message.artifacts ?? [],
             createdAt: message.createdAt,
@@ -166,6 +175,7 @@ export const createMessageLogStore = (db: Database | undefined) => {
             type: 'report' as const,
           } satisfies RecoveryMessage
         })
+        .filter((message): message is RecoveryMessage => message !== null)
     }
 
     return db
@@ -202,6 +212,10 @@ export const createMessageLogStore = (db: Database | undefined) => {
           return message
         }
 
+        if (typedRow.type !== 'report') {
+          return null
+        }
+
         return {
           artifacts: parseArtifacts(typedRow.artifacts),
           createdAt: typedRow.created_at,
@@ -211,6 +225,7 @@ export const createMessageLogStore = (db: Database | undefined) => {
           type: 'report' as const,
         } satisfies RecoveryMessage
       })
+      .filter((message): message is RecoveryMessage => message !== null)
   }
 
   return {
