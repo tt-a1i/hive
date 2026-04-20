@@ -41,18 +41,33 @@ const readLastSessionId = (dataDir: string, workspaceId: string, agentId: string
   return row?.last_session_id
 }
 
-const readConfiguredPresetId = (dataDir: string, workspaceId: string, agentId: string) => {
+const listSystemMessages = (
+  dataDir: string,
+  type: 'system_env_sync' | 'system_recovery_summary'
+) => {
   const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
-  const row = db
-    .prepare(
-      'SELECT command_preset_id FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?'
-    )
-    .get(workspaceId, agentId) as { command_preset_id: string | null } | undefined
+  const rows = db
+    .prepare('SELECT type, worker_id, text FROM messages WHERE type = ? ORDER BY sequence ASC')
+    .all(type) as Array<{ text: string; type: string; worker_id: string }>
   db.close()
-  return row?.command_preset_id
+  return rows
 }
 
-const writeFakeClaude = (workspacePath: string) => {
+const writePassiveNodeScript = (workspacePath: string, filename: string) => {
+  const scriptPath = join(workspacePath, filename)
+  writeFileSync(
+    scriptPath,
+    [
+      "process.stdin.setEncoding('utf8')",
+      "process.stdin.on('data', (chunk) => process.stdout.write('STDIN:' + chunk))",
+      "process.stdout.write('READY\\n')",
+      'setInterval(() => {}, 1000)',
+    ].join('\n')
+  )
+  return scriptPath
+}
+
+const writeResumableClaudeEcho = (workspacePath: string) => {
   const binDir = join(workspacePath, 'bin')
   mkdirSync(binDir, { recursive: true })
   const cliPath = join(binDir, 'claude')
@@ -63,23 +78,19 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk) => process.stdout.write('STDIN:' + chunk))
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
 const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
 const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
 const projectDir = join(projectsRoot, encoded)
-const expectFreshMarker = join(process.cwd(), '.expect-fresh')
 const expectResumeMarker = join(process.cwd(), '.expect-resume')
-const expectYoloMarker = join(process.cwd(), '.expect-yolo')
-const expectNoYoloMarker = join(process.cwd(), '.expect-no-yolo')
 mkdirSync(projectDir, { recursive: true })
 writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(expectResumeMarker) && !args.includes('--resume')) process.exit(2)
-if (existsSync(expectFreshMarker) && args.includes('--resume')) process.exit(3)
-if (existsSync(expectYoloMarker) && !args.includes('--dangerously-skip-permissions')) process.exit(4)
-if (existsSync(expectNoYoloMarker) && args.includes('--dangerously-skip-permissions')) process.exit(5)
 setInterval(() => {}, 1000)
 `
   )
@@ -93,15 +104,23 @@ const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspace
     headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
   })
+  expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
 }
 
-const createWorkerViaHttp = async (baseUrl: string, cookie: string, workspaceId: string) => {
+const createWorkerViaHttp = async (
+  baseUrl: string,
+  cookie: string,
+  workspaceId: string,
+  name: string,
+  role: 'coder' | 'tester' = 'coder'
+) => {
   const response = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/workers`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alice', role: 'coder' }),
+    body: JSON.stringify({ name, role }),
   })
+  expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
 }
 
@@ -154,70 +173,46 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
-describe('preset-driven Layer A', () => {
-  test('bound claude preset injects yolo args on fresh start', async () => {
-    const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-home-'))
+describe('Layer A env sync integration', () => {
+  test('successful Layer A resume injects persisted env-sync system message', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-layer-a-env-sync-home-'))
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
     const workspacePath = realpathSync(workspacePathRaw)
     process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
-    const fakeClaude = writeFakeClaude(workspacePath)
+    const fakeClaude = writeResumableClaudeEcho(workspacePath)
 
     const server = await startTestServer()
     try {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
-      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
-      const sessionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      const alice = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Alice')
+      const bob = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Bob', 'tester')
+      const bobScript = writePassiveNodeScript(workspacePath, 'bob-passive.js')
+      const sessionId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
-      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
+      await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ content: '# Tasks\n- [ ] env sync task\n' }),
+      })
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id, {
+        command: process.execPath,
+        args: [bobScript],
+      })
+      await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id, {
         command: fakeClaude,
         args: ['--session-id-test', sessionId],
         command_preset_id: 'claude',
       })
-      expect(readConfiguredPresetId(server.dataDir, workspace.id, worker.id)).toBe('claude')
-      writeFileSync(join(workspacePath, '.expect-yolo'), '1\n')
 
-      const run = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
-      await waitFor(async () => {
-        const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
-        expect(state.status).toBe('running')
-        expect(state.output).toContain(
-          `ARGS:--dangerously-skip-permissions --session-id-test ${sessionId}`
-        )
-      })
-    } finally {
-      await server.close()
-    }
-  })
-
-  test('bound claude preset captures and reuses session id on restart', async () => {
-    const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-home-'))
-    const workspacePathRaw = join(homeDir, 'workspace')
-    tempDirs.push(homeDir)
-    mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
-    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
-    const fakeClaude = writeFakeClaude(workspacePath)
-
-    const server = await startTestServer()
-    try {
-      const cookie = await getUiCookie(server.baseUrl)
-      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
-      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
-      const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-
-      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
-        command: fakeClaude,
-        args: ['--session-id-test', sessionId],
-        command_preset_id: 'claude',
-      })
-      expect(readConfiguredPresetId(server.dataDir, workspace.id, worker.id)).toBe('claude')
-
-      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
       await waitFor(() => {
-        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(sessionId)
+        expect(readLastSessionId(server.dataDir, workspace.id, alice.id)).toBe(sessionId)
       })
 
       server.store.stopAgentRun(firstRun.runId)
@@ -225,58 +220,31 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
       })
+      expect(listSystemMessages(server.dataDir, 'system_env_sync')).toHaveLength(0)
 
       writeFileSync(join(workspacePath, '.expect-resume'), '1\n')
-      writeFileSync(join(workspacePath, '.expect-yolo'), '1\n')
 
-      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain(
-          `ARGS:--resume ${sessionId} --dangerously-skip-permissions --session-id-test ${sessionId}`
-        )
-      })
-    } finally {
-      await server.close()
-    }
-  })
-
-  test('unbound claude command stays bare: no capture, no resume, no yolo', async () => {
-    const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-home-'))
-    const workspacePathRaw = join(homeDir, 'workspace')
-    tempDirs.push(homeDir)
-    mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
-    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
-    const fakeClaude = writeFakeClaude(workspacePath)
-
-    const server = await startTestServer()
-    try {
-      const cookie = await getUiCookie(server.baseUrl)
-      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
-      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
-      const sessionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-
-      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
-        command: fakeClaude,
-        args: ['--session-id-test', sessionId],
-      })
-      expect(readConfiguredPresetId(server.dataDir, workspace.id, worker.id)).toBeNull()
-      writeFileSync(join(workspacePath, '.expect-fresh'), '1\n')
-      writeFileSync(join(workspacePath, '.expect-no-yolo'), '1\n')
-
-      const run = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
-      await waitFor(async () => {
-        const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
-        expect(state.status).toBe('running')
-        expect(state.output).toContain(`ARGS:--session-id-test ${sessionId}`)
-        expect(state.output).not.toContain('--resume')
-        expect(state.output).not.toContain('--dangerously-skip-permissions')
+        expect(state.output).toContain(`ARGS:--resume ${sessionId}`)
+        expect(state.output).toContain('STDIN:[Hive 系统消息：你刚被 Hive 重启了。期间环境变化：')
+        expect(state.output).toContain('当前 workspace: Alpha')
+        expect(state.output).toContain('Bob')
+        expect(state.output).toContain('env sync task')
+        expect(state.output).toContain('重启期间未派新单')
       })
 
-      await new Promise((resolve) => setTimeout(resolve, 250))
-      expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBeUndefined()
+      const envSyncMessages = listSystemMessages(server.dataDir, 'system_env_sync')
+      expect(envSyncMessages).toHaveLength(1)
+      expect(envSyncMessages).toContainEqual(
+        expect.objectContaining({
+          type: 'system_env_sync',
+          worker_id: alice.id,
+          text: expect.stringContaining('env sync task'),
+        })
+      )
     } finally {
       await server.close()
     }

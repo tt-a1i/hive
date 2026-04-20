@@ -18,7 +18,7 @@ import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
-const originalHome = process.env.HOME
+const originalClaudeProjectsDir = process.env.HIVE_CLAUDE_PROJECTS_DIR
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -65,7 +65,8 @@ const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
 const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
-const projectDir = join(homedir(), '.claude', 'projects', encoded)
+const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
+const projectDir = join(projectsRoot, encoded)
 const failMarker = join(process.cwd(), '.fail-next-resume')
 const expectFreshMarker = join(process.cwd(), '.expect-fresh')
 const expectResumeMarker = join(process.cwd(), '.expect-resume')
@@ -129,12 +130,11 @@ const getRunOutputViaHttp = async (baseUrl: string, cookie: string, runId: strin
 }
 
 afterEach(() => {
-  if (originalHome === undefined) {
-    delete process.env.HOME
+  if (originalClaudeProjectsDir === undefined) {
+    delete process.env.HIVE_CLAUDE_PROJECTS_DIR
   } else {
-    process.env.HOME = originalHome
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = originalClaudeProjectsDir
   }
-  delete process.env.HIVE_CLAUDE_PROJECTS_DIR
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true })
   }
@@ -147,7 +147,7 @@ describe('Layer A resume recovery integration', () => {
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
     const workspacePath = realpathSync(workspacePathRaw)
-    process.env.HOME = homeDir
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
 
     const server = await startTestServer()
     try {
@@ -201,7 +201,7 @@ describe('Layer A resume recovery integration', () => {
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
     const workspacePath = realpathSync(workspacePathRaw)
-    process.env.HOME = homeDir
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
 
     const server = await startTestServer()
     try {
@@ -256,7 +256,7 @@ describe('Layer A resume recovery integration', () => {
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
     const workspacePath = realpathSync(workspacePathRaw)
-    process.env.HOME = homeDir
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(homeDir, '.claude', 'projects')
 
     const server = await startTestServer()
     try {
