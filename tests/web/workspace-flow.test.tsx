@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -34,26 +34,35 @@ afterEach(async () => {
 })
 
 describe('workspace flow with real server', () => {
-  test('can create a workspace from the empty state', async () => {
+  test('can create a workspace from the empty state and see the Linear workspace view', async () => {
     render(<App />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByLabelText('Workspace Name'), {
-      target: { value: 'Alpha' },
-    })
+    fireEvent.change(screen.getByLabelText('Workspace Name'), { target: { value: 'Alpha' } })
     fireEvent.change(screen.getByLabelText('Workspace Path'), {
       target: { value: '/tmp/hive-alpha' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Create Workspace' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Alpha')).toBeInTheDocument()
-      expect(screen.getAllByText('/tmp/hive-alpha').length).toBeGreaterThan(0)
-      expect(screen.getByText('Orchestrator')).toBeInTheDocument()
-      expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
+
+    const subHeader = screen.getByTestId('workspace-sub-header')
+    expect(within(subHeader).getByText('Alpha')).toBeInTheDocument()
+    expect(within(subHeader).getByText('/tmp/hive-alpha')).toBeInTheDocument()
+
+    // Orchestrator pane is mounted with the empty-state placeholder
+    expect(screen.getByTestId('orchestrator-terminal-slot')).toBeInTheDocument()
+    expect(screen.getByText(/Orchestrator 未启动/)).toBeInTheDocument()
+
+    // Workers pane shows empty grid + "+ New Worker" card
+    expect(screen.getByTestId('worker-grid')).toBeInTheDocument()
+
+    // Task Graph drawer is mounted
+    expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
   })
 })

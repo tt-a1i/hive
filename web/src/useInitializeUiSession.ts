@@ -53,7 +53,7 @@ export const useInitializeUiSession = (
             const nextActiveWorkspaceId = resolveActiveWorkspaceId(merged, persistedId)
             setActiveWorkspaceId(nextActiveWorkspaceId)
             if (persistedId !== nextActiveWorkspaceId) {
-              void saveActiveWorkspaceId(nextActiveWorkspaceId)
+              saveActiveWorkspaceId(nextActiveWorkspaceId).catch(() => {})
             }
             return merged
           })

@@ -36,7 +36,7 @@ export const WorkspaceTerminalPanels = ({
   }, [workspaceId])
 
   return (
-    <section hidden={hidden} aria-hidden={hidden || undefined}>
+    <section hidden={hidden} aria-hidden={hidden || undefined} aria-label="Terminal panels">
       {terminalRuns.map((run) => (
         <TerminalView
           key={run.run_id}

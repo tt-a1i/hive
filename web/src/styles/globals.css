@@ -1,86 +1,176 @@
 @import "tailwindcss";
 
 @theme {
-  /* Light Mode (default) Surface hierarchy */
-  --color-surface-0: #FFFFFF;
-  --color-surface-1: #F9FAFB;
-  --color-surface-2: #F3F4F6;
-  --color-surface-3: #E5E7EB;
-  --color-surface-4: #D1D5DB;
+  /* Linear dark — surfaces */
+  --color-bg-0: #08090a;
+  --color-bg-1: #0f0f11;
+  --color-bg-2: #18181b;
+  --color-bg-3: #232326;
+  --color-bg-crust: #050506;
 
-  /* Light Borders */
-  --color-border: #E5E7EB;
-  --color-border-bright: #D1D5DB;
-  --color-border-focus: #0084FF;
-  --color-divider: #F3F4F6;
+  /* Borders */
+  --color-border: #222226;
+  --color-border-bright: #2b2b30;
 
-  /* Light Text */
-  --color-text-primary: #111827;
-  --color-text-secondary: #4B5563;
-  --color-text-tertiary: #9CA3AF;
+  /* Text */
+  --color-text-primary: #f7f8f8;
+  --color-text-secondary: #8a8f98;
+  --color-text-tertiary: #62656c;
 
-  /* Accent / brand */
-  --color-accent: #0084FF;
-  --color-accent-hover: #339DFF;
-  --color-accent-fg: #FFFFFF;
+  /* Accent (Linear indigo) */
+  --color-accent: #5e6ad2;
+  --color-accent-hover: #7078e3;
 
-  /* Status colors */
+  /* Status */
   --color-status-green: #3FB950;
   --color-status-orange: #D29922;
   --color-status-red: #F85149;
-
-  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --color-status-blue: #4C9AFF;
+  --color-status-purple: #A371F7;
+  --color-status-gold: #D4A72C;
 }
 
-@layer base {
-  @media (prefers-color-scheme: dark) {
-    :root {
-      /* Dark Surface hierarchy */
-      --color-surface-0: #1F2428;
-      --color-surface-1: #24292E;
-      --color-surface-2: #2D3339;
-      --color-surface-3: #353C43;
-      --color-surface-4: #3E464E;
+:root {
+  /* Linear dark — surfaces */
+  --bg-0: #08090a;
+  --bg-1: #0f0f11;
+  --bg-2: #18181b;
+  --bg-3: #232326;
+  --bg-crust: #050506;
 
-      /* Dark Borders */
-      --color-border: #30363D;
-      --color-border-bright: #444C56;
-      --color-border-focus: #0084FF;
-      --color-divider: #141820;
+  /* Borders */
+  --border: #222226;
+  --border-bright: #2b2b30;
 
-      /* Dark Text */
-      --color-text-primary: #E6EDF3;
-      --color-text-secondary: #8B949E;
-      --color-text-tertiary: #6E7681;
-    }
-  }
+  /* Text */
+  --text-primary: #f7f8f8;
+  --text-secondary: #8a8f98;
+  --text-tertiary: #62656c;
 
-  /* Support manual class-based dark mode switching */
-  .dark {
-    /* Dark Surface hierarchy */
-    --color-surface-0: #1F2428;
-    --color-surface-1: #24292E;
-    --color-surface-2: #2D3339;
-    --color-surface-3: #353C43;
-    --color-surface-4: #3E464E;
+  /* Accent */
+  --accent: #5e6ad2;
+  --accent-hover: #7078e3;
 
-    /* Dark Borders */
-    --color-border: #30363D;
-    --color-border-bright: #444C56;
-    --color-border-focus: #0084FF;
-    --color-divider: #141820;
+  /* Status */
+  --status-green: #3FB950;
+  --status-orange: #D29922;
+  --status-red: #F85149;
+  --status-blue: #4C9AFF;
+  --status-purple: #A371F7;
+  --status-gold: #D4A72C;
 
-    /* Dark Text */
-    --color-text-primary: #E6EDF3;
-    --color-text-secondary: #8B949E;
-    --color-text-tertiary: #6E7681;
-  }
+  color-scheme: dark;
 }
 
 html, body {
-  @apply bg-surface-0 text-text-primary h-full m-0 p-0 overflow-hidden font-sans;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-0);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-#root {
-  @apply h-full;
+#root { height: 100%; }
+
+.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Linear dark palette helpers (class sugar) */
+.bg-0 { background: var(--bg-0); }
+.bg-1 { background: var(--bg-1); }
+.bg-2 { background: var(--bg-2); }
+.bg-3 { background: var(--bg-3); }
+.bg-crust { background: var(--bg-crust); }
+.text-pri { color: var(--text-primary); }
+.text-sec { color: var(--text-secondary); }
+.text-ter { color: var(--text-tertiary); }
+.border-d  { border-color: var(--border); }
+.border-b1 { border-color: var(--border-bright); }
+.accent { color: var(--accent); }
+.bg-accent { background: var(--accent); }
+
+/* Scrollbar */
+.scroll-y { overflow-y: auto; }
+.scroll-y::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-y::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+.scroll-y::-webkit-scrollbar-track { background: transparent; }
+
+/* Workspace row */
+.ws-row {
+  transition: background 0.12s;
+  cursor: pointer;
+}
+.ws-row:hover { background: var(--bg-2); }
+.ws-row.active {
+  background: var(--bg-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* Status dot */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.pulse-green { background: var(--status-green); animation: hive-pulse 1.6s ease-in-out infinite; }
+.pulse-orange { background: var(--status-orange); animation: hive-pulse 1.6s ease-in-out infinite; }
+@keyframes hive-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Worker card */
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-1px);
+}
+.card--interactive { cursor: pointer; }
+
+/* Role badges */
+.role-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.role-badge--coder { background: #1c3d5a; color: var(--status-blue); }
+.role-badge--tester { background: #3a2c1c; color: var(--status-orange); }
+.role-badge--reviewer { background: #3a1f3a; color: var(--status-purple); }
+.role-badge--orch { background: var(--bg-3); color: var(--text-secondary); }
+.role-badge--custom { background: var(--bg-3); color: var(--text-secondary); }
+
+/* line-clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Drawer */
+.drawer {
+  transform: translateX(100%);
+  transition: transform 0.25s ease-out;
+}
+.drawer.open { transform: translateX(0); }
+
+/* Modal backdrop */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.72);
 }

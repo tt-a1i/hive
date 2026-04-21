@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { getWorkspaceTasks, saveWorkspaceTasks } from '../api.js'
+import { toggleTaskLine } from './task-markdown.js'
 
 const toTasksSocketUrl = (workspaceId: string) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -137,6 +138,27 @@ export const useTasksFile = (workspaceId: string | null) => {
       setContent(response.content)
       setHasConflict(false)
       setRemoteContent(null)
+    },
+    toggleTaskAtLine: async (lineIndex: number) => {
+      if (!workspaceId) return
+      const previous = contentRef.current
+      const next = toggleTaskLine(previous, lineIndex)
+      if (next === previous) return
+      savedContentRef.current = next
+      contentRef.current = next
+      dirtyRef.current = false
+      setContent(next)
+      try {
+        const response = await saveWorkspaceTasks(workspaceId, { content: next })
+        savedContentRef.current = response.content
+        contentRef.current = response.content
+        setContent(response.content)
+      } catch (error) {
+        savedContentRef.current = previous
+        contentRef.current = previous
+        setContent(previous)
+        throw error
+      }
     },
   }
 }

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -40,7 +40,7 @@ afterEach(async () => {
 })
 
 describe('workspace create initial state', () => {
-  test('newly created workspace immediately shows independent tasks state', async () => {
+  test('newly created workspace immediately shows the Linear workspace view with empty drawer', async () => {
     render(<App />)
     const workspacePath = mkdtempSync(join(tmpdir(), 'hive-workspace-create-initial-'))
     tempDirs.push(workspacePath)
@@ -49,19 +49,20 @@ describe('workspace create initial state', () => {
       expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByLabelText('Workspace Name'), {
-      target: { value: 'Alpha' },
-    })
-    fireEvent.change(screen.getByLabelText('Workspace Path'), {
-      target: { value: workspacePath },
-    })
+    fireEvent.change(screen.getByLabelText('Workspace Name'), { target: { value: 'Alpha' } })
+    fireEvent.change(screen.getByLabelText('Workspace Path'), { target: { value: workspacePath } })
     fireEvent.click(screen.getByRole('button', { name: 'Create Workspace' }))
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
 
-    expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('')
-    expect(screen.getAllByText(workspacePath).length).toBeGreaterThan(0)
+    const subHeader = screen.getByTestId('workspace-sub-header')
+    expect(within(subHeader).getByText(workspacePath)).toBeInTheDocument()
+
+    // Drawer shows empty-state copy instead of a checkbox list
+    const drawer = screen.getByTestId('task-graph-drawer')
+    expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
+    expect(within(drawer).getByText(/没有任务条目/)).toBeInTheDocument()
   })
 })

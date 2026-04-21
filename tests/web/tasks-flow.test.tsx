@@ -81,15 +81,39 @@ afterEach(async () => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
-describe('tasks flow with real server', () => {
-  test('loads and saves tasks.md for the active workspace', async () => {
+const enterRawEditor = async (expectedInitialValue: string) => {
+  // Wait until tasks content is loaded (checkbox rendered means parseTaskMarkdown ran)
+  await screen.findByTestId('task-checkbox-0')
+  fireEvent.click(screen.getByRole('button', { name: 'edit raw' }))
+  await waitFor(() => {
+    expect(screen.getByLabelText('Tasks Markdown')).toHaveValue(expectedInitialValue)
+  })
+}
+
+describe('tasks flow driven from the Task Graph drawer', () => {
+  test('toggling a checkbox persists to tasks.md', async () => {
     render(<App />)
 
-    await waitFor(() => {
-      expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
+    const checkbox = await screen.findByTestId('task-checkbox-0')
+    expect(checkbox).not.toBeChecked()
+
+    fireEvent.click(checkbox)
+
+    await waitFor(async () => {
+      const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+        headers: { cookie: uiCookie },
+      })
+      await expect(saved.json()).resolves.toEqual({ content: '- [x] implement login\n' })
     })
 
-    expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [ ] implement login\n')
+    await waitFor(() => {
+      expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
+    })
+  })
+
+  test('raw editor save persists edits to tasks.md', async () => {
+    render(<App />)
+    await enterRawEditor('- [ ] implement login\n')
 
     fireEvent.change(screen.getByLabelText('Tasks Markdown'), {
       target: { value: '- [x] implement login\n' },
@@ -105,12 +129,9 @@ describe('tasks flow with real server', () => {
     await expect(savedResponse.json()).resolves.toEqual({ content: '- [x] implement login\n' })
   })
 
-  test('shows conflict banner when tasks.md changes externally during dirty edit', async () => {
+  test('raw editor shows conflict banner when tasks.md changes externally during dirty edit', async () => {
     render(<App />)
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
-    })
+    await enterRawEditor('- [ ] implement login\n')
 
     fireEvent.change(screen.getByLabelText('Tasks Markdown'), {
       target: { value: '- [ ] local draft\n' },
@@ -134,10 +155,7 @@ describe('tasks flow with real server', () => {
 
   test('auto-updates tasks content without conflict when editor is clean', async () => {
     render(<App />)
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('Tasks Markdown')).toBeInTheDocument()
-    })
+    await enterRawEditor('- [ ] implement login\n')
 
     writeFileSync(join(workspacePath, 'tasks.md'), '- [x] auto sync\n', 'utf8')
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -39,25 +39,32 @@ afterEach(async () => {
 })
 
 describe('worker flow with real server', () => {
-  test('can create a worker for the active workspace', async () => {
+  test('Add Worker dialog creates a card with role badge + status dot', async () => {
     render(<App />)
 
+    // Open the AddWorkerDialog via the Workers pane "+ New Worker" header button
     await waitFor(() => {
-      expect(screen.getByLabelText('Worker Name')).toBeInTheDocument()
+      const buttons = screen.getAllByRole('button', { name: /New Worker/ })
+      expect(buttons.length).toBeGreaterThan(0)
+    })
+    const newWorkerButtons = screen.getAllByRole('button', { name: /New Worker/ })
+    fireEvent.click(newWorkerButtons[0] as HTMLElement)
+
+    const dialog = await screen.findByRole('form', { name: 'Add worker' })
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Alice' } })
+    // role defaults to coder; explicit select keeps the test honest
+    fireEvent.change(within(dialog).getByLabelText('Role'), { target: { value: 'coder' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    // Dialog closes, card appears with testid + role badge
+    await waitFor(() => {
+      expect(screen.queryByRole('form', { name: 'Add worker' })).toBeNull()
     })
 
-    fireEvent.change(screen.getByLabelText('Worker Name'), {
-      target: { value: 'Alice' },
-    })
-    fireEvent.change(screen.getByLabelText('Worker Role'), {
-      target: { value: 'coder' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Worker' }))
-
-    await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeInTheDocument()
-      expect(screen.getByText('coder')).toBeInTheDocument()
-      expect(screen.getByText('stopped')).toBeInTheDocument()
-    })
+    const card = await screen.findByRole('button', { name: /^Open Alice$/ })
+    expect(card).toBeInTheDocument()
+    expect(within(card).getByText('Alice')).toBeInTheDocument()
+    expect(within(card).getByText('Coder')).toBeInTheDocument()
+    expect(within(card).getByText('stopped')).toBeInTheDocument()
   })
 })
