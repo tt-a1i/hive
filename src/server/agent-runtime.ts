@@ -1,3 +1,4 @@
+import type { AgentSummary } from '../shared/types.js'
 import { createAgentLaunchCache } from './agent-launch-cache.js'
 import type { AgentManager } from './agent-manager.js'
 import { createAgentRunStarter } from './agent-run-starter.js'
@@ -22,7 +23,8 @@ export const createAgentRuntime = (
   sessionStore: AgentSessionStorePort,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined,
   onAgentExit: (workspaceId: string, agentId: string) => void,
-  restartPolicy: RestartPolicy = createNoopRestartPolicy()
+  restartPolicy: RestartPolicy = createNoopRestartPolicy(),
+  getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
@@ -37,6 +39,7 @@ export const createAgentRuntime = (
     agentManager ? syncPersistedRun(run, agentManager.getRun(run.runId), agentRunStore) : run
   const stdinDispatcher = createAgentStdinDispatcher({
     agentManager,
+    getLaunchConfig: launchCache.peek,
     getWorkspaceId: launchCache.getWorkspaceId,
     registry,
     syncRun,
@@ -49,6 +52,7 @@ export const createAgentRuntime = (
     sessionStore,
     tokenRegistry,
     getCommandPreset,
+    getAgent,
     restartPolicy,
   })
 
@@ -58,6 +62,12 @@ export const createAgentRuntime = (
     },
     configureAgentLaunch(workspaceId, agentId, input) {
       launchCache.save(workspaceId, agentId, input)
+    },
+    deleteAgentLaunchConfig(workspaceId, agentId) {
+      launchCache.remove(workspaceId, agentId)
+    },
+    peekAgentLaunchConfig(workspaceId, agentId) {
+      return launchCache.peek(workspaceId, agentId)
     },
     getActiveRunByAgentId(workspaceId, agentId) {
       return getActiveRunByAgent(

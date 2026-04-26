@@ -65,7 +65,11 @@ export const markTaskDispatched = (
 ) => {
   const worker = getWorkerRecord(workspaces, workspaceId, workerId)
   worker.pendingTaskCount += 1
-  worker.status = getStatusFromPendingCount(worker.pendingTaskCount)
+  // spec §3.6.4: a stopped worker may accumulate queued tasks; PTY isn't
+  // running so it can't actually be `working`. Stay stopped until the user
+  // restarts it (mirrors markTaskReported's stopped guard at line 78).
+  if (worker.status !== 'stopped')
+    worker.status = getStatusFromPendingCount(worker.pendingTaskCount)
 }
 
 export const markTaskReported = (

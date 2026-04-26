@@ -1,4 +1,4 @@
-import type { WorkspaceSummary } from '../shared/types.js'
+import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
 import { buildAgentRunBootstrap, startAgentRunCapture } from './agent-run-bootstrap.js'
 import { handleAgentRunExit } from './agent-run-exit-handler.js'
@@ -6,9 +6,11 @@ import type { AgentRunExitContext, AgentRunStarterStorePort } from './agent-run-
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
+import { buildAgentStartupInstructions } from './agent-startup-instructions.js'
 import type { AgentTokenRegistry } from './agent-tokens.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
+import { createPostStartInputWriter, isInteractiveAgentCommand } from './post-start-input-writer.js'
 import type { RestartPolicy } from './restart-policy.js'
 
 interface AgentRunStarterInput {
@@ -19,6 +21,7 @@ interface AgentRunStarterInput {
   sessionStore: AgentSessionStorePort
   tokenRegistry: AgentTokenRegistry
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
+  getAgent: ((workspaceId: string, agentId: string) => AgentSummary | undefined) | undefined
   restartPolicy: RestartPolicy
 }
 
@@ -31,6 +34,7 @@ export const createAgentRunStarter =
     sessionStore,
     tokenRegistry,
     getCommandPreset,
+    getAgent,
     restartPolicy,
   }: AgentRunStarterInput) =>
   async (
@@ -70,6 +74,11 @@ export const createAgentRunStarter =
       cwd: workspace.path,
       env: {
         ...startEnv,
+        COLORTERM: 'truecolor',
+        FORCE_COLOR: '1',
+        NO_COLOR: undefined,
+        TERM: 'xterm-256color',
+        TERM_PROGRAM: 'hive',
         HIVE_PORT: hivePort,
         HIVE_AGENT_TOKEN: token,
       },
@@ -126,14 +135,23 @@ export const createAgentRunStarter =
     }
 
     startAgentRunCapture({ agentId, sessionCaptureSnapshot, sessionStore, startConfig, workspace })
+    const agent = getAgent?.(workspace.id, agentId)
+    const postStartWriter = createPostStartInputWriter(agentManager, startConfig.command)
     queueMicrotask(() => {
-      restartPolicy.injectPostStartMessage({
-        agentId,
-        runId: run.runId,
-        startConfig,
-        workspace,
-        writeToRun: (currentRunId, text) => agentManager.writeInput(currentRunId, text),
-      })
+      try {
+        const injectedRestartMessage = restartPolicy.injectPostStartMessage({
+          agentId,
+          runId: run.runId,
+          startConfig,
+          workspace,
+          writeToRun: postStartWriter,
+        })
+        if (!injectedRestartMessage && agent && isInteractiveAgentCommand(startConfig.command)) {
+          postStartWriter(run.runId, buildAgentStartupInstructions({ agent, workspace }))
+        }
+      } catch {
+        // The agent may have exited before post-start guidance could be written.
+      }
     })
 
     if (registry.hasPendingExitCode(run.runId)) {

@@ -51,7 +51,11 @@ describe('settings api', () => {
       expect.objectContaining({
         id: 'claude',
         display_name: 'Claude Code (CC)',
-        yolo_args_template: ['--dangerously-skip-permissions'],
+        yolo_args_template: [
+          '--dangerously-skip-permissions',
+          '--permission-mode=bypassPermissions',
+          '--disallowedTools=Task',
+        ],
       }),
       expect.objectContaining({ id: 'codex', display_name: 'Codex' }),
       expect.objectContaining({ id: 'opencode', display_name: 'OpenCode' }),

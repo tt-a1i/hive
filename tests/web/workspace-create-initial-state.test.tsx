@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -11,10 +11,17 @@ import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 let cleanupServer: (() => Promise<void>) | undefined
+let sandboxRoot = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
 beforeEach(async () => {
+  sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-fs-sandbox-'))
+  mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
+  tempDirs.push(sandboxRoot)
+  process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
+  process.env.HIVE_MOCK_PICK_FOLDER = join(sandboxRoot, 'alpha-project')
+
   const server = await startTestServer()
   cleanupServer = server.close
   let cookie = ''
@@ -36,31 +43,28 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
+  delete process.env.HIVE_FS_BROWSE_ROOT
+  delete process.env.HIVE_MOCK_PICK_FOLDER
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 describe('workspace create initial state', () => {
   test('newly created workspace immediately shows the Linear workspace view with empty drawer', async () => {
     render(<App />)
-    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-workspace-create-initial-'))
-    tempDirs.push(workspacePath)
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument()
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
+      target: { value: 'Alpha' },
     })
-
-    fireEvent.change(screen.getByLabelText('Workspace Name'), { target: { value: 'Alpha' } })
-    fireEvent.change(screen.getByLabelText('Workspace Path'), { target: { value: workspacePath } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create Workspace' }))
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
 
     const subHeader = screen.getByTestId('workspace-sub-header')
-    expect(within(subHeader).getByText(workspacePath)).toBeInTheDocument()
+    expect(within(subHeader).getByText(join(sandboxRoot, 'alpha-project'))).toBeInTheDocument()
 
-    // Drawer shows empty-state copy instead of a checkbox list
     const drawer = screen.getByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
     expect(within(drawer).getByText(/没有任务条目/)).toBeInTheDocument()

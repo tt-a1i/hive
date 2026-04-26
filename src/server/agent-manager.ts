@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node-pty'
+import { assertCommandIsExecutable } from './agent-command-resolver.js'
 import { attachAgentPty, toAgentRunSnapshot } from './agent-manager-support.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
@@ -50,6 +51,14 @@ interface AgentManager {
 
 const createRunId = () => randomUUID()
 
+const createSpawnEnv = (inputEnv?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => {
+  const env = { ...process.env, ...inputEnv }
+  for (const key of Object.keys(env)) {
+    if (env[key] === undefined) delete env[key]
+  }
+  return env
+}
+
 export const createAgentManager = ({
   ptyOutputBus = createPtyOutputBus(),
 }: {
@@ -71,8 +80,10 @@ export const createAgentManager = ({
       getRunRecord(runId).process.pause()
     },
     async startAgent(input) {
+      const env = createSpawnEnv(input.env)
+      assertCommandIsExecutable(input.command, input.cwd, env)
+
       const runId = createRunId()
-      const env = { ...process.env, ...input.env }
 
       const run: AgentRunRecord = {
         runId,
@@ -104,13 +115,13 @@ export const createAgentManager = ({
           spawn(input.command, input.args ?? [], {
             cwd: input.cwd,
             env,
-            name: 'xterm-color',
+            name: 'xterm-256color',
           }),
           ptyOutputBus
         )
-      } catch {
-        run.status = 'error'
-        run.exitCode = 1
+      } catch (error) {
+        runs.delete(runId)
+        throw error
       }
 
       return toAgentRunSnapshot(run)

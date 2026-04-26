@@ -13,8 +13,9 @@ export const teamRoutes: RouteDefinition[] = [
       workspaceId: body.project_id,
     })
     requireCommandForRole(agent, 'send')
-    store.dispatchTaskByWorkerName(body.project_id, body.to, body.text, {
+    await store.dispatchTaskByWorkerName(body.project_id, body.to, body.text, {
       fromAgentId: body.from_agent_id,
+      hivePort: body.hive_port ?? String(request.socket.localPort ?? ''),
     })
 
     sendJson(response, 202, { ok: true })

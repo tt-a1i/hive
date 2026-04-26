@@ -7,6 +7,7 @@ export interface AgentLaunchConfigRow {
 }
 
 interface AgentLaunchCacheStore {
+  deleteLaunchConfig: (workspaceId: string, agentId: string) => void
   listLaunchConfigs: () => AgentLaunchConfigRow[]
   saveLaunchConfig: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => void
 }
@@ -33,6 +34,12 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
       if (reloadedConfig) return reloadedConfig
       throw new Error(`Agent launch config not found: ${agentId}`)
     },
+    peek(workspaceId: string, agentId: string) {
+      const config = launchConfigs.get(cacheKey(workspaceId, agentId))
+      if (config) return config
+      load()
+      return launchConfigs.get(cacheKey(workspaceId, agentId))
+    },
     getWorkspaceId(agentId: string) {
       return workspaceByAgentId.get(agentId)
     },
@@ -47,6 +54,11 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
       launchConfigs.set(cacheKey(workspaceId, agentId), normalized)
       workspaceByAgentId.set(agentId, workspaceId)
       store.saveLaunchConfig(workspaceId, agentId, normalized)
+    },
+    remove(workspaceId: string, agentId: string) {
+      launchConfigs.delete(cacheKey(workspaceId, agentId))
+      workspaceByAgentId.delete(agentId)
+      store.deleteLaunchConfig(workspaceId, agentId)
     },
     setWorkspaceId(agentId: string, workspaceId: string) {
       workspaceByAgentId.set(agentId, workspaceId)

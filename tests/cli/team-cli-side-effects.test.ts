@@ -150,4 +150,105 @@ describe('team send CLI side effects (R1.3)', () => {
       await hive.close()
     }
   })
+
+  test('team send starts a stopped worker before injecting the task prompt', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-autostart-'))
+    const workspacePath = join(dataDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(dataDir)
+
+    const workerScript = join(workspacePath, 'worker-autostart-echo.js')
+    writeFileSync(
+      workerScript,
+      [
+        "process.stdin.setEncoding('utf8')",
+        "process.stdout.write('WORKER_READY\\n')",
+        "process.stdin.on('data', (chunk) => process.stdout.write('WRK:' + chunk))",
+      ].join('\n')
+    )
+    const orchScript = join(workspacePath, 'orch-passive.js')
+    writeFileSync(orchScript, "process.stdin.setEncoding('utf8'); process.stdin.resume();\n")
+
+    process.env.HIVE_DATA_DIR = dataDir
+    const hive = await runHiveCommand(['--port', '0'])
+    try {
+      const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
+      const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ name: 'AutoStart', path: workspacePath }),
+      })
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      const orchestratorId = `${workspace.id}:orchestrator`
+
+      const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ name: 'Alice', role: 'coder' }),
+      })
+      const worker = (await workerResponse.json()) as { id: string }
+
+      const configure = async (agentId: string, scriptPath: string) =>
+        fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/config`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({
+            command: '/bin/bash',
+            args: ['-lc', `"${process.execPath}" "${scriptPath}"`],
+          }),
+        })
+      const startAgent = async (agentId: string) =>
+        fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/start`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ hive_port: String(hive.port) }),
+        })
+
+      await configure(orchestratorId, orchScript)
+      await configure(worker.id, workerScript)
+      const orchStart = await startAgent(orchestratorId)
+      expect(orchStart.status).toBe(201)
+      expect(hive.store.getActiveRunByAgentId(workspace.id, worker.id)).toBeUndefined()
+
+      const orchToken = hive.store.peekAgentToken(orchestratorId)
+      if (!orchToken) {
+        throw new Error('Expected orchestrator token after start')
+      }
+      process.env = {
+        ...originalEnv,
+        HIVE_DATA_DIR: dataDir,
+        HIVE_AGENT_ID: orchestratorId,
+        HIVE_AGENT_TOKEN: orchToken,
+        HIVE_PORT: String(hive.port),
+        HIVE_PROJECT_ID: workspace.id,
+      }
+
+      await runTeamCommand(['send', 'Alice', '评估项目结构'])
+
+      await waitFor(async () => {
+        const workerRun = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
+        expect(workerRun).toBeDefined()
+        expect(workerRun?.output).toContain('WORKER_READY')
+        expect(workerRun?.output).toContain('WRK:')
+        expect(workerRun?.output).toContain('评估项目结构')
+      })
+
+      const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
+        headers: { cookie: uiCookie },
+      })
+      expect(teamResponse.status).toBe(200)
+      const team = (await teamResponse.json()) as Array<{
+        id: string
+        pending_task_count: number
+        status: string
+      }>
+      const aliceRow = team.find((item) => item.id === worker.id)
+      expect(aliceRow?.pending_task_count).toBe(1)
+      expect(aliceRow?.status).toBe('working')
+    } finally {
+      delete process.env.HIVE_DATA_DIR
+      await hive.close()
+    }
+  })
 })

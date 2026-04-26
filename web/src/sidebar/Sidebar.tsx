@@ -8,8 +8,8 @@ type SidebarProps = {
   workspaces: WorkspaceSummary[] | null
 }
 
-const hasWorkingWorker = (workers: TeamListItem[] | undefined): boolean =>
-  !!workers?.some((worker) => worker.status === 'working')
+const hasQueuedMember = (workers: TeamListItem[] | undefined): boolean =>
+  !!workers?.some((worker) => worker.pendingTaskCount > 0)
 
 const branchLabel = (workspace: WorkspaceSummary): string => workspace.path.split('/').pop() ?? ''
 
@@ -32,7 +32,7 @@ export const Sidebar = ({
       <ul className="flex-1 scroll-y">
         {workspaces.map((workspace) => {
           const isActive = workspace.id === activeWorkspaceId
-          const working = hasWorkingWorker(workersByWorkspaceId[workspace.id])
+          const queued = hasQueuedMember(workersByWorkspaceId[workspace.id])
           return (
             <li key={workspace.id}>
               <button
@@ -46,7 +46,9 @@ export const Sidebar = ({
                   <span className={isActive ? 'font-medium text-pri' : 'text-pri'}>
                     {workspace.name}
                   </span>
-                  {working ? <span className="dot pulse-green" title="worker working" /> : null}
+                  {queued ? (
+                    <span className="dot pulse-orange" title="team member has queued tasks" />
+                  ) : null}
                 </div>
                 <div className="mt-0.5 truncate text-[11px] text-ter">{workspace.path}</div>
                 <div className="mono mt-0.5 text-[10px] text-ter">{branchLabel(workspace)}</div>

@@ -1,5 +1,6 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 
+import { getHiveTeamRules } from './hive-team-guidance.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import { wrapSystemMessage } from './system-message.js'
 
@@ -31,6 +32,49 @@ const formatTaskEvents = (messages: RecoveryMessage[], agent: AgentSummary) => {
     : ['- （最近没有任务事件）']
 }
 
+const getOpenTaskTargets = (agent: AgentSummary, workers: AgentSummary[]) =>
+  agent.role === 'orchestrator' ? workers : [agent]
+
+const formatOpenTasks = (
+  messages: RecoveryMessage[],
+  agent: AgentSummary,
+  workers: AgentSummary[]
+) => {
+  const targetAgents = getOpenTaskTargets(agent, workers).filter(
+    (target) => target.role !== 'orchestrator'
+  )
+  const targetIds = new Set(targetAgents.map((target) => target.id))
+  const queues = new Map<string, Array<Extract<RecoveryMessage, { type: 'send' }>>>()
+
+  for (const message of messages) {
+    if (message.type === 'send' && targetIds.has(message.to)) {
+      const queue = queues.get(message.to) ?? []
+      queue.push(message)
+      queues.set(message.to, queue)
+      continue
+    }
+
+    if (message.type === 'report' && targetIds.has(message.from)) {
+      queues.get(message.from)?.shift()
+    }
+  }
+
+  const lines: string[] = []
+  for (const target of targetAgents) {
+    const queue = queues.get(target.id) ?? []
+    for (const task of queue.slice(-8)) {
+      lines.push(`- ${target.name}: ${task.text}`)
+    }
+    if (target.pendingTaskCount > queue.length) {
+      lines.push(
+        `- ${target.name}: ${target.pendingTaskCount - queue.length} 个 pending 无可恢复详情`
+      )
+    }
+  }
+
+  return lines.length > 0 ? lines : ['- （当前没有未完成任务）']
+}
+
 const formatWorkers = (workers: AgentSummary[]) => {
   if (workers.length === 0) return ['- 当前没有其他 worker']
   return workers.map(
@@ -44,12 +88,14 @@ const getTaskSectionTitle = (agent: AgentSummary) =>
 
 export const buildRecoverySummary = ({
   agent,
+  allTaskMessages,
   messages,
   tasksContent,
   workers,
   workspace,
 }: {
   agent: AgentSummary
+  allTaskMessages?: RecoveryMessage[]
   messages: RecoveryMessage[]
   tasksContent: string
   workers: AgentSummary[]
@@ -66,11 +112,17 @@ export const buildRecoverySummary = ({
       getTaskSectionTitle(agent),
       ...formatTaskEvents(messages, agent),
       '',
+      '## 当前未完成任务',
+      ...formatOpenTasks(allTaskMessages ?? messages, agent, workers),
+      '',
       '## 当前 tasks.md 状态',
       tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
       '',
       '## 当前活跃 worker',
       ...formatWorkers(workers),
+      '',
+      agent.role === 'orchestrator' ? '## Hive worker 派单规则' : '## Hive worker 边界',
+      ...getHiveTeamRules(agent),
       '',
       '请基于此继续。如果不确定，问 user。',
     ].join('\n')

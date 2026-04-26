@@ -4,6 +4,12 @@ type TerminalControlServerMessage =
   | { type: 'restore'; snapshot: string }
 
 interface TerminalClientOptions {
+  initialSize?: {
+    cols: number
+    pixelHeight?: number
+    pixelWidth?: number
+    rows: number
+  }
   onError: (message: string) => void
   onExit: (code: number | null) => void
   onOutput: (chunk: string, acknowledge: (bytes: number) => void) => void
@@ -17,21 +23,39 @@ export interface TerminalClient {
   sendInput: (chunk: string) => void
 }
 
-const toWebSocketUrl = (path: string) => {
+const toWebSocketUrl = (path: string, params: Record<string, number | string | undefined> = {}) => {
   const url = new URL(path, window.location.href)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) url.searchParams.set(key, String(value))
+  }
   return url.toString()
 }
 
 export const createTerminalClient = ({
+  initialSize,
   onError,
   onExit,
   onOutput,
   onRestore,
   runId,
 }: TerminalClientOptions): TerminalClient => {
-  const ioSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/io`))
-  const controlSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/control`))
+  const ioSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/io`, initialSize ?? {}))
+  const controlSocket = new WebSocket(
+    toWebSocketUrl(`/ws/terminal/${runId}/control`, initialSize ?? {})
+  )
+  let pendingResize: {
+    cols: number
+    rows: number
+    pixelWidth?: number
+    pixelHeight?: number
+  } | null = null
+
+  const sendResize = () => {
+    if (!pendingResize || controlSocket.readyState !== controlSocket.OPEN) return
+    controlSocket.send(JSON.stringify({ type: 'resize', ...pendingResize }))
+    pendingResize = null
+  }
 
   ioSocket.onmessage = (event) => {
     const chunk = typeof event.data === 'string' ? event.data : ''
@@ -39,6 +63,9 @@ export const createTerminalClient = ({
       if (controlSocket.readyState !== controlSocket.OPEN) return
       controlSocket.send(JSON.stringify({ type: 'output_ack', bytes }))
     })
+  }
+  controlSocket.onopen = () => {
+    sendResize()
   }
   controlSocket.onmessage = (event) => {
     const message = JSON.parse(String(event.data)) as TerminalControlServerMessage
@@ -58,8 +85,10 @@ export const createTerminalClient = ({
       controlSocket.close()
     },
     resize(cols, rows, pixelWidth, pixelHeight) {
-      if (controlSocket.readyState !== controlSocket.OPEN) return
-      controlSocket.send(JSON.stringify({ type: 'resize', cols, rows, pixelWidth, pixelHeight }))
+      pendingResize = { cols, rows }
+      if (pixelWidth !== undefined) pendingResize.pixelWidth = pixelWidth
+      if (pixelHeight !== undefined) pendingResize.pixelHeight = pixelHeight
+      sendResize()
     },
     sendInput(chunk) {
       if (ioSocket.readyState !== ioSocket.OPEN) return

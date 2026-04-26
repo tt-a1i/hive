@@ -8,7 +8,7 @@ import {
   serializeTerminalExit,
   serializeTerminalRestore,
 } from './terminal-protocol.js'
-import { TerminalStateMirror } from './terminal-state-mirror.js'
+import { type TerminalMirrorSize, TerminalStateMirror } from './terminal-state-mirror.js'
 
 interface ViewerState {
   clientId: string
@@ -27,8 +27,18 @@ interface RunState {
 }
 
 export interface TerminalStreamHub {
-  attachControl: (runId: string, clientId: string, socket: WebSocket) => void
-  attachIo: (runId: string, clientId: string, socket: WebSocket) => void
+  attachControl: (
+    runId: string,
+    clientId: string,
+    socket: WebSocket,
+    initialSize?: TerminalMirrorSize
+  ) => void
+  attachIo: (
+    runId: string,
+    clientId: string,
+    socket: WebSocket,
+    initialSize?: TerminalMirrorSize
+  ) => void
   close: () => void
 }
 
@@ -58,7 +68,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     return viewer
   }
 
-  const getOrCreateState = (runId: string) => {
+  const getOrCreateState = (runId: string, initialSize?: TerminalMirrorSize) => {
     let state = runStates.get(runId)
     if (!state) {
       state = {
@@ -66,7 +76,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         exited: false,
         exitInterval: null,
         // runId is globally unique, so it is semantically equivalent to workspaceId:runId.
-        mirror: new TerminalStateMirror(),
+        mirror: new TerminalStateMirror(initialSize),
         outputUnsubscribe: null,
         viewers: new Map(),
       }
@@ -78,6 +88,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         nextState.mirror.write(chunk)
         for (const viewer of nextState.viewers.values()) viewer.flowState?.enqueue(chunk)
       })
+    } else if (initialSize) {
+      state.mirror.resize(initialSize.cols, initialSize.rows)
     }
     return state
   }
@@ -116,8 +128,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   }
 
   return {
-    attachControl(runId, clientId, socket) {
-      const state = getOrCreateState(runId)
+    attachControl(runId, clientId, socket, initialSize) {
+      const state = getOrCreateState(runId, initialSize)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.controlSocket = socket
       startExitWatcher(runId, state)
@@ -133,7 +145,10 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         try {
           const message = parseTerminalControlMessage(raw as Buffer | string)
           if (message.type === 'output_ack') viewer.flowState?.ack(message.bytes)
-          if (message.type === 'resize') store.resizeAgentRun(runId, message.cols, message.rows)
+          if (message.type === 'resize') {
+            state.mirror.resize(message.cols, message.rows)
+            store.resizeAgentRun(runId, message.cols, message.rows)
+          }
           if (message.type === 'stop') store.stopAgentRun(runId)
           if (message.type === 'restore_complete') return
         } catch (error) {
@@ -149,8 +164,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         cleanupViewer(runId, state, clientId)
       })
     },
-    attachIo(runId, clientId, socket) {
-      const state = getOrCreateState(runId)
+    attachIo(runId, clientId, socket, initialSize) {
+      const state = getOrCreateState(runId, initialSize)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.ioSocket = socket
       viewer.flowState?.close()

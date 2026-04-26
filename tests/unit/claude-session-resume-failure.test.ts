@@ -106,6 +106,7 @@ describe('claude session resume failure', () => {
             },
           },
         ],
+        deleteLaunchConfig: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },

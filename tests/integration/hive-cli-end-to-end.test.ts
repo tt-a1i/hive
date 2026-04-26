@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,17 +15,49 @@ afterEach(() => {
   }
 })
 
+const waitFor = async (
+  assertion: () => void | Promise<void>,
+  timeoutMs = 5000,
+  intervalMs = 25
+) => {
+  const deadline = Date.now() + timeoutMs
+  let lastError: unknown
+  while (Date.now() <= deadline) {
+    try {
+      await assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+  throw lastError
+}
+
 describe('hive cli end to end', () => {
   test('real hive runtime can start and stop an agent over HTTP', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-e2e-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
     tempDirs.push(dataDir)
+    const originalNoColor = process.env.NO_COLOR
+    const originalForceColor = process.env.FORCE_COLOR
 
     const scriptPath = join(workspacePath, 'echo-agent.js')
-    writeFileSync(scriptPath, "setInterval(() => {}, 1000)\nconsole.log('ready')\n")
+    writeFileSync(
+      scriptPath,
+      [
+        "console.log('TERM=' + (process.env.TERM ?? ''))",
+        "console.log('COLORTERM=' + (process.env.COLORTERM ?? ''))",
+        "console.log('NO_COLOR=' + (process.env.NO_COLOR ?? ''))",
+        "console.log('FORCE_COLOR=' + (process.env.FORCE_COLOR ?? ''))",
+        'setInterval(() => {}, 1000)',
+      ].join('\n')
+    )
 
     process.env.HIVE_DATA_DIR = dataDir
+    process.env.NO_COLOR = '1'
+    delete process.env.FORCE_COLOR
     const hive = await runHiveCommand(['--port', '0'])
 
     try {
@@ -81,6 +113,19 @@ describe('hive cli end to end', () => {
         headers: { cookie: uiCookie },
       })
       expect(runResponse.status).toBe(200)
+      const run = (await runResponse.json()) as { output: string }
+      await waitFor(async () => {
+        const stateResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+          headers: { cookie: uiCookie },
+        })
+        const state = (await stateResponse.json()) as { output: string }
+        expect(state.output).toContain('TERM=xterm-256color')
+        expect(state.output).toContain('COLORTERM=truecolor')
+        expect(state.output).toContain('NO_COLOR=')
+        expect(state.output).not.toContain('NO_COLOR=1')
+        expect(state.output).toContain('FORCE_COLOR=1')
+      })
+      expect(run.output).toEqual(expect.any(String))
 
       const stopResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}/stop`, {
         method: 'POST',
@@ -90,7 +135,88 @@ describe('hive cli end to end', () => {
       expect(stopResponse.status).toBe(202)
     } finally {
       delete process.env.HIVE_DATA_DIR
+      if (originalNoColor === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = originalNoColor
+      if (originalForceColor === undefined) delete process.env.FORCE_COLOR
+      else process.env.FORCE_COLOR = originalForceColor
       await hive.close()
+    }
+  })
+
+  test('CLI uses a default SQLite data dir so builtin orchestrator config is seeded', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-default-home-'))
+    const workspacePath = join(homeDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(homeDir)
+
+    const childEnv = { ...process.env }
+    delete childEnv.HIVE_DATA_DIR
+    delete childEnv.HIVE_ORCHESTRATOR_ARGS_JSON
+    delete childEnv.HIVE_ORCHESTRATOR_COMMAND
+    const { spawn } = await import('node:child_process')
+    const modulePath = new URL('../../src/cli/hive.ts', import.meta.url)
+    const processHandle = spawn(
+      process.execPath,
+      ['--import', 'tsx', modulePath.pathname, '--port', '0'],
+      {
+        env: { ...childEnv, HOME: homeDir },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
+    let stdout = ''
+    processHandle.stdout.on('data', (chunk) => {
+      stdout += chunk.toString()
+    })
+
+    try {
+      await waitFor(() => {
+        expect(stdout).toContain('Hive running at http://127.0.0.1:')
+      })
+      const match = stdout.match(/Hive running at http:\/\/127\.0\.0\.1:(\d+)/)
+      expect(match?.[1]).toBeTruthy()
+      const baseUrl = `http://127.0.0.1:${Number(match?.[1])}`
+      const uiCookie = await getUiCookie(baseUrl)
+
+      const templatesResponse = await fetch(`${baseUrl}/api/settings/role-templates`, {
+        headers: { cookie: uiCookie },
+      })
+      expect(templatesResponse.status).toBe(200)
+      const templates = (await templatesResponse.json()) as Array<{
+        default_args: string[]
+        default_command: string
+        default_env: Record<string, string>
+        description: string
+        id: string
+        name: string
+        role_type: string
+      }>
+      const orchestrator = templates.find((template) => template.role_type === 'orchestrator')
+      expect(orchestrator?.id).toBe('orchestrator')
+      expect(orchestrator?.default_command).toBe('claude')
+
+      const response = await fetch(`${baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'DefaultConfig',
+          path: workspacePath,
+        }),
+      })
+
+      expect(response.status).toBe(201)
+      const body = (await response.json()) as {
+        orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+      }
+      expect(body.orchestrator_start).toEqual({
+        ok: false,
+        error: null,
+        run_id: null,
+      })
+      expect(existsSync(join(homeDir, '.config', 'hive', 'runtime.sqlite'))).toBe(true)
+    } finally {
+      processHandle.kill('SIGTERM')
+      await new Promise<void>((resolve) => processHandle.once('exit', () => resolve()))
     }
   })
 })

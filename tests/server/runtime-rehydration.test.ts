@@ -121,11 +121,17 @@ describe('runtime rehydration', () => {
     const firstCallArgs = startSpy.mock.calls[0]?.[0]?.args ?? []
     const secondCallArgs = startSpy.mock.calls[1]?.[0]?.args ?? []
 
-    expect(firstCallArgs).toEqual(['--dangerously-skip-permissions'])
+    expect(firstCallArgs).toEqual([
+      '--dangerously-skip-permissions',
+      '--permission-mode=bypassPermissions',
+      '--disallowedTools=Task',
+    ])
     expect(secondCallArgs).toEqual([
       '--resume',
       '11111111-1111-4111-8111-111111111111',
       '--dangerously-skip-permissions',
+      '--permission-mode=bypassPermissions',
+      '--disallowedTools=Task',
     ])
     expect(persistedSession).toEqual({ last_session_id: '11111111-1111-4111-8111-111111111111' })
     expect(mirroredWorkerSession).toEqual({

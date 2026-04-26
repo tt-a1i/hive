@@ -69,11 +69,38 @@ export const createWorkspaceStore = (
       workspaces.set(summary.id, { summary, agents: [createOrchestrator(summary.id)] })
       return summary
     },
+    deleteWorker(workspaceId, workerId) {
+      const workspace = getWorkspace(workspaceId)
+      getWorkerRecord(workspaces, workspaceId, workerId)
+      db?.transaction(() => {
+        db.prepare('DELETE FROM messages WHERE workspace_id = ? AND worker_id = ?').run(
+          workspaceId,
+          workerId
+        )
+        db.prepare('DELETE FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?').run(
+          workspaceId,
+          workerId
+        )
+        db.prepare('DELETE FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?').run(
+          workspaceId,
+          workerId
+        )
+        db.prepare('DELETE FROM agent_runs WHERE agent_id = ?').run(workerId)
+        db.prepare('DELETE FROM workers WHERE workspace_id = ? AND id = ?').run(
+          workspaceId,
+          workerId
+        )
+      })()
+      workspace.agents = workspace.agents.filter((agent) => agent.id !== workerId)
+    },
     getAgent: (workspaceId, agentId) => getAgentRecord(workspaces, workspaceId, agentId),
     getWorker: (workspaceId, workerId) => getWorkerRecord(workspaces, workspaceId, workerId),
     getWorkerByName: (workspaceId, workerName) =>
       getWorkerByNameRecord(workspaces, workspaceId, workerName),
     getWorkspaceSnapshot: getWorkspace,
+    hasAgent(workspaceId, agentId) {
+      return getWorkspace(workspaceId).agents.some((agent) => agent.id === agentId)
+    },
     listWorkers(workspaceId) {
       return getWorkspace(workspaceId)
         .agents.filter(isWorkerAgent)

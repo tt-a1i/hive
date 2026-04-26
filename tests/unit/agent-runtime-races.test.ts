@@ -56,6 +56,7 @@ describe('agent runtime races (unit)', () => {
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
+        deleteLaunchConfig: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: (runId, status, exitCode) => {
           updates.push({ runId, status, exitCode })
@@ -106,6 +107,7 @@ describe('agent runtime races (unit)', () => {
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [],
+        deleteLaunchConfig: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },
@@ -158,6 +160,7 @@ describe('agent runtime races (unit)', () => {
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
+        deleteLaunchConfig: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },
@@ -215,6 +218,7 @@ describe('agent runtime races (unit)', () => {
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
+        deleteLaunchConfig: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },

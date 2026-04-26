@@ -3,7 +3,7 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { createTeamOperations } from '../../src/server/team-operations.js'
 
 describe('team atomicity', () => {
-  test('dispatchTask does not bump pending count when message insert fails after PTY write', () => {
+  test('dispatchTask does not bump pending count when message insert fails before PTY write', async () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
@@ -42,9 +42,9 @@ describe('team atomicity', () => {
       } as never,
     })
 
-    expect(() =>
+    await expect(
       ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
-    ).toThrow(/insert message failed/)
+    ).rejects.toThrow(/insert message failed/)
 
     expect(store.listWorkers(workspace.id)).toContainEqual(
       expect.objectContaining({

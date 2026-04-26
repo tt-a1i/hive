@@ -1,10 +1,13 @@
 import type { AgentManager } from './agent-manager.js'
+import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { PtyInactiveError } from './http-errors.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
+import { createPostStartInputWriter } from './post-start-input-writer.js'
 
 interface AgentStdinDispatcherInput {
   agentManager: AgentManager | undefined
+  getLaunchConfig: (workspaceId: string, agentId: string) => AgentLaunchConfigInput | undefined
   getWorkspaceId: (agentId: string) => string | undefined
   registry: LiveRunRegistry
   syncRun: (run: LiveAgentRun) => LiveAgentRun
@@ -12,6 +15,7 @@ interface AgentStdinDispatcherInput {
 
 export const createAgentStdinDispatcher = ({
   agentManager,
+  getLaunchConfig,
   getWorkspaceId,
   registry,
   syncRun,
@@ -38,7 +42,12 @@ export const createAgentStdinDispatcher = ({
     }
 
     try {
-      agentManager?.writeInput(run.runId, text)
+      const config = getLaunchConfig(workspaceId, agentId)
+      if (agentManager && config) {
+        createPostStartInputWriter(agentManager, config.command)(run.runId, text)
+      } else {
+        agentManager?.writeInput(run.runId, text)
+      }
     } catch (error) {
       throw new PtyInactiveError(error instanceof Error ? error.message : String(error))
     }

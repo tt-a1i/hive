@@ -34,7 +34,7 @@ export const writeSystemMessage = ({
 }) => {
   const handle = insertMessage(record)
   try {
-    writeToRun(runId, `${text}\n`)
+    writeToRun(runId, text)
   } catch (error) {
     deleteMessage(handle)
     throw error

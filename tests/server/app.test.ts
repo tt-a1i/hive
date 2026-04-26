@@ -52,14 +52,18 @@ describe('runtime http app', () => {
     ])
   })
 
-  test('POST /api/workspaces creates workspace', async () => {
+  test('POST /api/workspaces creates workspace (autostart skipped)', async () => {
     const { baseUrl } = await startServer()
     const cookie = await getUiCookie(baseUrl)
 
     const response = await fetch(`${baseUrl}/api/workspaces`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ path: '/tmp/hive-beta', name: 'Beta' }),
+      body: JSON.stringify({
+        path: '/tmp/hive-beta',
+        name: 'Beta',
+        autostart_orchestrator: false,
+      }),
     })
 
     expect(response.status).toBe(201)
@@ -67,6 +71,7 @@ describe('runtime http app', () => {
       id: expect.any(String),
       name: 'Beta',
       path: '/tmp/hive-beta',
+      orchestrator_start: { ok: false, error: null, run_id: null },
     })
   })
 
@@ -154,6 +159,7 @@ describe('runtime http app', () => {
 
     expect(response.status).toBe(201)
     await expect(response.json()).resolves.toEqual({
+      agent_start: { ok: false, error: null, run_id: null },
       id: expect.any(String),
       name: 'Alice',
       role: 'coder',
@@ -169,6 +175,57 @@ describe('runtime http app', () => {
         pendingTaskCount: 0,
       },
     ])
+  })
+
+  test('DELETE /api/workspaces/:id/workers/:workerId stops active run and removes worker', async () => {
+    const { store, baseUrl } = await startServer()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const cookie = await getUiCookie(baseUrl)
+    const worker = store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+
+    const configResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          command: '/bin/bash',
+          args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+        }),
+      }
+    )
+    expect(configResponse.status).toBe(204)
+
+    const startResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ hive_port: '4010' }),
+      }
+    )
+    expect(startResponse.status).toBe(201)
+    expect(store.listTerminalRuns(workspace.id).some((run) => run.agent_id === worker.id)).toBe(
+      true
+    )
+
+    const deleteResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/workers/${worker.id}`,
+      {
+        method: 'DELETE',
+        headers: { cookie },
+      }
+    )
+
+    expect(deleteResponse.status).toBe(204)
+    expect(store.listWorkers(workspace.id)).toEqual([])
+    expect(store.listTerminalRuns(workspace.id).some((run) => run.agent_id === worker.id)).toBe(
+      false
+    )
+    expect(store.peekAgentLaunchConfig(workspace.id, worker.id)).toBeUndefined()
   })
 
   test('POST /api/team/send and /api/team/report update worker state', async () => {

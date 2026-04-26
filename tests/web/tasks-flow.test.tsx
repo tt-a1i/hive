@@ -53,7 +53,11 @@ beforeEach(async () => {
   const workspaceResponse = await nativeFetch(`${server.baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie: uiCookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({
+      name: 'Alpha',
+      path: workspacePath,
+      autostart_orchestrator: false,
+    }),
   })
   const workspace = (await workspaceResponse.json()) as { id: string }
   workspaceId = workspace.id

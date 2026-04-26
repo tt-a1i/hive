@@ -165,6 +165,67 @@ describe('terminal mirror', () => {
     }
   }, 15000)
 
+  test('T1b restore mirror uses initial control socket dimensions before replaying output', async () => {
+    const workspacePath = join(tmpdir(), `hive-terminal-mirror-wide-${Date.now()}`)
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(workspacePath)
+    const script = join(workspacePath, 'wide.js')
+    writeFileSync(
+      script,
+      [
+        "process.stdout.write('LEFT\\x1b[100CRIGHT')",
+        'process.stdin.resume()',
+        'setInterval(() => {}, 1000)',
+      ].join('\n')
+    )
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorker(server.baseUrl, cookie, workspace.id)
+      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+        script,
+      ])
+      const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
+
+      await waitFor(async () => {
+        const response = await fetch(`${server.baseUrl}/api/runtime/runs/${run.runId}`, {
+          headers: { cookie },
+        })
+        const body = (await response.json()) as { output: string }
+        expect(body.output).toContain('RIGHT')
+      })
+
+      const controlMessages: Array<{ [key: string]: unknown; type: string }> = []
+      const control = new WebSocket(
+        `${server.baseUrl.replace('http://', 'ws://')}/ws/terminal/${run.runId}/control?clientId=wide-viewer&cols=120&rows=5`,
+        { headers: { cookie } }
+      )
+      control.on('message', (chunk) => {
+        controlMessages.push(
+          JSON.parse(chunk.toString()) as { [key: string]: unknown; type: string }
+        )
+      })
+      await new Promise<void>((resolve, reject) => {
+        control.once('open', () => resolve())
+        control.once('error', reject)
+      })
+
+      await waitFor(() => {
+        const restore = controlMessages.find((message) => message.type === 'restore')
+        const snapshot = String(restore?.snapshot ?? '')
+        expect(snapshot).toContain('LEFT')
+        expect(snapshot).toContain('\u001b[100CRIGHT')
+        expect(snapshot).not.toContain('\u001b[75CRIGHT')
+      })
+
+      control.close()
+    } finally {
+      await server.close()
+    }
+  }, 15000)
+
   test('T2 multiple viewers each receive one copy of future PTY output', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-fanout-${Date.now()}`)
     mkdirSync(workspacePath, { recursive: true })

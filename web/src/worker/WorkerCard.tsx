@@ -7,16 +7,16 @@ type WorkerCardProps = {
 }
 
 const statusDisplay = (worker: TeamListItem) => {
-  if (worker.status === 'working') {
-    return {
-      bullet: '●',
-      dotClass: 'dot pulse-green',
-      label: 'working',
-      tone: 'var(--status-green)',
-    }
-  }
   if (worker.status === 'stopped') {
     return { bullet: '○', dotClass: 'dot', label: 'stopped', tone: 'var(--status-red)' }
+  }
+  if (worker.pendingTaskCount > 0) {
+    return {
+      bullet: '●',
+      dotClass: 'dot pulse-orange',
+      label: 'queued',
+      tone: 'var(--status-orange)',
+    }
   }
   return { bullet: '○', dotClass: 'dot', label: 'idle', tone: 'var(--text-tertiary)' }
 }

@@ -64,6 +64,8 @@ const readLastSessionId = (dataDir: string, workspaceId: string, agentId: string
   return row?.last_session_id
 }
 
+const orchestratorId = (workspaceId: string) => `${workspaceId}:orchestrator`
+
 const writeEchoAgent = (workspacePath: string, filename: string) => {
   const scriptPath = join(workspacePath, filename)
   writeFileSync(
@@ -102,6 +104,7 @@ mkdirSync(projectDir, { recursive: true })
 writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (args.includes('--resume') && existsSync(failMarker)) process.exit(1)
+process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
@@ -185,6 +188,79 @@ afterEach(() => {
 })
 
 describe('Layer B fallback integration', () => {
+  test('orchestrator recovery summary preserves Hive worker dispatch rules', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-orch-layer-b-home-'))
+    const workspacePathRaw = join(root, 'workspace')
+    tempDirs.push(root)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    const orchestratorScript = writeEchoAgent(workspacePath, 'orch-echo.js')
+    const bobScript = writeEchoAgent(workspacePath, 'bob-echo.js')
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
+      })
+      expect(workspaceResponse.status).toBe(201)
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      const orchestratorId = `${workspace.id}:orchestrator`
+      const bob = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Bob', 'tester')
+
+      await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/user-input`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ text: '让 worker 评估一下项目目标' }),
+      })
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id, {
+        command: process.execPath,
+        args: [bobScript],
+      })
+      await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, orchestratorId, {
+        command: process.execPath,
+        args: [orchestratorScript],
+      })
+      const firstRun = await startWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        orchestratorId
+      )
+      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.status).toBe('exited')
+      })
+
+      const secondRun = await startWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        orchestratorId
+      )
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain('让 worker 评估一下项目目标')
+        expect(state.output).toContain('Bob')
+        expect(state.output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
+        expect(state.output).toContain('team send <worker-name> "<task>"')
+        expect(state.output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
   test('custom command restart receives Layer B summary built from messages, tasks.md and worker list', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hive-layer-b-home-'))
     const workspacePathRaw = join(root, 'workspace')
@@ -258,6 +334,70 @@ describe('Layer B fallback integration', () => {
     }
   })
 
+  test('orchestrator recovery summary includes old unresolved pending task details', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-layer-b-pending-home-'))
+    const workspacePathRaw = join(root, 'workspace')
+    tempDirs.push(root)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    const orchestratorScript = writeEchoAgent(workspacePath, 'orch-pending-echo.js')
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const bob = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Bob', 'tester')
+
+      await server.store.dispatchTask(workspace.id, bob.id, '审查 Phase 3 SSE schema 缺口')
+
+      const db = new Database(join(server.dataDir, 'runtime.sqlite'))
+      db.prepare("UPDATE messages SET created_at = ? WHERE type = 'send' AND worker_id = ?").run(
+        Date.now() - 2 * 60 * 60 * 1000,
+        bob.id
+      )
+      db.close()
+
+      await configureWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        orchestratorId(workspace.id),
+        {
+          command: process.execPath,
+          args: [orchestratorScript],
+        }
+      )
+
+      const firstRun = await startWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        orchestratorId(workspace.id)
+      )
+      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.status).toBe('exited')
+      })
+
+      const secondRun = await startWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        orchestratorId(workspace.id)
+      )
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain('## 当前未完成任务')
+        expect(state.output).toContain('Bob')
+        expect(state.output).toContain('审查 Phase 3 SSE schema 缺口')
+      })
+    } finally {
+      await server.close()
+    }
+  }, 10_000)
+
   test('resume failure falls back to Layer B on the next start instead of restarting blank', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-layer-b-failure-home-'))
     const workspacePathRaw = join(homeDir, 'workspace')
@@ -327,7 +467,8 @@ describe('Layer B fallback integration', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, thirdRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).not.toContain('--resume')
-        expect(state.output).toContain('STDIN:[Hive 系统消息：你是 Alpha 的')
+        expect(state.output).toContain('STDIN:\u001b[200~[Hive 系统消息：你是 Alpha 的')
+        expect(state.output).toContain('\u001b[201~')
         expect(state.output).toContain('recover after failed resume')
         expect(state.output).toContain('恢复后检查 Layer B 摘要')
         expect(state.output).toContain('Bob')

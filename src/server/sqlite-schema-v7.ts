@@ -1,5 +1,6 @@
 import type { Database } from 'better-sqlite3'
 
+import { CLAUDE_DEFAULT_YOLO_ARGS } from './claude-command-defaults.js'
 import {
   CODER_ROLE_DESCRIPTION,
   ORCHESTRATOR_ROLE_DESCRIPTION,
@@ -62,7 +63,7 @@ export const applySchemaVersion7 = (db: Database) => {
       source: 'claude_project_jsonl_dir',
       pattern: '~/.claude/projects/{encoded_cwd}/*.jsonl',
     }),
-    JSON.stringify(['--dangerously-skip-permissions']),
+    JSON.stringify(CLAUDE_DEFAULT_YOLO_ARGS),
     now,
     now
   )

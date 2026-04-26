@@ -184,7 +184,7 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(
-          `ARGS:--dangerously-skip-permissions --session-id-test ${sessionId}`
+          `ARGS:--dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --session-id-test ${sessionId}`
         )
       })
     } finally {
@@ -234,7 +234,7 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(
-          `ARGS:--resume ${sessionId} --dangerously-skip-permissions --session-id-test ${sessionId}`
+          `ARGS:--resume ${sessionId} --dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --session-id-test ${sessionId}`
         )
       })
     } finally {

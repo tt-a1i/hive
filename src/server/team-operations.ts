@@ -1,4 +1,5 @@
 import type { AgentRuntime } from './agent-runtime.js'
+import { ConflictError } from './http-errors.js'
 import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
 import {
   createReportMessage,
@@ -16,6 +17,7 @@ export interface TeamOperationsInput {
 
 export interface DispatchTaskInput {
   fromAgentId?: string
+  hivePort?: string
 }
 
 export interface ReportTaskInput {
@@ -31,7 +33,34 @@ export const createTeamOperations = ({
   insertMessage,
   workspaceStore,
 }: TeamOperationsInput) => {
-  const dispatchTask = (
+  const ensureWorkerRun = async (workspaceId: string, workerId: string, hivePort: string) => {
+    if (agentRuntime.getActiveRunByAgentId(workspaceId, workerId)) {
+      return
+    }
+
+    const config = agentRuntime.peekAgentLaunchConfig(workspaceId, workerId)
+    if (!config) {
+      throw new ConflictError('No worker launch config available')
+    }
+
+    workspaceStore.markAgentStarted(workspaceId, workerId)
+    try {
+      const run = await agentRuntime.startAgent(
+        workspaceStore.getWorkspaceSnapshot(workspaceId).summary,
+        workerId,
+        { hivePort }
+      )
+      if (run.status === 'error') {
+        workspaceStore.markAgentStopped(workspaceId, workerId)
+        throw new ConflictError(`${config.command} failed to start`)
+      }
+    } catch (error) {
+      workspaceStore.markAgentStopped(workspaceId, workerId)
+      throw error
+    }
+  }
+
+  const dispatchTask = async (
     workspaceId: string,
     workerId: string,
     text: string,
@@ -44,6 +73,7 @@ export const createTeamOperations = ({
       if (input.fromAgentId) {
         const sender = workspaceStore.getAgent(workspaceId, input.fromAgentId)
         const worker = workspaceStore.getWorker(workspaceId, workerId)
+        await ensureWorkerRun(workspaceId, workerId, input.hivePort ?? '')
         agentRuntime.writeSendPrompt(workspaceId, workerId, sender.name, worker.description, text)
       }
 
@@ -63,7 +93,7 @@ export const createTeamOperations = ({
       input: DispatchTaskInput = {}
     ) {
       const worker = workspaceStore.getWorkerByName(workspaceId, workerName)
-      dispatchTask(workspaceId, worker.id, text, input)
+      return dispatchTask(workspaceId, worker.id, text, input)
     },
     recordUserInput(workspaceId: string, orchestratorId: string, text: string) {
       workspaceStore.getAgent(workspaceId, orchestratorId)

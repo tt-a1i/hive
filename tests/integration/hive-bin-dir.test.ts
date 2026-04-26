@@ -129,4 +129,83 @@ describe('hive bin dir', () => {
       await hive.close()
     }
   })
+
+  test('dummy agent can execute team list via injected HIVE_BIN_DIR and HIVE env', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-bin-dir-team-list-'))
+    const workspacePath = join(dataDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(dataDir)
+
+    const scriptPath = join(workspacePath, 'team-list.js')
+    writeFileSync(
+      scriptPath,
+      [
+        "import { execFileSync } from 'node:child_process'",
+        "const output = execFileSync('team', ['list'], { encoding: 'utf8' })",
+        "console.log('TEAM_LIST:' + output.trim())",
+      ].join('\n')
+    )
+
+    process.env.HIVE_DATA_DIR = dataDir
+    const hive = await runHiveCommand(['--port', '0'])
+
+    try {
+      const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
+      const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+      })
+      expect(workspaceResponse.status).toBe(201)
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      const orchestratorId = `${workspace.id}:orchestrator`
+
+      const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ name: 'Alice', role: 'coder' }),
+      })
+      expect(workerResponse.status).toBe(201)
+
+      const configResponse = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({
+            command: process.execPath,
+            args: [scriptPath],
+          }),
+        }
+      )
+      expect(configResponse.status).toBe(204)
+
+      const startResponse = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ hive_port: String(hive.port) }),
+        }
+      )
+      expect(startResponse.status).toBe(201)
+      const payload = (await startResponse.json()) as { runId: string }
+
+      await waitFor(async () => {
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`, {
+          headers: { cookie: uiCookie },
+        })
+        expect(runResponse.status).toBe(200)
+        const run = (await runResponse.json()) as { output: string; status: string }
+        expect(run.status).toBe('exited')
+        expect(run.output).toContain('TEAM_LIST:')
+        expect(run.output).toContain('"name":"Alice"')
+        expect(run.output).toContain('"pending_task_count":0')
+      })
+    } finally {
+      delete process.env.HIVE_DATA_DIR
+      await hive.close()
+    }
+  })
 })

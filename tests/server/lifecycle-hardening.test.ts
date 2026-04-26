@@ -180,7 +180,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     db.close()
   })
 
-  test('R2.3: POST /api/team/send to a worker with no run returns 409 and records no send message', async () => {
+  test('R2.3: POST /api/team/send to a worker with no launch config returns 409 and records no send message', async () => {
     const { dataDir, workspacePath } = prepareWorkspace()
     // Orchestrator needs a LIVE pty so the authz token is valid and the run is active.
     const orchScript = join(workspacePath, 'passive.js')
@@ -199,7 +199,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     })
     await store.startAgent(workspace.id, orchestrator.id, { hivePort: '4010' })
 
-    // Worker exists but never started → no live run.
+    // Worker exists but has no launch config, so runtime cannot autostart it.
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
 
     const app = createApp({ store })
@@ -229,7 +229,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
 
     expect(response.status).toBe(409)
     const body = (await response.json()) as { error: string }
-    expect(body.error).toMatch(/No active run/)
+    expect(body.error).toMatch(/No worker launch config available/)
 
     const sendMessages = store
       .listMessagesForRecovery(workspace.id, 0)

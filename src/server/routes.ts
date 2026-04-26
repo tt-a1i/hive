@@ -8,6 +8,7 @@ import type {
   SendTaskBody,
   WorkerRole,
 } from './route-types.js'
+import { fsRoutes } from './routes-fs.js'
 import { runtimeRoutes } from './routes-runtime.js'
 import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
@@ -22,6 +23,7 @@ const routes: RouteDefinition[] = [
   ...taskRoutes,
   ...runtimeRoutes,
   ...teamRoutes,
+  ...fsRoutes,
 ]
 
 export const matchRoute = (method: string, pathname: string) => {

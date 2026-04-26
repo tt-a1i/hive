@@ -16,7 +16,12 @@ export interface AgentRuntime {
     agentId: string,
     input: import('./agent-run-store.js').AgentLaunchConfigInput
   ) => void
+  deleteAgentLaunchConfig: (workspaceId: string, agentId: string) => void
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
+  peekAgentLaunchConfig: (
+    workspaceId: string,
+    agentId: string
+  ) => import('./agent-run-store.js').AgentLaunchConfigInput | undefined
   getLiveRun: (runId: string) => LiveAgentRun
   getPtyOutputBus: () => PtyOutputBus
   listAgentRuns: (agentId: string) => PersistedAgentRun[]

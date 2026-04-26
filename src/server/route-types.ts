@@ -5,6 +5,7 @@ import type { RuntimeStore } from './runtime-store.js'
 import type { TasksFileService } from './tasks-file.js'
 
 export interface SendTaskBody {
+  hive_port?: string
   project_id: string
   from_agent_id: string
   token?: string
@@ -24,10 +25,17 @@ export interface ReportTaskBody {
 export interface CreateWorkspaceBody {
   path: string
   name: string
+  /** Default true. When false, skip orchestrator PTY spawn after creation. */
+  autostart_orchestrator?: boolean
+  /** HTTP port the orchestrator child should call back to (HIVE_PORT env). */
+  hive_port?: string
 }
 
 export interface CreateWorkerBody {
+  autostart?: boolean
+  command_preset_id?: string | null
   description?: string
+  hive_port?: string
   name: string
   role: WorkerRole
 }

@@ -1,8 +1,8 @@
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 
 type WorkspaceSubHeaderProps = {
-  activeCount: number
   agentCount: number
+  runningCount: number
   workspace: WorkspaceSummary
 }
 
@@ -10,8 +10,8 @@ const branchLabel = (workspace: WorkspaceSummary): string =>
   workspace.path.split('/').pop() ?? 'main'
 
 export const WorkspaceSubHeader = ({
-  activeCount,
   agentCount,
+  runningCount,
   workspace,
 }: WorkspaceSubHeaderProps) => (
   <div
@@ -30,7 +30,7 @@ export const WorkspaceSubHeader = ({
     <span className="mono text-ter">{branchLabel(workspace)}</span>
     <div className="flex-1" />
     <span className="text-ter">
-      {agentCount} agent{agentCount === 1 ? '' : 's'} · {activeCount} active
+      {agentCount} agent{agentCount === 1 ? '' : 's'} · {runningCount} running
     </span>
   </div>
 )

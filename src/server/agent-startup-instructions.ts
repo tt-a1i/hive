@@ -1,0 +1,57 @@
+import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
+
+import { getHiveTeamRules } from './hive-team-guidance.js'
+
+export const buildAgentStartupInstructions = ({
+  agent,
+  workspace,
+}: {
+  agent: AgentSummary
+  workspace: WorkspaceSummary
+}) => {
+  const lines = [
+    '[Hive 系统消息：启动说明]',
+    '',
+    `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
+    `当前 workspace: ${workspace.name}`,
+    `项目路径: ${workspace.path}`,
+    '',
+    `你的角色：${agent.description}`,
+    '',
+  ]
+
+  if (agent.role === 'orchestrator') {
+    lines.push(
+      '你的职责：',
+      '- 直接响应 user，澄清需求并拆解任务',
+      '- 维护 tasks.md',
+      '- 按 worker 名称派单，并根据汇报推进下一步',
+      '',
+      '可用 team 命令：',
+      '- team list',
+      '- team send <worker-name> "<task>"',
+      '- team report "<结论>" --success',
+      '',
+      '派单时必须使用 worker name，不要使用 worker id。',
+      '',
+      'Hive worker 派单规则：',
+      ...getHiveTeamRules(agent)
+    )
+  } else {
+    lines.push(
+      '可用 team 命令：',
+      '- team report "<结论>" --success',
+      '- team report "<原因>" --failed',
+      '',
+      '完成任务后必须执行 `team report "<结论>" --success`。',
+      '失败或阻塞时必须执行 `team report "<原因>" --failed`。',
+      '不要调用 team send；worker 之间不能直接派单。',
+      '',
+      'Hive worker 边界：',
+      ...getHiveTeamRules(agent)
+    )
+  }
+
+  lines.push('')
+  return lines.join('\n')
+}

@@ -14,19 +14,20 @@ interface RuntimeStore {
   createWorkspace: (path: string, name: string) => WorkspaceSummary
   listWorkspaces: () => WorkspaceSummary[]
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
+  deleteWorker: (workspaceId: string, workerId: string) => void
   recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => void
   dispatchTask: (
     workspaceId: string,
     workerId: string,
     text: string,
     input?: DispatchTaskInput
-  ) => void
+  ) => Promise<void>
   dispatchTaskByWorkerName: (
     workspaceId: string,
     workerName: string,
     text: string,
     input?: DispatchTaskInput
-  ) => void
+  ) => Promise<void>
   reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => void
   listWorkers: (workspaceId: string) => TeamListItem[]
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
@@ -44,6 +45,10 @@ interface RuntimeStore {
     agentId: string,
     input: AgentLaunchConfigInput
   ) => void
+  peekAgentLaunchConfig: (
+    workspaceId: string,
+    agentId: string
+  ) => AgentLaunchConfigInput | undefined
   startAgent: (
     workspaceId: string,
     agentId: string,
@@ -92,6 +97,12 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     },
     listWorkspaces: () => services.workspaceStore.listWorkspaces(),
     addWorker: (workspaceId, input) => services.workspaceStore.addWorker(workspaceId, input),
+    deleteWorker: (workspaceId, workerId) => {
+      const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
+      if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
+      services.agentRuntime.deleteAgentLaunchConfig(workspaceId, workerId)
+      services.workspaceStore.deleteWorker(workspaceId, workerId)
+    },
     recordUserInput: services.teamOps.recordUserInput,
     dispatchTask: services.teamOps.dispatchTask,
     dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
@@ -104,6 +115,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     getPtyOutputBus: lifecycle.getPtyOutputBus,
     listTerminalRuns: lifecycle.listTerminalRuns,
     configureAgentLaunch: lifecycle.configureAgentLaunch,
+    peekAgentLaunchConfig: lifecycle.peekAgentLaunchConfig,
     startAgent: lifecycle.startAgent,
     startWorkspaceWatch: lifecycle.startWorkspaceWatch,
     getLiveRun: (runId) => services.agentRuntime.getLiveRun(runId),

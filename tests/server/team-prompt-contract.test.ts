@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,7 @@ import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
 const tempDirs: string[] = []
+const originalPath = process.env.PATH
 
 const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
   const deadline = Date.now() + timeoutMs
@@ -27,6 +28,7 @@ const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25)
 }
 
 afterEach(() => {
+  process.env.PATH = originalPath
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true })
   }
@@ -62,7 +64,7 @@ describe('team prompt contract', () => {
     })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
-    store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
+    await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
       fromAgentId: orchestrator.id,
     })
 
@@ -71,6 +73,61 @@ describe('team prompt contract', () => {
       expect(run?.output).toContain('@Orchestrator')
       expect(run?.output).toContain(`你的角色：${worker.description}`)
       expect(run?.output.trimEnd()).toMatch(/实现登录$/)
+    })
+  })
+
+  test('team send submits prompts to interactive CLI agents after bracketed paste', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-interactive-team-send-'))
+    const workspacePath = join(dataDir, 'workspace')
+    const binDir = join(dataDir, 'bin')
+    mkdirSync(workspacePath, { recursive: true })
+    mkdirSync(binDir, { recursive: true })
+    tempDirs.push(dataDir)
+
+    const fakeClaude = join(binDir, 'claude')
+    writeFileSync(
+      fakeClaude,
+      [
+        '#!/usr/bin/env node',
+        "process.stdin.setEncoding('utf8')",
+        "process.stdout.write('❯ ')",
+        "process.stdin.on('data', (chunk) => {",
+        "  process.stdout.write('IN:' + chunk)",
+        "  if (chunk.includes('\\r')) process.stdout.write('\\n❯ ')",
+        '})',
+        'process.stdin.resume()',
+      ].join('\n')
+    )
+    chmodSync(fakeClaude, 0o755)
+    process.env.PATH = `${binDir}:${originalPath ?? ''}`
+
+    const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
+    if (!orchestrator) {
+      throw new Error('Expected default orchestrator')
+    }
+
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, { command: 'claude', args: [] })
+
+    await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+    await waitFor(() => {
+      const run = store.getActiveRunByAgentId(workspace.id, worker.id)
+      expect(run?.output).toContain('[Hive 系统消息：启动说明]')
+      expect(run?.output).toContain('IN:\r')
+    })
+
+    await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
+      fromAgentId: orchestrator.id,
+    })
+
+    await waitFor(() => {
+      const run = store.getActiveRunByAgentId(workspace.id, worker.id)
+      expect(run?.output).toContain('\u001b[200~[Hive 系统消息：来自 @Orchestrator 的派单]')
+      expect(run?.output).toContain('实现登录')
+      expect(run?.output).toContain('\u001b[201~')
+      expect(run?.output.match(/IN:\r/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
     })
   })
 })

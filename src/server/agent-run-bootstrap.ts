@@ -23,6 +23,27 @@ const resolveHiveBinDir = () => {
 
 const HIVE_BIN_DIR = resolveHiveBinDir()
 
+type LaunchPreset = Pick<
+  CommandPresetRecord,
+  'resumeArgsTemplate' | 'sessionIdCapture' | 'yoloArgsTemplate'
+>
+
+const resolveLaunchPreset = (
+  config: AgentLaunchConfigInput,
+  getCommandPreset: (id: string) => CommandPresetRecord | undefined
+): LaunchPreset | undefined => {
+  if (config.commandPresetId) return getCommandPreset(config.commandPresetId)
+
+  const implicitPreset = getCommandPreset(config.command)
+  if (!implicitPreset || implicitPreset.command !== config.command) return undefined
+
+  return {
+    resumeArgsTemplate: null,
+    sessionIdCapture: null,
+    yoloArgsTemplate: implicitPreset.yoloArgsTemplate,
+  }
+}
+
 export const buildAgentRunBootstrap = (
   workspace: WorkspaceSummary,
   agentId: string,
@@ -30,7 +51,7 @@ export const buildAgentRunBootstrap = (
   sessionStore: AgentSessionStorePort,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
 ) => {
-  const preset = config.commandPresetId ? getCommandPreset(config.commandPresetId) : undefined
+  const preset = resolveLaunchPreset(config, getCommandPreset)
   const startConfig = withPresetResumeArgs(
     config,
     preset,

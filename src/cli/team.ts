@@ -18,6 +18,13 @@ interface HiveEnv {
 
 type ReportStatus = 'success' | 'failed'
 
+const TEAM_USAGE = [
+  'Usage:',
+  '  team list',
+  '  team send <worker-name> "<task>"',
+  '  team report "<result>" [--success|--failed] [--artifact <path>]',
+].join('\n')
+
 const getHiveEnv = (): HiveEnv => {
   const values = Object.fromEntries(
     REQUIRED_ENV_KEYS.map((key) => [key, process.env[key]])
@@ -88,11 +95,16 @@ const parseReportArgs = (args: string[]) => {
 }
 
 export const runTeamCommand = async (argv: string[]) => {
-  const env = getHiveEnv()
   const [command, ...args] = argv
-  const baseUrl = getBaseUrl(env)
+
+  if (!command || command === 'help' || command === '--help' || command === '-h') {
+    console.log(TEAM_USAGE)
+    return
+  }
 
   if (command === 'list') {
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
     const response = await fetch(`${baseUrl}/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
       method: 'GET',
       headers: {
@@ -115,7 +127,10 @@ export const runTeamCommand = async (argv: string[]) => {
       throw new Error('Usage: team send <worker-name> <task>')
     }
 
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
     await postJson(`${baseUrl}/api/team/send`, {
+      hive_port: env.HIVE_PORT,
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
@@ -128,6 +143,8 @@ export const runTeamCommand = async (argv: string[]) => {
   if (command === 'report') {
     const report = parseReportArgs(args)
 
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
     await postJson(`${baseUrl}/api/team/report`, {
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,

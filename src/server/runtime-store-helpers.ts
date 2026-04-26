@@ -86,9 +86,11 @@ export const createRuntimeStoreServices = (
     agentSessionStore,
     settings.getCommandPreset,
     (workspaceId, agentId) => {
+      if (!workspaceStore.hasAgent(workspaceId, agentId)) return
       workspaceStore.markAgentStopped(workspaceId, agentId)
     },
-    restartPolicy
+    restartPolicy,
+    (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId)
   )
   const teamOps = createTeamOperations({
     agentRuntime,
@@ -127,6 +129,8 @@ export const createRuntimeStoreLifecycle = ({
     services.workspaceStore.getAgent(workspaceId, agentId)
     services.agentRuntime.configureAgentLaunch(workspaceId, agentId, input)
   },
+  peekAgentLaunchConfig: (workspaceId: string, agentId: string) =>
+    services.agentRuntime.peekAgentLaunchConfig(workspaceId, agentId),
   getPtyOutputBus: (): PtyOutputBus => {
     if (!agentManager) throw new Error('Agent manager is required for PTY output subscriptions')
     return agentManager.getOutputBus()

@@ -130,6 +130,81 @@ describe('schema version', () => {
     db.close()
   })
 
+  test('migration updates builtin Claude yolo args for existing databases', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-claude-yolo-'))
+    tempDirs.push(dataDir)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+
+      INSERT INTO schema_version (version, applied_at)
+      VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8);
+
+      CREATE TABLE command_presets (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        command TEXT NOT NULL,
+        args TEXT NOT NULL,
+        env TEXT NOT NULL,
+        resume_args_template TEXT,
+        session_id_capture TEXT,
+        yolo_args_template TEXT,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `)
+    db.prepare(
+      `INSERT INTO command_presets (
+        id,
+        display_name,
+        command,
+        args,
+        env,
+        resume_args_template,
+        session_id_capture,
+        yolo_args_template,
+        is_builtin,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'claude',
+      'Claude Code (CC)',
+      'claude',
+      '[]',
+      '{}',
+      '[]',
+      null,
+      JSON.stringify(['--dangerously-skip-permissions']),
+      1,
+      1,
+      1
+    )
+
+    initializeRuntimeDatabase(db)
+
+    const preset = db
+      .prepare('SELECT yolo_args_template FROM command_presets WHERE id = ?')
+      .get('claude') as { yolo_args_template: string } | undefined
+    const version = db.prepare('SELECT version FROM schema_version WHERE version = ?').get(9) as
+      | { version: number }
+      | undefined
+
+    expect(JSON.parse(preset?.yolo_args_template ?? '[]')).toEqual([
+      '--dangerously-skip-permissions',
+      '--permission-mode=bypassPermissions',
+      '--disallowedTools=Task',
+    ])
+    expect(version).toEqual({ version: 9 })
+
+    db.close()
+  })
+
   test('migration upgrades legacy messages.kind data into messages.type', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-migrate-'))
     tempDirs.push(dataDir)

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { once } from 'node:events'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 import { createAgentManager } from '../server/agent-manager.js'
 import { createApp } from '../server/app.js'
@@ -34,13 +36,15 @@ const parsePort = (argv: string[]) => {
   return 3000
 }
 
+const resolveDataDir = () => process.env.HIVE_DATA_DIR || join(homedir(), '.config', 'hive')
+
 export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResult> => {
   const port = parsePort(argv)
-  const dataDir = process.env.HIVE_DATA_DIR
+  const dataDir = resolveDataDir()
   const app = createApp({
     store: createRuntimeStore({
       agentManager: createAgentManager(),
-      ...(dataDir ? { dataDir } : {}),
+      dataDir,
     }),
   })
 

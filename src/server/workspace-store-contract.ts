@@ -14,10 +14,12 @@ export interface WorkerInput {
 export interface WorkspaceStore {
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
   createWorkspace: (path: string, name: string) => WorkspaceSummary
+  deleteWorker: (workspaceId: string, workerId: string) => void
   getAgent: (workspaceId: string, agentId: string) => AgentSummary
   getWorker: (workspaceId: string, workerId: string) => AgentSummary
   getWorkerByName: (workspaceId: string, workerName: string) => AgentSummary
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
+  hasAgent: (workspaceId: string, agentId: string) => boolean
   listWorkers: (workspaceId: string) => TeamListItem[]
   listWorkspaces: () => WorkspaceSummary[]
   markAgentStarted: (workspaceId: string, agentId: string) => void

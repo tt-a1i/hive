@@ -208,11 +208,11 @@ describe('M5 Linear dark visual contract', () => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
 
-    // Open the AddWorkerDialog via the Workers pane header button
-    const newWorkerButtons = screen.getAllByRole('button', { name: /New Worker/ })
+    // Open the AddWorkerDialog via the Team Members pane header button
+    const newWorkerButtons = screen.getAllByRole('button', { name: /New Member/ })
     fireEvent.click(newWorkerButtons[0] as HTMLElement)
 
-    const dialog = await screen.findByRole('form', { name: 'Add worker' })
+    const dialog = await screen.findByRole('form', { name: 'Add team member' })
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Alice' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 

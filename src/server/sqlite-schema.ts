@@ -3,8 +3,9 @@ import type { Database } from 'better-sqlite3'
 import { applySchemaVersion5 } from './sqlite-schema-v5.js'
 import { applySchemaVersion7 } from './sqlite-schema-v7.js'
 import { applySchemaVersion8 } from './sqlite-schema-v8.js'
+import { applySchemaVersion9 } from './sqlite-schema-v9.js'
 
-export const CURRENT_SCHEMA_VERSION = 8
+export const CURRENT_SCHEMA_VERSION = 9
 
 export const initializeRuntimeDatabase = (db: Database) => {
   db.exec(`
@@ -160,5 +161,10 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(8)) {
     applySchemaVersion8(db)
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(8, Date.now())
+  }
+
+  if (!appliedVersions.has(9)) {
+    applySchemaVersion9(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(9, Date.now())
   }
 }

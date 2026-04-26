@@ -29,23 +29,13 @@ describe('startAgent exception rollback (R1.2)', () => {
       args: [],
     })
 
-    const run = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
-    // Real node-pty + non-existent command → exits fast with non-zero; agent-manager
-    // triggers run.onExit which should flip worker to stopped.
-    const deadline = Date.now() + 2000
-    while (
-      Date.now() <= deadline &&
-      store.getWorker(workspace.id, worker.id).status !== 'stopped'
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    }
+    await expect(store.startAgent(workspace.id, worker.id, { hivePort: '4010' })).rejects.toThrow(
+      '/definitely/not/a/real/binary CLI not found in PATH'
+    )
+
     expect(store.getWorker(workspace.id, worker.id).status).toBe('stopped')
     expect(store.peekAgentToken(worker.id)).toBeUndefined()
-    // agent_runs should settle to error (non-zero exit).
-    const runs = store.listAgentRuns(worker.id)
-    expect(runs.length).toBeGreaterThan(0)
-    expect(['error', 'exited']).toContain(runs[0]?.status)
-    void run
+    expect(store.listAgentRuns(worker.id)).toEqual([])
   })
 
   test('marks agent stopped when agentManager.startAgent throws after token issue', async () => {

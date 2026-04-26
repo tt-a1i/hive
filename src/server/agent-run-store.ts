@@ -142,6 +142,16 @@ export const createAgentRunStore = (db: Database | undefined) => {
     )
   }
 
+  const deleteLaunchConfig = (workspaceId: string, agentId: string) => {
+    if (closed) {
+      return
+    }
+    db?.prepare('DELETE FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?').run(
+      workspaceId,
+      agentId
+    )
+  }
+
   const insertAgentRun = (
     runId: string,
     agentId: string,
@@ -205,6 +215,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
     close,
     initialize,
     insertAgentRun,
+    deleteLaunchConfig,
     listAgentRuns,
     listLaunchConfigs,
     saveLaunchConfig,

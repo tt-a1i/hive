@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws'
 
 import type { RuntimeStore } from './runtime-store.js'
 import { createTasksWebSocketServer } from './tasks-websocket-server.js'
+import type { TerminalMirrorSize } from './terminal-state-mirror.js'
 import { createTerminalStreamHub } from './terminal-stream-hub.js'
 import { readCookie } from './ui-auth-helpers.js'
 
@@ -19,6 +20,15 @@ const matchTerminalPath = (pathname: string) => {
 
 const getClientId = (url: URL) => {
   return url.searchParams.get('clientId')?.trim() || 'legacy'
+}
+
+const getInitialSize = (url: URL): TerminalMirrorSize | undefined => {
+  const cols = Number(url.searchParams.get('cols'))
+  const rows = Number(url.searchParams.get('rows'))
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) {
+    return undefined
+  }
+  return { cols, rows }
 }
 
 const rejectUpgrade = (
@@ -72,8 +82,8 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
     const wss = match.channel === 'io' ? ioWss : controlWss
     wss.handleUpgrade(request, socket, head, (ws) => {
       const clientId = getClientId(url)
-      if (match.channel === 'io') hub.attachIo(match.runId, clientId, ws)
-      else hub.attachControl(match.runId, clientId, ws)
+      if (match.channel === 'io') hub.attachIo(match.runId, clientId, ws, getInitialSize(url))
+      else hub.attachControl(match.runId, clientId, ws, getInitialSize(url))
     })
   })
 

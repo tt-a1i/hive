@@ -21,11 +21,13 @@ export interface RestartPolicy {
     startConfig: AgentLaunchConfigInput
     workspace: WorkspaceSummary
     writeToRun: (runId: string, text: string) => void
-  }) => void
+  }) => boolean
 }
 
 export const createNoopRestartPolicy = (): RestartPolicy => ({
-  injectPostStartMessage() {},
+  injectPostStartMessage() {
+    return false
+  },
 })
 
 export const createRestartPolicy = ({
@@ -38,11 +40,11 @@ export const createRestartPolicy = ({
 }: RestartPolicyInput): RestartPolicy => ({
   injectPostStartMessage({ agentId, runId, startConfig, workspace, writeToRun }) {
     const previousRun = findPreviousRun(listAgentRuns(agentId), runId)
-    if (!previousRun) return
+    if (!previousRun) return false
 
     const snapshot = getWorkspaceSnapshot(workspace.id)
     const agent = snapshot.agents.find((item) => item.id === agentId)
-    if (!agent) return
+    if (!agent) return false
     const workers = snapshot.agents.filter(
       (item) => item.role !== 'orchestrator' && item.id !== agentId
     )
@@ -51,6 +53,7 @@ export const createRestartPolicy = ({
     if (startConfig.resumedSessionId) {
       const sinceMs = previousRun.endedAt ?? previousRun.startedAt
       const text = buildEnvSyncMessage({
+        agent,
         tasksContent,
         workers,
         workspace,
@@ -64,11 +67,12 @@ export const createRestartPolicy = ({
         text,
         writeToRun,
       })
-      return
+      return true
     }
 
     const text = buildRecoverySummary({
       agent,
+      allTaskMessages: listMessagesForRecovery(workspace.id, 0),
       messages: listMessagesForRecovery(workspace.id, Date.now() - RECOVERY_WINDOW_MS),
       tasksContent,
       workers,
@@ -82,5 +86,6 @@ export const createRestartPolicy = ({
       text,
       writeToRun,
     })
+    return true
   },
 })

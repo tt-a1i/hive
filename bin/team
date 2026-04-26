@@ -1,2 +1,7 @@
 #!/usr/bin/env node
-import '../src/cli/team.js'
+import { runTeamCommand } from '../src/cli/team.js'
+
+void runTeamCommand(process.argv.slice(2)).catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})

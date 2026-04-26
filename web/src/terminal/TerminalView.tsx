@@ -52,20 +52,20 @@ export const TerminalView = ({ runId, title }: TerminalViewProps) => {
   if (portalTarget) {
     return createPortal(body, portalTarget)
   }
-  return (
-    <section aria-label={`Terminal ${title}`} className="flex h-full w-full flex-col">
-      {body}
-    </section>
-  )
+  return null
 }
 
 const TerminalPtyView = ({ runId, title: _title }: TerminalViewProps) => {
   const { containerRef, error, status } = useTerminalRun(runId)
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <p className="sr-only">{status}</p>
       {error ? <p role="alert">{error}</p> : null}
-      <div data-testid={`terminal-${runId}`} ref={containerRef} className="h-full w-full flex-1" />
+      <div
+        data-testid={`terminal-${runId}`}
+        ref={containerRef}
+        className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-1"
+      />
     </div>
   )
 }

@@ -88,7 +88,7 @@ const createWorkspace = async (name: string) => {
   const response = await nativeFetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name, path: workspacePath }),
+    body: JSON.stringify({ name, path: workspacePath, autostart_orchestrator: false }),
   })
   return (await response.json()) as { id: string; path: string }
 }
@@ -115,7 +115,7 @@ const configureAndStartWorker = async (workspaceId: string, workspacePath: strin
 }
 
 describe('workspace sidebar flow', () => {
-  test('switching workspace keeps background terminal sockets mounted', async () => {
+  test('switching workspace does not mount detached terminal sockets', async () => {
     const alpha = await createWorkspace('Alpha')
     const beta = await createWorkspace('Beta')
     mkdirSync(alpha.path, { recursive: true })
@@ -125,12 +125,12 @@ describe('workspace sidebar flow', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
-      expect(screen.getByLabelText(/Terminal Alice/)).toBeInTheDocument()
     })
+    expect(screen.queryByLabelText(/Terminal Alice/)).toBeNull()
     const terminalSocketCount = MockWebSocket.instances.filter((socket) =>
       socket.url.includes('/ws/terminal/')
     ).length
-    expect(terminalSocketCount).toBe(2)
+    expect(terminalSocketCount).toBe(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
 
@@ -149,11 +149,10 @@ describe('workspace sidebar flow', () => {
         value: beta.id,
       })
     })
-    expect(screen.getByTestId(/^terminal-/)).toBeInTheDocument()
+    expect(screen.queryByTestId(/^terminal-/)).toBeNull()
     const terminalSockets = MockWebSocket.instances.filter((socket) =>
       socket.url.includes('/ws/terminal/')
     )
-    expect(terminalSockets).toHaveLength(2)
-    expect(terminalSockets.every((socket) => socket.closed === false)).toBe(true)
+    expect(terminalSockets).toHaveLength(0)
   })
 })

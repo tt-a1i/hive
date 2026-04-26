@@ -1,5 +1,6 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 
+import { getHiveTeamRules } from './hive-team-guidance.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import { wrapSystemMessage } from './system-message.js'
 
@@ -24,11 +25,13 @@ const formatRestartWindow = (messages: RecoveryMessage[]) => {
 }
 
 export const buildEnvSyncMessage = ({
+  agent,
   tasksContent,
   workers,
   workspace,
   restartWindowMessages,
 }: {
+  agent: AgentSummary
   tasksContent: string
   workers: AgentSummary[]
   workspace: WorkspaceSummary
@@ -43,6 +46,8 @@ export const buildEnvSyncMessage = ({
       '- tasks.md 当前内容:',
       tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
       ...formatRestartWindow(restartWindowMessages),
+      agent.role === 'orchestrator' ? '- Hive worker 派单规则:' : '- Hive worker 边界:',
+      ...getHiveTeamRules(agent).map((rule) => `  - ${rule}`),
       '请继续。如果不确定，用 team list / Read tasks.md 自查或问 user。',
     ].join('\n')
   )

@@ -13,7 +13,7 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
       className="flex shrink-0 items-center gap-3 border-b px-4 py-2"
       style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
     >
-      <span className="font-medium text-pri">Workers</span>
+      <span className="font-medium text-pri">Team Members</span>
       <span className="text-ter text-xs">{workers.length}</span>
       <div className="flex-1" />
       <button
@@ -25,21 +25,16 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
         <span className="text-sm leading-none" aria-hidden>
           +
         </span>
-        New Worker
+        New Member
       </button>
     </div>
 
     <div className="flex-1 scroll-y p-4">
       <ul
-        aria-label="Workers"
+        aria-label="Team members"
         className="grid grid-cols-1 gap-3 lg:grid-cols-2"
         data-testid="worker-grid"
       >
-        {workers.map((worker) => (
-          <li key={worker.id}>
-            <WorkerCard worker={worker} onClick={onOpenWorker} />
-          </li>
-        ))}
         <li>
           <button
             type="button"
@@ -50,12 +45,17 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
             <span className="mb-1 text-2xl leading-none" aria-hidden>
               +
             </span>
-            <span className="text-xs">New Worker</span>
+            <span className="text-xs">New Member</span>
             <span className="mt-1 text-[10px] text-ter">
               Coder · Reviewer · Tester · Architect · Custom
             </span>
           </button>
         </li>
+        {workers.map((worker) => (
+          <li key={worker.id}>
+            <WorkerCard worker={worker} onClick={onOpenWorker} />
+          </li>
+        ))}
       </ul>
     </div>
   </div>

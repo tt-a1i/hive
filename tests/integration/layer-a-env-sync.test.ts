@@ -91,6 +91,7 @@ mkdirSync(projectDir, { recursive: true })
 writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(expectResumeMarker) && !args.includes('--resume')) process.exit(2)
+process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
@@ -229,7 +230,10 @@ describe('Layer A env sync integration', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(`ARGS:--resume ${sessionId}`)
-        expect(state.output).toContain('STDIN:[Hive 系统消息：你刚被 Hive 重启了。期间环境变化：')
+        expect(state.output).toContain(
+          'STDIN:\u001b[200~[Hive 系统消息：你刚被 Hive 重启了。期间环境变化：'
+        )
+        expect(state.output).toContain('\u001b[201~')
         expect(state.output).toContain('当前 workspace: Alpha')
         expect(state.output).toContain('Bob')
         expect(state.output).toContain('env sync task')
