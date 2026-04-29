@@ -88,7 +88,7 @@ afterEach(async () => {
 const openTaskGraph = async () => {
   const drawer = await screen.findByTestId('task-graph-drawer')
   if (drawer.getAttribute('aria-hidden') === 'true') {
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle task graph' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle blueprint' }))
   }
   await waitFor(() => {
     expect(drawer).toHaveAttribute('aria-hidden', 'false')
@@ -121,7 +121,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     const drawer = await screen.findByTestId('task-graph-drawer')
     expect(drawer).toHaveAttribute('aria-hidden', 'true')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle task graph' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle blueprint' }))
 
     await waitFor(() => {
       expect(drawer).toHaveAttribute('aria-hidden', 'false')

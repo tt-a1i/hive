@@ -1,3 +1,5 @@
+import { Hexagon, ListChecks, Settings as SettingsIcon } from 'lucide-react'
+
 type TopbarProps = {
   onToggleTaskGraph: () => void
   taskGraphOpen: boolean
@@ -10,7 +12,7 @@ export const Topbar = ({ onToggleTaskGraph, taskGraphOpen, version = 'v0.1' }: T
     style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
   >
     <div className="flex items-center gap-2">
-      <span className="text-lg leading-none">🐝</span>
+      <Hexagon size={16} className="text-pri" aria-hidden />
       <span className="font-semibold text-pri">Hive</span>
       <span className="text-ter text-xs">{version}</span>
     </div>
@@ -20,19 +22,21 @@ export const Topbar = ({ onToggleTaskGraph, taskGraphOpen, version = 'v0.1' }: T
         type="button"
         onClick={onToggleTaskGraph}
         aria-pressed={taskGraphOpen}
-        aria-label="Toggle task graph"
-        className="flex items-center gap-1 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        aria-label="Toggle blueprint"
+        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        data-testid="topbar-blueprint"
       >
-        <span aria-hidden>📋</span>
-        <span>Task Graph</span>
+        <ListChecks size={14} aria-hidden />
+        <span>Blueprint</span>
       </button>
       <button
         type="button"
         aria-label="Settings"
-        className="rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        data-testid="topbar-settings"
       >
-        <span aria-hidden>⚙️</span>
-        <span className="ml-1">Settings</span>
+        <SettingsIcon size={14} aria-hidden />
+        <span>Settings</span>
       </button>
     </div>
   </header>
