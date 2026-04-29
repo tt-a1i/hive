@@ -6,6 +6,14 @@ type FooterProps = {
   workspaceCount: number
 }
 
+const Dot = ({ color }: { color: string }) => (
+  <span
+    aria-hidden
+    className="inline-block h-1.5 w-1.5 rounded-full align-middle"
+    style={{ background: color }}
+  />
+)
+
 export const Footer = ({
   connected,
   running,
@@ -23,19 +31,26 @@ export const Footer = ({
       {workspaceCount} workspace{workspaceCount === 1 ? '' : 's'}
     </span>
     <span aria-hidden>·</span>
-    <span data-testid="footer-running" title="PTY running (working + idle)">
-      <span style={{ color: 'var(--status-green)' }}>●</span> {running} running
+    <span
+      data-testid="footer-running"
+      title="PTY running (working + idle)"
+      className="inline-flex items-center gap-1.5"
+    >
+      <Dot color="var(--status-green)" /> {running} running
     </span>
     <span aria-hidden>·</span>
-    <span data-testid="footer-stopped">
-      <span style={{ color: 'var(--status-red)' }}>○</span> {stopped} stopped
+    <span data-testid="footer-stopped" className="inline-flex items-center gap-1.5">
+      <Dot color="var(--status-red)" /> {stopped} stopped
     </span>
     <div className="flex-1" />
     <span
       title={connected ? 'connected' : 'disconnected'}
+      className="inline-flex items-center gap-1.5"
       style={{ color: connected ? 'var(--status-green)' : 'var(--status-red)' }}
+      data-testid="footer-connection"
     >
-      {connected ? '● connected' : '● disconnected'}
+      <Dot color={connected ? 'var(--status-green)' : 'var(--status-red)'} />
+      {connected ? 'connected' : 'disconnected'}
     </span>
   </footer>
 )
