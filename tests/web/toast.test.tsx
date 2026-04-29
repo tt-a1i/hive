@@ -36,7 +36,9 @@ const ShowButton = ({
     <button
       type="button"
       data-testid={`show-${kind}`}
-      onClick={() => show({ kind, message, durationMs })}
+      onClick={() =>
+        show(durationMs === undefined ? { kind, message } : { kind, message, durationMs })
+      }
     >
       show
     </button>

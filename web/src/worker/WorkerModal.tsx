@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
 
@@ -126,9 +127,7 @@ export const WorkerModal = ({
           className="flex shrink-0 items-center gap-3 border-b px-4 py-3"
           style={{ borderColor: 'var(--border)' }}
         >
-          <span className="text-2xl leading-none" aria-hidden>
-            {role.emoji}
-          </span>
+          <RoleAvatar role={worker.role} size={36} />
           <div className="min-w-0">
             <div className="truncate font-medium text-pri">{worker.name}</div>
             <div className="mono truncate text-[11px] text-ter">

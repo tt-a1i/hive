@@ -218,9 +218,11 @@ describe('worker flow with real server', () => {
 
     await waitFor(() => {
       const card = screen.getByRole('button', { name: /^Open Carol$/ })
-      // Initial card: stopped + queue=0 — no pending pill, just the queue count.
+      // Initial card: stopped + queue=0 — only the status pill is asserted.
+      // (M6-A removed the redundant "queue: N" footer; pending count surfaces
+      // only when > 0 via the queue-badge.)
       expect(within(card).getByText('stopped')).toBeInTheDocument()
-      expect(within(card).getByText('queue:')).toBeInTheDocument()
+      expect(within(card).queryByText('1 queued')).toBeNull()
     })
 
     serverContext?.store.dispatchTask(workspaceId, worker.id, 'Implement refresh')
@@ -230,10 +232,9 @@ describe('worker flow with real server', () => {
         const card = screen.getByRole('button', { name: /^Open Carol$/ })
         // spec §3.6.4: pending_task_count is orthogonal to status. The status
         // pill stays `stopped` (PTY isn't running); the queue length surfaces
-        // as a separate orange indicator.
+        // as a separate orange queue-badge.
         expect(within(card).getByText('stopped')).toBeInTheDocument()
         expect(within(card).getByText('1 queued')).toBeInTheDocument()
-        expect(within(card).getByText('1 pending task(s)')).toBeInTheDocument()
         // Sub-header: 0 working / 0 idle / 2 stopped, with 1 queued aside.
         expect(screen.getByTestId('workspace-sub-header')).toHaveTextContent('1 queued')
       },

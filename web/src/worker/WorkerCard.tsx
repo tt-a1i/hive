@@ -1,4 +1,5 @@
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
 
@@ -21,9 +22,7 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
       data-status={status.kind}
     >
       <div className="flex items-start gap-3">
-        <span className="text-3xl leading-none" aria-hidden>
-          {role.emoji}
-        </span>
+        <RoleAvatar role={worker.role} size={40} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-pri">{worker.name}</span>
@@ -50,17 +49,6 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
             </span>
           ) : null}
         </div>
-      </div>
-
-      <div className="mt-3 flex items-center justify-between text-[11px] text-ter">
-        <span>
-          queue: <span className="mono text-sec">{worker.pendingTaskCount}</span>
-        </span>
-        {queue ? (
-          <span className="text-status-orange">{queue.count} pending task(s)</span>
-        ) : (
-          <span aria-hidden>—</span>
-        )}
       </div>
     </button>
   )
