@@ -27,7 +27,8 @@ const formatTaskEvents = (messages: RecoveryMessage[], agent: AgentSummary) => {
   return taskEvents.length > 0
     ? taskEvents.slice(-8).map((message) => {
         if (message.type === 'send') return `- send -> ${message.to}: ${message.text}`
-        return `- report <- ${message.from} [${message.status}]: ${message.text}`
+        const status = message.status ? ` [${message.status}]` : ''
+        return `- report <- ${message.from}${status}: ${message.text}`
       })
     : ['- （最近没有任务事件）']
 }

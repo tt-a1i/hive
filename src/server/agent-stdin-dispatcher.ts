@@ -58,11 +58,10 @@ export const createAgentStdinDispatcher = ({
       workspaceId: string,
       workerName: string,
       text: string,
-      status: string,
       artifacts: string[],
       input: { requireActiveRun?: boolean } = {}
     ) {
-      const lines = [`[Hive 系统消息：来自 @${workerName} 的汇报，状态: ${status}]`, text]
+      const lines = [`[Hive 系统消息：来自 @${workerName} 的汇报]`, text]
       for (const artifact of artifacts) lines.push(`artifact: ${artifact}`)
       lines.push('')
       writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, lines.join('\n'), input)
@@ -83,8 +82,7 @@ export const createAgentStdinDispatcher = ({
           `你的角色：${workerDescription}`,
           '',
           '你必须遵守：',
-          '- 完成任务后，执行 `team report "<结论>" --success`',
-          '- 失败请 `team report "<原因>" --failed`',
+          '- 完成、失败、阻塞或部分完成后，执行 `team report "<完整汇报>"`',
           '- 不要做无关的事，做完就 report',
           '',
           '任务内容：',

@@ -218,7 +218,9 @@ describe('worker flow with real server', () => {
 
     await waitFor(() => {
       const card = screen.getByRole('button', { name: /^Open Carol$/ })
-      expect(within(card).getByText('尚未派单')).toBeInTheDocument()
+      // Initial card: stopped + queue=0 — no pending pill, just the queue count.
+      expect(within(card).getByText('stopped')).toBeInTheDocument()
+      expect(within(card).getByText('queue:')).toBeInTheDocument()
     })
 
     serverContext?.store.dispatchTask(workspaceId, worker.id, 'Implement refresh')
@@ -226,10 +228,14 @@ describe('worker flow with real server', () => {
     await waitFor(
       () => {
         const card = screen.getByRole('button', { name: /^Open Carol$/ })
+        // spec §3.6.4: pending_task_count is orthogonal to status. The status
+        // pill stays `stopped` (PTY isn't running); the queue length surfaces
+        // as a separate orange indicator.
+        expect(within(card).getByText('stopped')).toBeInTheDocument()
+        expect(within(card).getByText('1 queued')).toBeInTheDocument()
         expect(within(card).getByText('1 pending task(s)')).toBeInTheDocument()
-        expect(within(card).getByText('queued')).toBeInTheDocument()
-        expect(screen.getByTestId('workspace-sub-header')).toHaveTextContent('2 agents · 0 running')
-        expect(screen.getByTitle('team member has queued tasks')).toBeInTheDocument()
+        // Sub-header: 0 working / 0 idle / 2 stopped, with 1 queued aside.
+        expect(screen.getByTestId('workspace-sub-header')).toHaveTextContent('1 queued')
       },
       { timeout: 2000 }
     )

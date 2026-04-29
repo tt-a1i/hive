@@ -7,6 +7,8 @@ describe('report pending count', () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    // Simulate PTY started before dispatching.
+    store.getWorker(workspace.id, worker.id).status = 'idle'
 
     store.dispatchTask(workspace.id, worker.id, 'Task 1')
     store.dispatchTask(workspace.id, worker.id, 'Task 2')

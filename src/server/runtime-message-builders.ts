@@ -38,18 +38,21 @@ export const createReportMessage = (
   workspaceId: string,
   workerId: string,
   text: string,
-  status: string,
+  status: string | undefined,
   artifacts: string[]
-): MessageLogRecord => ({
-  artifacts,
-  createdAt: Date.now(),
-  fromAgentId: workerId,
-  status,
-  text,
-  type: 'report',
-  workerId,
-  workspaceId,
-})
+): MessageLogRecord => {
+  const message: MessageLogRecord = {
+    artifacts,
+    createdAt: Date.now(),
+    fromAgentId: workerId,
+    text,
+    type: 'report',
+    workerId,
+    workspaceId,
+  }
+  if (status) message.status = status
+  return message
+}
 
 export const createSystemEnvSyncMessage = (
   workspaceId: string,

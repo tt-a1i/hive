@@ -12,9 +12,7 @@ const upsertWorker = (workers: TeamListItem[], worker: TeamListItem): TeamListIt
 interface UseWorkerActionsInput {
   activeWorkspaceId: string | null
   hivePort: string
-  setWorkersByWorkspaceId: React.Dispatch<
-    React.SetStateAction<Record<string, TeamListItem[]>>
-  >
+  setWorkersByWorkspaceId: React.Dispatch<React.SetStateAction<Record<string, TeamListItem[]>>>
 }
 
 export interface WorkerActions {
@@ -71,18 +69,15 @@ export const useWorkerActions = ({
       if (!activeWorkspaceId) return { error: 'No active workspace' }
       try {
         await startAgentRun(activeWorkspaceId, workerId, hivePort)
-        setWorkersByWorkspaceId((current) => ({
-          ...current,
-          [activeWorkspaceId]: (current[activeWorkspaceId] ?? []).map((worker) =>
-            worker.id === workerId ? { ...worker, status: 'idle' } : worker
-          ),
-        }))
+        // No optimistic status patch: server is authoritative (working iff
+        // pending>0). Next listWorkers tick (≤500ms) reconciles. Optimistic
+        // 'idle' would lie when worker had pending dispatches.
         return { error: null }
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) }
       }
     },
-    [activeWorkspaceId, hivePort, setWorkersByWorkspaceId]
+    [activeWorkspaceId, hivePort]
   )
 
   const stopWorkerRunAction = useCallback<WorkerActions['stopWorkerRun']>(async (runId) => {

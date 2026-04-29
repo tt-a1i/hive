@@ -41,7 +41,6 @@ export interface AgentRuntime {
     workerName: string,
     workerId: string,
     text: string,
-    status: string,
     artifacts: string[],
     input?: { requireActiveRun?: boolean }
   ) => void

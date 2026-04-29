@@ -30,13 +30,19 @@ export const teamRoutes: RouteDefinition[] = [
       workspaceId: body.project_id,
     })
     requireCommandForRole(agent, 'report')
-    const status = body.status === 'success' || body.status === 'failed' ? body.status : 'success'
-    store.reportTask(body.project_id, body.from_agent_id, {
-      artifacts: body.artifacts.filter((item): item is string => typeof item === 'string'),
+    const reportInput = {
+      artifacts: (body.artifacts ?? []).filter((item): item is string => typeof item === 'string'),
       requireActiveRun: true,
-      status,
       text: body.result,
-    })
+    }
+    if (typeof body.status === 'string') {
+      store.reportTask(body.project_id, body.from_agent_id, {
+        ...reportInput,
+        status: body.status,
+      })
+    } else {
+      store.reportTask(body.project_id, body.from_agent_id, reportInput)
+    }
     sendJson(response, 202, { ok: true })
   }),
 ]

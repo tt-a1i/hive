@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import WebSocket from 'ws'
 
@@ -85,7 +85,19 @@ afterEach(async () => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
+const openTaskGraph = async () => {
+  const drawer = await screen.findByTestId('task-graph-drawer')
+  if (drawer.getAttribute('aria-hidden') === 'true') {
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle task graph' }))
+  }
+  await waitFor(() => {
+    expect(drawer).toHaveAttribute('aria-hidden', 'false')
+  })
+  return drawer
+}
+
 const enterRawEditor = async (expectedInitialValue: string) => {
+  await openTaskGraph()
   // Wait until tasks content is loaded (checkbox rendered means parseTaskMarkdown ran)
   await screen.findByTestId('task-checkbox-0')
   fireEvent.click(screen.getByRole('button', { name: 'edit raw' }))
@@ -95,8 +107,38 @@ const enterRawEditor = async (expectedInitialValue: string) => {
 }
 
 describe('tasks flow driven from the Task Graph drawer', () => {
+  test('task graph starts closed and opens to a readable summary and nested task tree', async () => {
+    await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
+      body: JSON.stringify({
+        content: '- [ ] implement login @Alice\n  - [x] wire submit\n- [x] review docs @Bob\n',
+      }),
+    })
+
+    render(<App />)
+
+    const drawer = await screen.findByTestId('task-graph-drawer')
+    expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle task graph' }))
+
+    await waitFor(() => {
+      expect(drawer).toHaveAttribute('aria-hidden', 'false')
+    })
+
+    const summary = await within(drawer).findByTestId('task-graph-summary')
+    expect(summary).toHaveTextContent('2/3')
+    expect(summary).toHaveTextContent('67%')
+    expect(within(drawer).getByTestId('task-progress-bar')).toHaveAttribute('aria-valuenow', '67')
+    expect(within(drawer).getByText('@Alice')).toBeInTheDocument()
+    expect(within(drawer).getByText('@Bob')).toBeInTheDocument()
+    expect(within(drawer).getByTestId('task-line-1')).toHaveTextContent('wire submit')
+  })
+
   test('toggling a checkbox persists to tasks.md', async () => {
     render(<App />)
+    await openTaskGraph()
 
     const checkbox = await screen.findByTestId('task-checkbox-0')
     expect(checkbox).not.toBeChecked()

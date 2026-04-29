@@ -50,8 +50,16 @@ describe('agent startup instructions', () => {
       [
         '#!/usr/bin/env node',
         "process.stdin.setEncoding('utf8')",
+        'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
+        'let submitReadyAt = 0',
         "process.stdout.write('❯ ')",
-        "process.stdin.on('data', (chunk) => process.stdout.write('IN:' + chunk))",
+        "process.stdin.on('data', (chunk) => {",
+        "  process.stdout.write('IN:' + chunk)",
+        "  if (chunk.includes('\\u001b[201~')) submitReadyAt = Date.now() + 500",
+        "  const isSubmit = submitReadyAt > 0 && (chunk === '\\r' || chunk === '\\n' || chunk === '\\r\\n')",
+        "  if (isSubmit && Date.now() >= submitReadyAt) process.stdout.write('\\nSUBMITTED\\n❯ ')",
+        "  else if (isSubmit) process.stdout.write('\\nEARLY_ENTER_IGNORED\\n❯ ')",
+        '})',
         'process.stdin.resume()',
       ].join('\n')
     )
@@ -122,13 +130,17 @@ describe('agent startup instructions', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        expect(body.output).toContain('[Hive 系统消息：启动说明]')
-        expect(body.output).toContain('你是 Alpha 的 Orchestrator')
-        expect(body.output).toContain('team send <worker-name> "<task>"')
-        expect(body.output).toContain('team list')
-        expect(body.output).toContain('维护 tasks.md')
-        expect(body.output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
-        expect(body.output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+        const output = body.output.replaceAll('IN:', '')
+        expect(output).toContain('[Hive 系统消息：启动说明]')
+        expect(output).toContain('你是 Alpha 的 Orchestrator')
+        expect(output).toContain('team send <worker-name> "<task>"')
+        expect(output).toContain('team list')
+        expect(output).toContain('维护 tasks.md')
+        expect(output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
+        expect(output).toContain('先执行 `team list` 确认真实 Hive worker')
+        expect(output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
+        expect(output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+        expect(output).toContain('SUBMITTED')
       })
 
       await waitFor(async () => {
@@ -136,10 +148,14 @@ describe('agent startup instructions', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        expect(body.output).toContain('[Hive 系统消息：启动说明]')
-        expect(body.output).toContain('你是 Alpha 的 Alice（coder）')
-        expect(body.output).toContain('完成任务后必须执行 `team report "<结论>" --success`')
-        expect(body.output).not.toContain('team send <worker-name>')
+        const output = body.output.replaceAll('IN:', '')
+        expect(output).toContain('[Hive 系统消息：启动说明]')
+        expect(output).toContain('你是 Alpha 的 Alice（coder）')
+        expect(output).toContain('完成任务后必须执行 `team report "<结论>"`')
+        expect(output).not.toContain('--success')
+        expect(output).not.toContain('--failed')
+        expect(output).not.toContain('team send <worker-name>')
+        expect(output).toContain('SUBMITTED')
       })
     } finally {
       await hive.close()

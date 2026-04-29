@@ -134,12 +134,33 @@ describe('runtime store', () => {
       name: 'Alice',
       role: 'coder',
     })
+    // Simulate PTY started: worker is idle, not stopped (spec §3.6.4 keeps
+    // stopped workers from being silently promoted to working when their
+    // PTY isn't actually running).
+    store.getWorker(workspace.id, worker.id).status = 'idle'
 
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
     expect(updatedWorker.pendingTaskCount).toBe(1)
     expect(updatedWorker.status).toBe('working')
+  })
+
+  test('dispatchTask keeps a stopped worker stopped while accumulating queue', () => {
+    const store = createRuntimeStore()
+
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const worker = store.addWorker(workspace.id, {
+      name: 'Alice',
+      role: 'coder',
+    })
+    // worker.addWorker initialises status='stopped' (PTY hasn't started).
+
+    store.dispatchTask(workspace.id, worker.id, 'Implement feature')
+
+    const updatedWorker = store.getWorker(workspace.id, worker.id)
+    expect(updatedWorker.pendingTaskCount).toBe(1)
+    expect(updatedWorker.status).toBe('stopped')
   })
 
   test('startAgent success promotes a fresh worker from stopped to idle', async () => {
@@ -163,6 +184,8 @@ describe('runtime store', () => {
       name: 'Alice',
       role: 'coder',
     })
+    // Simulate the worker already having an active PTY before queuing.
+    store.getWorker(workspace.id, worker.id).status = 'idle'
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
     store.configureAgentLaunch(workspace.id, worker.id, { command: '/bin/bash', args: [] })
 
@@ -179,6 +202,8 @@ describe('runtime store', () => {
       name: 'Alice',
       role: 'coder',
     })
+    // Simulate PTY already running so dispatchTask can promote to working.
+    store.getWorker(workspace.id, worker.id).status = 'idle'
 
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
     store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })

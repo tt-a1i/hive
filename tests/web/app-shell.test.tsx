@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -70,5 +70,25 @@ describe('app shell with real server', () => {
     expect(sidebar.closest('.h-screen')).toBeInTheDocument()
 
     expect(screen.getByRole('contentinfo')).toHaveClass('h-6')
+  })
+
+  test('workspace sidebar can collapse to a narrow rail and expand again', async () => {
+    render(<App />)
+
+    const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
+    expect(sidebar).toHaveClass('w-56')
+    expect(sidebar).toHaveAttribute('data-collapsed', 'false')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace sidebar' }))
+
+    expect(sidebar).toHaveClass('w-14')
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+    expect(screen.queryByLabelText('Workspaces')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand workspace sidebar' }))
+
+    expect(sidebar).toHaveClass('w-56')
+    expect(sidebar).toHaveAttribute('data-collapsed', 'false')
+    expect(screen.getByLabelText('Workspaces')).toBeInTheDocument()
   })
 })

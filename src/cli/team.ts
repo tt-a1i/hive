@@ -16,13 +16,11 @@ interface HiveEnv {
   HIVE_AGENT_TOKEN: string
 }
 
-type ReportStatus = 'success' | 'failed'
-
 const TEAM_USAGE = [
   'Usage:',
   '  team list',
   '  team send <worker-name> "<task>"',
-  '  team report "<result>" [--success|--failed] [--artifact <path>]',
+  '  team report "<result>" [--artifact <path>]',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -58,29 +56,23 @@ const postJson = async (url: string, body: unknown) => {
 const parseReportArgs = (args: string[]) => {
   const [result, ...rest] = args
   if (!result) {
-    throw new Error('Usage: team report <result> [--success|--failed] [--artifact <path>]')
+    throw new Error('Usage: team report <result> [--artifact <path>]')
   }
 
-  let status: ReportStatus = 'success'
   const artifacts: string[] = []
 
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index]
 
-    if (arg === '--success') {
-      status = 'success'
-      continue
-    }
-
-    if (arg === '--failed') {
-      status = 'failed'
+    if (arg === '--success' || arg === '--failed') {
+      // Backward-compatible no-op: reports are interpreted from their text.
       continue
     }
 
     if (arg === '--artifact') {
       const artifactPath = rest[index + 1]
       if (!artifactPath) {
-        throw new Error('Usage: team report <result> [--success|--failed] [--artifact <path>]')
+        throw new Error('Usage: team report <result> [--artifact <path>]')
       }
 
       artifacts.push(artifactPath)
@@ -91,7 +83,7 @@ const parseReportArgs = (args: string[]) => {
     throw new Error(`Unknown argument: ${arg}`)
   }
 
-  return { result, status, artifacts }
+  return { result, artifacts }
 }
 
 export const runTeamCommand = async (argv: string[]) => {
@@ -150,7 +142,6 @@ export const runTeamCommand = async (argv: string[]) => {
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
       result: report.result,
-      status: report.status,
       artifacts: report.artifacts,
     })
     return

@@ -116,7 +116,7 @@ describe('team report cli', () => {
         HIVE_PORT: String(hive.port),
         HIVE_PROJECT_ID: workspace.id,
       }
-      await runTeamCommand(['report', 'Done via CLI', '--success', '--artifact', 'src/auth.ts'])
+      await runTeamCommand(['report', 'Done via CLI', '--artifact', 'src/auth.ts'])
 
       await waitFor(async () => {
         const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${run.runId}`, {
@@ -125,6 +125,8 @@ describe('team report cli', () => {
         const body = (await runResponse.json()) as { output: string }
         expect(body.output).toContain('Done via CLI')
         expect(body.output).toContain('src/auth.ts')
+        expect(body.output).not.toContain('状态:')
+        expect(body.output).not.toContain('success')
       })
     } finally {
       delete process.env.HIVE_DATA_DIR

@@ -114,8 +114,8 @@ export const createAgentRuntime = (
       stopLiveRun(agentManager, registry, syncRun, runId)
     },
     validateAgentToken: tokenRegistry.validate,
-    writeReportPrompt(workspaceId, workerName, _workerId, text, status, artifacts, input = {}) {
-      stdinDispatcher.writeReportPrompt(workspaceId, workerName, text, status, artifacts, input)
+    writeReportPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
+      stdinDispatcher.writeReportPrompt(workspaceId, workerName, text, artifacts, input)
     },
     writeSendPrompt(workspaceId, workerId, fromAgentName, workerDescription, text) {
       stdinDispatcher.writeSendPrompt(workspaceId, workerId, fromAgentName, workerDescription, text)

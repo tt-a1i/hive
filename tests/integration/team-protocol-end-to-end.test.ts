@@ -159,7 +159,6 @@ describe('team protocol end to end', () => {
           from_agent_id: worker.id,
           token: hive.store.peekAgentToken(worker.id),
           result: '已完成登录接口',
-          status: 'success',
           artifacts: ['src/auth.ts'],
         }),
       })
@@ -194,6 +193,8 @@ describe('team protocol end to end', () => {
       expect(messages).toContainEqual(
         expect.objectContaining({ type: 'report', from: worker.id, text: '已完成登录接口' })
       )
+      const report = messages.find((message) => message.type === 'report')
+      expect(report).not.toHaveProperty('status')
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()

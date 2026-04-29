@@ -37,6 +37,9 @@ describe('OrchestratorPane three-state UI (M5.4)', () => {
   })
 
   test('running: header exposes ⏹ Stop + ↻ Restart, PTY slot mounts with run id', () => {
+    // Stop / Restart now require user confirmation (destructive on a live PTY).
+    // jsdom has no native confirm — stub to true so the button click flows through.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { onStart, onStop, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
 
     const stopBtn = screen.getByTestId('orchestrator-stop')
@@ -58,6 +61,20 @@ describe('OrchestratorPane three-state UI (M5.4)', () => {
     expect(onStop).toHaveBeenCalledTimes(1)
     expect(onRestart).toHaveBeenCalledTimes(1)
     expect(onStart).not.toHaveBeenCalled()
+    expect(confirmSpy).toHaveBeenCalledTimes(2)
+    confirmSpy.mockRestore()
+  })
+
+  test('running: declining confirm() cancels Stop / Restart', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { onStop, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
+
+    fireEvent.click(screen.getByTestId('orchestrator-stop'))
+    fireEvent.click(screen.getByTestId('orchestrator-restart'))
+    expect(onStop).not.toHaveBeenCalled()
+    expect(onRestart).not.toHaveBeenCalled()
+    expect(confirmSpy).toHaveBeenCalledTimes(2)
+    confirmSpy.mockRestore()
   })
 
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {

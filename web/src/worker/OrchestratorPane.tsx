@@ -11,30 +11,66 @@ type OrchestratorPaneProps = {
   onRestart: () => void
 }
 
+const StatusPill = ({ state }: { state: OrchestratorPaneState }) => {
+  if (state.kind === 'running')
+    return (
+      <span className="status-pill status-pill--working">
+        <span className="status-dot status-dot--working" aria-hidden />
+        running
+      </span>
+    )
+  if (state.kind === 'failed')
+    return (
+      <span className="status-pill status-pill--stopped">
+        <span className="status-dot status-dot--stopped" aria-hidden />
+        failed
+      </span>
+    )
+  return (
+    <span className="status-pill status-pill--stopped">
+      <span className="status-dot status-dot--stopped" aria-hidden />
+      stopped
+    </span>
+  )
+}
+
+const confirmStop = () =>
+  window.confirm(
+    'Stop Queen? The orchestrator PTY will be killed and any unsaved conversation in this terminal will be lost. Worker dispatches stay in their queues.'
+  )
+const confirmRestart = () =>
+  window.confirm(
+    'Restart Queen? The current PTY will be killed and a new orchestrator will start (resuming session if supported by the CLI).'
+  )
+
 const HeaderActions = ({
   state,
+  onStart,
   onStop,
   onRestart,
-}: Pick<OrchestratorPaneProps, 'state' | 'onStop' | 'onRestart'>) => {
+}: Pick<OrchestratorPaneProps, 'state' | 'onStart' | 'onStop' | 'onRestart'>) => {
   if (state.kind === 'running') {
     return (
-      <div className="flex gap-1" data-testid="orchestrator-running-actions">
+      <div className="flex gap-1.5" data-testid="orchestrator-running-actions">
         <button
           type="button"
-          onClick={onStop}
-          className="rounded px-2 py-0.5 text-[11px] text-sec hover:bg-3 hover:text-pri"
-          style={{ borderColor: 'var(--border)' }}
+          onClick={() => {
+            if (confirmStop()) onStop()
+          }}
+          className="icon-btn"
           data-testid="orchestrator-stop"
         >
-          ⏹ Stop
+          <span aria-hidden>⏹</span> Stop
         </button>
         <button
           type="button"
-          onClick={onRestart}
-          className="rounded px-2 py-0.5 text-[11px] text-sec hover:bg-3 hover:text-pri"
+          onClick={() => {
+            if (confirmRestart()) onRestart()
+          }}
+          className="icon-btn"
           data-testid="orchestrator-restart"
         >
-          ↻ Restart
+          <span aria-hidden>↻</span> Restart
         </button>
       </div>
     )
@@ -44,15 +80,23 @@ const HeaderActions = ({
       <button
         type="button"
         onClick={onRestart}
-        className="rounded px-2 py-0.5 text-[11px] text-white hover:opacity-90"
-        style={{ background: 'var(--accent)' }}
+        className="icon-btn icon-btn--primary"
         data-testid="orchestrator-retry-header"
       >
-        ↻ Retry
+        <span aria-hidden>↻</span> Retry
       </button>
     )
   }
-  return null
+  return (
+    <button
+      type="button"
+      onClick={onStart}
+      className="icon-btn icon-btn--primary"
+      data-testid="orchestrator-start-header"
+    >
+      <span aria-hidden>▶</span> Start
+    </button>
+  )
 }
 
 const PlaceholderBody = ({
@@ -63,14 +107,14 @@ const PlaceholderBody = ({
   if (state.kind === 'failed') {
     return (
       <div
-        className="m-auto flex max-w-[320px] flex-col items-center gap-3 px-6 py-4 text-center"
+        className="m-auto flex max-w-[360px] flex-col items-center gap-3 px-6 py-4 text-center"
         data-testid="orchestrator-failed-body"
       >
         <div className="text-sm" style={{ color: 'var(--status-red)' }}>
           Queen failed to start
         </div>
         <div
-          className="mono w-full break-words rounded border px-2 py-1.5 text-[11px] text-ter"
+          className="mono w-full break-words rounded border px-2 py-1.5 text-left text-[11px] text-ter"
           style={{ background: 'var(--bg-crust)', borderColor: 'var(--border)' }}
           data-testid="orchestrator-failed-error"
         >
@@ -79,32 +123,47 @@ const PlaceholderBody = ({
         <button
           type="button"
           onClick={onRestart}
-          className="rounded px-3 py-1.5 text-xs text-white hover:opacity-90"
-          style={{ background: 'var(--accent)' }}
+          className="icon-btn icon-btn--primary"
           data-testid="orchestrator-retry"
         >
-          ↻ Retry
+          <span aria-hidden>↻</span> Retry
         </button>
       </div>
     )
   }
   return (
     <div
-      className="m-auto flex max-w-[320px] flex-col items-center gap-3 px-6 py-4 text-center"
+      className="m-auto flex max-w-[380px] flex-col gap-4 px-6 py-4 text-left"
       data-testid="orchestrator-idle-body"
     >
+      <div className="text-center">
+        <div className="text-2xl" aria-hidden>
+          👑
+        </div>
+        <div className="mt-2 text-sm text-pri">Queen is offline</div>
+        <div className="mt-1 text-[11px] text-ter">
+          The orchestrator runs as a CLI agent in this PTY. Start it to begin dispatching team
+          members.
+        </div>
+      </div>
       <button
         type="button"
         onClick={onStart}
-        className="rounded px-4 py-1.5 text-xs text-white hover:opacity-90"
-        style={{ background: 'var(--accent)' }}
+        className="icon-btn icon-btn--primary self-center"
         data-testid="orchestrator-start"
       >
-        ▶ Start Queen
+        <span aria-hidden>▶</span> Start Queen
       </button>
-      <div className="text-[11px] text-ter">
-        Orchestrator 未启动。点击 Start Queen 后 xterm 将在此处渲染实时 PTY 输出。
-      </div>
+      <ul className="space-y-1.5 text-[11px] text-ter">
+        <li>· Wait for user input or paste a goal once Queen is running</li>
+        <li>
+          · Run <span className="mono text-sec">team list</span> to see available team members
+        </li>
+        <li>
+          · Use <span className="mono text-sec">team send &lt;name&gt; "..."</span> to dispatch a
+          task
+        </li>
+      </ul>
     </div>
   )
 }
@@ -127,12 +186,12 @@ export const OrchestratorPane = ({
       <span className="text-lg leading-none" aria-hidden>
         👑
       </span>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <div className="font-medium text-pri">Queen</div>
-        <div className="mono text-[11px] text-ter">Orchestrator · {agentModel}</div>
+        <div className="mono truncate text-[11px] text-ter">Orchestrator · {agentModel}</div>
       </div>
-      <HeaderActions state={state} onStop={onStop} onRestart={onRestart} />
-      <span className="role-badge role-badge--orch">orch</span>
+      <StatusPill state={state} />
+      <HeaderActions state={state} onStart={onStart} onStop={onStop} onRestart={onRestart} />
     </div>
 
     <div

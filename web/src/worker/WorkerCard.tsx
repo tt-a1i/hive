@@ -1,29 +1,16 @@
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { getRolePresentation } from './role-presentation.js'
+import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
 
 type WorkerCardProps = {
   onClick: (worker: TeamListItem) => void
   worker: TeamListItem
 }
 
-const statusDisplay = (worker: TeamListItem) => {
-  if (worker.status === 'stopped') {
-    return { bullet: '○', dotClass: 'dot', label: 'stopped', tone: 'var(--status-red)' }
-  }
-  if (worker.pendingTaskCount > 0) {
-    return {
-      bullet: '●',
-      dotClass: 'dot pulse-orange',
-      label: 'queued',
-      tone: 'var(--status-orange)',
-    }
-  }
-  return { bullet: '○', dotClass: 'dot', label: 'idle', tone: 'var(--text-tertiary)' }
-}
-
 export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
   const role = getRolePresentation(worker.role)
-  const status = statusDisplay(worker)
+  const status = presentWorkerStatus(worker)
+  const queue = presentWorkerQueue(worker)
   return (
     <button
       type="button"
@@ -31,6 +18,7 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
       aria-label={`Open ${worker.name}`}
       className="card card--interactive p-4 text-left"
       data-testid={`worker-card-${worker.id}`}
+      data-status={status.kind}
     >
       <div className="flex items-start gap-3">
         <span className="text-3xl leading-none" aria-hidden>
@@ -38,29 +26,41 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-pri">{worker.name}</span>
+            <span className="truncate font-medium text-pri">{worker.name}</span>
             <span className={`role-badge ${role.badgeClass}`}>{role.label}</span>
           </div>
-          <div className="mono mt-0.5 text-[11px] text-ter">{worker.role}</div>
+          <div className="mono mt-0.5 truncate text-[11px] text-ter">{worker.role}</div>
         </div>
-        <span
-          className={status.dotClass}
-          style={status.dotClass === 'dot' ? { background: status.tone } : undefined}
-          title={status.label}
-        />
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className={`status-pill status-pill--${status.kind}`}
+            title={status.label}
+            role="status"
+          >
+            <span className={status.dotClass} aria-hidden />
+            {status.label}
+          </span>
+          {queue ? (
+            <span
+              className="queue-badge"
+              title={`${queue.count} pending dispatch(es) — independent of PTY state`}
+            >
+              <span className="status-dot status-dot--queued" aria-hidden />
+              {queue.label}
+            </span>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-3 flex items-center gap-2 text-xs">
-        <span style={{ color: status.tone }} aria-hidden>
-          {status.bullet}
+
+      <div className="mt-3 flex items-center justify-between text-[11px] text-ter">
+        <span>
+          queue: <span className="mono text-sec">{worker.pendingTaskCount}</span>
         </span>
-        <span className="text-pri">{status.label}</span>
-      </div>
-      <div className="line-clamp-2 mt-2 text-xs text-sec">
-        {worker.pendingTaskCount > 0 ? `${worker.pendingTaskCount} pending task(s)` : '尚未派单'}
-      </div>
-      <div className="mt-3 flex items-center justify-between text-[10px] text-ter">
-        <span>队列: {worker.pendingTaskCount}</span>
-        <span>—</span>
+        {queue ? (
+          <span className="text-status-orange">{queue.count} pending task(s)</span>
+        ) : (
+          <span aria-hidden>—</span>
+        )}
       </div>
     </button>
   )

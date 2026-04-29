@@ -21,5 +21,7 @@ describe('team cli help', () => {
     expect(output).toContain('team list')
     expect(output).toContain('team send <worker-name> "<task>"')
     expect(output).toContain('team report "<result>"')
+    expect(output).not.toContain('--success')
+    expect(output).not.toContain('--failed')
   })
 })

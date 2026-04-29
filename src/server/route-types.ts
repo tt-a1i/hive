@@ -18,8 +18,8 @@ export interface ReportTaskBody {
   from_agent_id: string
   token?: string
   result: string
-  status: string
-  artifacts: unknown[]
+  status?: string
+  artifacts?: unknown[]
 }
 
 export interface CreateWorkspaceBody {

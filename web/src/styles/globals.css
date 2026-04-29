@@ -111,7 +111,7 @@ html, body {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* Status dot */
+/* Status dot — neutral baseline used by sidebar / inline indicators */
 .dot {
   display: inline-block;
   width: 7px;
@@ -125,6 +125,97 @@ html, body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+
+/* Status dot — typed (spec §3.6 + §3.6.4). One token per kind so colors stay
+   stable across cards / sidebar / sub-header. */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.status-dot--working { background: var(--status-green); animation: hive-pulse 1.6s ease-in-out infinite; }
+.status-dot--idle { background: var(--text-tertiary); }
+.status-dot--queued { background: var(--status-orange); animation: hive-pulse 1.6s ease-in-out infinite; }
+.status-dot--stopped { background: var(--status-red); opacity: 0.85; }
+
+/* Status pill — used inline in cards / headers next to a label */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status-pill--working {
+  color: var(--status-green);
+  border-color: color-mix(in oklab, var(--status-green) 35%, transparent);
+  background: color-mix(in oklab, var(--status-green) 12%, transparent);
+}
+.status-pill--idle {
+  color: var(--text-secondary);
+  border-color: var(--border);
+  background: var(--bg-3);
+}
+.status-pill--queued {
+  color: var(--status-orange);
+  border-color: color-mix(in oklab, var(--status-orange) 35%, transparent);
+  background: color-mix(in oklab, var(--status-orange) 12%, transparent);
+}
+.status-pill--stopped {
+  color: var(--status-red);
+  border-color: color-mix(in oklab, var(--status-red) 32%, transparent);
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+}
+
+/* Queue badge — orthogonal to status pill (spec §3.6.4: pending_task_count is
+   a separate axis, must never replace the status). */
+.queue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  color: var(--status-orange);
+  border: 1px solid color-mix(in oklab, var(--status-orange) 35%, transparent);
+  background: color-mix(in oklab, var(--status-orange) 10%, transparent);
+}
+
+/* Action button — small icon-button used in modals / cards */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.icon-btn:hover { background: var(--bg-3); color: var(--text-primary); border-color: var(--border-bright); }
+.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn--primary {
+  background: var(--accent);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.icon-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.icon-btn--danger { color: var(--status-red); }
+.icon-btn--danger:hover { background: color-mix(in oklab, var(--status-red) 14%, transparent); border-color: color-mix(in oklab, var(--status-red) 40%, transparent); color: var(--status-red); }
 
 /* Worker card */
 .card {
@@ -169,6 +260,103 @@ html, body {
   transition: transform 0.25s ease-out;
 }
 .drawer.open { transform: translateX(0); }
+
+.task-summary {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background:
+    linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 58%),
+    var(--bg-2);
+}
+
+.task-progress {
+  margin-top: 10px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-3);
+}
+
+.task-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--status-green));
+  transition: width 0.18s ease-out;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-node {
+  position: relative;
+}
+
+.task-children {
+  position: relative;
+  margin-left: 10px;
+  padding-left: 10px;
+}
+
+.task-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 6px;
+  left: 10px;
+  width: 1px;
+  background: var(--border-bright);
+}
+
+.task-status-open {
+  color: var(--text-tertiary);
+  background: var(--bg-3);
+}
+
+.task-status-done {
+  color: var(--status-green);
+  background: color-mix(in oklab, var(--status-green) 13%, transparent);
+}
+
+.task-mention {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  border: 1px solid color-mix(in oklab, var(--status-blue) 30%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  color: var(--status-blue);
+  background: color-mix(in oklab, var(--status-blue) 10%, transparent);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.task-child-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0 6px 0 4px;
+  color: var(--text-tertiary);
+  background: var(--bg-3);
+  font-size: 10px;
+}
+
+.task-empty {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px dashed var(--border-bright);
+  border-radius: 8px;
+  padding: 14px;
+  color: var(--text-tertiary);
+  background: var(--bg-2);
+}
 
 /* Modal backdrop */
 .modal-backdrop {

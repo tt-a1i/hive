@@ -30,7 +30,7 @@ export const buildAgentStartupInstructions = ({
       '可用 team 命令：',
       '- team list',
       '- team send <worker-name> "<task>"',
-      '- team report "<结论>" --success',
+      '- team report "<结论>"',
       '',
       '派单时必须使用 worker name，不要使用 worker id。',
       '',
@@ -40,11 +40,10 @@ export const buildAgentStartupInstructions = ({
   } else {
     lines.push(
       '可用 team 命令：',
-      '- team report "<结论>" --success',
-      '- team report "<原因>" --failed',
+      '- team report "<完整汇报>"',
       '',
-      '完成任务后必须执行 `team report "<结论>" --success`。',
-      '失败或阻塞时必须执行 `team report "<原因>" --failed`。',
+      '完成任务后必须执行 `team report "<结论>"`。',
+      '失败、阻塞或部分完成也用 `team report "<当前状态与原因>"` 汇报。',
       '不要调用 team send；worker 之间不能直接派单。',
       '',
       'Hive worker 边界：',

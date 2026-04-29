@@ -102,7 +102,7 @@ export const createTeamOperations = ({
     },
     reportTask(workspaceId: string, workerId: string, input: ReportTaskInput = {}) {
       const text = input.text ?? ''
-      const status = input.status ?? 'success'
+      const status = input.status
       const artifacts = input.artifacts ?? []
       const messageHandle = insertMessage(
         createReportMessage(workspaceId, workerId, text, status, artifacts)
@@ -114,7 +114,6 @@ export const createTeamOperations = ({
             workspaceStore.getWorker(workspaceId, workerId).name,
             workerId,
             text,
-            status,
             artifacts,
             { requireActiveRun: input.requireActiveRun }
           )

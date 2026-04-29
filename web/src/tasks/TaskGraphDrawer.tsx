@@ -1,3 +1,12 @@
+import {
+  CheckCircle2,
+  ChevronRight,
+  Circle,
+  Code2,
+  FileText,
+  ListChecks,
+  PanelRightClose,
+} from 'lucide-react'
 import { useState } from 'react'
 
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
@@ -17,44 +26,77 @@ type TaskGraphDrawerProps = {
 }
 
 const TaskItem = ({
+  depth = 0,
   onToggle,
   task,
 }: {
+  depth?: number
   onToggle: (lineIndex: number) => void
   task: ParsedTask
-}) => (
-  <li>
-    <label className="flex items-start gap-2">
-      <input
-        type="checkbox"
-        checked={task.checked}
-        onChange={() => onToggle(task.line)}
-        className="mt-1"
-        style={{ accentColor: 'var(--accent)' }}
-        data-testid={`task-checkbox-${task.line}`}
-        aria-label={task.text || `task-line-${task.line}`}
-      />
-      <div className="flex-1">
+}) => {
+  const StatusIcon = task.checked ? CheckCircle2 : Circle
+  return (
+    <li className="task-node" data-testid={`task-line-${task.line}`}>
+      <label
+        className="group flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-2"
+        style={{ marginLeft: depth ? 14 : 0 }}
+      >
+        <input
+          type="checkbox"
+          checked={task.checked}
+          onChange={() => onToggle(task.line)}
+          className="sr-only"
+          data-testid={`task-checkbox-${task.line}`}
+          aria-label={task.text || `task-line-${task.line}`}
+        />
         <span
-          className={task.checked ? 'line-through text-ter' : 'text-pri'}
-          style={task.checked ? undefined : { color: 'var(--text-primary)' }}
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            task.checked ? 'task-status-done' : 'task-status-open'
+          }`}
+          aria-hidden
         >
-          {task.text}
+          <StatusIcon size={14} strokeWidth={2.2} />
         </span>
-        {task.mentions.length > 0 ? (
-          <span className="ml-2 text-[11px] text-ter">{task.mentions.join(' ')}</span>
-        ) : null}
-        {task.children.length > 0 ? (
-          <ul className="ml-4 mt-1 space-y-1.5">
-            {task.children.map((child) => (
-              <TaskItem key={child.line} onToggle={onToggle} task={child} />
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    </label>
-  </li>
-)
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-start gap-2">
+            <span
+              className={`min-w-0 flex-1 text-[13px] leading-5 ${
+                task.checked ? 'text-ter line-through' : 'text-pri'
+              }`}
+            >
+              {task.text}
+            </span>
+            {task.children.length > 0 ? (
+              <span className="task-child-count mono">
+                <ChevronRight size={12} strokeWidth={2.2} />
+                {task.children.length}
+              </span>
+            ) : null}
+          </span>
+          {task.mentions.length > 0 ? (
+            <span className="mt-1 flex flex-wrap gap-1.5">
+              {task.mentions.map((mention) => (
+                <span className="task-mention" key={`${task.line}-${mention}`}>
+                  {mention}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      </label>
+      {task.children.length > 0 ? (
+        <ul className="task-children">
+          {task.children.map((child) => (
+            <TaskItem depth={depth + 1} key={child.line} onToggle={onToggle} task={child} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  )
+}
+
+const flattenTasks = (tasks: ParsedTask[]): ParsedTask[] =>
+  tasks.flatMap((task) => [task, ...flattenTasks(task.children)])
 
 export const TaskGraphDrawer = ({
   content,
@@ -70,43 +112,62 @@ export const TaskGraphDrawer = ({
 }: TaskGraphDrawerProps) => {
   const [rawMode, setRawMode] = useState(false)
   const tasks = parseTaskMarkdown(content)
+  const flatTasks = flattenTasks(tasks)
+  const totalTasks = flatTasks.length
+  const completedTasks = flatTasks.filter((task) => task.checked).length
+  const openTasks = totalTasks - completedTasks
+  const completionPercent = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100)
+
   return (
     <aside
       aria-label="Task graph"
       data-testid="task-graph-drawer"
       aria-hidden={!open}
-      className={`drawer absolute right-0 top-0 bottom-0 z-20 flex w-[400px] flex-col border-l shadow-2xl${open ? ' open' : ''}`}
-      style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
+      className={`drawer absolute right-0 top-0 bottom-0 z-20 flex flex-col border-l shadow-2xl${open ? ' open' : ''}`}
+      style={{
+        background: 'var(--bg-1)',
+        borderColor: 'var(--border)',
+        maxWidth: 'calc(100vw - 3.5rem)',
+        width: 520,
+      }}
     >
       <div
-        className="flex shrink-0 items-center gap-2 border-b px-4 py-3"
+        className="flex shrink-0 items-center gap-3 border-b px-4 py-3"
         style={{ borderColor: 'var(--border)' }}
       >
-        <span className="text-lg leading-none" aria-hidden>
-          📋
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-2 text-sec"
+          aria-hidden
+        >
+          <ListChecks size={17} strokeWidth={2.1} />
         </span>
-        <span className="font-medium text-pri">tasks.md</span>
-        {workspacePath ? (
-          <span className="mono truncate text-[11px] text-ter">{workspacePath}/tasks.md</span>
-        ) : null}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-pri">Task Graph</span>
+            <span className="rounded bg-2 px-1.5 py-0.5 text-[10px] uppercase text-ter">
+              tasks.md
+            </span>
+          </div>
+          {workspacePath ? (
+            <div className="mono mt-0.5 truncate text-[11px] text-ter">
+              {workspacePath}/tasks.md
+            </div>
+          ) : null}
+        </div>
         <div className="flex-1" />
         <button
           type="button"
           onClick={() => setRawMode((v) => !v)}
-          className="rounded px-2 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+          className={`icon-btn ${rawMode ? 'icon-btn--primary' : ''}`}
         >
-          {rawMode ? 'done' : 'edit raw'}
+          {rawMode ? <ListChecks size={15} /> : <Code2 size={15} />}
+          <span>{rawMode ? 'done' : 'edit raw'}</span>
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close task graph"
-          className="px-2 text-lg leading-none text-sec hover:text-pri"
-        >
-          ×
+        <button type="button" onClick={onClose} aria-label="Close task graph" className="icon-btn">
+          <PanelRightClose size={15} />
         </button>
       </div>
-      <div className="flex-1 scroll-y p-4 text-sm">
+      <div className="flex-1 scroll-y px-4 py-3 text-sm">
         {rawMode ? (
           <TaskGraphRawEditor
             content={content}
@@ -117,17 +178,49 @@ export const TaskGraphDrawer = ({
             onSave={onSave}
           />
         ) : tasks.length === 0 ? (
-          <p className="text-ter">没有任务条目。Orchestrator 可以用 Edit 工具写入 tasks.md。</p>
+          <div className="task-empty">
+            <FileText size={18} strokeWidth={2} />
+            <div>
+              <div className="font-medium text-sec">没有任务条目</div>
+              <div className="mt-1 text-xs text-ter">
+                Orchestrator 写入 tasks.md 后会自动显示在这里。
+              </div>
+            </div>
+          </div>
         ) : (
-          <ul className="space-y-2" data-testid="task-graph-list">
-            {tasks.map((task) => (
-              <TaskItem key={task.line} onToggle={onToggleTaskLine} task={task} />
-            ))}
-          </ul>
+          <div className="flex flex-col gap-3">
+            <div className="task-summary" data-testid="task-graph-summary">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-[11px] uppercase text-ter">Progress</div>
+                  <div className="mono mt-1 text-xl text-pri">
+                    {completedTasks}/{totalTasks}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="mono text-lg text-sec">{completionPercent}%</div>
+                  <div className="mt-1 text-[11px] text-ter">{openTasks} open</div>
+                </div>
+              </div>
+              <div
+                aria-label="Task completion"
+                aria-valuemax={100}
+                aria-valuemin={0}
+                aria-valuenow={completionPercent}
+                className="task-progress"
+                data-testid="task-progress-bar"
+                role="progressbar"
+              >
+                <span style={{ width: `${completionPercent}%` }} />
+              </div>
+            </div>
+            <ul className="task-list" data-testid="task-graph-list">
+              {tasks.map((task) => (
+                <TaskItem key={task.line} onToggle={onToggleTaskLine} task={task} />
+              ))}
+            </ul>
+          </div>
         )}
-        <div className="mt-6 text-[11px] text-ter">
-          提示：orch 用 Edit 工具直接改这份 markdown；用户也能在这里点击勾选。
-        </div>
       </div>
     </aside>
   )

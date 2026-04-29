@@ -72,6 +72,9 @@ describe('team prompt contract', () => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
       expect(run?.output).toContain('@Orchestrator')
       expect(run?.output).toContain(`你的角色：${worker.description}`)
+      expect(run?.output).toContain('执行 `team report "<完整汇报>"`')
+      expect(run?.output).not.toContain('--success')
+      expect(run?.output).not.toContain('--failed')
       expect(run?.output.trimEnd()).toMatch(/实现登录$/)
     })
   })
@@ -90,10 +93,19 @@ describe('team prompt contract', () => {
       [
         '#!/usr/bin/env node',
         "process.stdin.setEncoding('utf8')",
+        'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
+        'const SUBMIT_READY_DELAY_MS = 150',
+        "const PASTE_END = '\\u001b[201~'",
+        'let submitReadyAt = 0',
         "process.stdout.write('❯ ')",
         "process.stdin.on('data', (chunk) => {",
         "  process.stdout.write('IN:' + chunk)",
-        "  if (chunk.includes('\\r')) process.stdout.write('\\n❯ ')",
+        '  if (chunk.includes(PASTE_END)) submitReadyAt = Date.now() + SUBMIT_READY_DELAY_MS',
+        "  const isSubmit = submitReadyAt > 0 && (chunk === '\\r' || chunk === '\\n' || chunk === '\\r\\n')",
+        '  if (isSubmit) {',
+        "    if (Date.now() >= submitReadyAt) process.stdout.write('\\nSUBMITTED\\n❯ ')",
+        "    else process.stdout.write('\\nEARLY_ENTER_IGNORED\\n❯ ')",
+        '  }',
         '})',
         'process.stdin.resume()',
       ].join('\n')
@@ -115,7 +127,7 @@ describe('team prompt contract', () => {
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
       expect(run?.output).toContain('[Hive 系统消息：启动说明]')
-      expect(run?.output).toContain('IN:\r')
+      expect(run?.output).toContain('SUBMITTED')
     })
 
     await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
@@ -127,7 +139,7 @@ describe('team prompt contract', () => {
       expect(run?.output).toContain('\u001b[200~[Hive 系统消息：来自 @Orchestrator 的派单]')
       expect(run?.output).toContain('实现登录')
       expect(run?.output).toContain('\u001b[201~')
-      expect(run?.output.match(/IN:\r/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+      expect(run?.output.match(/SUBMITTED/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
     })
   })
 })

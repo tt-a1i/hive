@@ -35,7 +35,7 @@ interface SendRecoveryMessage extends RecoveryMessageBase {
 interface ReportRecoveryMessage extends RecoveryMessageBase {
   artifacts: string[]
   from: string
-  status: string
+  status?: string
   type: 'report'
 }
 
@@ -166,14 +166,15 @@ export const createMessageLogStore = (db: Database | undefined) => {
             return null
           }
 
-          return {
+          const recoveryMessage: ReportRecoveryMessage = {
             artifacts: message.artifacts ?? [],
             createdAt: message.createdAt,
             from: message.fromAgentId ?? message.workerId,
-            status: message.status ?? 'success',
             text: message.text,
             type: 'report' as const,
-          } satisfies RecoveryMessage
+          }
+          if (message.status) recoveryMessage.status = message.status
+          return recoveryMessage
         })
         .filter((message): message is RecoveryMessage => message !== null)
     }
@@ -216,14 +217,15 @@ export const createMessageLogStore = (db: Database | undefined) => {
           return null
         }
 
-        return {
+        const recoveryMessage: ReportRecoveryMessage = {
           artifacts: parseArtifacts(typedRow.artifacts),
           createdAt: typedRow.created_at,
           from: typedRow.from_agent_id ?? typedRow.worker_id,
-          status: typedRow.status ?? 'success',
           text: typedRow.text ?? '',
           type: 'report' as const,
-        } satisfies RecoveryMessage
+        }
+        if (typedRow.status) recoveryMessage.status = typedRow.status
+        return recoveryMessage
       })
       .filter((message): message is RecoveryMessage => message !== null)
   }

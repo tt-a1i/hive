@@ -14,13 +14,13 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
       style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
     >
       <span className="font-medium text-pri">Team Members</span>
-      <span className="text-ter text-xs">{workers.length}</span>
+      <span className="rounded bg-3 px-1.5 py-0.5 mono text-[10px] text-sec">{workers.length}</span>
       <div className="flex-1" />
       <button
         type="button"
         onClick={onAddWorkerClick}
-        className="flex items-center gap-1 rounded px-2.5 py-1 text-xs text-white hover:opacity-90"
-        style={{ background: 'var(--accent)' }}
+        className="icon-btn icon-btn--primary"
+        data-testid="add-worker-trigger"
       >
         <span className="text-sm leading-none" aria-hidden>
           +
@@ -39,16 +39,14 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
           <button
             type="button"
             onClick={onAddWorkerClick}
-            className="card flex min-h-[140px] w-full flex-col items-center justify-center p-4 text-ter hover:text-sec"
+            className="card flex min-h-[112px] w-full flex-col items-center justify-center gap-1 p-4 text-ter hover:text-sec"
             style={{ borderStyle: 'dashed' }}
           >
-            <span className="mb-1 text-2xl leading-none" aria-hidden>
+            <span className="text-2xl leading-none" aria-hidden>
               +
             </span>
             <span className="text-xs">New Member</span>
-            <span className="mt-1 text-[10px] text-ter">
-              Coder · Reviewer · Tester · Architect · Custom
-            </span>
+            <span className="text-[10px] text-ter">Coder · Reviewer · Tester · Custom</span>
           </button>
         </li>
         {workers.map((worker) => (
@@ -57,6 +55,14 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
           </li>
         ))}
       </ul>
+      {workers.length === 0 ? (
+        <p className="mt-6 max-w-[420px] text-[11px] text-ter">
+          Team members are CLI agents (Claude, Codex, OpenCode, …) running as PTYs in this
+          workspace. The Orchestrator dispatches work to them via{' '}
+          <span className="mono">team send</span> and they reply via{' '}
+          <span className="mono">team report</span>.
+        </p>
+      ) : null}
     </div>
   </div>
 )

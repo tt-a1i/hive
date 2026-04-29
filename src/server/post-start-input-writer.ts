@@ -5,8 +5,17 @@ import type { AgentManager } from './agent-manager.js'
 const INTERACTIVE_COMMANDS = new Set(['claude', 'codex', 'gemini', 'opencode'])
 const READY_CHECK_INTERVAL_MS = 50
 const READY_TIMEOUT_MS = 3000
+const MIN_SUBMIT_AFTER_PASTE_DELAY_MS = 600
+const MAX_SUBMIT_AFTER_PASTE_DELAY_MS = 1500
+const PASTE_CHARS_PER_DELAY_MS = 4
 
-export const toBracketedPasteSubmission = (text: string) => `\u001b[200~${text}\u001b[201~\r`
+export const toBracketedPasteSubmission = (text: string) => `\u001b[200~${text}\u001b[201~`
+
+const getSubmitAfterPasteDelayMs = (text: string) =>
+  Math.min(
+    MAX_SUBMIT_AFTER_PASTE_DELAY_MS,
+    Math.max(MIN_SUBMIT_AFTER_PASTE_DELAY_MS, Math.ceil(text.length / PASTE_CHARS_PER_DELAY_MS))
+  )
 
 export const isInteractiveAgentCommand = (command: string) =>
   INTERACTIVE_COMMANDS.has(basename(command).toLowerCase())
@@ -32,6 +41,13 @@ export const createPostStartInputWriter = (
       }
       if (hasInteractivePromptReady(output) || Date.now() - startedAt >= READY_TIMEOUT_MS) {
         agentManager.writeInput(runId, toBracketedPasteSubmission(text))
+        setTimeout(() => {
+          try {
+            agentManager.writeInput(runId, '\r')
+          } catch {
+            // The PTY may have exited between paste and submit.
+          }
+        }, getSubmitAfterPasteDelayMs(text))
         return
       }
       setTimeout(tryWrite, READY_CHECK_INTERVAL_MS)

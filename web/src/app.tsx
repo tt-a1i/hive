@@ -1,26 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
-import { createWorker, deleteWorker, saveActiveWorkspaceId, startAgentRun } from './api.js'
+import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
+import { saveActiveWorkspaceId } from './api.js'
 import { MainLayout } from './layout/MainLayout.js'
 import { Sidebar } from './sidebar/Sidebar.js'
 import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
+import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
+import { useWorkspaceStats } from './useWorkspaceStats.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
+import { useWorkerActions } from './worker/useWorkerActions.js'
 import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
 const RUNTIME_ADDRESS = '127.0.0.1:4010'
 const HIVE_PORT = '4010'
-
-const upsertWorker = <T extends { id: string }>(workers: T[], worker: T): T[] => {
-  const existingIndex = workers.findIndex((item) => item.id === worker.id)
-  if (existingIndex === -1) return [...workers, worker]
-  return workers.map((item) => (item.id === worker.id ? worker : item))
-}
 
 export const App = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
@@ -28,7 +25,7 @@ export const App = () => {
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(activeWorkspaceId)
   const [mountedWorkspaceIds, setMountedWorkspaceIds] = useState<string[]>([])
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
-  const [taskGraphOpen, setTaskGraphOpen] = useState(true)
+  const [taskGraphOpen, setTaskGraphOpen] = useState(false)
   const activeWorkspaceSaveQueue = useRef(Promise.resolve())
 
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
@@ -72,64 +69,21 @@ export const App = () => {
 
   const activeWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
   const activeTasksFile = useTasksFile(activeWorkspaceId)
-  const activeWorkers = activeWorkspace ? (workersByWorkspaceId[activeWorkspace.id] ?? []) : []
-  const agentsAlive =
-    Object.values(workersByWorkspaceId).reduce(
-      (total, list) => total + list.filter((worker) => worker.status !== 'stopped').length,
-      0
-    ) + (activeWorkspace ? 1 : 0)
-
-  const handleCreateWorker = async (
-    workerName: string,
-    workerRole: WorkerRole,
-    commandPresetId: string
-  ) => {
-    if (!activeWorkspaceId) return { error: 'No active workspace' }
-    const result = await createWorker(activeWorkspaceId, {
-      autostart: true,
-      command_preset_id: commandPresetId,
-      hive_port: HIVE_PORT,
-      name: workerName,
-      role: workerRole,
-    })
-    setWorkersByWorkspaceId((current) => ({
-      ...current,
-      [activeWorkspaceId]: upsertWorker(current[activeWorkspaceId] ?? [], result.worker),
-    }))
-    return { error: result.agentStart.ok ? null : result.agentStart.error }
-  }
-
-  const handleDeleteWorker = async (workerId: string) => {
-    if (!activeWorkspaceId) throw new Error('No active workspace')
-    await deleteWorker(activeWorkspaceId, workerId)
-    setWorkersByWorkspaceId((current) => ({
-      ...current,
-      [activeWorkspaceId]: (current[activeWorkspaceId] ?? []).filter(
-        (worker) => worker.id !== workerId
-      ),
-    }))
-  }
-
-  const handleStartWorker = async (workerId: string) => {
-    if (!activeWorkspaceId) return { error: 'No active workspace' }
-    try {
-      await startAgentRun(activeWorkspaceId, workerId, HIVE_PORT)
-      setWorkersByWorkspaceId((current) => ({
-        ...current,
-        [activeWorkspaceId]: (current[activeWorkspaceId] ?? []).map((worker) =>
-          worker.id === workerId ? { ...worker, status: 'idle' } : worker
-        ),
-      }))
-      return { error: null }
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) }
-    }
-  }
+  const activeWorkers: TeamListItem[] = activeWorkspace
+    ? (workersByWorkspaceId[activeWorkspace.id] ?? [])
+    : []
+  const terminalRuns = useTerminalRuns(activeWorkspaceId)
+  const stats = useWorkspaceStats(activeWorkspaceId, activeWorkers, terminalRuns)
+  const workerActions = useWorkerActions({
+    activeWorkspaceId,
+    hivePort: HIVE_PORT,
+    setWorkersByWorkspaceId,
+  })
 
   return (
     <MainLayout
-      agentsAlive={agentsAlive}
       onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
+      running={stats.working + stats.idle}
       runtimeAddress={RUNTIME_ADDRESS}
       sidebar={
         <Sidebar
@@ -140,6 +94,7 @@ export const App = () => {
           workspaces={workspaces}
         />
       }
+      stopped={stats.stopped}
       taskGraphOpen={taskGraphOpen}
       workspaceCount={workspaces?.length ?? 0}
     >
@@ -154,13 +109,16 @@ export const App = () => {
         ))}
       <WorkspaceDetail
         hivePort={HIVE_PORT}
-        onCreateWorker={handleCreateWorker}
-        onDeleteWorker={handleDeleteWorker}
-        onStartWorker={handleStartWorker}
+        onCreateWorker={workerActions.createWorker}
+        onDeleteWorker={workerActions.deleteWorker}
+        onStartWorker={workerActions.startWorker}
+        onStopWorkerRun={workerActions.stopWorkerRun}
         onOrchestratorResult={recordOrchestratorResult}
         orchestratorAutostartError={
           activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
         }
+        stats={stats}
+        terminalRuns={terminalRuns}
         workers={activeWorkers}
         workspace={activeWorkspace}
       />
