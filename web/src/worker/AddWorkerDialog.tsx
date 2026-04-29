@@ -1,7 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Check, UserPlus } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
-import { useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
@@ -105,6 +104,33 @@ const AgentRadio = ({
   </button>
 )
 
+const CustomRoleCard = ({ active, onSelect }: { active: boolean; onSelect: () => void }) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    aria-pressed={active}
+    data-testid="role-card-custom"
+    className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
+    style={{
+      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'transparent',
+      border: active ? '1px solid var(--accent)' : '1px dashed var(--border-bright)',
+    }}
+  >
+    {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role */}
+    <RoleAvatar role="custom" size={32} />
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-pri">Custom</span>
+        <span className="text-[10px] uppercase tracking-wider text-ter">advanced</span>
+      </div>
+      <div className="text-[11px] leading-snug text-ter">
+        Same starter framework as the built-ins; describe behavior freely in the agent's own prompt.
+      </div>
+    </div>
+    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
+  </button>
+)
+
 export const AddWorkerDialog = ({
   commandPresets,
   commandPresetId,
@@ -117,7 +143,6 @@ export const AddWorkerDialog = ({
   workerName,
   workerRole,
 }: AddWorkerDialogProps) => {
-  const [showCustom, setShowCustom] = useState(workerRole === 'custom')
   const handleClose = (open: boolean) => {
     if (!open) onClose()
   }
@@ -181,57 +206,20 @@ export const AddWorkerDialog = ({
 
               <div className="flex flex-col gap-2">
                 <FieldLabel>Role</FieldLabel>
-                {showCustom ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustom(false)
-                      onRoleChange('coder')
-                    }}
-                    aria-pressed
-                    data-testid="role-card-custom"
-                    className="flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors"
-                    style={{
-                      background: 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))',
-                      borderColor: 'var(--accent)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      {/* biome-ignore lint/a11y/useValidAriaRole: domain prop */}
-                      <RoleAvatar role="custom" size={32} />
-                      <Check size={14} className="text-accent" aria-hidden />
-                    </div>
-                    <div className="text-sm font-medium text-pri">Custom</div>
-                    <div className="text-[11px] leading-snug text-ter">
-                      Same starter framework as the built-ins; describe behavior in the agent's own
-                      prompt. Click to switch back.
-                    </div>
-                  </button>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {PRIMARY_ROLES.map((spec) => (
-                      <RoleCard
-                        key={spec.value}
-                        active={workerRole === spec.value}
-                        spec={spec}
-                        onSelect={() => onRoleChange(spec.value)}
-                      />
-                    ))}
-                  </div>
-                )}
-                {!showCustom ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustom(true)
-                      onRoleChange('custom')
-                    }}
-                    data-testid="role-custom-toggle"
-                    className="self-start text-[11px] text-ter hover:text-sec"
-                  >
-                    or use Custom →
-                  </button>
-                ) : null}
+                <div className="grid grid-cols-3 gap-2">
+                  {PRIMARY_ROLES.map((spec) => (
+                    <RoleCard
+                      key={spec.value}
+                      active={workerRole === spec.value}
+                      spec={spec}
+                      onSelect={() => onRoleChange(spec.value)}
+                    />
+                  ))}
+                </div>
+                <CustomRoleCard
+                  active={workerRole === 'custom'}
+                  onSelect={() => onRoleChange('custom')}
+                />
               </div>
 
               <div className="flex flex-col gap-2">
