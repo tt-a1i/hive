@@ -145,13 +145,17 @@ describe('worker flow with real server', () => {
       .find((run) => run.agent_name === 'Alice')
     expect(workerRun?.run_id).toEqual(expect.any(String))
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     fireEvent.click(card)
-    const modal = await screen.findByRole('dialog', { name: 'Alice detail' })
+    // Radix Dialog labels itself via Dialog.Title which is the bare worker name.
+    const modal = await screen.findByRole('dialog', { name: 'Alice' })
     await waitFor(() => {
       expect(document.querySelector('[id^="worker-pty-"]')).not.toBeNull()
     })
-    fireEvent.click(within(modal).getByRole('button', { name: 'Delete' }))
+    // Delete is destructive: button opens Confirm; confirm-action performs.
+    fireEvent.click(within(modal).getByTestId('worker-delete'))
+    const confirm = await screen.findByTestId('confirm-title')
+    expect(confirm).toHaveTextContent('Delete Alice?')
+    fireEvent.click(screen.getByTestId('confirm-action'))
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /^Open Alice$/ })).toBeNull()
@@ -183,9 +187,9 @@ describe('worker flow with real server', () => {
     expect(within(card).getByText('stopped')).toBeInTheDocument()
     fireEvent.click(card)
 
-    const modal = await screen.findByRole('dialog', { name: 'Bob detail' })
-    expect(within(modal).getByText(/PTY not running/)).toBeInTheDocument()
-    fireEvent.click(within(modal).getAllByRole('button', { name: 'Start' })[0] as HTMLElement)
+    const modal = await screen.findByRole('dialog', { name: 'Bob' })
+    expect(within(modal).getByText(/PTY stopped|not started/)).toBeInTheDocument()
+    fireEvent.click(within(modal).getAllByRole('button', { name: /Start/ })[0] as HTMLElement)
 
     await waitFor(() => {
       expect(document.querySelector('[id^="worker-pty-"]')).not.toBeNull()
