@@ -76,10 +76,9 @@ describe('workspace flow with real server', () => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
 
-    const subHeader = screen.getByTestId('workspace-sub-header')
-    expect(within(subHeader).getByText('Alpha')).toBeInTheDocument()
-    expect(within(subHeader).getByText(join(sandboxRoot, 'alpha-project'))).toBeInTheDocument()
-
+    // Workspace name + path live in the sidebar (workspace row); the canvas
+    // sub-header was removed in M6-A polish. Assert the orchestrator slot
+    // mounted as the canonical "workspace canvas is loaded" signal.
     expect(screen.getByTestId('orchestrator-terminal-slot')).toBeInTheDocument()
     // After autostart the pane should land in the running state (Stop CTA in
     // the header + a PTY slot ready for TerminalView to portal into). Polling

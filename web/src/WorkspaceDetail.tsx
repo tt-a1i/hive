@@ -5,7 +5,6 @@ import type { OrchestratorStartResult, TerminalRunSummary } from './api.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
 import type { WorkspaceStats } from './useWorkspaceStats.js'
-import { WorkspaceSubHeader } from './WorkspaceSubHeader.js'
 import { AddWorkerDialog } from './worker/AddWorkerDialog.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
 import { useOrchestratorPaneState } from './worker/useOrchestratorPaneState.js'
@@ -25,7 +24,8 @@ type WorkspaceDetailProps = {
   onStopWorkerRun: (runId: string) => Promise<{ error: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   orchestratorAutostartError: string | null
-  stats: WorkspaceStats
+  /** Kept for API stability — sub-header consumed it; M6-A removed the bar but the prop signature stays so caller wiring is untouched. */
+  stats?: WorkspaceStats
   terminalRuns: TerminalRunSummary[]
   workers: TeamListItem[]
   workspace: WorkspaceSummary | undefined
@@ -39,7 +39,6 @@ export const WorkspaceDetail = ({
   onStopWorkerRun,
   onOrchestratorResult,
   orchestratorAutostartError,
-  stats,
   terminalRuns,
   workers,
   workspace,
@@ -125,8 +124,6 @@ export const WorkspaceDetail = ({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <WorkspaceSubHeader stats={stats} workspace={workspace} />
-
       <div className="flex min-h-0 flex-1">
         <OrchestratorPane
           state={orchestrator.state}

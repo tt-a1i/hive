@@ -62,8 +62,12 @@ describe('workspace create initial state', () => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
 
-    const subHeader = screen.getByTestId('workspace-sub-header')
-    expect(within(subHeader).getByText(join(sandboxRoot, 'alpha-project'))).toBeInTheDocument()
+    // Sub-header was removed in M6-A polish. Workspace name lives in the
+    // sidebar (asserted above via aria-current); team-member counts live in
+    // the global Footer. Path is shown in the sidebar row.
+    expect(screen.getByText(join(sandboxRoot, 'alpha-project'))).toBeInTheDocument()
+    expect(screen.getByTestId('footer-running')).toHaveTextContent('0 running')
+    expect(screen.getByTestId('footer-stopped')).toHaveTextContent('0 stopped')
 
     const drawer = screen.getByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()

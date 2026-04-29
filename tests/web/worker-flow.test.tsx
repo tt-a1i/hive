@@ -237,8 +237,6 @@ describe('worker flow with real server', () => {
         // as a separate orange queue-badge.
         expect(within(card).getByText('stopped')).toBeInTheDocument()
         expect(within(card).getByText('1 queued')).toBeInTheDocument()
-        // Sub-header: 0 working / 0 idle / 2 stopped, with 1 queued aside.
-        expect(screen.getByTestId('workspace-sub-header')).toHaveTextContent('1 queued')
       },
       { timeout: 2000 }
     )
