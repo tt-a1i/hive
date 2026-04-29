@@ -74,4 +74,53 @@ describe('Confirm dialog', () => {
     )
     expect(screen.getByTestId('confirm-action').className).toContain('icon-btn--danger')
   })
+
+  test('confirmKind=default applies primary styling (sanity vs. danger)', () => {
+    render(
+      <Confirm
+        open
+        onOpenChange={() => {}}
+        title="t"
+        description="d"
+        confirmLabel="OK"
+        onConfirm={() => {}}
+      />
+    )
+    const action = screen.getByTestId('confirm-action')
+    expect(action.className).toContain('icon-btn--primary')
+    expect(action.className).not.toContain('icon-btn--danger')
+  })
+
+  test('Escape key closes dialog (radix default behavior — but we own the contract)', () => {
+    const onOpenChange = vi.fn()
+    const onConfirm = vi.fn()
+    render(
+      <Confirm
+        open
+        onOpenChange={onOpenChange}
+        title="t"
+        description="d"
+        confirmLabel="OK"
+        onConfirm={onConfirm}
+      />
+    )
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  test('cancelLabel override is rendered', () => {
+    render(
+      <Confirm
+        open
+        onOpenChange={() => {}}
+        title="t"
+        description="d"
+        confirmLabel="OK"
+        cancelLabel="Nope"
+        onConfirm={() => {}}
+      />
+    )
+    expect(screen.getByTestId('confirm-cancel')).toHaveTextContent('Nope')
+  })
 })
