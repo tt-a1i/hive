@@ -17,10 +17,17 @@ type WorkerModalProps = {
   worker: TeamListItem
 }
 
-const copyToClipboard = (value: string) => {
+const copyToClipboard = (value: string): Promise<boolean> => {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(value).catch(() => {})
+    return navigator.clipboard
+      .writeText(value)
+      .then(() => true)
+      .catch((error: unknown) => {
+        console.error('[hive] swallowed:WorkerModal.clipboard', error)
+        return false
+      })
   }
+  return Promise.resolve(false)
 }
 
 export const WorkerModal = ({
@@ -84,9 +91,12 @@ export const WorkerModal = ({
   }
 
   const handleCopyId = () => {
-    copyToClipboard(worker.id)
-    setCopyHint('Copied agent id')
-    window.setTimeout(() => setCopyHint(null), 1500)
+    void copyToClipboard(worker.id).then((ok) => {
+      // Don't pretend a copy succeeded when the browser refused; show the
+      // honest outcome (most often "Copy unavailable" in non-secure contexts).
+      setCopyHint(ok ? 'Copied agent id' : 'Copy unavailable')
+      window.setTimeout(() => setCopyHint(null), 1500)
+    })
   }
 
   const handleDelete = () => {

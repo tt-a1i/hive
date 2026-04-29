@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import { saveActiveWorkspaceId } from './api.js'
 import { MainLayout } from './layout/MainLayout.js'
+import { logSwallowed } from './lib/log-swallowed.js'
 import { Sidebar } from './sidebar/Sidebar.js'
 import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
@@ -36,9 +37,9 @@ export const App = () => {
   const selectWorkspace = (workspaceId: string | null) => {
     setActiveWorkspaceId(workspaceId)
     activeWorkspaceSaveQueue.current = activeWorkspaceSaveQueue.current
-      .catch(() => {})
+      .catch(logSwallowed('selectWorkspace.prevQueue'))
       .then(() => saveActiveWorkspaceId(workspaceId))
-      .catch(() => {})
+      .catch(logSwallowed('selectWorkspace.save'))
   }
 
   const { orchestratorAutostartErrors, recordOrchestratorResult, createNewWorkspace } =
@@ -128,7 +129,9 @@ export const App = () => {
             onReload={activeTasksFile.onReload}
             onSave={activeTasksFile.onSave}
             onToggleTaskLine={(line) => {
-              void activeTasksFile.toggleTaskAtLine(line).catch(() => {})
+              void activeTasksFile
+                .toggleTaskAtLine(line)
+                .catch(logSwallowed('tasks.toggleTaskAtLine'))
             }}
             open={taskGraphOpen}
             workspacePath={activeWorkspace.path}

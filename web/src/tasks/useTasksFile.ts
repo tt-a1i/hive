@@ -93,7 +93,9 @@ export const useTasksFile = (workspaceId: string | null) => {
         .then(({ content: nextContent }) => {
           if (!closed) applyRemoteContent(nextContent, contentRef.current)
         })
-        .catch(() => {})
+        .catch((error: unknown) => {
+          console.error('[hive] swallowed:tasks.getOnReconnect', error)
+        })
     }
     socket.onmessage = (event) => {
       if (closed) return

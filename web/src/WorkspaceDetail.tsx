@@ -69,6 +69,15 @@ export const WorkspaceDetail = ({
   useEffect(() => {
     if (deleteWorkerError) toast.show({ kind: 'error', message: deleteWorkerError })
   }, [deleteWorkerError, toast])
+
+  // B2: when the user switches workspace, clear local error state so we don't
+  // surface a stale error from the previous workspace as a fresh toast.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: effect intentionally fires only on workspace switch
+  useEffect(() => {
+    setDeleteWorkerError(null)
+    setStartWorkerError(null)
+    setStartingWorkerId(null)
+  }, [workspace?.id])
   const orchestrator = useOrchestratorPaneState({
     workspaceId: workspace?.id ?? '',
     hivePort,

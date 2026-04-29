@@ -53,7 +53,9 @@ export const useInitializeUiSession = (
             const nextActiveWorkspaceId = resolveActiveWorkspaceId(merged, persistedId)
             setActiveWorkspaceId(nextActiveWorkspaceId)
             if (persistedId !== nextActiveWorkspaceId) {
-              saveActiveWorkspaceId(nextActiveWorkspaceId).catch(() => {})
+              saveActiveWorkspaceId(nextActiveWorkspaceId).catch((error: unknown) => {
+                console.error('[hive] swallowed:initSession.save', error)
+              })
             }
             return merged
           })

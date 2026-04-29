@@ -153,7 +153,12 @@ export const restartAgentRun = async (
   runId: string,
   hivePort: string
 ): Promise<{ runId: string }> => {
-  await stopAgentRun(runId).catch(() => {})
+  // Best-effort stop: a 404 here often means the run already exited on its
+  // own; either way we proceed to start a fresh one. Swallowed errors land in
+  // the dev console for diagnosis.
+  await stopAgentRun(runId).catch((error: unknown) => {
+    console.error('[hive] swallowed:restartAgentRun.stop', error)
+  })
   return startAgentRun(workspaceId, agentId, hivePort)
 }
 
