@@ -1,3 +1,5 @@
+import { UserPlus } from 'lucide-react'
+
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { WorkerCard } from './WorkerCard.js'
 
@@ -22,10 +24,7 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
         className="icon-btn icon-btn--primary"
         data-testid="add-worker-trigger"
       >
-        <span className="text-sm leading-none" aria-hidden>
-          +
-        </span>
-        New Member
+        <UserPlus size={14} aria-hidden /> Add Member
       </button>
     </div>
 
@@ -39,13 +38,11 @@ export const WorkersPane = ({ onAddWorkerClick, onOpenWorker, workers }: Workers
           <button
             type="button"
             onClick={onAddWorkerClick}
-            className="card flex min-h-[112px] w-full flex-col items-center justify-center gap-1 p-4 text-ter hover:text-sec"
+            className="card flex min-h-[112px] w-full flex-col items-center justify-center gap-2 p-4 text-ter hover:text-sec"
             style={{ borderStyle: 'dashed' }}
           >
-            <span className="text-2xl leading-none" aria-hidden>
-              +
-            </span>
-            <span className="text-xs">New Member</span>
+            <UserPlus size={20} aria-hidden />
+            <span className="text-xs">Add Member</span>
             <span className="text-[10px] text-ter">Coder · Reviewer · Tester · Custom</span>
           </button>
         </li>

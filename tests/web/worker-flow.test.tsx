@@ -104,13 +104,13 @@ describe('worker flow with real server', () => {
   test('Add Worker dialog creates a card with role badge + status dot', async () => {
     render(<App />)
 
-    // Open the AddWorkerDialog via the Team Members pane "+ New Member" header button
+    // Open the AddWorkerDialog via the Team Members pane "Add Member" header button
     await waitFor(() => {
-      const buttons = screen.getAllByRole('button', { name: /New Member/ })
+      const buttons = screen.getAllByRole('button', { name: /Add Member/ })
       expect(buttons.length).toBeGreaterThan(0)
     })
     expect(screen.getByText('Team Members')).toBeInTheDocument()
-    const newWorkerButtons = screen.getAllByRole('button', { name: /New Member/ })
+    const newWorkerButtons = screen.getAllByRole('button', { name: /Add Member/ })
     fireEvent.click(newWorkerButtons[0] as HTMLElement)
 
     const dialog = await screen.findByRole('form', { name: 'Add team member' })
@@ -136,7 +136,7 @@ describe('worker flow with real server', () => {
     expect(within(card).getByText('Coder')).toBeInTheDocument()
     expect(within(card).getByText('idle')).toBeInTheDocument()
     const grid = screen.getByTestId('worker-grid')
-    expect(within(grid).getAllByRole('button')[0]).toHaveTextContent('New Member')
+    expect(within(grid).getAllByRole('button')[0]).toHaveTextContent('Add Member')
 
     const workerRun = serverContext?.store
       .listTerminalRuns(workspaceId)
