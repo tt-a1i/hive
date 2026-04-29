@@ -71,9 +71,18 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       const id = generateId()
       setToasts((current) => {
         const next = [...current, { id, kind, message }]
-        // Drop oldest entries when over cap; their pending timers are no-ops
-        // (filter-out by id removes the DOM, timer firing later just no-ops).
-        return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
+        if (next.length <= MAX_TOASTS) return next
+        // Over cap: drop oldest entries AND clear their pending dismiss timers
+        // so they don't leak in timers.current until natural expiry.
+        const evicted = next.slice(0, next.length - MAX_TOASTS)
+        for (const entry of evicted) {
+          const timer = timers.current.get(entry.id)
+          if (timer) {
+            clearTimeout(timer)
+            timers.current.delete(entry.id)
+          }
+        }
+        return next.slice(next.length - MAX_TOASTS)
       })
       const ms = durationMs ?? defaultDuration(kind)
       if (ms > 0) {

@@ -19,9 +19,10 @@ export const useWorkspaceWorkers = (activeWorkspaceId: string | null) => {
           if (!cancelled)
             setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: items }))
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!cancelled)
             setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: [] }))
+          console.error('[hive] swallowed:workspaceWorkers.list', error)
         })
     }
     loadWorkers()

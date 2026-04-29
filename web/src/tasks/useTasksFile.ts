@@ -69,7 +69,7 @@ export const useTasksFile = (workspaceId: string | null) => {
         setHasConflict(false)
         setRemoteContent(null)
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return
         savedContentRef.current = ''
         dirtyRef.current = false
@@ -77,6 +77,7 @@ export const useTasksFile = (workspaceId: string | null) => {
         setContent('')
         setLoaded(true)
         setHasConflict(false)
+        console.error('[hive] swallowed:tasks.initialLoad', error)
         setRemoteContent(null)
       })
     return () => {

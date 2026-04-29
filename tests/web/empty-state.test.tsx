@@ -19,6 +19,20 @@ describe('EmptyState', () => {
     expect(screen.getByTestId('custom-icon')).toBeInTheDocument()
   })
 
+  test('renders slots in DOM order: icon → title → description', () => {
+    render(
+      <EmptyState title="My title" description="My desc" icon={<svg data-testid="my-icon" />} />
+    )
+    const root = screen.getByTestId('empty-state')
+    const order = Array.from(root.children).map((child) => child.getAttribute('data-testid'))
+    const iconIdx = order.indexOf('empty-state-icon')
+    const titleIdx = order.indexOf('empty-state-title')
+    const descIdx = order.indexOf('empty-state-description')
+    expect(iconIdx).toBeGreaterThanOrEqual(0)
+    expect(iconIdx).toBeLessThan(titleIdx)
+    expect(titleIdx).toBeLessThan(descIdx)
+  })
+
   test('renders action and triggers click', () => {
     const onClick = vi.fn()
     render(

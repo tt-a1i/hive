@@ -176,7 +176,14 @@ describe('Toast system', () => {
     expect(toasts[2]?.textContent).toContain('boom-4')
   })
 
-  test('cleanup on unmount clears all pending timers (no React warnings)', () => {
+  test('cleanup on unmount calls clearTimeout for every pending toast timer', () => {
+    // Real assertion via spy on globalThis.clearTimeout: regardless of React's
+    // warning behavior (R19 no longer warns on setState-after-unmount, so the
+    // old `consoleError.not.toHaveBeenCalled()` was vacuous), we observe the
+    // actual cleanup mechanism — clearTimeout call count equals pushed-toast
+    // count.
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
+
     const Pusher = () => {
       const { show } = useToast()
       useEffect(() => {
@@ -185,21 +192,61 @@ describe('Toast system', () => {
       }, [show])
       return null
     }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const { unmount } = render(
       <ToastProvider>
         <Pusher />
         <Toaster />
       </ToastProvider>
     )
+
+    const callsBeforeUnmount = clearSpy.mock.calls.length
     unmount()
-    // Advance past timer expiry — if cleanup didn't clearTimeout, the queued
-    // dismiss callback would fire on an unmounted component and React would
-    // warn (logged via console.error).
-    act(() => {
-      vi.advanceTimersByTime(10_000)
-    })
-    expect(consoleError).not.toHaveBeenCalled()
-    consoleError.mockRestore()
+    const callsDuringUnmount = clearSpy.mock.calls.length - callsBeforeUnmount
+    // Two toasts pushed (success kind, durationMs > 0 so both have timers); the
+    // ToastProvider unmount effect must clear both. If product code drops the
+    // for-loop, this drops to 0 and the test fails.
+    expect(callsDuringUnmount).toBeGreaterThanOrEqual(2)
+
+    clearSpy.mockRestore()
+  })
+
+  test('storm eviction also clears the evicted toasts pending timers', () => {
+    // When MAX_TOASTS overflow drops oldest entries, their setTimeout must be
+    // canceled. Otherwise the timer Map leaks until natural expiry. Spy
+    // clearTimeout count before/after the eviction.
+    const clearSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+    const Storm = () => {
+      const { show } = useToast()
+      return (
+        <button
+          type="button"
+          data-testid="storm-evict"
+          onClick={() => {
+            // success toasts get default 3000ms timers — pushing 5 evicts 2.
+            for (let index = 0; index < 5; index += 1) {
+              show({ kind: 'success', message: `m-${index}` })
+            }
+          }}
+        >
+          storm
+        </button>
+      )
+    }
+    render(
+      <ToastProvider>
+        <Storm />
+        <Toaster />
+      </ToastProvider>
+    )
+    const before = clearSpy.mock.calls.length
+    fireEvent.click(screen.getByTestId('storm-evict'))
+    const evictedClears = clearSpy.mock.calls.length - before
+    // Expect ≥ 2 clears (the evicted m-0 and m-1 timers) — count may be
+    // higher if React triggers any internal clears, but never lower if the
+    // eviction loop runs.
+    expect(evictedClears).toBeGreaterThanOrEqual(2)
+    clearSpy.mockRestore()
   })
 })

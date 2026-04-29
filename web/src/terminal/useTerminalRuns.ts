@@ -20,8 +20,9 @@ export const useTerminalRuns = (workspaceId: string | null): TerminalRunSummary[
         .then((runs) => {
           if (!cancelled) setTerminalRuns(runs)
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!cancelled) setTerminalRuns([])
+          console.error('[hive] swallowed:terminalRuns.list', error)
         })
     }
     loadRuns()

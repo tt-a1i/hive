@@ -61,11 +61,12 @@ export const useInitializeUiSession = (
           })
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setWorkspaces([])
           setActiveWorkspaceId(null)
         }
+        console.error('[hive] swallowed:initSession.bootstrap', error)
       })
     return () => {
       cancelled = true

@@ -23,8 +23,9 @@ export const WorkspaceTerminalPanels = ({
         .then((runs) => {
           if (!cancelled) setTerminalRuns(runs)
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!cancelled) setTerminalRuns([])
+          console.error('[hive] swallowed:terminalPanels.listRuns', error)
         })
     }
     loadRuns()
