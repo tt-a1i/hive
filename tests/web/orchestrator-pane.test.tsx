@@ -83,6 +83,38 @@ describe('OrchestratorPane three-state UI', () => {
     expect(onRestart).not.toHaveBeenCalled()
   })
 
+  test('Confirm closes if PTY exits while dialog is open (B3 regression)', () => {
+    // User clicks Stop → Confirm opens → PTY exits naturally → state flips to
+    // idle. The pending Confirm dialog must close so the user can't click an
+    // action that no longer matches reality (would silently no-op upstream).
+    const onStop = vi.fn()
+    const onStart = vi.fn()
+    const onRestart = vi.fn()
+    const { rerender } = render(
+      <OrchestratorPane
+        state={{ kind: 'running', runId: 'run-abc' }}
+        onStart={onStart}
+        onStop={onStop}
+        onRestart={onRestart}
+      />
+    )
+    fireEvent.click(screen.getByTestId('orchestrator-stop'))
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Stop Queen?')
+
+    // PTY exit happens upstream — state.kind switches to 'idle'.
+    rerender(
+      <OrchestratorPane
+        state={{ kind: 'idle' }}
+        onStart={onStart}
+        onStop={onStop}
+        onRestart={onRestart}
+      />
+    )
+    // Dialog must be gone; user did not get a chance to click stale confirm.
+    expect(screen.queryByTestId('confirm-title')).toBeNull()
+    expect(onStop).not.toHaveBeenCalled()
+  })
+
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {
     const errorMessage = 'claude CLI not found in PATH'
     const { onStart, onStop, onRestart } = renderPane({ kind: 'failed', error: errorMessage })

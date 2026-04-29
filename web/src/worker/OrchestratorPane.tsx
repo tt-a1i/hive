@@ -1,5 +1,5 @@
 import { Crown, Play, RotateCcw, Square } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
@@ -160,6 +160,15 @@ export const OrchestratorPane = ({
   onRestart,
 }: OrchestratorPaneProps) => {
   const [confirmKind, setConfirmKind] = useState<'stop' | 'restart' | null>(null)
+
+  // B3: when PTY exits (idle/failed) while a Confirm dialog is open, the
+  // pending action no longer matches reality (no live run to stop/restart).
+  // Force-close any open confirm whenever the underlying state leaves running.
+  useEffect(() => {
+    if (state.kind !== 'running' && confirmKind !== null) {
+      setConfirmKind(null)
+    }
+  }, [state.kind, confirmKind])
 
   const closeConfirm = () => setConfirmKind(null)
   const onConfirmAction = () => {
