@@ -31,8 +31,11 @@ export const Topbar = ({ onToggleTaskGraph, taskGraphOpen, version = 'v0.1' }: T
       </button>
       <button
         type="button"
-        aria-label="Settings"
-        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        disabled
+        aria-disabled
+        aria-label="Settings (coming in M7)"
+        title="Coming in M7"
+        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-ter cursor-not-allowed opacity-60"
         data-testid="topbar-settings"
       >
         <SettingsIcon size={14} aria-hidden />
