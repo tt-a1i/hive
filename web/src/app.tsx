@@ -7,6 +7,9 @@ import { Sidebar } from './sidebar/Sidebar.js'
 import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
+import { Toaster } from './ui/toast.js'
+import { ToastProvider } from './ui/useToast.js'
+import { useEmptyStateAutoOpen } from './useEmptyStateAutoOpen.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceStats } from './useWorkspaceStats.js'
@@ -55,17 +58,9 @@ export const App = () => {
     )
   }, [activeWorkspaceId])
 
-  // Auto-open the picker on empty-state so the user is never stuck at a blank
-  // canvas. The dialog itself fires the native OS folder picker on trigger
-  // change; setting the trigger once per empty-state detection is enough.
-  const emptyStateTriggeredRef = useRef(false)
-  useEffect(() => {
-    if (workspaces === null) return
-    if (workspaces.length === 0 && !emptyStateTriggeredRef.current) {
-      emptyStateTriggeredRef.current = true
-      setAddDialogTrigger((value) => value + 1)
-    }
-  }, [workspaces])
+  // Auto-open the picker on first empty-state so the user isn't stuck on a
+  // blank canvas. Dialog fires the OS folder picker on trigger change.
+  useEmptyStateAutoOpen(workspaces, () => setAddDialogTrigger((value) => value + 1))
 
   const activeWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
   const activeTasksFile = useTasksFile(activeWorkspaceId)
@@ -81,70 +76,73 @@ export const App = () => {
   })
 
   return (
-    <MainLayout
-      onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
-      running={stats.working + stats.idle}
-      runtimeAddress={RUNTIME_ADDRESS}
-      sidebar={
-        <Sidebar
-          activeWorkspaceId={activeWorkspaceId}
-          onCreateClick={() => setAddDialogTrigger((value) => value + 1)}
-          onSelectWorkspace={selectWorkspace}
-          workersByWorkspaceId={workersByWorkspaceId}
-          workspaces={workspaces}
-        />
-      }
-      stopped={stats.stopped}
-      taskGraphOpen={taskGraphOpen}
-      workspaceCount={workspaces?.length ?? 0}
-    >
-      {workspaces
-        ?.filter((workspace) => mountedWorkspaceIds.includes(workspace.id))
-        .map((workspace) => (
-          <WorkspaceTerminalPanels
-            key={`terminal-${workspace.id}`}
-            hidden={workspace.id !== activeWorkspaceId}
-            workspaceId={workspace.id}
+    <ToastProvider>
+      <MainLayout
+        onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
+        running={stats.working + stats.idle}
+        runtimeAddress={RUNTIME_ADDRESS}
+        sidebar={
+          <Sidebar
+            activeWorkspaceId={activeWorkspaceId}
+            onCreateClick={() => setAddDialogTrigger((value) => value + 1)}
+            onSelectWorkspace={selectWorkspace}
+            workersByWorkspaceId={workersByWorkspaceId}
+            workspaces={workspaces}
           />
-        ))}
-      <WorkspaceDetail
-        hivePort={HIVE_PORT}
-        onCreateWorker={workerActions.createWorker}
-        onDeleteWorker={workerActions.deleteWorker}
-        onStartWorker={workerActions.startWorker}
-        onStopWorkerRun={workerActions.stopWorkerRun}
-        onOrchestratorResult={recordOrchestratorResult}
-        orchestratorAutostartError={
-          activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
         }
-        stats={stats}
-        terminalRuns={terminalRuns}
-        workers={activeWorkers}
-        workspace={activeWorkspace}
-      />
-      {activeWorkspace ? (
-        <TaskGraphDrawer
-          content={activeTasksFile.content}
-          hasConflict={activeTasksFile.hasConflict}
-          onClose={() => setTaskGraphOpen(false)}
-          onContentChange={activeTasksFile.onChange}
-          onKeepLocal={activeTasksFile.onKeepLocal}
-          onReload={activeTasksFile.onReload}
-          onSave={activeTasksFile.onSave}
-          onToggleTaskLine={(line) => {
-            void activeTasksFile.toggleTaskAtLine(line).catch(() => {})
-          }}
-          open={taskGraphOpen}
-          workspacePath={activeWorkspace.path}
+        stopped={stats.stopped}
+        taskGraphOpen={taskGraphOpen}
+        workspaceCount={workspaces?.length ?? 0}
+      >
+        {workspaces
+          ?.filter((workspace) => mountedWorkspaceIds.includes(workspace.id))
+          .map((workspace) => (
+            <WorkspaceTerminalPanels
+              key={`terminal-${workspace.id}`}
+              hidden={workspace.id !== activeWorkspaceId}
+              workspaceId={workspace.id}
+            />
+          ))}
+        <WorkspaceDetail
+          hivePort={HIVE_PORT}
+          onCreateWorker={workerActions.createWorker}
+          onDeleteWorker={workerActions.deleteWorker}
+          onStartWorker={workerActions.startWorker}
+          onStopWorkerRun={workerActions.stopWorkerRun}
+          onOrchestratorResult={recordOrchestratorResult}
+          orchestratorAutostartError={
+            activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
+          }
+          stats={stats}
+          terminalRuns={terminalRuns}
+          workers={activeWorkers}
+          workspace={activeWorkspace}
         />
-      ) : null}
-      <AddWorkspaceDialog
-        onClose={() => {}}
-        onCreate={(input) => {
-          void createNewWorkspace(input)
-        }}
-        trigger={addDialogTrigger}
-      />
-    </MainLayout>
+        {activeWorkspace ? (
+          <TaskGraphDrawer
+            content={activeTasksFile.content}
+            hasConflict={activeTasksFile.hasConflict}
+            onClose={() => setTaskGraphOpen(false)}
+            onContentChange={activeTasksFile.onChange}
+            onKeepLocal={activeTasksFile.onKeepLocal}
+            onReload={activeTasksFile.onReload}
+            onSave={activeTasksFile.onSave}
+            onToggleTaskLine={(line) => {
+              void activeTasksFile.toggleTaskAtLine(line).catch(() => {})
+            }}
+            open={taskGraphOpen}
+            workspacePath={activeWorkspace.path}
+          />
+        ) : null}
+        <AddWorkspaceDialog
+          onClose={() => {}}
+          onCreate={(input) => {
+            void createNewWorkspace(input)
+          }}
+          trigger={addDialogTrigger}
+        />
+      </MainLayout>
+      <Toaster />
+    </ToastProvider>
   )
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
 import type { OrchestratorStartResult, TerminalRunSummary } from './api.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
+import { useToast } from './ui/useToast.js'
 import type { WorkspaceStats } from './useWorkspaceStats.js'
 import { WorkspaceSubHeader } from './WorkspaceSubHeader.js'
 import { AddWorkerDialog } from './worker/AddWorkerDialog.js'
@@ -48,6 +49,7 @@ export const WorkspaceDetail = ({
   const [deleteWorkerError, setDeleteWorkerError] = useState<string | null>(null)
   const [startWorkerError, setStartWorkerError] = useState<string | null>(null)
   const [startingWorkerId, setStartingWorkerId] = useState<string | null>(null)
+  const toast = useToast()
   // Always derive the modal's worker from the latest workers prop so the
   // 500ms poll keeps it fresh — we never freeze a stale snapshot.
   const activeWorker: TeamListItem | null =
@@ -57,6 +59,15 @@ export const WorkspaceDetail = ({
     if (activeWorkerId && !activeWorker) setActiveWorkerId(null)
   }, [activeWorkerId, activeWorker])
   const composer = useWorkerComposer({ createWorker: onCreateWorker, open: composerOpen })
+
+  // Surface composer / delete errors as toasts instead of inline alert bands.
+  useEffect(() => {
+    if (composer.createWorkerError) toast.show({ kind: 'error', message: composer.createWorkerError })
+  }, [composer.createWorkerError, toast])
+
+  useEffect(() => {
+    if (deleteWorkerError) toast.show({ kind: 'error', message: deleteWorkerError })
+  }, [deleteWorkerError, toast])
   const orchestrator = useOrchestratorPaneState({
     workspaceId: workspace?.id ?? '',
     hivePort,
@@ -119,23 +130,6 @@ export const WorkspaceDetail = ({
           workers={workers}
         />
       </div>
-      {composer.createWorkerError ? (
-        <p
-          role="alert"
-          className="border-t border-status-red/30 bg-status-red/10 px-4 py-2 text-xs text-status-red"
-        >
-          {composer.createWorkerError}
-        </p>
-      ) : null}
-      {deleteWorkerError ? (
-        <p
-          role="alert"
-          className="border-t border-status-red/30 bg-status-red/10 px-4 py-2 text-xs text-status-red"
-        >
-          {deleteWorkerError}
-        </p>
-      ) : null}
-
       {activeWorker ? (
         <WorkerModal
           onClose={() => setActiveWorkerId(null)}
