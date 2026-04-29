@@ -114,16 +114,18 @@ describe('worker flow with real server', () => {
     fireEvent.click(newWorkerButtons[0] as HTMLElement)
 
     const dialog = await screen.findByRole('form', { name: 'Add team member' })
-    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Alice' } })
-    // role defaults to coder; explicit select keeps the test honest
-    fireEvent.change(within(dialog).getByLabelText('Role'), { target: { value: 'coder' } })
-    const agentSelect = within(dialog).getByLabelText('Agent')
-    await waitFor(() => {
-      expect(within(agentSelect).getByRole('option', { name: 'Sleeper' })).toBeInTheDocument()
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
+      target: { value: 'Alice' },
     })
-    const sleeperOption = within(agentSelect).getByRole('option', { name: 'Sleeper' })
-    fireEvent.change(agentSelect, { target: { value: sleeperOption.getAttribute('value') ?? '' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    // M6-A: role is selected via card buttons (no native select). Coder card is
+    // the default-active card; click is idempotent and asserts wiring.
+    fireEvent.click(within(dialog).getByTestId('role-card-coder'))
+    // Agent CLI is selected via radio-style buttons keyed by preset id.
+    await waitFor(() => {
+      expect(within(dialog).queryByTestId(`agent-radio-${sleeperPresetId}`)).toBeInTheDocument()
+    })
+    fireEvent.click(within(dialog).getByTestId(`agent-radio-${sleeperPresetId}`))
+    fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
 
     // Dialog closes, card appears with testid + role badge
     await waitFor(() => {

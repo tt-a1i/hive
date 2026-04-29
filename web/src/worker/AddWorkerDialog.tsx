@@ -1,7 +1,11 @@
-import type { FormEvent } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { Check, UserPlus } from 'lucide-react'
+import type { FormEvent, ReactNode } from 'react'
+import { useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
+import { RoleAvatar } from './RoleAvatar.js'
 
 type AddWorkerDialogProps = {
   commandPresets: CommandPreset[]
@@ -16,6 +20,91 @@ type AddWorkerDialogProps = {
   workerRole: WorkerRole
 }
 
+interface RoleCardSpec {
+  value: Exclude<WorkerRole, 'custom'>
+  label: string
+  hint: string
+}
+
+const PRIMARY_ROLES: RoleCardSpec[] = [
+  { value: 'coder', label: 'Coder', hint: 'Implements features, writes code.' },
+  { value: 'reviewer', label: 'Reviewer', hint: 'Reviews code or proposals.' },
+  { value: 'tester', label: 'Tester', hint: 'Writes / runs tests.' },
+]
+
+const FieldLabel = ({ children }: { children: ReactNode }) => (
+  <span className="text-[10px] font-medium uppercase tracking-wider text-ter">{children}</span>
+)
+
+const RoleCard = ({
+  active,
+  spec,
+  onSelect,
+}: {
+  active: boolean
+  spec: RoleCardSpec
+  onSelect: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    aria-pressed={active}
+    data-testid={`role-card-${spec.value}`}
+    className="group flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors"
+    style={{
+      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
+      borderColor: active ? 'var(--accent)' : 'var(--border)',
+    }}
+  >
+    <div className="flex w-full items-center justify-between">
+      {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role */}
+      <RoleAvatar role={spec.value} size={32} />
+      {active ? <Check size={14} className="text-accent" aria-hidden /> : null}
+    </div>
+    <div className="text-sm font-medium text-pri">{spec.label}</div>
+    <div className="text-[11px] leading-snug text-ter">{spec.hint}</div>
+  </button>
+)
+
+const AgentRadio = ({
+  active,
+  preset,
+  onSelect,
+}: {
+  active: boolean
+  preset: CommandPreset
+  onSelect: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onSelect}
+    aria-pressed={active}
+    data-testid={`agent-radio-${preset.id}`}
+    className="flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors"
+    style={{
+      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
+      borderColor: active ? 'var(--accent)' : 'var(--border)',
+    }}
+  >
+    <span
+      aria-hidden
+      className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border"
+      style={{
+        borderColor: active ? 'var(--accent)' : 'var(--border-bright)',
+        background: active ? 'var(--accent)' : 'transparent',
+      }}
+    >
+      {active ? (
+        <span className="block h-1 w-1 rounded-full" style={{ background: 'var(--bg-elevated)' }} />
+      ) : null}
+    </span>
+    <div className="min-w-0 flex-1">
+      <div className="truncate text-sm text-pri">{preset.displayName}</div>
+      <div className="mono truncate text-[11px] text-ter">{preset.command}</div>
+    </div>
+  </button>
+)
+
 export const AddWorkerDialog = ({
   commandPresets,
   commandPresetId,
@@ -27,76 +116,167 @@ export const AddWorkerDialog = ({
   onSubmit,
   workerName,
   workerRole,
-}: AddWorkerDialogProps) => (
-  <div className="fixed inset-0 z-40 flex items-center justify-center">
-    <button
-      type="button"
-      aria-label="Close add member"
-      onClick={onClose}
-      className="modal-backdrop absolute inset-0"
-    />
-    <form
-      onSubmit={onSubmit}
-      className="relative flex w-[420px] flex-col gap-3 rounded-lg border p-5 shadow-2xl"
-      style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}
-      aria-label="Add team member"
-    >
-      <h3 className="text-base font-semibold text-pri">Add team member</h3>
-      <label className="flex flex-col gap-1 text-xs text-sec">
-        Name
-        <input
-          value={workerName}
-          onChange={(event) => onNameChange(event.target.value)}
-          className="rounded border px-2 py-1.5 text-sm text-pri"
-          style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
+}: AddWorkerDialogProps) => {
+  const [showCustom, setShowCustom] = useState(workerRole === 'custom')
+  const handleClose = (open: boolean) => {
+    if (!open) onClose()
+  }
+
+  return (
+    <Dialog.Root open onOpenChange={handleClose}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          data-testid="add-worker-overlay"
+          className="fixed inset-0 z-40"
+          style={{ background: 'var(--bg-overlay)' }}
         />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-sec">
-        Role
-        <select
-          value={workerRole}
-          onChange={(event) => onRoleChange(event.target.value as WorkerRole)}
-          className="rounded border px-2 py-1.5 text-sm text-pri"
-          style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
+        <Dialog.Content
+          data-testid="add-worker-content"
+          className="fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border"
+          style={{
+            background: 'var(--bg-elevated)',
+            borderColor: 'var(--border-bright)',
+            boxShadow: 'var(--shadow-elev-2)',
+          }}
         >
-          <option value="coder">Coder</option>
-          <option value="tester">Tester</option>
-          <option value="reviewer">Reviewer</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-sec">
-        Agent
-        <select
-          value={commandPresetId}
-          onChange={(event) => onPresetChange(event.target.value)}
-          className="rounded border px-2 py-1.5 text-sm text-pri"
-          style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
-        >
-          {commandPresets.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              {preset.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="flex justify-end gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded px-3 py-1.5 text-xs text-sec hover:bg-3 hover:text-pri"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={creating || !workerName.trim() || !commandPresetId}
-          className="rounded px-3 py-1.5 text-xs text-white hover:opacity-90"
-          style={{ background: 'var(--accent)' }}
-        >
-          {creating ? 'Creating...' : 'Create'}
-        </button>
-      </div>
-    </form>
-  </div>
-)
+          <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
+            <div
+              className="flex items-center gap-3 border-b px-5 py-4"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-lg"
+                style={{
+                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                  color: 'var(--accent)',
+                }}
+              >
+                <UserPlus size={18} aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <Dialog.Title className="text-md font-medium text-pri">
+                  Add team member
+                </Dialog.Title>
+                <Dialog.Description className="text-[11px] text-ter">
+                  Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
+                  <span className="mono">team send</span>.
+                </Dialog.Description>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 px-5 py-4">
+              <label className="flex flex-col gap-1.5">
+                <FieldLabel>Name</FieldLabel>
+                <input
+                  value={workerName}
+                  onChange={(event) => onNameChange(event.target.value)}
+                  placeholder="e.g. Alice"
+                  className="rounded-md border px-3 py-2 text-sm text-pri outline-none transition-colors"
+                  style={{
+                    background: 'var(--bg-1)',
+                    borderColor: 'var(--border-bright)',
+                  }}
+                />
+              </label>
+
+              <div className="flex flex-col gap-2">
+                <FieldLabel>Role</FieldLabel>
+                {showCustom ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustom(false)
+                      onRoleChange('coder')
+                    }}
+                    aria-pressed
+                    data-testid="role-card-custom"
+                    className="flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors"
+                    style={{
+                      background: 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))',
+                      borderColor: 'var(--accent)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      {/* biome-ignore lint/a11y/useValidAriaRole: domain prop */}
+                      <RoleAvatar role="custom" size={32} />
+                      <Check size={14} className="text-accent" aria-hidden />
+                    </div>
+                    <div className="text-sm font-medium text-pri">Custom</div>
+                    <div className="text-[11px] leading-snug text-ter">
+                      Same starter framework as the built-ins; describe behavior in the agent's own
+                      prompt. Click to switch back.
+                    </div>
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRIMARY_ROLES.map((spec) => (
+                      <RoleCard
+                        key={spec.value}
+                        active={workerRole === spec.value}
+                        spec={spec}
+                        onSelect={() => onRoleChange(spec.value)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {!showCustom ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustom(true)
+                      onRoleChange('custom')
+                    }}
+                    data-testid="role-custom-toggle"
+                    className="self-start text-[11px] text-ter hover:text-sec"
+                  >
+                    or use Custom →
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <FieldLabel>Agent CLI</FieldLabel>
+                {commandPresets.length === 0 ? (
+                  <div className="text-[11px] text-ter">Loading presets…</div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {commandPresets.map((preset) => (
+                      <AgentRadio
+                        key={preset.id}
+                        active={commandPresetId === preset.id}
+                        preset={preset}
+                        onSelect={() => onPresetChange(preset.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div
+              className="flex items-center justify-end gap-2 border-t px-5 py-3"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <button
+                type="button"
+                onClick={onClose}
+                className="icon-btn"
+                data-testid="add-worker-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creating || !workerName.trim() || !commandPresetId}
+                className="icon-btn icon-btn--primary"
+                data-testid="add-worker-submit"
+              >
+                {creating ? 'Creating…' : 'Add member'}
+              </button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
