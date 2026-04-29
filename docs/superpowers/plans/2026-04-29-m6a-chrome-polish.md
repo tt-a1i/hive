@@ -35,9 +35,10 @@
 
 **Modify:**
 - `web/src/styles/globals.css` — 追加 token / 删除 hover transform
-- `web/src/worker/role-presentation.ts` — 删除 `emoji` 字段（破坏性，所有 caller 同 PR 改）
-- `web/src/worker/OrchestratorPane.tsx` — emoji → Crown/Play/Square/RotateCcw；`window.confirm` → `<Confirm>`；空态 placeholder → `<EmptyState>`
+- `web/src/worker/role-presentation.ts` — 删除 `emoji` 字段（破坏性，所有 caller 同 commit 改）
+- `web/src/worker/OrchestratorPane.tsx` — emoji → Crown/Play/Square/RotateCcw；`window.confirm` × 2 → `<Confirm>`；空态 placeholder → `<EmptyState>`
 - `web/src/worker/WorkerCard.tsx` — emoji 头像 → `<RoleAvatar>`
+- `web/src/worker/WorkerModal.tsx` — **仅** emoji 头像 → `<RoleAvatar>`（必须，Task 7 删字段后不修就 build 挂）。其他 ⏹↻▶⧉🗑 emoji 按钮和 3× `window.confirm` **故意保留**——M6-C 会用 `<WorkerInspector>` 整体替换 WorkerModal，对它做完整修复是浪费
 - `web/src/worker/WorkersPane.tsx` — `+` emoji → `<UserPlus>`
 - `web/src/layout/Topbar.tsx` — 🐝/📋/⚙️ → Hexagon/ListChecks/Settings
 - `web/src/layout/Footer.tsx` — `●○` 字符 → div dot
@@ -48,6 +49,7 @@
 **Update existing tests:**
 - `tests/web/orchestrator-pane.test.tsx` — `window.confirm` 断言改 `<Confirm>` 流程；emoji 字符串断言改 lucide 渲染断言
 - `tests/web/worker-flow.test.tsx` — emoji 头像断言改 `<RoleAvatar>`
+- `tests/web/worker-modal.test.tsx` — **仅**头像 emoji 断言改 `data-testid="role-avatar"`；其他 emoji 按钮 / window.confirm 断言不动（保留至 M6-C）
 - `tests/web/m5-linear-visual.test.tsx` — 删除（M5 视觉冻结测试不再适用）
 
 ---
@@ -983,17 +985,20 @@ git commit -m "feat(ui): RoleAvatar (role-block initials, replaces emoji avatars
 
 ---
 
-## Task 7: 删除 `role-presentation.ts` 的 emoji 字段（破坏性，所有 caller 同步改）
+## Task 7: 删 `role.emoji` 字段 + WorkerCard / WorkerModal 全切 RoleAvatar（原子）
 
 **Files:**
-- Modify: `web/src/worker/role-presentation.ts`
-- Modify: `web/src/worker/WorkerCard.tsx`（同 task 8 处理细节）
+- Modify: `web/src/worker/role-presentation.ts` — 删 `emoji` 字段
+- Modify: `web/src/worker/WorkerCard.tsx` — 用 `<RoleAvatar>` + 删底部重复 queue 行
+- Modify: `web/src/worker/WorkerModal.tsx` — 仅头像那处用 `<RoleAvatar>`（其他 emoji/confirm M6-C 整删）
+- Modify: `tests/web/worker-flow.test.tsx`（断言更新）
+- Modify: `tests/web/worker-modal.test.tsx`（仅头像断言更新）
 
-> 这步不能单独 commit 提前——会断 build。实际上跟 Task 8 合并提交。先做 7 的修改，紧接着做 8 的修改后再 commit。
+> **原子性约束**：`role.emoji` 字段同时被 WorkerCard 和 WorkerModal 引用。任何只改其中一个的中间态都会 build 挂。三处必须在同一个 commit。
 
-- [ ] **Step 1: 修改 `role-presentation.ts` 删 emoji 字段**
+- [ ] **Step 1: 改 role-presentation.ts 删 emoji 字段**
 
-将文件内容替换为：
+将 `web/src/worker/role-presentation.ts` 整体替换为：
 
 ```ts
 import type { WorkerRole } from '../../../src/shared/types.js'
@@ -1019,34 +1024,9 @@ export const getRolePresentation = (role: WorkerRole): RolePresentation => {
 }
 ```
 
-> 不 commit ——立即接 Task 8。
+- [ ] **Step 2: 改 WorkerCard.tsx**
 
----
-
-## Task 8: WorkerCard 用 `RoleAvatar` 替换 emoji 头像
-
-**Files:**
-- Modify: `web/src/worker/WorkerCard.tsx`
-- Modify: `tests/web/worker-flow.test.tsx`（断言更新）
-
-- [ ] **Step 1: 改 WorkerCard**
-
-修改 `web/src/worker/WorkerCard.tsx`，将 import 区改为：
-
-```tsx
-import type { TeamListItem } from '../../../src/shared/types.js'
-import { RoleAvatar } from './RoleAvatar.js'
-import { getRolePresentation } from './role-presentation.js'
-import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
-```
-
-把 emoji 头像那块（原代码 `<span className="text-3xl leading-none" aria-hidden>{role.emoji}</span>`）替换为：
-
-```tsx
-<RoleAvatar role={worker.role} size={40} />
-```
-
-整个 WorkerCard 文件变为：
+将整个文件替换为：
 
 ```tsx
 import type { TeamListItem } from '../../../src/shared/types.js'
@@ -1106,37 +1086,71 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
 }
 ```
 
-> 注意：删掉了原本底部 `<div className="mt-3 flex items-center justify-between text-[11px] text-ter">` 那一行 "queue: N / N pending task(s)" 重复信息。
+> 注意：删掉了原本底部 `<div className="mt-3 flex items-center justify-between text-[11px] text-ter">` 那一行 "queue: N / N pending task(s)" 重复信息（spec §3.6.4 + 第 1 节痛点 #3）。
 
-- [ ] **Step 2: 更新现有 worker-flow 测试**
+- [ ] **Step 3: 改 WorkerModal.tsx 仅头像那处**
 
-打开 `tests/web/worker-flow.test.tsx`，搜索任何断言 emoji 字符（如 `🐝`、`expect(...).toContain('🐝')`、`getByText('🐝')`）。删除这些断言；如果某测试只为验证 emoji 渲染，改为验证 `data-testid="role-avatar"` 存在 + `data-role` 正确：
+打开 `web/src/worker/WorkerModal.tsx`，加 import：
+
+```tsx
+import { RoleAvatar } from './RoleAvatar.js'
+```
+
+定位到 line 129 附近的：
+
+```tsx
+          <span className="text-2xl leading-none" aria-hidden>
+            {role.emoji}
+          </span>
+```
+
+替换为：
+
+```tsx
+          <RoleAvatar role={worker.role} size={36} />
+```
+
+**其他 emoji 按钮 (⏹↻▶⧉🗑) 和 3× `window.confirm` 不动** —— M6-C 整体替换 WorkerModal 时清理。
+
+- [ ] **Step 4: 更新 worker-flow + worker-modal 测试断言**
+
+`tests/web/worker-flow.test.tsx`：搜 emoji 字符（🐝🐛🦉🐜）和 `role.emoji`，删除相关断言。需要断言头像存在的地方改：
 
 ```tsx
 const avatar = within(card).getByTestId('role-avatar')
 expect(avatar.getAttribute('data-role')).toBe('coder')
 ```
 
-> 修改具体哪几行依测试当前内容；执行时打开文件 grep `emoji` / 表情字符 后逐处改。
+`tests/web/worker-modal.test.tsx`：仅头像断言需要改。搜 emoji 字符 + `getRolePresentation` 头像渲染断言，改为 `data-testid="role-avatar"` 断言。其他 stop/restart/delete 流程的 `window.confirm` 测试断言**不动**。
 
-- [ ] **Step 3: 跑全套 web 测试确认通过**
+> 具体修改行数依测试当前内容；执行时 `grep -n "🐝\|🐛\|🦉\|🐜\|emoji" tests/web/worker-flow.test.tsx tests/web/worker-modal.test.tsx` 后逐处改。
+
+- [ ] **Step 5: 跑相关测试确认通过**
 
 ```bash
-pnpm exec vitest run tests/web/worker-flow.test.tsx tests/web/role-avatar.test.tsx
+pnpm exec vitest run tests/web/worker-flow.test.tsx tests/web/worker-modal.test.tsx tests/web/role-avatar.test.tsx
 ```
 
-Expected: PASS。
+Expected: PASS。如果 worker-modal 有非头像相关测试失败（例如某测试断言整个渲染快照），单独评估：通常应该不影响。
 
-- [ ] **Step 4: Commit (Task 7 + 8 合并)**
+- [ ] **Step 6: Build 验证（关键 — 原子 commit 前必须保证 build 绿）**
 
 ```bash
-git add web/src/worker/role-presentation.ts web/src/worker/WorkerCard.tsx tests/web/worker-flow.test.tsx
-git commit -m "feat(ui): WorkerCard uses RoleAvatar — drop role.emoji + duplicate queue footer"
+pnpm exec tsc -p tsconfig.json --noEmit
+```
+
+Expected: 无 type error。
+
+- [ ] **Step 7: Commit (单原子 commit)**
+
+```bash
+git add web/src/worker/role-presentation.ts web/src/worker/WorkerCard.tsx web/src/worker/WorkerModal.tsx tests/web/worker-flow.test.tsx tests/web/worker-modal.test.tsx
+git commit -m "feat(ui): drop role.emoji — WorkerCard + WorkerModal use RoleAvatar (atomic)"
 ```
 
 ---
 
-## Task 9: OrchestratorPane — 替换 emoji + `window.confirm`
+## Task 8: OrchestratorPane — 替换 emoji + `window.confirm`
 
 **Files:**
 - Modify: `web/src/worker/OrchestratorPane.tsx`
@@ -1451,7 +1465,7 @@ git commit -m "feat(ui): OrchestratorPane — lucide icons + Confirm dialog (kil
 
 ---
 
-## Task 10: WorkersPane — 替换 emoji + 加 UserPlus icon
+## Task 9: WorkersPane — 替换 emoji + 加 UserPlus icon
 
 **Files:**
 - Modify: `web/src/worker/WorkersPane.tsx`
@@ -1545,7 +1559,7 @@ git commit -m "feat(ui): WorkersPane uses UserPlus icon + 'Add Member' label"
 
 ---
 
-## Task 11: Topbar — 替换 emoji
+## Task 10: Topbar — 替换 emoji
 
 **Files:**
 - Modify: `web/src/layout/Topbar.tsx`
@@ -1617,7 +1631,7 @@ git commit -m "feat(ui): Topbar lucide icons + 'Blueprint' label (spec §11.4)"
 
 ---
 
-## Task 12: Footer — `●○` 字符 → div dot
+## Task 11: Footer — `●○` 字符 → div dot
 
 **Files:**
 - Modify: `web/src/layout/Footer.tsx`
@@ -1696,7 +1710,7 @@ git commit -m "feat(ui): Footer dot div replaces unicode bullet chars"
 
 ---
 
-## Task 13: Sidebar — 空态用 `EmptyState`
+## Task 12: Sidebar — 空态用 `EmptyState`
 
 **Files:**
 - Modify: `web/src/sidebar/Sidebar.tsx`
@@ -1747,7 +1761,7 @@ git commit -m "feat(ui): Sidebar uses EmptyState for no-workspaces"
 
 ---
 
-## Task 14: WorkspaceDetail — 删 inline error band，改 toast
+## Task 13: WorkspaceDetail — 删 inline error band，改 toast
 
 **Files:**
 - Modify: `web/src/WorkspaceDetail.tsx`
@@ -1806,7 +1820,7 @@ git commit -m "refactor(ui): WorkspaceDetail surface errors via toast (drop inli
 
 ---
 
-## Task 15: App — 顶层挂载 ToastProvider + Toaster
+## Task 14: App — 顶层挂载 ToastProvider + Toaster
 
 **Files:**
 - Modify: `web/src/app.tsx`
@@ -1876,7 +1890,7 @@ git commit -m "feat(ui): App mounts ToastProvider + Toaster at root"
 
 ---
 
-## Task 16: 删除 m5-linear-visual.test.tsx + 全套 sanity check
+## Task 15: 删除 m5-linear-visual.test.tsx + 全套 sanity check
 
 **Files:**
 - Delete: `tests/web/m5-linear-visual.test.tsx`
@@ -1915,12 +1929,12 @@ git commit -m "test(ui): remove M5 visual freeze test (M6-B will write new struc
 | Spec §10 M6-A 项 | 对应 Task |
 |---|---|
 | §4.1–4.6 token 落 globals.css | Task 1 |
-| emoji → lucide icon | Task 9 (Orch) / 10 (Workers) / 11 (Topbar) / 12 (Footer) |
+| emoji → lucide icon | Task 8 (Orch) / 9 (Workers) / 10 (Topbar) / 11 (Footer) |
 | 删除 `card:hover transform` | Task 2 |
-| `RoleAvatar` 替换 emoji 头像 | Task 6 (创建) + Task 8 (使用) |
-| 自研 `<Confirm>` 替换 `window.confirm` | Task 5 (创建) + Task 9 (使用) |
-| `<Toast>` + `useToast` 系统 | Task 4 (创建) + Task 14 (使用) + Task 15 (挂载) |
-| `<EmptyState>` 统一组件 | Task 3 (创建) + Task 9 (Orch) + Task 13 (Sidebar) |
+| `RoleAvatar` 替换 emoji 头像 | Task 6 (创建) + Task 7 (WorkerCard + WorkerModal 原子使用) |
+| 自研 `<Confirm>` 替换 `window.confirm` | Task 5 (创建) + Task 8 (OrchestratorPane 使用)；WorkerModal 内 3× `window.confirm` 故意保留 (M6-C 整删) |
+| `<Toast>` + `useToast` 系统 | Task 4 (创建) + Task 13 (使用) + Task 14 (挂载) |
+| `<EmptyState>` 统一组件 | Task 3 (创建) + Task 8 (Orch) + Task 12 (Sidebar) |
 
 所有 M6-A 范围 spec 项已覆盖。
 
@@ -1942,14 +1956,14 @@ git commit -m "test(ui): remove M5 visual freeze test (M6-B will write new struc
 
 ## 完成判据（M6-A 整体）
 
-- [ ] 16 个 task 全部 `- [ ]` 勾完
+- [ ] 15 个 task 全部 `- [ ]` 勾完
 - [ ] `pnpm check` 通过（biome lint）
 - [ ] `pnpm build` 通过（vite build + tsc）
 - [ ] `pnpm test` 通过（含新增 EmptyState/Toast/Confirm/RoleAvatar 测试 + 更新后的现有测试）
 - [ ] `wc -l web/src/app.tsx` ≤ 150
 - [ ] `grep -r "window.confirm" web/src/` 无任何命中
 - [ ] `grep -rE "🐝|👑|📋|⚙️|🐛|🦉|🐜" web/src/` 无任何命中（emoji 已清空）
-- [ ] `git log --oneline | head -16` 列出 16 条对应 commit（每 task 一条 commit）
+- [ ] `git log --oneline | head -15` 列出 15 条对应 commit（每 task 一条 commit）
 
 ---
 
