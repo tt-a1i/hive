@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -109,6 +110,96 @@ describe('Toast system', () => {
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(() => render(<Bad />)).toThrow(/ToastProvider/)
+    consoleError.mockRestore()
+  })
+
+  test('useToast() return value is referentially stable across toast list changes (B1 regression)', () => {
+    // B1: consumer using `useEffect(..., [toast])` must NOT re-run when the
+    // toast list mutates. Pre-fix the api object was rebuilt on every Provider
+    // render → effects looped → toast storms.
+    let showCount = 0
+    let effectRunCount = 0
+
+    const Consumer = () => {
+      const toast = useToast()
+      useEffect(() => {
+        effectRunCount += 1
+        showCount += 1
+        toast.show({ kind: 'success', message: `m${showCount}` })
+      }, [toast])
+      return null
+    }
+
+    render(
+      <ToastProvider>
+        <Consumer />
+        <Toaster />
+      </ToastProvider>
+    )
+
+    // Effect runs exactly once on mount; the toast.show inside causes a
+    // Provider re-render (toast list changed), but the api object is memoized
+    // so its identity does NOT change → effect deps don't fire again.
+    expect(effectRunCount).toBe(1)
+    expect(showCount).toBe(1)
+    expect(screen.getAllByTestId('toast')).toHaveLength(1)
+  })
+
+  test('toast list capped at 3 — older entries are evicted under storm', () => {
+    const Storm = () => {
+      const { show } = useToast()
+      return (
+        <button
+          type="button"
+          data-testid="storm"
+          onClick={() => {
+            for (let index = 0; index < 5; index += 1) {
+              show({ kind: 'error', message: `boom-${index}` })
+            }
+          }}
+        >
+          storm
+        </button>
+      )
+    }
+    render(
+      <ToastProvider>
+        <Storm />
+        <Toaster />
+      </ToastProvider>
+    )
+    fireEvent.click(screen.getByTestId('storm'))
+    const toasts = screen.getAllByTestId('toast')
+    expect(toasts).toHaveLength(3)
+    // Oldest two evicted: boom-0 and boom-1; newest 3 retained.
+    expect(toasts[0]?.textContent).toContain('boom-2')
+    expect(toasts[2]?.textContent).toContain('boom-4')
+  })
+
+  test('cleanup on unmount clears all pending timers (no React warnings)', () => {
+    const Pusher = () => {
+      const { show } = useToast()
+      useEffect(() => {
+        show({ kind: 'success', message: 'a' })
+        show({ kind: 'success', message: 'b' })
+      }, [show])
+      return null
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { unmount } = render(
+      <ToastProvider>
+        <Pusher />
+        <Toaster />
+      </ToastProvider>
+    )
+    unmount()
+    // Advance past timer expiry — if cleanup didn't clearTimeout, the queued
+    // dismiss callback would fire on an unmounted component and React would
+    // warn (logged via console.error).
+    act(() => {
+      vi.advanceTimersByTime(10_000)
+    })
+    expect(consoleError).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
 })

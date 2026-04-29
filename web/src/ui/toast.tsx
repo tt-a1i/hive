@@ -1,7 +1,8 @@
-import { useToast } from './useToast.js'
+import { useToast, useToastList } from './useToast.js'
 
 export const Toaster = () => {
-  const { toasts, dismiss } = useToast()
+  const toasts = useToastList()
+  const { dismiss } = useToast()
   if (toasts.length === 0) return null
   return (
     <div

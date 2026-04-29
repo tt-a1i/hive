@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react'
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 export type ToastKind = 'success' | 'warning' | 'error'
 
@@ -16,13 +24,25 @@ interface ShowOptions {
   durationMs?: number
 }
 
+/**
+ * Stable API surface — show/dismiss callbacks are useCallback-bound and the
+ * api object itself is useMemo'd, so consumers depending on it inside
+ * useEffect() do not re-run when the toast list changes.
+ *
+ * Toast state (the list) lives in a separate context (ToastStateContext) so
+ * only the Toaster subscribes to it; consumers that only push toasts (the
+ * common case) are not affected by list churn.
+ */
 interface ToastApi {
   show: (opts: ShowOptions) => string
   dismiss: (id: string) => void
-  toasts: ToastEntry[]
 }
 
-const ToastContext = createContext<ToastApi | null>(null)
+const ToastApiContext = createContext<ToastApi | null>(null)
+const ToastStateContext = createContext<ToastEntry[]>([])
+
+/** Hard cap on simultaneous toasts to avoid DOM ballooning under failure storms. */
+const MAX_TOASTS = 3
 
 const defaultDuration = (kind: ToastKind): number => {
   if (kind === 'success') return 3000
@@ -30,7 +50,16 @@ const defaultDuration = (kind: ToastKind): number => {
   return 0
 }
 
-const generateId = () => `t-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`
+const generateId = (): string => {
+  // crypto.randomUUID requires a secure context (HTTPS or localhost). Hive is
+  // currently 127.0.0.1-bound (secure), but a future LAN deploy would not be —
+  // fall back to a Math.random-derived id so ToastProvider never crashes.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `t-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`
+  }
+  const random = Math.random().toString(36).slice(2, 10)
+  return `t-${random}-${Date.now().toString(36)}`
+}
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastEntry[]>([])
@@ -48,7 +77,12 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const show = useCallback(
     ({ kind, message, durationMs }: ShowOptions): string => {
       const id = generateId()
-      setToasts((current) => [...current, { id, kind, message }])
+      setToasts((current) => {
+        const next = [...current, { id, kind, message }]
+        // Drop oldest entries when over cap; their pending timers are no-ops
+        // (filter-out by id removes the DOM, timer firing later just no-ops).
+        return next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
+      })
       const ms = durationMs ?? defaultDuration(kind)
       if (ms > 0) {
         const timer = setTimeout(() => dismiss(id), ms)
@@ -67,11 +101,23 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  return <ToastContext.Provider value={{ show, dismiss, toasts }}>{children}</ToastContext.Provider>
+  // Stable api ref — show/dismiss are useCallback-bound, so the memo only
+  // changes when those identities change (i.e. never, after first mount).
+  const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss])
+
+  return (
+    <ToastApiContext.Provider value={api}>
+      <ToastStateContext.Provider value={toasts}>{children}</ToastStateContext.Provider>
+    </ToastApiContext.Provider>
+  )
 }
 
+/** Push toasts. Stable across renders — safe in useEffect deps. */
 export const useToast = (): ToastApi => {
-  const ctx = useContext(ToastContext)
+  const ctx = useContext(ToastApiContext)
   if (!ctx) throw new Error('useToast must be used within ToastProvider')
   return ctx
 }
+
+/** Subscribe to the toast list. Use only in <Toaster />. */
+export const useToastList = (): ToastEntry[] => useContext(ToastStateContext)
