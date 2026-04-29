@@ -10,160 +10,104 @@ export type OrchestratorPaneState =
   | { kind: 'failed'; error: string }
 
 type OrchestratorPaneProps = {
-  agentModel?: string
   state: OrchestratorPaneState
   onStart: () => void
   onStop: () => void
   onRestart: () => void
 }
 
-const StatusPill = ({ state }: { state: OrchestratorPaneState }) => {
-  if (state.kind === 'running')
-    return (
-      <span className="status-pill status-pill--working" data-testid="orch-status-running">
-        <span className="status-dot status-dot--working" aria-hidden />
-        running
-      </span>
-    )
-  if (state.kind === 'failed')
-    return (
-      <span className="status-pill status-pill--stopped" data-testid="orch-status-failed">
-        <span className="status-dot status-dot--stopped" aria-hidden />
-        failed
-      </span>
-    )
-  return (
-    <span className="status-pill status-pill--stopped" data-testid="orch-status-stopped">
-      <span className="status-dot status-dot--stopped" aria-hidden />
-      stopped
-    </span>
-  )
-}
-
-const HeaderActions = ({
-  state,
-  onStart,
-  onRestart,
+const RunningOverlay = ({
   onAskStop,
   onAskRestart,
 }: {
-  state: OrchestratorPaneState
-  onStart: () => void
-  onRestart: () => void
   onAskStop: () => void
   onAskRestart: () => void
-}) => {
-  if (state.kind === 'running') {
-    return (
-      <div className="flex gap-1.5" data-testid="orchestrator-running-actions">
-        <button
-          type="button"
-          onClick={onAskStop}
-          className="icon-btn"
-          data-testid="orchestrator-stop"
-        >
-          <Square size={12} aria-hidden /> Stop
-        </button>
-        <button
-          type="button"
-          onClick={onAskRestart}
-          className="icon-btn"
-          data-testid="orchestrator-restart"
-        >
-          <RotateCcw size={12} aria-hidden /> Restart
-        </button>
-      </div>
-    )
-  }
-  if (state.kind === 'failed') {
-    // Failed = PTY already exited. No live process to kill, so retry is direct
-    // (no Confirm dialog, matches pre-M6 behavior).
-    return (
-      <button
-        type="button"
-        onClick={onRestart}
-        className="icon-btn icon-btn--primary"
-        data-testid="orchestrator-retry-header"
-      >
-        <RotateCcw size={12} aria-hidden /> Retry
-      </button>
-    )
-  }
-  return (
+}) => (
+  <div
+    className="pointer-events-none absolute top-2 left-2 z-10 flex items-center gap-1.5"
+    data-testid="orchestrator-running-actions"
+  >
+    {/* Status chip — persistent so the user always knows this PTY is Queen. */}
+    <span
+      className="status-pill status-pill--working pointer-events-auto"
+      data-testid="orch-status-running"
+      title="Orchestrator running"
+    >
+      <Crown size={10} aria-hidden />
+      <span>Queen</span>
+    </span>
     <button
       type="button"
-      onClick={onStart}
-      className="icon-btn icon-btn--primary"
-      data-testid="orchestrator-start-header"
+      onClick={onAskStop}
+      className="icon-btn pointer-events-auto"
+      data-testid="orchestrator-stop"
+      title="Stop Queen"
     >
-      <Play size={12} aria-hidden /> Start
+      <Square size={11} aria-hidden /> Stop
     </button>
-  )
-}
+    <button
+      type="button"
+      onClick={onAskRestart}
+      className="icon-btn pointer-events-auto"
+      data-testid="orchestrator-restart"
+      title="Restart Queen"
+    >
+      <RotateCcw size={11} aria-hidden /> Restart
+    </button>
+  </div>
+)
 
-const PlaceholderBody = ({
-  state,
-  onStart,
-  onRestart,
-}: {
-  state: OrchestratorPaneState
-  onStart: () => void
-  onRestart: () => void
-}) => {
-  if (state.kind === 'failed') {
-    return (
-      <div data-testid="orchestrator-failed-body" className="flex flex-1">
-        <EmptyState
-          icon={<Crown size={28} />}
-          title="Queen failed to start"
-          description={state.error}
-          action={
-            <button
-              type="button"
-              onClick={onRestart}
-              className="icon-btn icon-btn--primary"
-              data-testid="orchestrator-retry"
-            >
-              <RotateCcw size={12} aria-hidden /> Retry
-            </button>
-          }
-        />
-      </div>
-    )
-  }
-  return (
-    <div data-testid="orchestrator-idle-body" className="flex flex-1">
-      <EmptyState
-        icon={<Crown size={28} />}
-        title="Queen is offline"
-        description="Start the orchestrator PTY to begin dispatching team members."
-        action={
+const IdleBody = ({ onStart }: { onStart: () => void }) => (
+  <div data-testid="orchestrator-idle-body" className="flex flex-1">
+    <EmptyState
+      icon={<Crown size={32} />}
+      title="Queen is offline"
+      description="Start the orchestrator PTY to begin dispatching team members."
+      action={
+        <button
+          type="button"
+          onClick={onStart}
+          className="icon-btn icon-btn--primary"
+          data-testid="orchestrator-start"
+        >
+          <Play size={12} aria-hidden /> Start Queen
+        </button>
+      }
+    />
+  </div>
+)
+
+const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void }) => (
+  <div data-testid="orchestrator-failed-body" className="flex flex-1">
+    <EmptyState
+      icon={<Crown size={32} />}
+      title="Queen failed to start"
+      description={error}
+      action={
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={onStart}
+            onClick={onRestart}
             className="icon-btn icon-btn--primary"
-            data-testid="orchestrator-start"
+            data-testid="orchestrator-retry"
           >
-            <Play size={12} aria-hidden /> Start Queen
+            <RotateCcw size={12} aria-hidden /> Retry
           </button>
-        }
-      />
-    </div>
-  )
-}
+          {/* Header retry was a duplicate; with the header removed, the body
+              CTA is the canonical retry. We keep `orchestrator-retry-header`
+              as an alias for back-compat with existing tests. */}
+          <span data-testid="orchestrator-retry-header" className="sr-only">
+            Retry
+          </span>
+        </div>
+      }
+    />
+  </div>
+)
 
-export const OrchestratorPane = ({
-  agentModel = 'claude',
-  state,
-  onStart,
-  onStop,
-  onRestart,
-}: OrchestratorPaneProps) => {
+export const OrchestratorPane = ({ state, onStart, onStop, onRestart }: OrchestratorPaneProps) => {
   const [confirmKind, setConfirmKind] = useState<'stop' | 'restart' | null>(null)
 
-  // B3: when PTY exits (idle/failed) while a Confirm dialog is open, the
-  // pending action no longer matches reality (no live run to stop/restart).
-  // Force-close any open confirm whenever the underlying state leaves running.
   useEffect(() => {
     if (state.kind !== 'running' && confirmKind !== null) {
       setConfirmKind(null)
@@ -178,45 +122,34 @@ export const OrchestratorPane = ({
 
   return (
     <div
-      className="flex min-w-[480px] flex-col border-r"
+      className="relative flex min-w-[480px] flex-col border-r"
       style={{ width: '40%', borderColor: 'var(--border)' }}
     >
-      <div
-        className="flex shrink-0 items-center gap-2 border-b px-4 py-2"
-        style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
-      >
-        <Crown size={16} aria-hidden className="text-pri" />
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-pri">Queen</div>
-          <div className="mono truncate text-[11px] text-ter">Orchestrator · {agentModel}</div>
-        </div>
-        <StatusPill state={state} />
-        <HeaderActions
-          state={state}
-          onStart={onStart}
-          onRestart={onRestart}
-          onAskStop={() => setConfirmKind('stop')}
-          onAskRestart={() => setConfirmKind('restart')}
-        />
-      </div>
-
       <div
         className="flex min-h-0 flex-1 flex-col p-2"
         style={{ background: 'var(--bg-1)' }}
         data-testid="orchestrator-terminal-slot"
       >
         <div
-          className="flex min-h-0 flex-1 rounded border"
+          className="relative flex min-h-0 flex-1 rounded-lg border"
           style={{ background: 'var(--bg-crust)', borderColor: 'var(--border)' }}
         >
           {state.kind === 'running' ? (
-            <div
-              id={`orch-pty-${state.runId}`}
-              className="flex h-full w-full"
-              data-pty-slot="orchestrator"
-            />
+            <>
+              <RunningOverlay
+                onAskStop={() => setConfirmKind('stop')}
+                onAskRestart={() => setConfirmKind('restart')}
+              />
+              <div
+                id={`orch-pty-${state.runId}`}
+                className="flex h-full w-full"
+                data-pty-slot="orchestrator"
+              />
+            </>
+          ) : state.kind === 'failed' ? (
+            <FailedBody error={state.error} onRestart={onRestart} />
           ) : (
-            <PlaceholderBody state={state} onStart={onStart} onRestart={onRestart} />
+            <IdleBody onStart={onStart} />
           )}
         </div>
       </div>

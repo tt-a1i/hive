@@ -121,9 +121,8 @@ describe('OrchestratorPane three-state UI', () => {
 
     expect(screen.getByTestId('orchestrator-failed-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-description')).toHaveTextContent(errorMessage)
-    // Both Retry CTAs (header + body) must dispatch onRestart so the user can
-    // recover from either entry point.
-    expect(screen.getByTestId('orchestrator-retry-header')).toHaveTextContent('Retry')
+    // Header was removed; only the body Retry CTA remains. Header testid is
+    // kept as an sr-only alias for back-compat (cannot be clicked).
     const retryBody = screen.getByTestId('orchestrator-retry')
     expect(retryBody).toHaveTextContent('Retry')
 
@@ -132,8 +131,6 @@ describe('OrchestratorPane three-state UI', () => {
 
     fireEvent.click(retryBody)
     expect(onRestart).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByTestId('orchestrator-retry-header'))
-    expect(onRestart).toHaveBeenCalledTimes(2)
     expect(onStart).not.toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
   })

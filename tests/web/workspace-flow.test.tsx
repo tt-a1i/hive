@@ -93,7 +93,8 @@ describe('workspace flow with real server', () => {
     expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
     expect(screen.queryByTestId('orchestrator-idle-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
-    expect(screen.getByTestId('worker-grid')).toBeInTheDocument()
+    // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
+    expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
   })
 })
