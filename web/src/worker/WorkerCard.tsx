@@ -17,20 +17,17 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
       type="button"
       onClick={() => onClick(worker)}
       aria-label={`Open ${worker.name}`}
-      className="card card--interactive p-4 text-left"
+      className="card card--interactive flex w-full items-center gap-3 p-3 text-left"
       data-testid={`worker-card-${worker.id}`}
       data-status={status.kind}
     >
-      <div className="flex items-start gap-3">
-        <RoleAvatar role={worker.role} size={40} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium text-pri">{worker.name}</span>
-            <span className={`role-badge ${role.badgeClass}`}>{role.label}</span>
-          </div>
-          <div className="mono mt-0.5 truncate text-[11px] text-ter">{worker.role}</div>
+      <RoleAvatar role={worker.role} size={36} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium text-pri">{worker.name}</span>
+          <span className={`role-badge ${role.badgeClass}`}>{role.label}</span>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="mt-1 flex items-center gap-2">
           <span
             className={`status-pill status-pill--${status.kind}`}
             title={status.label}

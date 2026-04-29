@@ -137,8 +137,9 @@ describe('worker flow with real server', () => {
     expect(within(card).getByText('Alice')).toBeInTheDocument()
     expect(within(card).getByText('Coder')).toBeInTheDocument()
     expect(within(card).getByText('idle')).toBeInTheDocument()
-    const grid = screen.getByTestId('worker-grid')
-    expect(within(grid).getAllByRole('button')[0]).toHaveTextContent('Add Member')
+    // Add Member affordance now lives only in the WorkersPane header (the
+    // dashed in-grid Add Member tile was redundant and visually misleading).
+    expect(screen.getByTestId('add-worker-trigger')).toHaveTextContent('Add Member')
 
     const workerRun = serverContext?.store
       .listTerminalRuns(workspaceId)
