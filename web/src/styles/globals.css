@@ -264,7 +264,7 @@ html, body {
 }
 .card:hover {
   border-color: var(--border-bright);
-  transform: translateY(-1px);
+  background: color-mix(in oklab, var(--bg-2) 85%, var(--bg-3));
 }
 .card--interactive { cursor: pointer; }
 
