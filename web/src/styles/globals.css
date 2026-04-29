@@ -28,6 +28,10 @@
   --color-status-blue: #4C9AFF;
   --color-status-purple: #A371F7;
   --color-status-gold: #D4A72C;
+
+  /* M6 — overlay & elevated */
+  --color-bg-overlay: rgba(8, 9, 10, 0.72);
+  --color-bg-elevated: #1c1c20;
 }
 
 :root {
@@ -37,6 +41,10 @@
   --bg-2: #18181b;
   --bg-3: #232326;
   --bg-crust: #050506;
+
+  /* M6 — overlay & elevated */
+  --bg-overlay: rgba(8, 9, 10, 0.72);
+  --bg-elevated: #1c1c20;
 
   /* Borders */
   --border: #222226;
@@ -58,6 +66,36 @@
   --status-blue: #4C9AFF;
   --status-purple: #A371F7;
   --status-gold: #D4A72C;
+
+  /* M6 — typography scale */
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 15px;
+
+  /* M6 — icon scale */
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 20px;
+
+  /* M6 — radius scale */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* M6 — motion */
+  --ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+
+  /* M6 — focus ring & elevation */
+  --ring-focus: rgba(94, 106, 210, 0.45);
+  --shadow-elev-2: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
 
   color-scheme: dark;
 }
