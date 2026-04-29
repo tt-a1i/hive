@@ -1,4 +1,5 @@
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
+import { EmptyState } from '../ui/EmptyState.js'
 
 type SidebarProps = {
   activeWorkspaceId: string | null
@@ -30,7 +31,12 @@ export const Sidebar = ({
     {workspaces === null ? (
       <p className="px-3 py-2 text-xs text-ter">Loading…</p>
     ) : workspaces.length === 0 ? (
-      <p className="px-3 py-2 text-xs text-ter">No workspaces yet</p>
+      <div className="flex-1 px-2 py-4">
+        <EmptyState
+          title="No workspaces"
+          description="Add one to start. Hive will load tasks.md and start the Orchestrator."
+        />
+      </div>
     ) : (
       <ul className="flex-1 scroll-y">
         {workspaces.map((workspace) => {
