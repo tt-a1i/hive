@@ -155,4 +155,50 @@ describe('workspace sidebar flow', () => {
     )
     expect(terminalSockets).toHaveLength(0)
   })
+
+  test('deleting the active workspace shows Confirm, removes it, selects next', async () => {
+    const alpha = await createWorkspace('Alpha')
+    const beta = await createWorkspace('Beta')
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
+    })
+
+    // Click trash icon → Confirm dialog opens (no native window.confirm).
+    fireEvent.click(screen.getByRole('button', { name: 'Delete workspace Alpha' }))
+    const confirmTitle = await screen.findByTestId('confirm-title')
+    expect(confirmTitle).toHaveTextContent('Delete workspace "Alpha"?')
+    expect(screen.getByTestId('confirm-action')).toHaveTextContent('Delete workspace')
+
+    // Confirming actually performs the delete.
+    fireEvent.click(screen.getByTestId('confirm-action'))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true')
+    })
+
+    await waitFor(async () => {
+      const workspaceResponse = await nativeFetch(`${baseUrl}/api/workspaces`, {
+        headers: { cookie },
+      })
+      await expect(workspaceResponse.json()).resolves.toEqual([
+        expect.objectContaining({ id: beta.id, name: 'Beta' }),
+      ])
+    })
+
+    await waitFor(async () => {
+      const appStateResponse = await nativeFetch(
+        `${baseUrl}/api/settings/app-state/active_workspace_id`,
+        { headers: { cookie } }
+      )
+      await expect(appStateResponse.json()).resolves.toEqual({
+        key: 'active_workspace_id',
+        value: beta.id,
+      })
+    })
+    expect(alpha.id).not.toBe(beta.id)
+  })
 })
