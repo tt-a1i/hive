@@ -1,3 +1,5 @@
+import { Folder, GitBranch } from 'lucide-react'
+
 import type { FsBrowseEntryPayload } from '../api.js'
 
 type FsEntryListProps = {
@@ -52,7 +54,9 @@ export const FsEntryList = ({
                     : { color: 'var(--text-primary)' }
                 }
               >
-                <span aria-hidden>{entry.is_git_repository ? '🔃' : '📁'}</span>
+                <span aria-hidden className="inline-flex items-center text-sec">
+                  {entry.is_git_repository ? <GitBranch size={14} /> : <Folder size={14} />}
+                </span>
                 <span className="mono flex-1 truncate">{entry.name}</span>
                 {entry.is_git_repository ? (
                   <span

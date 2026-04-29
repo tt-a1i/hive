@@ -1,3 +1,4 @@
+import { Folder } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { FsEntryList } from './FsEntryList.js'
@@ -70,9 +71,7 @@ export const ServerBrowseDialog = ({ onClose, onCreate, open }: ServerBrowseDial
           className="flex shrink-0 items-center gap-2 border-b px-4 py-3"
           style={{ borderColor: 'var(--border)' }}
         >
-          <span className="text-lg leading-none" aria-hidden>
-            📁
-          </span>
+          <Folder size={16} aria-hidden className="text-sec" />
           <h2 className="font-medium text-pri">Browse server filesystem</h2>
           <span className="mono truncate text-[11px] text-ter" data-testid="fs-root-path">
             root: {browse.root_path || '(loading)'}
