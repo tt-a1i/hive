@@ -1962,7 +1962,7 @@ git commit -m "test(ui): remove M5 visual freeze test (M6-B will write new struc
 - [ ] `pnpm test` 通过（含新增 EmptyState/Toast/Confirm/RoleAvatar 测试 + 更新后的现有测试）
 - [ ] `wc -l web/src/app.tsx` ≤ 150
 - [ ] `grep -r "window.confirm" web/src/` 无任何命中
-- [ ] `grep -rE "🐝|👑|📋|⚙️|🐛|🦉|🐜" web/src/` 无任何命中（emoji 已清空）
+- [ ] `grep -rE "🐝|👑|📋|⚙️|🐛|🦉|🐜|📁|🔃" web/src/` 无任何命中（emoji 已清空）；WorkerModal 内 ⏹↻▶ 计划留 M6-C 整删
 - [ ] `git log --oneline | head -15` 列出 15 条对应 commit（每 task 一条 commit）
 
 ---

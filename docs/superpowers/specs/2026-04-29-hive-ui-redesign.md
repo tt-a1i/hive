@@ -455,7 +455,7 @@ mode = 'blueprint-focus' （按 ⌘⇧4 / 点 Blueprint 展开按钮触发）
 | `SettingsInspector` | `web/src/inspector/SettingsInspector.tsx` | 设置入口骨架（M6-D 仅占位，模板 CRUD 延后到 M7） |
 | `KeyboardCheatsheet` | `web/src/inspector/KeyboardCheatsheet.tsx` | `?` 键打开的快捷键速查（drawer 内显示） |
 | `Confirm` | `web/src/ui/Confirm.tsx` | 自研确认 dialog（替换 `window.confirm`） |
-| `Toast` + `useToast` | `web/src/ui/toast.tsx` + `web/src/ui/useToast.ts` | toast 通知系统 |
+| `Toast` + `useToast` | `web/src/ui/toast.tsx` + `web/src/ui/useToast.tsx` | toast 通知系统（含 JSX，故 `.tsx`） |
 | `EmptyState` | `web/src/ui/EmptyState.tsx` | 统一空态组件 |
 | `RoleAvatar` | `web/src/worker/RoleAvatar.tsx` | role-block 头像（取代 emoji） |
 | `Icon` | （直接 lucide-react import，不再包） | — |
@@ -653,6 +653,8 @@ GET /api/ui/workspaces/:id/recent-dispatches?limit=10
 **改为**：Blueprint Bar 常驻顶栏。紧凑模式仅显示进度条 + 计数；展开模式（按 ⌘3 或点 toggle）显示完整 task list；进一步进入 raw editor 模式（按钮切换）。详见本文档 §3.3。
 
 **命名修订**：UI 内 "Task Graph" 全部改为 "Blueprint"（更贴蜂巢隐喻 + 跟产品 spec §13 命名"Hive Blueprint" 对齐）。
+
+> **[M6-A 实现说明]** 仅 UI 可见文字 + `aria-label` 在 M6-A 同步修订（如 Topbar 文字、`Toggle blueprint` aria）。**JS 内部 prop / state / file / testid 命名**（`onToggleTaskGraph` / `taskGraphOpen` / `TaskGraphDrawer` / `data-testid="task-graph-drawer"`）保留至 **M6-B**，跟随主区结构重做时一次性 rename，避免 M6-A 与 M6-B 的 diff 互相污染。
 
 ### 11.5 §6.5 角色模板管理
 M6 不实施模板 CRUD，仅做 settings drawer 骨架。模板 CRUD 延到 M7。
