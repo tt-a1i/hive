@@ -20,12 +20,12 @@ const renderPane = (state: OrchestratorPaneState) => {
   return { onStart, onStop, onRestart }
 }
 
-describe('OrchestratorPane three-state UI (M5.4)', () => {
-  test('idle: shows ▶ Start Queen primary CTA, click dispatches onStart', () => {
+describe('OrchestratorPane three-state UI', () => {
+  test('idle: shows Start Queen primary CTA, click dispatches onStart', () => {
     const { onStart, onStop, onRestart } = renderPane({ kind: 'idle' })
 
     const startBtn = screen.getByTestId('orchestrator-start')
-    expect(startBtn).toHaveTextContent('▶ Start Queen')
+    expect(startBtn).toHaveTextContent('Start Queen')
     expect(screen.getByTestId('orchestrator-idle-body')).toBeInTheDocument()
     expect(screen.queryByTestId('orchestrator-running-actions')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
@@ -36,16 +36,13 @@ describe('OrchestratorPane three-state UI (M5.4)', () => {
     expect(onRestart).not.toHaveBeenCalled()
   })
 
-  test('running: header exposes ⏹ Stop + ↻ Restart, PTY slot mounts with run id', () => {
-    // Stop / Restart now require user confirmation (destructive on a live PTY).
-    // jsdom has no native confirm — stub to true so the button click flows through.
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  test('running: clicking Stop opens Confirm dialog; confirming triggers onStop', () => {
     const { onStart, onStop, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
 
     const stopBtn = screen.getByTestId('orchestrator-stop')
     const restartBtn = screen.getByTestId('orchestrator-restart')
-    expect(stopBtn).toHaveTextContent('⏹ Stop')
-    expect(restartBtn).toHaveTextContent('↻ Restart')
+    expect(stopBtn).toBeInTheDocument()
+    expect(restartBtn).toBeInTheDocument()
 
     // PTY slot must use the run id so TerminalView can portal into it.
     const slot = document.getElementById('orch-pty-run-abc')
@@ -56,25 +53,34 @@ describe('OrchestratorPane three-state UI (M5.4)', () => {
     expect(screen.queryByTestId('orchestrator-idle-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
+    // Click Stop → Confirm dialog opens → onStop only after confirm-action.
     fireEvent.click(stopBtn)
-    fireEvent.click(restartBtn)
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Stop Queen?')
+    expect(onStop).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('confirm-action'))
     expect(onStop).toHaveBeenCalledTimes(1)
+
+    // Click Restart → Confirm dialog opens with restart copy → onRestart fires.
+    fireEvent.click(restartBtn)
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Restart Queen?')
+    fireEvent.click(screen.getByTestId('confirm-action'))
     expect(onRestart).toHaveBeenCalledTimes(1)
+
     expect(onStart).not.toHaveBeenCalled()
-    expect(confirmSpy).toHaveBeenCalledTimes(2)
-    confirmSpy.mockRestore()
   })
 
-  test('running: declining confirm() cancels Stop / Restart', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  test('running: clicking Stop then Cancel keeps PTY alive', () => {
     const { onStop, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
 
     fireEvent.click(screen.getByTestId('orchestrator-stop'))
-    fireEvent.click(screen.getByTestId('orchestrator-restart'))
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Stop Queen?')
+    fireEvent.click(screen.getByTestId('confirm-cancel'))
     expect(onStop).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('orchestrator-restart'))
+    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Restart Queen?')
+    fireEvent.click(screen.getByTestId('confirm-cancel'))
     expect(onRestart).not.toHaveBeenCalled()
-    expect(confirmSpy).toHaveBeenCalledTimes(2)
-    confirmSpy.mockRestore()
   })
 
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {
@@ -82,12 +88,12 @@ describe('OrchestratorPane three-state UI (M5.4)', () => {
     const { onStart, onStop, onRestart } = renderPane({ kind: 'failed', error: errorMessage })
 
     expect(screen.getByTestId('orchestrator-failed-body')).toBeInTheDocument()
-    expect(screen.getByTestId('orchestrator-failed-error')).toHaveTextContent(errorMessage)
+    expect(screen.getByTestId('empty-state-description')).toHaveTextContent(errorMessage)
     // Both Retry CTAs (header + body) must dispatch onRestart so the user can
     // recover from either entry point.
-    expect(screen.getByTestId('orchestrator-retry-header')).toHaveTextContent('↻ Retry')
+    expect(screen.getByTestId('orchestrator-retry-header')).toHaveTextContent('Retry')
     const retryBody = screen.getByTestId('orchestrator-retry')
-    expect(retryBody).toHaveTextContent('↻ Retry')
+    expect(retryBody).toHaveTextContent('Retry')
 
     // Idle body must NOT show in failed state — failed path is a hard-fail UX.
     expect(screen.queryByTestId('orchestrator-idle-body')).toBeNull()
