@@ -61,15 +61,21 @@ describe('app shell with real server', () => {
     await waitFor(() => {
       expect(screen.getByTestId('confirm-workspace-dialog')).toBeInTheDocument()
     })
-    expect(screen.getByRole('dialog', { name: 'Confirm workspace' })).toBeInTheDocument()
+    // Radix Dialog labels itself via Dialog.Title — now 'Add workspace'.
+    expect(screen.getByRole('dialog', { name: 'Add workspace' })).toBeInTheDocument()
     expect(screen.getByTestId('confirm-workspace-create')).toBeInTheDocument()
     expect(screen.queryByTestId('add-workspace-dialog')).toBeNull()
 
-    const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
+    // Radix Dialog locks the rest of the tree (aria-hidden) — query with
+    // `hidden: true` so testing-library traverses past the inert node.
+    const sidebar = screen.getByRole('complementary', {
+      name: 'Workspace sidebar',
+      hidden: true,
+    })
     expect(sidebar).toHaveClass('w-56')
     expect(sidebar.closest('.h-screen')).toBeInTheDocument()
 
-    expect(screen.getByRole('contentinfo')).toHaveClass('h-6')
+    expect(screen.getByRole('contentinfo', { hidden: true })).toHaveClass('h-6')
   })
 
   test('workspace sidebar can collapse to a narrow rail and expand again', async () => {

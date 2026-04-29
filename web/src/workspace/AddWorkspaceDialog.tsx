@@ -1,8 +1,11 @@
+import * as Dialog from '@radix-ui/react-dialog'
+import { AlertTriangle, FolderSearch } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { type FsProbeResponse, pickFolder } from '../api.js'
+import { type CommandPreset, type FsProbeResponse, listCommandPresets, pickFolder } from '../api.js'
 import { ConfirmWorkspaceDialog } from './ConfirmWorkspaceDialog.js'
 import { ServerBrowseDialog } from './ServerBrowseDialog.js'
+import type { WorkspaceCreateInput } from './workspace-create-input.js'
 
 type AddWorkspaceDialogProps = {
   /**
@@ -11,7 +14,7 @@ type AddWorkspaceDialogProps = {
    */
   trigger: number
   onClose: () => void
-  onCreate: (input: { name: string; path: string }) => void
+  onCreate: (input: WorkspaceCreateInput) => void
 }
 
 type Stage =
@@ -21,8 +24,18 @@ type Stage =
   | { kind: 'browse' }
   | { kind: 'error'; message: string }
 
+const DEFAULT_COMMAND_PRESET_ID = 'claude'
+
+const chooseDefaultCommandPresetId = (presets: CommandPreset[]) =>
+  presets.some((preset) => preset.id === DEFAULT_COMMAND_PRESET_ID)
+    ? DEFAULT_COMMAND_PRESET_ID
+    : (presets[0]?.id ?? DEFAULT_COMMAND_PRESET_ID)
+
 export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceDialogProps) => {
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
+  const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
+  const [commandPresetId, setCommandPresetId] = useState(DEFAULT_COMMAND_PRESET_ID)
+  const [commandPresetError, setCommandPresetError] = useState<string | null>(null)
   // Keep the latest onClose in a ref so the pick effect can depend only on
   // `trigger`. If we listed onClose in the deps array, a fresh inline lambda
   // from the parent (which is the normal React pattern) would re-fire the
@@ -35,6 +48,23 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
   useEffect(() => {
     if (trigger === 0) return
     let cancelled = false
+    setCommandPresetError(null)
+    void listCommandPresets()
+      .then((presets) => {
+        if (cancelled) return
+        setCommandPresets(presets)
+        setCommandPresetId((current) =>
+          presets.some((preset) => preset.id === current)
+            ? current
+            : chooseDefaultCommandPresetId(presets)
+        )
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCommandPresets([])
+        setCommandPresetId(DEFAULT_COMMAND_PRESET_ID)
+        setCommandPresetError('Failed to load CLI presets; using server default.')
+      })
     setStage({ kind: 'picking' })
     pickFolder()
       .then((result) => {
@@ -77,7 +107,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     onClose()
   }
 
-  const handleCreate = (input: { name: string; path: string }) => {
+  const handleCreate = (input: WorkspaceCreateInput) => {
     setStage({ kind: 'idle' })
     onCreate(input)
   }
@@ -85,71 +115,112 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
   if (stage.kind === 'idle') return null
   if (stage.kind === 'picking') {
     return (
-      <div
-        className="fixed inset-0 z-40 flex items-center justify-center"
-        data-testid="add-workspace-picking"
-      >
-        <div className="modal-backdrop absolute inset-0" />
-        <div
-          role="status"
-          className="relative rounded-lg border px-4 py-3 text-xs text-ter shadow-xl"
-          style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}
-        >
-          Opening system folder picker…
-        </div>
-      </div>
+      <Dialog.Root open>
+        <Dialog.Portal>
+          <Dialog.Overlay
+            className="fixed inset-0 z-40"
+            style={{ background: 'var(--bg-overlay)' }}
+          />
+          <Dialog.Content
+            data-testid="add-workspace-picking"
+            aria-describedby={undefined}
+            className="fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
+            style={{
+              background: 'var(--bg-elevated)',
+              borderColor: 'var(--border-bright)',
+              boxShadow: 'var(--shadow-elev-2)',
+            }}
+          >
+            <Dialog.Title className="sr-only">Opening folder picker</Dialog.Title>
+            <div className="flex items-center gap-3">
+              <FolderSearch
+                size={18}
+                aria-hidden
+                className="animate-pulse"
+                style={{ color: 'var(--accent)' }}
+              />
+              <span className="text-sm text-pri">Opening system folder picker…</span>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     )
   }
   if (stage.kind === 'error') {
     return (
-      <div
-        className="fixed inset-0 z-40 flex items-center justify-center"
-        data-testid="add-workspace-error"
-      >
-        <button
-          type="button"
-          aria-label="Dismiss error"
-          onClick={handleCancel}
-          className="modal-backdrop absolute inset-0"
-        />
-        <div
-          role="alertdialog"
-          aria-modal="true"
-          aria-label="Folder picker error"
-          className="relative flex w-[420px] flex-col gap-3 rounded-lg border p-4 shadow-2xl"
-          style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}
-        >
-          <p className="text-sm text-pri">Folder picker failed</p>
-          <p className="text-xs text-ter">{stage.message}</p>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="rounded px-3 py-1.5 text-xs text-sec hover:bg-3 hover:text-pri"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={() => setStage({ kind: 'confirm', probe: null, pasteDefault: true })}
-              className="rounded px-3 py-1.5 text-xs text-white hover:opacity-90"
-              style={{ background: 'var(--accent)' }}
-            >
-              Paste path instead
-            </button>
-          </div>
-        </div>
-      </div>
+      <Dialog.Root open onOpenChange={(open) => !open && handleCancel()}>
+        <Dialog.Portal>
+          <Dialog.Overlay
+            className="fixed inset-0 z-40"
+            style={{ background: 'var(--bg-overlay)' }}
+          />
+          <Dialog.Content
+            data-testid="add-workspace-error"
+            className="fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
+            style={{
+              background: 'var(--bg-elevated)',
+              borderColor: 'var(--border-bright)',
+              boxShadow: 'var(--shadow-elev-2)',
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                style={{
+                  background: 'color-mix(in oklab, var(--status-red) 14%, transparent)',
+                  color: 'var(--status-red)',
+                }}
+              >
+                <AlertTriangle size={18} aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <Dialog.Title className="text-md font-medium text-pri">
+                  Folder picker failed
+                </Dialog.Title>
+                <Dialog.Description className="mt-1.5 break-words text-[12px] leading-snug text-ter">
+                  {stage.message}
+                </Dialog.Description>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={handleCancel} className="icon-btn">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => setStage({ kind: 'confirm', probe: null, pasteDefault: true })}
+                className="icon-btn icon-btn--primary"
+              >
+                Paste path instead
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     )
   }
   if (stage.kind === 'browse') {
-    return <ServerBrowseDialog open onClose={handleCancel} onCreate={handleCreate} />
+    return (
+      <ServerBrowseDialog
+        commandPresetError={commandPresetError}
+        commandPresetId={commandPresetId}
+        commandPresets={commandPresets}
+        onClose={handleCancel}
+        onCommandPresetChange={setCommandPresetId}
+        onCreate={handleCreate}
+        open
+      />
+    )
   }
   return (
     <ConfirmWorkspaceDialog
+      commandPresetError={commandPresetError}
+      commandPresetId={commandPresetId}
+      commandPresets={commandPresets}
       pasteFallbackDefault={stage.pasteDefault}
       probe={stage.probe}
       onCancel={handleCancel}
+      onCommandPresetChange={setCommandPresetId}
       onCreate={handleCreate}
       onOpenServerBrowse={() => setStage({ kind: 'browse' })}
     />

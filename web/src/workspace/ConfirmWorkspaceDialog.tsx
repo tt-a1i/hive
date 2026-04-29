@@ -1,24 +1,39 @@
-import { Folder } from 'lucide-react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { ChevronDown, ChevronRight, Folder, GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-import type { FsProbeResponse } from '../api.js'
+import type { CommandPreset, FsProbeResponse } from '../api.js'
+import { WorkspaceCommandPresetSelect } from './WorkspaceCommandPresetSelect.js'
+import type { WorkspaceCreateInput } from './workspace-create-input.js'
 
 type ConfirmWorkspaceDialogProps = {
   /** Probe result for the picked folder, or null when user chose the paste-path fallback. */
   probe: FsProbeResponse | null
   /** When true, the paste-path fallback section is expanded by default (unsupported platform). */
   pasteFallbackDefault?: boolean
+  commandPresetError: string | null
+  commandPresetId: string
+  commandPresets: CommandPreset[]
   onCancel: () => void
-  onCreate: (input: { name: string; path: string }) => void
+  onCommandPresetChange: (value: string) => void
+  onCreate: (input: WorkspaceCreateInput) => void
   onOpenServerBrowse: () => void
 }
 
 const basenameOf = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? ''
 
+const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+  <span className="text-[10px] font-medium uppercase tracking-wider text-ter">{children}</span>
+)
+
 export const ConfirmWorkspaceDialog = ({
   probe,
   pasteFallbackDefault = false,
+  commandPresetError,
+  commandPresetId,
+  commandPresets,
   onCancel,
+  onCommandPresetChange,
   onCreate,
   onOpenServerBrowse,
 }: ConfirmWorkspaceDialogProps) => {
@@ -39,138 +54,169 @@ export const ConfirmWorkspaceDialog = ({
 
   const handleCreate = () => {
     if (!canCreate) return
-    onCreate({ name: name.trim(), path: resolvedPath })
+    onCreate({ commandPresetId: commandPresetId || null, name: name.trim(), path: resolvedPath })
   }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center"
-      data-testid="confirm-workspace-dialog"
-    >
-      <button
-        type="button"
-        aria-label="Close add workspace"
-        onClick={onCancel}
-        className="modal-backdrop absolute inset-0"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Confirm workspace"
-        className="relative flex w-[460px] max-w-[90vw] flex-col rounded-lg border shadow-2xl"
-        style={{ background: 'var(--bg-2)', borderColor: 'var(--border)' }}
-      >
-        <div
-          className="flex items-center gap-2 border-b px-4 py-3"
-          style={{ borderColor: 'var(--border)' }}
+    <Dialog.Root open onOpenChange={(open) => !open && onCancel()}>
+      <Dialog.Portal>
+        <Dialog.Overlay
+          data-testid="confirm-workspace-overlay"
+          className="fixed inset-0 z-40"
+          style={{ background: 'var(--bg-overlay)' }}
+        />
+        <Dialog.Content
+          data-testid="confirm-workspace-dialog"
+          className="fixed top-1/2 left-1/2 z-50 flex w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border"
+          style={{
+            background: 'var(--bg-elevated)',
+            borderColor: 'var(--border-bright)',
+            boxShadow: 'var(--shadow-elev-2)',
+          }}
         >
-          <Folder size={16} aria-hidden className="text-sec" />
-          <h2 className="font-medium text-pri">Add workspace</h2>
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Close dialog"
-            className="px-2 text-lg leading-none text-sec hover:text-pri"
+          <div
+            className="flex items-center gap-3 border-b px-5 py-4"
+            style={{ borderColor: 'var(--border)' }}
           >
-            ×
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3 p-4">
-          <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-ter">
-            Path
-            <input
-              readOnly
-              value={probe?.path ?? ''}
-              placeholder="(no folder picked — use paste path below)"
-              className="mono rounded border px-2 py-1.5 text-sm text-pri"
-              style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
-              data-testid="confirm-workspace-path"
-            />
-          </label>
-
-          {probe?.is_git_repository ? (
             <div
-              className="flex items-center gap-2 text-[11px]"
-              data-testid="confirm-workspace-git-badge"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+              style={{
+                background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                color: 'var(--accent)',
+              }}
             >
-              <span className="role-badge role-badge--coder" style={{ fontSize: '9px' }}>
-                git · {probe.current_branch ?? 'detached'}
-              </span>
-              <span className="text-ter">Git repo detected</span>
+              <Folder size={18} aria-hidden />
             </div>
-          ) : probe?.ok ? (
-            <span className="text-[11px] text-ter">No git repository at this path.</span>
-          ) : null}
+            <div className="min-w-0 flex-1">
+              <Dialog.Title className="text-md font-medium text-pri">Add workspace</Dialog.Title>
+              <Dialog.Description className="text-[11px] text-ter">
+                Hive will load <span className="mono">tasks.md</span> and start the Orchestrator
+                here.
+              </Dialog.Description>
+            </div>
+          </div>
 
-          <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-ter">
-            Workspace name
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="mono rounded border px-2 py-1.5 text-sm text-pri"
-              style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
-              data-testid="confirm-workspace-name"
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={() => setPasteExpanded((v) => !v)}
-            className="text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
-            data-testid="confirm-workspace-paste-toggle"
-          >
-            {pasteExpanded ? '▾ Advanced: paste path' : '▸ Advanced: paste path'}
-          </button>
-          {pasteExpanded ? (
-            <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-ter">
-              Absolute path
+          <div className="flex flex-col gap-4 px-5 py-4">
+            <label className="flex flex-col gap-1.5">
+              <FieldLabel>Path</FieldLabel>
               <input
-                type="text"
-                value={pastePath}
-                onChange={(event) => setPastePath(event.target.value)}
-                placeholder="/absolute/path"
-                className="mono rounded border px-2 py-1.5 text-sm text-pri"
-                style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
-                data-testid="confirm-workspace-paste-path"
+                readOnly
+                value={probe?.path ?? ''}
+                placeholder="(no folder picked — use paste path below)"
+                className="mono rounded-md border px-3 py-2 text-sm text-pri outline-none"
+                style={{
+                  background: 'var(--bg-1)',
+                  borderColor: 'var(--border-bright)',
+                }}
+                data-testid="confirm-workspace-path"
               />
             </label>
-          ) : null}
 
-          <button
-            type="button"
-            onClick={onOpenServerBrowse}
-            className="text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
-            data-testid="confirm-workspace-browse-toggle"
-          >
-            ▸ Advanced: browse server filesystem
-          </button>
-        </div>
+            {probe?.is_git_repository ? (
+              <div
+                className="flex items-center gap-2 text-[11px]"
+                data-testid="confirm-workspace-git-badge"
+              >
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium"
+                  style={{
+                    background: 'color-mix(in oklab, var(--status-blue) 12%, transparent)',
+                    color: 'var(--status-blue)',
+                    border: '1px solid color-mix(in oklab, var(--status-blue) 30%, transparent)',
+                  }}
+                >
+                  <GitBranch size={11} aria-hidden />
+                  {probe.current_branch ?? 'detached'}
+                </span>
+                <span className="text-ter">git repository detected</span>
+              </div>
+            ) : probe?.ok ? (
+              <span className="text-[11px] text-ter">No git repository at this path.</span>
+            ) : null}
 
-        <div
-          className="flex items-center justify-end gap-2 border-t px-4 py-3"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-sec hover:bg-3 hover:text-pri"
+            <label className="flex flex-col gap-1.5">
+              <FieldLabel>Workspace name</FieldLabel>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder={basenameOf(probe?.path ?? '') || 'my-project'}
+                className="rounded-md border px-3 py-2 text-sm text-pri outline-none"
+                style={{
+                  background: 'var(--bg-1)',
+                  borderColor: 'var(--border-bright)',
+                }}
+                data-testid="confirm-workspace-name"
+              />
+            </label>
+
+            <WorkspaceCommandPresetSelect
+              error={commandPresetError}
+              onChange={onCommandPresetChange}
+              presets={commandPresets}
+              value={commandPresetId}
+            />
+
+            <button
+              type="button"
+              onClick={() => setPasteExpanded((v) => !v)}
+              className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+              data-testid="confirm-workspace-paste-toggle"
+            >
+              {pasteExpanded ? (
+                <ChevronDown size={11} aria-hidden />
+              ) : (
+                <ChevronRight size={11} aria-hidden />
+              )}
+              Advanced: paste path
+            </button>
+            {pasteExpanded ? (
+              <label className="flex flex-col gap-1.5">
+                <FieldLabel>Absolute path</FieldLabel>
+                <input
+                  type="text"
+                  value={pastePath}
+                  onChange={(event) => setPastePath(event.target.value)}
+                  placeholder="/absolute/path"
+                  className="mono rounded-md border px-3 py-2 text-sm text-pri outline-none"
+                  style={{
+                    background: 'var(--bg-1)',
+                    borderColor: 'var(--border-bright)',
+                  }}
+                  data-testid="confirm-workspace-paste-path"
+                />
+              </label>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={onOpenServerBrowse}
+              className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+              data-testid="confirm-workspace-browse-toggle"
+            >
+              <ChevronRight size={11} aria-hidden />
+              Advanced: browse server filesystem
+            </button>
+          </div>
+
+          <div
+            className="flex items-center justify-end gap-2 border-t px-5 py-3"
+            style={{ borderColor: 'var(--border)' }}
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={!canCreate}
-            data-testid="confirm-workspace-create"
-            className="rounded px-4 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-40"
-            style={{ background: 'var(--accent)' }}
-          >
-            Create Workspace
-          </button>
-        </div>
-      </div>
-    </div>
+            <button type="button" onClick={onCancel} className="icon-btn">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!canCreate}
+              data-testid="confirm-workspace-create"
+              className="icon-btn icon-btn--primary"
+            >
+              Create workspace
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
