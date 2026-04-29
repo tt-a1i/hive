@@ -15,13 +15,7 @@ describe('EmptyState', () => {
   })
 
   test('renders icon slot when provided', () => {
-    render(
-      <EmptyState
-        title="t"
-        description="d"
-        icon={<svg data-testid="custom-icon" />}
-      />
-    )
+    render(<EmptyState title="t" description="d" icon={<svg data-testid="custom-icon" />} />)
     expect(screen.getByTestId('custom-icon')).toBeInTheDocument()
   })
 

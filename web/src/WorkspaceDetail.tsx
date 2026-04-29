@@ -62,7 +62,8 @@ export const WorkspaceDetail = ({
 
   // Surface composer / delete errors as toasts instead of inline alert bands.
   useEffect(() => {
-    if (composer.createWorkerError) toast.show({ kind: 'error', message: composer.createWorkerError })
+    if (composer.createWorkerError)
+      toast.show({ kind: 'error', message: composer.createWorkerError })
   }, [composer.createWorkerError, toast])
 
   useEffect(() => {

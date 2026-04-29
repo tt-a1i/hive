@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 export type ToastKind = 'success' | 'warning' | 'error'
 
@@ -30,8 +30,7 @@ const defaultDuration = (kind: ToastKind): number => {
   return 0
 }
 
-const generateId = () =>
-  `t-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`
+const generateId = () => `t-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastEntry[]>([])
@@ -68,9 +67,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  return (
-    <ToastContext.Provider value={{ show, dismiss, toasts }}>{children}</ToastContext.Provider>
-  )
+  return <ToastContext.Provider value={{ show, dismiss, toasts }}>{children}</ToastContext.Provider>
 }
 
 export const useToast = (): ToastApi => {
