@@ -396,7 +396,9 @@ html, body {
   background: var(--bg-2);
 }
 
-/* Modal backdrop */
+/* Deprecated — kept only for compat; prefer `var(--bg-overlay)` on a
+   <Dialog.Overlay> element. M6-A migrated all known callers; remove this
+   class in M6-D收口 once external code (if any) is verified. */
 .modal-backdrop {
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--bg-overlay);
 }
