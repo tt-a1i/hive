@@ -80,17 +80,16 @@ describe('workspace flow with real server', () => {
     // sub-header was removed in M6-A polish. Assert the orchestrator slot
     // mounted as the canonical "workspace canvas is loaded" signal.
     expect(screen.getByTestId('orchestrator-terminal-slot')).toBeInTheDocument()
-    // After autostart the pane should land in the running state (Stop CTA in
-    // the header + a PTY slot ready for TerminalView to portal into). Polling
-    // for terminal runs is on a 500ms interval so we wait a bit.
+    // After autostart the pane should land in the running state — PTY slot
+    // mounted, idle/failed bodies absent. Stop/Restart actions are no longer
+    // surfaced inline (M6-B palette will own them); the only running-state
+    // signal is the data-pty-slot element. Polling is 500ms; allow time.
     await waitFor(
       () => {
-        expect(screen.getByTestId('orchestrator-stop')).toBeInTheDocument()
+        expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
       },
       { timeout: 3000 }
     )
-    expect(screen.getByTestId('orchestrator-restart')).toBeInTheDocument()
-    expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
     expect(screen.queryByTestId('orchestrator-idle-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
