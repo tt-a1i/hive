@@ -114,7 +114,7 @@ export const WorkerModal = ({
         <Dialog.Content
           data-testid="worker-modal"
           aria-label={`${worker.name} detail`}
-          className="elev-2 fixed inset-y-0 right-0 z-50 flex w-[860px] max-w-[calc(100vw-32px)] flex-col border-l"
+          className="drawer-pop elev-2 fixed inset-y-0 right-0 z-50 flex w-[860px] max-w-[calc(100vw-32px)] flex-col border-l"
           style={{
             background: 'var(--bg-1)',
             borderColor: 'var(--border)',

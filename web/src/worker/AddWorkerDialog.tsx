@@ -56,7 +56,6 @@ const RoleCard = ({
     }}
   >
     <div className="flex w-full items-center justify-between">
-      {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role */}
       <RoleAvatar role={spec.value} size={32} />
       {active ? <Check size={14} className="text-accent" aria-hidden /> : null}
     </div>
@@ -116,7 +115,7 @@ const CustomRoleCard = ({ active, onSelect }: { active: boolean; onSelect: () =>
       border: active ? '1px solid var(--accent)' : '1px dashed var(--border-bright)',
     }}
   >
-    {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not HTML role */}
+    {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not an ARIA role */}
     <RoleAvatar role="custom" size={32} />
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
@@ -154,114 +153,116 @@ export const AddWorkerDialog = ({
           data-testid="add-worker-overlay"
           className="app-overlay fixed inset-0 z-40"
         />
-        <Dialog.Content
-          data-testid="add-worker-content"
-          className="elev-2 fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border"
-          style={{
-            background: 'var(--bg-elevated)',
-            borderColor: 'var(--border-bright)',
-          }}
-        >
-          <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
-            <div
-              className="flex items-center gap-3 border-b px-5 py-4"
-              style={{ borderColor: 'var(--border)' }}
-            >
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+          <Dialog.Content
+            data-testid="add-worker-content"
+            className="dialog-scale-pop elev-2 pointer-events-auto w-[480px] max-w-full rounded-lg border"
+            style={{
+              background: 'var(--bg-elevated)',
+              borderColor: 'var(--border-bright)',
+            }}
+          >
+            <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
               <div
-                className="flex h-9 w-9 items-center justify-center rounded-lg"
-                style={{
-                  background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
-                  color: 'var(--accent)',
-                }}
+                className="flex items-center gap-3 border-b px-5 py-4"
+                style={{ borderColor: 'var(--border)' }}
               >
-                <UserPlus size={18} aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-md font-medium text-pri">
-                  Add team member
-                </Dialog.Title>
-                <Dialog.Description className="text-[11px] text-ter">
-                  Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
-                  <span className="mono">team send</span>.
-                </Dialog.Description>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4 px-5 py-4">
-              <label className="flex flex-col gap-1.5">
-                <FieldLabel>Name</FieldLabel>
-                <input
-                  value={workerName}
-                  onChange={(event) => onNameChange(event.target.value)}
-                  placeholder="e.g. Alice"
-                  className="rounded-md border px-3 py-2 text-sm text-pri outline-none transition-colors"
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg"
                   style={{
-                    background: 'var(--bg-1)',
-                    borderColor: 'var(--border-bright)',
+                    background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
+                    color: 'var(--accent)',
                   }}
-                />
-              </label>
-
-              <div className="flex flex-col gap-2">
-                <FieldLabel>Role</FieldLabel>
-                <div className="grid grid-cols-3 gap-2">
-                  {PRIMARY_ROLES.map((spec) => (
-                    <RoleCard
-                      key={spec.value}
-                      active={workerRole === spec.value}
-                      spec={spec}
-                      onSelect={() => onRoleChange(spec.value)}
-                    />
-                  ))}
+                >
+                  <UserPlus size={18} aria-hidden />
                 </div>
-                <CustomRoleCard
-                  active={workerRole === 'custom'}
-                  onSelect={() => onRoleChange('custom')}
-                />
+                <div className="min-w-0 flex-1">
+                  <Dialog.Title className="text-md font-medium text-pri">
+                    Add team member
+                  </Dialog.Title>
+                  <Dialog.Description className="text-[11px] text-ter">
+                    Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
+                    <span className="mono">team send</span>.
+                  </Dialog.Description>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <FieldLabel>Agent CLI</FieldLabel>
-                {commandPresets.length === 0 ? (
-                  <div className="text-[11px] text-ter">Loading presets…</div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {commandPresets.map((preset) => (
-                      <AgentRadio
-                        key={preset.id}
-                        active={commandPresetId === preset.id}
-                        preset={preset}
-                        onSelect={() => onPresetChange(preset.id)}
+              <div className="flex flex-col gap-4 px-5 py-4">
+                <label className="flex flex-col gap-1.5">
+                  <FieldLabel>Name</FieldLabel>
+                  <input
+                    value={workerName}
+                    onChange={(event) => onNameChange(event.target.value)}
+                    placeholder="e.g. Alice"
+                    className="rounded-md border px-3 py-2 text-sm text-pri outline-none transition-colors"
+                    style={{
+                      background: 'var(--bg-1)',
+                      borderColor: 'var(--border-bright)',
+                    }}
+                  />
+                </label>
+
+                <div className="flex flex-col gap-2">
+                  <FieldLabel>Role</FieldLabel>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRIMARY_ROLES.map((spec) => (
+                      <RoleCard
+                        key={spec.value}
+                        active={workerRole === spec.value}
+                        spec={spec}
+                        onSelect={() => onRoleChange(spec.value)}
                       />
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
+                  <CustomRoleCard
+                    active={workerRole === 'custom'}
+                    onSelect={() => onRoleChange('custom')}
+                  />
+                </div>
 
-            <div
-              className="flex items-center justify-end gap-2 border-t px-5 py-3"
-              style={{ borderColor: 'var(--border)' }}
-            >
-              <button
-                type="button"
-                onClick={onClose}
-                className="icon-btn"
-                data-testid="add-worker-cancel"
+                <div className="flex flex-col gap-2">
+                  <FieldLabel>Agent CLI</FieldLabel>
+                  {commandPresets.length === 0 ? (
+                    <div className="text-[11px] text-ter">Loading presets…</div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      {commandPresets.map((preset) => (
+                        <AgentRadio
+                          key={preset.id}
+                          active={commandPresetId === preset.id}
+                          preset={preset}
+                          onSelect={() => onPresetChange(preset.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="flex items-center justify-end gap-2 border-t px-5 py-3"
+                style={{ borderColor: 'var(--border)' }}
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creating || !workerName.trim() || !commandPresetId}
-                className="icon-btn icon-btn--primary"
-                data-testid="add-worker-submit"
-              >
-                {creating ? 'Creating…' : 'Add member'}
-              </button>
-            </div>
-          </form>
-        </Dialog.Content>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="icon-btn"
+                  data-testid="add-worker-cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating || !workerName.trim() || !commandPresetId}
+                  className="icon-btn icon-btn--primary"
+                  data-testid="add-worker-submit"
+                >
+                  {creating ? 'Creating…' : 'Add member'}
+                </button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </div>
       </Dialog.Portal>
     </Dialog.Root>
   )

@@ -1,4 +1,19 @@
+import { X } from 'lucide-react'
+
+import type { ToastKind } from './useToast.js'
 import { useToast, useToastList } from './useToast.js'
+
+const dotClassByKind: Record<ToastKind, string> = {
+  success: 'status-dot status-dot--working',
+  warning: 'status-dot status-dot--queued',
+  error: 'status-dot status-dot--stopped',
+}
+
+const accentByKind: Record<ToastKind, string> = {
+  success: 'var(--status-green)',
+  warning: 'var(--status-orange)',
+  error: 'var(--status-red)',
+}
 
 export const Toaster = () => {
   const toasts = useToastList()
@@ -16,39 +31,24 @@ export const Toaster = () => {
           key={toast.id}
           data-testid="toast"
           data-kind={toast.kind}
-          className="pointer-events-auto flex min-w-[260px] max-w-[400px] items-start gap-3 rounded-lg border px-3 py-2"
+          className="elev-2 toast-pop pointer-events-auto flex min-w-[260px] max-w-[400px] items-start gap-3 rounded-lg border px-3 py-2.5"
           style={{
             background: 'var(--bg-elevated)',
-            borderColor:
-              toast.kind === 'error'
-                ? 'color-mix(in oklab, var(--status-red) 35%, var(--border))'
-                : toast.kind === 'warning'
-                  ? 'color-mix(in oklab, var(--status-orange) 35%, var(--border))'
-                  : 'color-mix(in oklab, var(--status-green) 35%, var(--border))',
-            boxShadow: 'var(--shadow-elev-2)',
+            borderColor: `color-mix(in oklab, ${accentByKind[toast.kind]} 35%, var(--border))`,
           }}
         >
-          <span
-            className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full"
-            style={{
-              background:
-                toast.kind === 'error'
-                  ? 'var(--status-red)'
-                  : toast.kind === 'warning'
-                    ? 'var(--status-orange)'
-                    : 'var(--status-green)',
-            }}
-            aria-hidden
-          />
-          <div className="min-w-0 flex-1 break-words text-sm text-pri">{toast.message}</div>
+          <span className={`mt-1 ${dotClassByKind[toast.kind]}`} aria-hidden />
+          <div className="min-w-0 flex-1 break-words text-sm leading-relaxed text-pri">
+            {toast.message}
+          </div>
           <button
             type="button"
             data-testid="toast-close"
             onClick={() => dismiss(toast.id)}
-            className="rounded p-0.5 text-ter hover:text-pri"
+            className="-mt-0.5 -mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-ter transition-colors hover:bg-3 hover:text-pri"
             aria-label="Dismiss"
           >
-            ×
+            <X size={13} aria-hidden />
           </button>
         </div>
       ))}

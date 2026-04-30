@@ -74,7 +74,7 @@ export const ServerBrowseDialog = ({
         />
         <Dialog.Content
           data-testid="add-workspace-dialog"
-          className="elev-2 fixed top-1/2 left-1/2 z-50 flex w-[760px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border"
+          className="dialog-pop elev-2 fixed top-1/2 left-1/2 z-50 flex w-[760px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border"
           style={{
             height: '600px',
             maxHeight: 'calc(100vh - 32px)',

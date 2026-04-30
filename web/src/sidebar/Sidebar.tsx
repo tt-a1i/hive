@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
@@ -127,15 +127,7 @@ export const Sidebar = ({
                   aria-label={`Delete workspace ${workspace.name}`}
                   title={`Delete workspace ${workspace.name}`}
                   onClick={() => requestDelete(workspace)}
-                  className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
-                  style={{ background: 'transparent' }}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.background =
-                      'color-mix(in oklab, var(--status-red) 14%, transparent)'
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.background = 'transparent'
-                  }}
+                  className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
                 >
                   <Trash2 size={13} aria-hidden />
                 </button>
@@ -148,12 +140,10 @@ export const Sidebar = ({
         type="button"
         onClick={onCreateClick}
         aria-label="New workspace"
-        className="m-2 flex items-center justify-center gap-1.5 rounded border border-dashed px-3 py-2 text-xs text-sec hover:bg-3 hover:text-pri"
-        style={{ borderColor: 'var(--border)' }}
+        className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors"
+        style={{ borderColor: 'var(--border-bright)' }}
       >
-        <span className="text-base leading-none" aria-hidden>
-          +
-        </span>
+        <Plus size={13} aria-hidden />
         Add Workspace
       </button>
 

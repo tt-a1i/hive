@@ -72,6 +72,10 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
         // User canceled the native dialog — dismiss silently without showing
         // any additional UI. This mirrors how macOS Finder handles cancel.
         if (result.canceled) {
+          if (result.error) {
+            setStage({ kind: 'error', message: result.error })
+            return
+          }
           setStage({ kind: 'idle' })
           onCloseRef.current()
           return
@@ -121,7 +125,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
           <Dialog.Content
             data-testid="add-workspace-picking"
             aria-describedby={undefined}
-            className="elev-2 fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
+            className="dialog-pop elev-2 fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
@@ -149,7 +153,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
           <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
           <Dialog.Content
             data-testid="add-workspace-error"
-            className="elev-2 fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
+            className="dialog-pop elev-2 fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',

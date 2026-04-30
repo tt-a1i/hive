@@ -21,6 +21,7 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
   const role = getRolePresentation(worker.role)
   const status = presentWorkerStatus(worker)
   const queue = presentWorkerQueue(worker)
+  const stripe = roleStripeColor[worker.role]
   return (
     <button
       type="button"
@@ -30,33 +31,36 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
       data-testid={`worker-card-${worker.id}`}
       data-status={status.kind}
     >
-      {/* Role-color left stripe — gives each card a visual identity tied to role. */}
+      {/* Role-color left stripe — gradient falloff + right-side soft glow so
+          the role tint reads as light leaking into the card, not a hard bar. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-0 w-[3px]"
-        style={{ background: roleStripeColor[worker.role] }}
+        className="absolute inset-y-0 left-0 w-[2px]"
+        style={{
+          background: `linear-gradient(180deg, ${stripe} 0%, color-mix(in oklab, ${stripe} 55%, transparent) 100%)`,
+          boxShadow: `2px 0 10px -2px color-mix(in oklab, ${stripe} 35%, transparent)`,
+        }}
       />
 
-      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-        <RoleAvatar role={worker.role} size={40} statusRing={status.kind} />
+      <div className="flex items-start gap-3 px-4 py-3.5">
+        <RoleAvatar role={worker.role} size={36} statusRing={status.kind} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-pri">{worker.name}</span>
             <span className={`role-badge ${role.badgeClass}`}>{role.label}</span>
+            <span className="mono shrink-0 text-[10px] text-ter" title={`agent id ${worker.id}`}>
+              {shortId(worker.id)}
+            </span>
           </div>
-          <div
-            className={`mt-1.5 inline-flex items-center gap-1.5 text-[11px] ${
-              status.kind === 'working'
-                ? 'text-status-green'
-                : status.kind === 'stopped'
-                  ? 'text-status-red'
-                  : 'text-ter'
-            }`}
-            role="status"
-            title={status.label}
-          >
-            <span className={status.dotClass} aria-hidden />
-            {status.label}
+          <div className="mt-2 flex items-center gap-2">
+            <span
+              className={`status-pill status-pill--${status.kind}`}
+              role="status"
+              title={status.label}
+            >
+              <span className={status.dotClass} aria-hidden />
+              {status.label}
+            </span>
           </div>
         </div>
         {queue ? (
@@ -68,19 +72,6 @@ export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
             {queue.label}
           </span>
         ) : null}
-      </div>
-
-      <div
-        className="mono flex items-center gap-3 border-t px-4 py-2 text-[10px] text-ter"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        <span title={`agent id ${worker.id}`}>
-          id <span className="text-sec">{shortId(worker.id)}</span>
-        </span>
-        <span aria-hidden>·</span>
-        <span>
-          queue <span className="text-sec">{worker.pendingTaskCount}</span>
-        </span>
       </div>
     </button>
   )

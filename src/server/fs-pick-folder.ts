@@ -2,7 +2,6 @@ import { type ExecFileOptions, execFile } from 'node:child_process'
 
 import { type FsProbeResponse, probeDirectory } from './fs-browse.js'
 
-const PICK_FOLDER_TIMEOUT_MS = 15_000
 // macOS Cocoa returns -1743 when the user clicks Cancel in `choose folder`.
 // osascript maps that to exit code 1 with the message on stderr.
 const MACOS_CANCEL_PATTERNS = [/-128/, /-1743/, /user canceled/i, /execution error/i]
@@ -85,13 +84,13 @@ const finalizeWithProbe = async (path: string): Promise<PickFolderResponse> => {
 
 const macOsPick = async (run: RunPickCommand): Promise<PickFolderResponse> => {
   const script = 'POSIX path of (choose folder with prompt "Select Hive workspace")'
-  const result = await run('osascript', ['-e', script], { timeout: PICK_FOLDER_TIMEOUT_MS })
+  const result = await run('osascript', ['-e', script], {})
 
   if (result.spawnError?.code === 'ENOENT') {
     return emptyResponse({ error: 'osascript is unavailable on this host.', supported: false })
   }
   if (result.timedOut) {
-    return emptyResponse({ canceled: true, error: 'Folder picker timed out after 15s.' })
+    return emptyResponse({ error: 'Folder picker timed out before a folder was selected.' })
   }
   const combinedStderr = result.stderr.toLowerCase()
   if (result.status !== 0) {
@@ -111,7 +110,7 @@ const linuxPick = async (run: RunPickCommand): Promise<PickFolderResponse> => {
   const result = await run(
     'zenity',
     ['--file-selection', '--directory', '--title=Select Hive workspace'],
-    { timeout: PICK_FOLDER_TIMEOUT_MS }
+    {}
   )
   if (result.spawnError?.code === 'ENOENT') {
     return emptyResponse({
@@ -120,7 +119,7 @@ const linuxPick = async (run: RunPickCommand): Promise<PickFolderResponse> => {
     })
   }
   if (result.timedOut) {
-    return emptyResponse({ canceled: true, error: 'Folder picker timed out after 15s.' })
+    return emptyResponse({ error: 'Folder picker timed out before a folder was selected.' })
   }
   if (result.status !== 0 && LINUX_CANCEL_EXIT_CODES.has(result.status ?? 0)) {
     return emptyResponse({ canceled: true })

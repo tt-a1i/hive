@@ -127,6 +127,22 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  test('canceled=true with an error keeps the flow open with paste fallback', async () => {
+    stubFetch(() => ({
+      canceled: true,
+      error: 'Folder picker timed out.',
+      path: null,
+      probe: null,
+      supported: true,
+    }))
+    const onClose = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={onClose} onCreate={() => {}} />)
+
+    const err = await screen.findByTestId('add-workspace-error')
+    expect(within(err).getByText(/timed out/)).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   test('supported=false opens ConfirmDialog with paste-path expanded by default', async () => {
     stubFetch(() => ({
       canceled: false,

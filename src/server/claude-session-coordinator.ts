@@ -69,6 +69,7 @@ export const captureSessionIdWithCoordinator = async ({
       clearPollerIfIdle(projectKey)
       resolve()
     }, timeoutMs)
+    timeout.unref?.()
     waiter = {
       knownSessionIds,
       onCapture,
@@ -83,6 +84,7 @@ export const captureSessionIdWithCoordinator = async ({
         projectKey,
         setInterval(() => flushWaiters(projectKey, listSessionIds), intervalMs)
       )
+      pollersByProjectKey.get(projectKey)?.unref?.()
     }
     flushWaiters(projectKey, listSessionIds)
   })

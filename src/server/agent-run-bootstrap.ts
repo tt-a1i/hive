@@ -22,6 +22,7 @@ const resolveHiveBinDir = () => {
 }
 
 const HIVE_BIN_DIR = resolveHiveBinDir()
+const SESSION_CAPTURE_TIMEOUT_MS = 30_000
 
 type LaunchPreset = Pick<
   CommandPresetRecord,
@@ -96,6 +97,7 @@ export const startAgentRunCapture = ({
     sessionCaptureSnapshot,
     (sessionId) => {
       sessionStore.setLastSessionId(workspace.id, agentId, sessionId)
-    }
+    },
+    SESSION_CAPTURE_TIMEOUT_MS
   )
 }

@@ -86,9 +86,13 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  /* M6 — motion */
-  --ease-out: cubic-bezier(0.16, 0.84, 0.44, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* M6 — motion (six-curve easing system) */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);          /* Linear-style entrance */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);              /* fast exit */
+  --ease-modal: cubic-bezier(0.32, 0.72, 0, 1);       /* iOS slide-over */
+  --ease-spring: cubic-bezier(0.5, 1.5, 0.5, 1);      /* completion bounce */
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1); /* Toast / success */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);      /* toggles */
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 280ms;
@@ -97,7 +101,30 @@
   --ring-focus: rgba(94, 106, 210, 0.45);
   --shadow-elev-2: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
 
+  /* M6 — three-piece card shadow (contact + key + ambient + rim highlight). */
+  --shadow-card:
+    0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.20),
+    0 8px 24px -8px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-card-hover:
+    0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent),
+    0 2px 4px rgba(0, 0, 0, 0.20),
+    0 16px 40px -12px rgba(0, 0, 0, 0.50),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
   color-scheme: dark;
+}
+
+/* Universal text rendering — UI app: tabular numerics + Inter cv11 (single-storey 1). */
+html, body {
+  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1;
+  -moz-osx-font-smoothing: grayscale;
+  caret-color: var(--accent);
+}
+::selection {
+  background: color-mix(in oklab, var(--accent) 32%, transparent);
+  color: var(--text-primary);
 }
 
 html, body {
@@ -159,6 +186,26 @@ html, body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+/* Sidebar inline delete (per-row) — hover tints with status-red wash. */
+.ws-row-delete:hover {
+  background: color-mix(in oklab, var(--status-red) 14%, transparent);
+}
+
+/* Sidebar add-workspace dashed CTA — gets accent on hover. */
+.ws-add {
+  background: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.ws-add:hover {
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
+  color: var(--text-primary);
+}
+
 /* Status dot — neutral baseline used by sidebar / inline indicators */
 .dot {
   display: inline-block;
@@ -175,7 +222,8 @@ html, body {
 }
 
 /* Status dot — typed (spec §3.6 + §3.6.4). One token per kind so colors stay
-   stable across cards / sidebar / sub-header. */
+   stable across cards / sidebar / sub-header. Working/queued get a soft
+   ripple via animated box-shadow expansion (1.8s — slow reads as premium). */
 .status-dot {
   display: inline-block;
   width: 8px;
@@ -183,11 +231,11 @@ html, body {
   border-radius: 50%;
   vertical-align: middle;
   flex-shrink: 0;
+  transition: background var(--dur-base) var(--ease-out);
 }
 .status-dot--working {
   background: var(--status-green);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-green) 22%, transparent);
-  animation: hive-pulse 1.6s ease-in-out infinite;
+  animation: hive-ripple-green 1.8s var(--ease-in-out) infinite;
 }
 .status-dot--idle {
   background: var(--text-tertiary);
@@ -195,13 +243,24 @@ html, body {
 }
 .status-dot--queued {
   background: var(--status-orange);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-orange) 22%, transparent);
-  animation: hive-pulse 1.6s ease-in-out infinite;
+  animation: hive-ripple-orange 1.8s var(--ease-in-out) infinite;
 }
 .status-dot--stopped {
   background: var(--status-red);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--status-red) 22%, transparent);
   opacity: 0.85;
+}
+@keyframes hive-ripple-green {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-green) 22%, transparent); }
+  50%      { box-shadow: 0 0 0 7px color-mix(in oklab, var(--status-green) 6%, transparent); }
+}
+@keyframes hive-ripple-orange {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-orange) 22%, transparent); }
+  50%      { box-shadow: 0 0 0 7px color-mix(in oklab, var(--status-orange) 6%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot--working,
+  .status-dot--queued { animation: none; }
 }
 
 /* Status pill — used inline in cards / headers next to a label */
@@ -311,28 +370,31 @@ html, body {
   color: var(--status-red);
 }
 
-/* Worker card */
+/* Worker card — three-piece shadow + 1px lift on hover.
+   The lift is what separates "designed" from "drawn"; pair with the bigger
+   ambient shadow so the card feels genuinely elevated, not just outlined. */
 .card {
+  position: relative;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  /* Inner top highlight + subtle drop shadow → real elevation in dark UI. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-card);
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    border-color var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
 }
 .card--interactive { cursor: pointer; }
 .card--interactive:hover {
+  transform: translateY(-1px);
   border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
   background: color-mix(in oklab, var(--accent) 4%, var(--bg-2));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent),
-    0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-card-hover);
+}
+.card--interactive:active { transform: translateY(0); transition-duration: 80ms; }
+@media (prefers-reduced-motion: reduce) {
+  .card--interactive:hover { transform: none; }
 }
 
 /* Role badges */
@@ -491,4 +553,151 @@ html, body {
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 12px 28px rgba(0, 0, 0, 0.45),
     0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Canonical text input — replaces inline rounded-md/border/px-3/py-2 across
+   dialogs. Includes a proper focus-visible ring (was missing everywhere). */
+.input {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-1);
+  border: 1px solid var(--border-bright);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.input::placeholder { color: var(--text-tertiary); }
+.input:hover:not(:focus) { border-color: var(--text-tertiary); }
+.input:focus-visible {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.25),
+    0 0 0 3px var(--ring-focus);
+}
+.input--readonly { background: var(--bg-0); color: var(--text-secondary); cursor: default; }
+
+/* Dialog open/close choreography — radix sets [data-state] on Overlay and
+   Content. Three flavors so animations don't fight each layout family:
+     • .dialog-pop  — centered dialogs (top-1/2 left-1/2 -translate-x/y-1/2),
+                      scale + opacity around their existing translate.
+     • .dialog-scale-pop — dialogs centered by an outer grid layer; scale only.
+     • .drawer-pop  — side panels (inset-y-0 right-0), slide in from right. */
+@keyframes dialog-overlay-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes dialog-pop-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes dialog-pop-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+}
+@keyframes dialog-scale-pop-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes dialog-scale-pop-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.97); }
+}
+@keyframes drawer-pop-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes drawer-pop-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(24px); }
+}
+.app-overlay[data-state="open"]  { animation: dialog-overlay-in 180ms var(--ease-out); }
+.app-overlay[data-state="closed"] { animation: dialog-overlay-out 140ms var(--ease-in); }
+.dialog-pop[data-state="open"]   { animation: dialog-pop-in 200ms var(--ease-out) both; }
+.dialog-pop[data-state="closed"] { animation: dialog-pop-out 140ms var(--ease-in) both; }
+.dialog-scale-pop[data-state="open"]   { animation: dialog-scale-pop-in 200ms var(--ease-out) both; }
+.dialog-scale-pop[data-state="closed"] { animation: dialog-scale-pop-out 140ms var(--ease-in) both; }
+.drawer-pop[data-state="open"]   { animation: drawer-pop-in 220ms var(--ease-modal) both; }
+.drawer-pop[data-state="closed"] { animation: drawer-pop-out 160ms var(--ease-in) both; }
+@media (prefers-reduced-motion: reduce) {
+  .app-overlay[data-state="open"],
+  .app-overlay[data-state="closed"],
+  .dialog-pop[data-state="open"],
+  .dialog-pop[data-state="closed"],
+  .dialog-scale-pop[data-state="open"],
+  .dialog-scale-pop[data-state="closed"],
+  .drawer-pop[data-state="open"],
+  .drawer-pop[data-state="closed"] { animation: none; }
+}
+
+/* Toast spring entrance — overshoot once on open, fast slide on close. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.toast-pop { animation: toast-in 320ms var(--ease-overshoot); }
+@media (prefers-reduced-motion: reduce) {
+  .toast-pop { animation: none; }
+}
+
+/* CLI / preset select — wraps a native <select> with custom chrome.
+   Drops the system focus outline, replaces the chevron with a lucide one,
+   matches .input visual language. */
+.cli-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-bright);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.cli-select:hover { border-color: var(--text-tertiary); }
+.cli-select:focus-within {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.25),
+    0 0 0 3px var(--ring-focus);
+}
+.cli-select__leading {
+  position: absolute;
+  left: 10px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.cli-select__trailing {
+  position: absolute;
+  right: 10px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.cli-select:focus-within .cli-select__trailing { transform: translateY(1px); }
+.cli-select__field {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.cli-select__field:disabled { color: var(--text-tertiary); cursor: not-allowed; }
+.cli-select__field option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
 }

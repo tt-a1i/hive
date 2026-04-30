@@ -18,7 +18,7 @@ type OrchestratorPaneProps = {
 const IdleBody = ({ onStart }: { onStart: () => void }) => (
   <div data-testid="orchestrator-idle-body" className="flex flex-1">
     <EmptyState
-      icon={<Crown size={32} />}
+      icon={<Crown size={26} />}
       title="Queen is offline"
       description="Start the orchestrator PTY to begin dispatching team members."
       action={
@@ -38,7 +38,7 @@ const IdleBody = ({ onStart }: { onStart: () => void }) => (
 const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void }) => (
   <div data-testid="orchestrator-failed-body" className="flex flex-1">
     <EmptyState
-      icon={<Crown size={32} />}
+      icon={<Crown size={26} />}
       title="Queen failed to start"
       description={error}
       action={

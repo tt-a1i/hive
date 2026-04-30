@@ -104,13 +104,17 @@ import { join } from 'node:path'
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '019dc277-0e8e-75c1-9794-94929426288e'
+const delayIndex = args.indexOf('--session-write-delay-ms-test')
+const writeDelayMs = delayIndex >= 0 ? Number.parseInt(args[delayIndex + 1] ?? '0', 10) : 0
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
 const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
 mkdirSync(sessionDir, { recursive: true })
-writeFileSync(
-  join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl'),
-  JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n'
-)
+const writeSession = () => writeFileSync(
+    join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl'),
+    JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n'
+  )
+if (writeDelayMs > 0) setTimeout(writeSession, writeDelayMs)
+else writeSession()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(join(process.cwd(), '.expect-resume')) && !(args[0] === 'resume' && args[1] === sessionId)) process.exit(2)
 setInterval(() => {}, 1000)
@@ -453,4 +457,39 @@ describe('preset-driven Layer A', () => {
       await server.close()
     }
   })
+
+  test('bound codex preset still captures a session id created after CLI startup', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-delayed-resume-'))
+    const workspacePathRaw = join(homeDir, 'workspace')
+    tempDirs.push(homeDir)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    process.env.CODEX_HOME = join(homeDir, '.codex')
+    const fakeCodex = writeFakeCodex(workspacePath)
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
+      const sessionId = '019ddf19-d534-7eb3-8a8c-83cde4613417'
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
+        command: fakeCodex,
+        args: ['--session-id-test', sessionId, '--session-write-delay-ms-test', '6000'],
+        command_preset_id: 'codex',
+      })
+
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.status).toBe('running')
+      })
+      await waitFor(() => {
+        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(sessionId)
+      }, 12_000)
+    } finally {
+      await server.close()
+    }
+  }, 20_000)
 })

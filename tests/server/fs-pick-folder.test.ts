@@ -43,9 +43,9 @@ const emptySpawn = {
 
 describe('pickFolder — platform dispatch', () => {
   test('darwin: osascript stdout path flows through probeDirectory and returns probe.ok', async () => {
-    const calls: Array<{ command: string; args: string[] }> = []
-    const runCommand: RunPickCommand = async (command, args) => {
-      calls.push({ command, args })
+    const calls: Array<{ command: string; args: string[]; timeout: unknown }> = []
+    const runCommand: RunPickCommand = async (command, args, options) => {
+      calls.push({ command, args, timeout: options.timeout })
       return { ...emptySpawn, stdout: `${insideDir}\n` }
     }
     const result = await pickFolder({ platform: 'darwin', runCommand })
@@ -56,6 +56,7 @@ describe('pickFolder — platform dispatch', () => {
     expect(result.probe?.is_git_repository).toBe(true)
     expect(calls[0]?.command).toBe('osascript')
     expect(calls[0]?.args[0]).toBe('-e')
+    expect(calls[0]?.timeout).toBeUndefined()
   })
 
   test('darwin: user cancel (exit code 1 + -1743) yields canceled=true silently', async () => {
@@ -72,9 +73,9 @@ describe('pickFolder — platform dispatch', () => {
   })
 
   test('linux: zenity stdout path flows through probeDirectory', async () => {
-    const calls: Array<{ command: string; args: string[] }> = []
-    const runCommand: RunPickCommand = async (command, args) => {
-      calls.push({ command, args })
+    const calls: Array<{ command: string; args: string[]; timeout: unknown }> = []
+    const runCommand: RunPickCommand = async (command, args, options) => {
+      calls.push({ command, args, timeout: options.timeout })
       return { ...emptySpawn, stdout: `${insideDir}\n` }
     }
     const result = await pickFolder({ platform: 'linux', runCommand })
@@ -82,6 +83,7 @@ describe('pickFolder — platform dispatch', () => {
     expect(result.probe?.is_git_repository).toBe(true)
     expect(calls[0]?.command).toBe('zenity')
     expect(calls[0]?.args).toContain('--directory')
+    expect(calls[0]?.timeout).toBeUndefined()
   })
 
   test('linux: zenity cancel (exit 1) is canceled, not an error', async () => {
@@ -118,7 +120,7 @@ describe('pickFolder — platform dispatch', () => {
     expect(result.error).toMatch(/outside the Hive browse sandbox/)
   })
 
-  test('timeout is surfaced as canceled with an informative error', async () => {
+  test('unexpected timeout is surfaced as an error, not a silent cancel', async () => {
     const runCommand: RunPickCommand = async () => ({
       ...emptySpawn,
       status: null,
@@ -126,7 +128,7 @@ describe('pickFolder — platform dispatch', () => {
       timedOut: true,
     })
     const result = await pickFolder({ platform: 'darwin', runCommand })
-    expect(result.canceled).toBe(true)
+    expect(result.canceled).toBe(false)
     expect(result.error).toMatch(/timed out/)
   })
 })
