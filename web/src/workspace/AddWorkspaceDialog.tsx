@@ -117,18 +117,14 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     return (
       <Dialog.Root open>
         <Dialog.Portal>
-          <Dialog.Overlay
-            className="fixed inset-0 z-40"
-            style={{ background: 'var(--bg-overlay)' }}
-          />
+          <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
           <Dialog.Content
             data-testid="add-workspace-picking"
             aria-describedby={undefined}
-            className="fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
+            className="elev-2 fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
-              boxShadow: 'var(--shadow-elev-2)',
             }}
           >
             <Dialog.Title className="sr-only">Opening folder picker</Dialog.Title>
@@ -150,17 +146,13 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     return (
       <Dialog.Root open onOpenChange={(open) => !open && handleCancel()}>
         <Dialog.Portal>
-          <Dialog.Overlay
-            className="fixed inset-0 z-40"
-            style={{ background: 'var(--bg-overlay)' }}
-          />
+          <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
           <Dialog.Content
             data-testid="add-workspace-error"
-            className="fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
+            className="elev-2 fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
-              boxShadow: 'var(--shadow-elev-2)',
             }}
           >
             <div className="flex items-start gap-3">

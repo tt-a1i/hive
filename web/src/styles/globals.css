@@ -140,13 +140,23 @@ html, body {
 
 /* Workspace row */
 .ws-row {
-  transition: background 0.12s;
+  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
   cursor: pointer;
+  position: relative;
 }
-.ws-row:hover { background: var(--bg-2); }
+.ws-row:hover { background: color-mix(in oklab, var(--accent) 4%, var(--bg-1)); }
 .ws-row.active {
-  background: var(--bg-2);
+  background: color-mix(in oklab, var(--accent) 8%, var(--bg-1));
   box-shadow: inset 3px 0 0 var(--accent);
+}
+.ws-row.active::after {
+  /* Subtle inner top highlight to lift the active row off the sidebar plane. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* Status dot — neutral baseline used by sidebar / inline indicators */
@@ -174,10 +184,25 @@ html, body {
   vertical-align: middle;
   flex-shrink: 0;
 }
-.status-dot--working { background: var(--status-green); animation: hive-pulse 1.6s ease-in-out infinite; }
-.status-dot--idle { background: var(--text-tertiary); }
-.status-dot--queued { background: var(--status-orange); animation: hive-pulse 1.6s ease-in-out infinite; }
-.status-dot--stopped { background: var(--status-red); opacity: 0.85; }
+.status-dot--working {
+  background: var(--status-green);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-green) 22%, transparent);
+  animation: hive-pulse 1.6s ease-in-out infinite;
+}
+.status-dot--idle {
+  background: var(--text-tertiary);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--text-tertiary) 18%, transparent);
+}
+.status-dot--queued {
+  background: var(--status-orange);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-orange) 22%, transparent);
+  animation: hive-pulse 1.6s ease-in-out infinite;
+}
+.status-dot--stopped {
+  background: var(--status-red);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--status-red) 22%, transparent);
+  opacity: 0.85;
+}
 
 /* Status pill — used inline in cards / headers next to a label */
 .status-pill {
@@ -240,33 +265,75 @@ html, body {
   font-size: 11px;
   color: var(--text-secondary);
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-2);
+  /* Inner top highlight: 1px of light to fake screen-light ambience.
+     Combined with the tiny outer shadow this gives buttons depth instead
+     of looking like flat color rectangles. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 1px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform 80ms var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
-.icon-btn:hover { background: var(--bg-3); color: var(--text-primary); border-color: var(--border-bright); }
-.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.icon-btn:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+  border-color: var(--border-bright);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.icon-btn:active { transform: scale(0.97); }
+.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .icon-btn--primary {
   background: var(--accent);
   color: var(--text-primary);
-  border-color: var(--accent);
+  border-color: color-mix(in oklab, #fff 12%, var(--accent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.35);
 }
-.icon-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.icon-btn--danger { color: var(--status-red); }
-.icon-btn--danger:hover { background: color-mix(in oklab, var(--status-red) 14%, transparent); border-color: color-mix(in oklab, var(--status-red) 40%, transparent); color: var(--status-red); }
+.icon-btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: color-mix(in oklab, #fff 18%, var(--accent-hover));
+}
+.icon-btn--danger {
+  color: var(--status-red);
+}
+.icon-btn--danger:hover {
+  background: color-mix(in oklab, var(--status-red) 14%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 40%, transparent);
+  color: var(--status-red);
+}
 
 /* Worker card */
 .card {
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.card:hover {
-  border-color: var(--border-bright);
-  background: color-mix(in oklab, var(--bg-2) 85%, var(--bg-3));
+  /* Inner top highlight + subtle drop shadow → real elevation in dark UI. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.25);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .card--interactive { cursor: pointer; }
+.card--interactive:hover {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
+  background: color-mix(in oklab, var(--accent) 4%, var(--bg-2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+}
 
 /* Role badges */
 .role-badge {
@@ -396,9 +463,32 @@ html, body {
   background: var(--bg-2);
 }
 
-/* Deprecated — kept only for compat; prefer `var(--bg-overlay)` on a
+/* Deprecated — kept only for compat; prefer `.app-overlay` on a
    <Dialog.Overlay> element. M6-A migrated all known callers; remove this
    class in M6-D收口 once external code (if any) is verified. */
 .modal-backdrop {
   background: var(--bg-overlay);
+}
+
+/* Canonical Dialog.Overlay surface — frosted-glass effect for hero dialogs.
+   backdrop-filter is unsupported in jsdom (test env) but shipped in every
+   modern desktop browser; degrades gracefully to a solid translucent fill. */
+.app-overlay {
+  background: var(--bg-overlay);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+}
+
+/* Inner top highlight — utility for elevated surfaces (drops a 1px line of
+   light at the top edge to fake ambient screen-light reflection). */
+.elev-1 {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.elev-2 {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.35);
 }

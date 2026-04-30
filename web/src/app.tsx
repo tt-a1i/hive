@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
-import { saveActiveWorkspaceId } from './api.js'
 import { MainLayout } from './layout/MainLayout.js'
 import { logSwallowed } from './lib/log-swallowed.js'
 import { Sidebar } from './sidebar/Sidebar.js'
@@ -12,7 +11,10 @@ import { Toaster } from './ui/toast.js'
 import { ToastProvider } from './ui/useToast.js'
 import { useEmptyStateAutoOpen } from './useEmptyStateAutoOpen.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
+import { useMountedWorkspaceIds } from './useMountedWorkspaceIds.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
+import { useWorkspaceDelete } from './useWorkspaceDelete.js'
+import { useWorkspaceSelection } from './useWorkspaceSelection.js'
 import { useWorkspaceStats } from './useWorkspaceStats.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
@@ -25,22 +27,13 @@ const HIVE_PORT = '4010'
 
 export const App = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
+  const { activeWorkspaceId, selectWorkspace, setActiveWorkspaceId } = useWorkspaceSelection()
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(activeWorkspaceId)
-  const [mountedWorkspaceIds, setMountedWorkspaceIds] = useState<string[]>([])
+  const [mountedWorkspaceIds, setMountedWorkspaceIds] = useMountedWorkspaceIds(activeWorkspaceId)
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
-  const activeWorkspaceSaveQueue = useRef(Promise.resolve())
 
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
-
-  const selectWorkspace = (workspaceId: string | null) => {
-    setActiveWorkspaceId(workspaceId)
-    activeWorkspaceSaveQueue.current = activeWorkspaceSaveQueue.current
-      .catch(logSwallowed('selectWorkspace.prevQueue'))
-      .then(() => saveActiveWorkspaceId(workspaceId))
-      .catch(logSwallowed('selectWorkspace.save'))
-  }
 
   const { orchestratorAutostartErrors, recordOrchestratorResult, createNewWorkspace } =
     useWorkspaceCreate({
@@ -52,15 +45,6 @@ export const App = () => {
       },
     })
 
-  useEffect(() => {
-    if (!activeWorkspaceId) return
-    setMountedWorkspaceIds((current) =>
-      current.includes(activeWorkspaceId) ? current : [...current, activeWorkspaceId]
-    )
-  }, [activeWorkspaceId])
-
-  // Auto-open the picker on first empty-state so the user isn't stuck on a
-  // blank canvas. Dialog fires the OS folder picker on trigger change.
   useEmptyStateAutoOpen(workspaces, () => setAddDialogTrigger((value) => value + 1))
 
   const activeWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
@@ -75,17 +59,27 @@ export const App = () => {
     hivePort: HIVE_PORT,
     setWorkersByWorkspaceId,
   })
+  const deleteWorkspace = useWorkspaceDelete({
+    activeWorkspaceId,
+    onActiveDeleted: () => setTaskGraphOpen(false),
+    selectWorkspace,
+    setMountedWorkspaceIds,
+    setWorkersByWorkspaceId,
+    setWorkspaces,
+    workspaces,
+  })
 
   return (
     <ToastProvider>
       <MainLayout
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
-        running={stats.working + stats.idle}
+        running={terminalRuns.length}
         runtimeAddress={RUNTIME_ADDRESS}
         sidebar={
           <Sidebar
             activeWorkspaceId={activeWorkspaceId}
             onCreateClick={() => setAddDialogTrigger((value) => value + 1)}
+            onDeleteWorkspace={deleteWorkspace}
             onSelectWorkspace={selectWorkspace}
             workersByWorkspaceId={workersByWorkspaceId}
             workspaces={workspaces}
@@ -114,7 +108,6 @@ export const App = () => {
           orchestratorAutostartError={
             activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
           }
-          stats={stats}
           terminalRuns={terminalRuns}
           workers={activeWorkers}
           workspace={activeWorkspace}

@@ -27,17 +27,35 @@ const parseArgsEnv = (raw: string | undefined): string[] | undefined => {
   return undefined
 }
 
+const resolveCommandPresetLaunchConfig = (
+  settings: SettingsStore,
+  commandPresetId: string
+): AgentLaunchConfigInput | undefined => {
+  const preset = settings.getCommandPreset(commandPresetId)
+  if (!preset) return undefined
+  return {
+    args: preset.args,
+    command: preset.command,
+    commandPresetId: preset.id,
+  }
+}
+
 /**
- * Resolve the orchestrator's default launch config in priority order:
- * 1. `HIVE_ORCHESTRATOR_COMMAND` env var (with optional `HIVE_ORCHESTRATOR_ARGS_JSON`).
+ * Resolve the orchestrator's launch config in priority order:
+ * 1. Explicit workspace-create command preset chosen by the user.
+ * 2. `HIVE_ORCHESTRATOR_COMMAND` env var (with optional `HIVE_ORCHESTRATOR_ARGS_JSON`).
  *    Tests use this to inject a dummy CLI like `bash -c 'echo queen up; sleep 60'`
  *    so autostart can run end-to-end without depending on a real `claude` binary.
- * 2. The seeded `orchestrator` role template (defaults to `claude`).
+ * 3. The seeded `orchestrator` role template (defaults to `claude`).
  * Returns `undefined` when neither source has a usable command.
  */
 export const resolveOrchestratorLaunchConfig = (
-  settings: SettingsStore
+  settings: SettingsStore,
+  commandPresetId: string | null = null
 ): AgentLaunchConfigInput | undefined => {
+  if (commandPresetId) {
+    return resolveCommandPresetLaunchConfig(settings, commandPresetId)
+  }
   const envCommand = process.env.HIVE_ORCHESTRATOR_COMMAND
   if (envCommand) {
     return {
@@ -66,11 +84,12 @@ export const resolveOrchestratorLaunchConfig = (
 export const seedOrchestratorLaunchConfig = (
   port: ConfigurePort,
   settings: SettingsStore,
-  workspaceId: string
+  workspaceId: string,
+  commandPresetId: string | null = null
 ): void => {
   const orchestratorId = getOrchestratorId(workspaceId)
   if (port.peekAgentLaunchConfig(workspaceId, orchestratorId)) return
-  const config = resolveOrchestratorLaunchConfig(settings)
+  const config = resolveOrchestratorLaunchConfig(settings, commandPresetId)
   if (!config) return
   port.configureAgentLaunch(workspaceId, orchestratorId, config)
 }

@@ -152,16 +152,14 @@ export const AddWorkerDialog = ({
       <Dialog.Portal>
         <Dialog.Overlay
           data-testid="add-worker-overlay"
-          className="fixed inset-0 z-40"
-          style={{ background: 'var(--bg-overlay)' }}
+          className="app-overlay fixed inset-0 z-40"
         />
         <Dialog.Content
           data-testid="add-worker-content"
-          className="fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border"
+          className="elev-2 fixed top-1/2 left-1/2 z-50 w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border"
           style={{
             background: 'var(--bg-elevated)',
             borderColor: 'var(--border-bright)',
-            boxShadow: 'var(--shadow-elev-2)',
           }}
         >
           <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">

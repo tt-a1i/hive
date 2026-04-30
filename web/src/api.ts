@@ -106,6 +106,7 @@ export const createWorkspace = async (input: {
   name: string
   path: string
   autostart_orchestrator?: boolean
+  command_preset_id?: string | null
   hive_port?: string
 }): Promise<CreateWorkspaceResponse> => {
   const response = await apiFetch('/api/workspaces', {
@@ -119,6 +120,14 @@ export const createWorkspace = async (input: {
   }
 
   return (await response.json()) as CreateWorkspaceResponse
+}
+
+export const deleteWorkspace = async (workspaceId: string): Promise<void> => {
+  const response = await apiFetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to delete workspace'))
+  }
 }
 
 export const startAgentRun = async (

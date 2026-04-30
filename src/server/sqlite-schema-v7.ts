@@ -1,6 +1,6 @@
 import type { Database } from 'better-sqlite3'
 
-import { CLAUDE_DEFAULT_YOLO_ARGS } from './claude-command-defaults.js'
+import { BUILTIN_COMMAND_PRESETS } from './command-preset-defaults.js'
 import {
   CODER_ROLE_DESCRIPTION,
   ORCHESTRATOR_ROLE_DESCRIPTION,
@@ -46,48 +46,27 @@ export const applySchemaVersion7 = (db: Database) => {
     );
   `)
 
-  db.prepare(
+  const insertPreset = db.prepare(
     `INSERT INTO command_presets (
        id, display_name, command, args, env, resume_args_template, session_id_capture,
        yolo_args_template, is_builtin, created_at, updated_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
      ON CONFLICT(id) DO NOTHING`
-  ).run(
-    'claude',
-    'Claude Code (CC)',
-    'claude',
-    '[]',
-    '{}',
-    '--resume {session_id}',
-    JSON.stringify({
-      source: 'claude_project_jsonl_dir',
-      pattern: '~/.claude/projects/{encoded_cwd}/*.jsonl',
-    }),
-    JSON.stringify(CLAUDE_DEFAULT_YOLO_ARGS),
-    now,
-    now
   )
-  db.prepare(
-    `INSERT INTO command_presets (
-       id, display_name, command, args, env, resume_args_template, session_id_capture,
-       yolo_args_template, is_builtin, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-     ON CONFLICT(id) DO NOTHING`
-  ).run('codex', 'Codex', 'codex', '[]', '{}', null, null, null, now, now)
-  db.prepare(
-    `INSERT INTO command_presets (
-       id, display_name, command, args, env, resume_args_template, session_id_capture,
-       yolo_args_template, is_builtin, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-     ON CONFLICT(id) DO NOTHING`
-  ).run('opencode', 'OpenCode', 'opencode', '[]', '{}', null, null, null, now, now)
-  db.prepare(
-    `INSERT INTO command_presets (
-       id, display_name, command, args, env, resume_args_template, session_id_capture,
-       yolo_args_template, is_builtin, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-     ON CONFLICT(id) DO NOTHING`
-  ).run('gemini', 'Gemini', 'gemini', '[]', '{}', null, null, null, now, now)
+  for (const preset of BUILTIN_COMMAND_PRESETS) {
+    insertPreset.run(
+      preset.id,
+      preset.displayName,
+      preset.command,
+      '[]',
+      '{}',
+      preset.resumeArgsTemplate,
+      preset.sessionIdCapture ? JSON.stringify(preset.sessionIdCapture) : null,
+      preset.yoloArgsTemplate ? JSON.stringify(preset.yoloArgsTemplate) : null,
+      now,
+      now
+    )
+  }
 
   db.prepare(
     `INSERT INTO role_templates (

@@ -5,6 +5,7 @@ import {
   createWorkspace,
   type OrchestratorStartResult,
 } from './api.js'
+import type { WorkspaceCreateInput } from './workspace/workspace-create-input.js'
 
 interface UseWorkspaceCreateInput {
   hivePort: string
@@ -16,7 +17,7 @@ interface UseWorkspaceCreateOutput {
   /** workspaceId → sticky autostart error (cleared on Retry). */
   orchestratorAutostartErrors: Record<string, string | null>
   recordOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
-  createNewWorkspace: (input: { name: string; path: string }) => Promise<CreateWorkspaceResponse>
+  createNewWorkspace: (input: WorkspaceCreateInput) => Promise<CreateWorkspaceResponse>
 }
 
 /**
@@ -38,11 +39,12 @@ export const useWorkspaceCreate = ({
   )
 
   const createNewWorkspace = useCallback(
-    async (input: { name: string; path: string }) => {
+    async (input: WorkspaceCreateInput) => {
       const response = await createWorkspace({
         name: input.name,
         path: input.path,
         autostart_orchestrator: true,
+        command_preset_id: input.commandPresetId,
         hive_port: hivePort,
       })
       onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })

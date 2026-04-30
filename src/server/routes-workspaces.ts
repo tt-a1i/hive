@@ -45,7 +45,12 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    seedOrchestratorLaunchConfig(store, store.settings, workspace.id)
+    seedOrchestratorLaunchConfig(
+      store,
+      store.settings,
+      workspace.id,
+      body.command_preset_id ?? null
+    )
     // Spawn failure must NOT block workspace creation — see AGENTS.md §1
     // (no try/catch fallbacks in production code, but `autostartOrchestrator`
     // captures the failure as a structured result instead of throwing).
@@ -56,6 +61,22 @@ export const workspaceRoutes: RouteDefinition[] = [
       body.hive_port ?? ''
     )
     sendJson(response, 201, { ...workspace, orchestrator_start: orchestratorStart })
+  }),
+  route('DELETE', '/api/workspaces/:workspaceId', async ({ params, request, response, store }) => {
+    const workspaceId = getRequiredParam(
+      response,
+      params,
+      'workspaceId',
+      'Workspace id is required'
+    )
+    if (!workspaceId) {
+      return
+    }
+
+    requireUiTokenFromRequest(request, store.validateUiToken)
+    await store.deleteWorkspace(workspaceId)
+    response.statusCode = 204
+    response.end()
   }),
   route('GET', '/api/ui/workspaces/:workspaceId/team', ({ params, request, response, store }) => {
     const workspaceId = getRequiredParam(

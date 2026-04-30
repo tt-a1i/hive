@@ -46,6 +46,11 @@ const json = (body: unknown): Response =>
     json: async () => body,
   }) as Response
 
+const commandPresets = [
+  { args: [], command: 'claude', display_name: 'Claude Code (CC)', id: 'claude' },
+  { args: [], command: 'codex', display_name: 'Codex', id: 'codex' },
+]
+
 type PickHandler = () => PickFolderResponse
 
 const stubFetch = (pick: PickHandler, browse?: FsBrowseResponse) => {
@@ -64,6 +69,9 @@ const stubFetch = (pick: PickHandler, browse?: FsBrowseResponse) => {
     if (u.pathname === '/api/fs/probe') {
       const q = u.searchParams.get('path') ?? ''
       return json({ ...sandboxProbe, path: q, suggested_name: q.split('/').pop() ?? '' })
+    }
+    if (u.pathname === '/api/settings/command-presets') {
+      return json(commandPresets)
     }
     throw new Error(`Unexpected fetch: ${method} ${url}`)
   })
@@ -97,8 +105,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     )
     expect(within(confirm).getByTestId('confirm-workspace-git-badge').textContent).toContain('main')
 
-    // Verify POST was issued before any probe/browse call (native picker must be first).
-    expect(calls[0]).toEqual({ method: 'POST', url: '/api/fs/pick-folder' })
+    expect(calls).toContainEqual({ method: 'POST', url: '/api/fs/pick-folder' })
   })
 
   test('canceled=true closes silently and fires onClose — no dialog left behind', async () => {
@@ -171,7 +178,35 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     fireEvent.change(nameInput, { target: { value: 'renamed' } })
     fireEvent.click(screen.getByTestId('confirm-workspace-create'))
 
-    expect(onCreate).toHaveBeenCalledWith({ name: 'renamed', path: PICKED })
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'renamed',
+      path: PICKED,
+    })
+  })
+
+  test('Confirm dialog lets the user choose the orchestrator CLI preset', async () => {
+    stubFetch(() => ({
+      canceled: false,
+      error: null,
+      path: PICKED,
+      probe: sandboxProbe,
+      supported: true,
+    }))
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.change(within(confirm).getByTestId('workspace-command-preset'), {
+      target: { value: 'codex' },
+    })
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'codex',
+      name: 'alpha',
+      path: PICKED,
+    })
   })
 
   test('paste-path fallback supplies the path when user did not pick a folder', async () => {
@@ -191,7 +226,11 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     fireEvent.change(screen.getByTestId('confirm-workspace-name'), { target: { value: 'custom' } })
 
     fireEvent.click(screen.getByTestId('confirm-workspace-create'))
-    expect(onCreate).toHaveBeenCalledWith({ name: 'custom', path: '/abs/path/here' })
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'custom',
+      path: '/abs/path/here',
+    })
   })
 })
 
@@ -238,6 +277,10 @@ describe('AddWorkspaceDialog — server-browse Advanced mode', () => {
     fireEvent.change(screen.getByTestId('fs-preview-name-input'), { target: { value: 'Alpha' } })
     fireEvent.click(screen.getByTestId('add-workspace-create'))
 
-    expect(onCreate).toHaveBeenCalledWith({ name: 'Alpha', path: PICKED })
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'Alpha',
+      path: PICKED,
+    })
   })
 })

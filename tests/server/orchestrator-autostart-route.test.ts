@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,13 +9,13 @@ import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
-const servers: Array<{ close: () => void }> = []
+const servers: Array<{ close: () => Promise<void> }> = []
 const restoreEnv: Array<[string, string | undefined]> = []
 const tempDirs: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
   while (servers.length > 0) {
-    servers.pop()?.close()
+    await servers.pop()?.close()
   }
   while (restoreEnv.length > 0) {
     const [key, value] = restoreEnv.pop() ?? ['', undefined]
@@ -38,15 +38,23 @@ const setEnv = (key: string, value: string | undefined) => {
   else process.env[key] = value
 }
 
-const startServer = async () => {
-  const store = createRuntimeStore({ agentManager: createAgentManager() })
+const startServer = async (input: { dataDir?: string } = {}) => {
+  const store = createRuntimeStore({
+    agentManager: createAgentManager(),
+    ...(input.dataDir ? { dataDir: input.dataDir } : {}),
+  })
   const app = createApp({ store })
 
   await new Promise<void>((resolve) => {
     app.server.listen(0, '127.0.0.1', () => resolve())
   })
 
-  servers.push(app.server)
+  servers.push({
+    async close() {
+      await store.close()
+      await new Promise<void>((resolve) => app.server.close(() => resolve()))
+    },
+  })
   const address = app.server.address()
   if (!address || typeof address === 'string') throw new Error('No port')
 
@@ -76,7 +84,7 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       id: string
       orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
     }
-    expect(body.orchestrator_start.ok).toBe(true)
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
     expect(body.orchestrator_start.error).toBeNull()
     expect(typeof body.orchestrator_start.run_id).toBe('string')
 
@@ -134,7 +142,11 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     await new Promise<void>((resolve) => {
       app.server.listen(0, '127.0.0.1', () => resolve())
     })
-    servers.push(app.server)
+    servers.push({
+      async close() {
+        await new Promise<void>((resolve) => app.server.close(() => resolve()))
+      },
+    })
     const address = app.server.address()
     if (!address || typeof address === 'string') throw new Error('No port')
     const baseUrl = `http://127.0.0.1:${address.port}`
@@ -151,7 +163,7 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       id: string
       orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
     }
-    expect(body.orchestrator_start.ok).toBe(true)
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
     expect(startSpy).toHaveBeenCalledOnce()
     const startInput = startSpy.mock.calls[0]?.[0]
     expect(startInput?.command).toBe('claude')
@@ -163,6 +175,50 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     expect(
       store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)?.commandPresetId
     ).toBeNull()
+  })
+
+  test('command_preset_id selects the orchestrator CLI preset for autostart', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-codex-bin-'))
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-preset-codex-'))
+    tempDirs.push(binDir)
+    tempDirs.push(dataDir)
+    const fakeCodex = join(binDir, 'codex')
+    writeFileSync(fakeCodex, ['#!/bin/sh', 'echo codex orchestrator up', 'sleep 60'].join('\n'))
+    chmodSync(fakeCodex, 0o755)
+    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    const codexHome = mkdtempSync(join(tmpdir(), 'hive-codex-home-'))
+    tempDirs.push(codexHome)
+    setEnv('CODEX_HOME', codexHome)
+
+    const { store, baseUrl } = await startServer({ dataDir })
+    const cookie = await getUiCookie(baseUrl)
+    const workspacePath = makeWorkspacePath('preset-codex')
+    mkdirSync(workspacePath, { recursive: true })
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        command_preset_id: 'codex',
+        name: 'PresetCodex',
+        path: workspacePath,
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
+    const config = store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)
+    expect(config?.command).toBe('codex')
+    expect(config?.commandPresetId).toBe('codex')
+
+    const run = store
+      .listTerminalRuns(body.id)
+      .find((item) => item.agent_id === `${body.id}:orchestrator`)
+    if (run) store.stopAgentRun(run.run_id)
   })
 
   test('spawn failure (async exit) does NOT block workspace creation, surfaces binary name', async () => {
@@ -253,7 +309,12 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     await new Promise<void>((resolve) => {
       app.server.listen(0, '127.0.0.1', () => resolve())
     })
-    servers.push(app.server)
+    servers.push({
+      async close() {
+        await store.close()
+        await new Promise<void>((resolve) => app.server.close(() => resolve()))
+      },
+    })
     const address = app.server.address()
     if (!address || typeof address === 'string') throw new Error('No port')
     const baseUrl = `http://127.0.0.1:${address.port}`

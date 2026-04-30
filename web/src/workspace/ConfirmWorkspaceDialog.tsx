@@ -62,16 +62,14 @@ export const ConfirmWorkspaceDialog = ({
       <Dialog.Portal>
         <Dialog.Overlay
           data-testid="confirm-workspace-overlay"
-          className="fixed inset-0 z-40"
-          style={{ background: 'var(--bg-overlay)' }}
+          className="app-overlay fixed inset-0 z-40"
         />
         <Dialog.Content
           data-testid="confirm-workspace-dialog"
-          className="fixed top-1/2 left-1/2 z-50 flex w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border"
+          className="elev-2 fixed top-1/2 left-1/2 z-50 flex w-[480px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border"
           style={{
             background: 'var(--bg-elevated)',
             borderColor: 'var(--border-bright)',
-            boxShadow: 'var(--shadow-elev-2)',
           }}
         >
           <div

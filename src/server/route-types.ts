@@ -27,6 +27,8 @@ export interface CreateWorkspaceBody {
   name: string
   /** Default true. When false, skip orchestrator PTY spawn after creation. */
   autostart_orchestrator?: boolean
+  /** Optional command preset to use for the initial orchestrator launch. */
+  command_preset_id?: string | null
   /** HTTP port the orchestrator child should call back to (HIVE_PORT env). */
   hive_port?: string
 }

@@ -109,17 +109,15 @@ export const WorkerModal = ({
       <Dialog.Portal>
         <Dialog.Overlay
           data-testid="worker-modal-overlay"
-          className="fixed inset-0 z-40"
-          style={{ background: 'var(--bg-overlay)' }}
+          className="app-overlay fixed inset-0 z-40"
         />
         <Dialog.Content
           data-testid="worker-modal"
           aria-label={`${worker.name} detail`}
-          className="fixed inset-y-0 right-0 z-50 flex w-[860px] max-w-[calc(100vw-32px)] flex-col border-l"
+          className="elev-2 fixed inset-y-0 right-0 z-50 flex w-[860px] max-w-[calc(100vw-32px)] flex-col border-l"
           style={{
             background: 'var(--bg-1)',
             borderColor: 'var(--border)',
-            boxShadow: 'var(--shadow-elev-2)',
           }}
         >
           <div

@@ -38,6 +38,15 @@ const withPresetYoloArgs = (
   return { ...config, args: nextArgs }
 }
 
+const hasResumeArgs = (args: string[]) =>
+  args.includes('--resume') ||
+  args.includes('-r') ||
+  args.includes('--continue') ||
+  args.includes('-c') ||
+  args.includes('--session') ||
+  args.includes('-s') ||
+  args[0] === 'resume'
+
 export const withPresetResumeArgs = (
   config: AgentLaunchConfigInput,
   preset: BoundPreset | null | undefined,
@@ -56,7 +65,7 @@ export const withPresetResumeArgs = (
     return nextConfig
   }
   const args = nextConfig.args ?? []
-  if (args.includes('--resume') || args.includes('--continue')) return nextConfig
+  if (hasResumeArgs(args)) return nextConfig
 
   return {
     ...nextConfig,

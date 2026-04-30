@@ -10,6 +10,9 @@ import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const originalClaudeProjectsDir = process.env.HIVE_CLAUDE_PROJECTS_DIR
+const originalCodexHome = process.env.CODEX_HOME
+const originalGeminiHome = process.env.HIVE_GEMINI_HOME
+const originalOpenCodeDbPath = process.env.HIVE_OPENCODE_DB_PATH
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -87,6 +90,93 @@ setInterval(() => {}, 1000)
   return cliPath
 }
 
+const writeFakeCodex = (workspacePath: string) => {
+  const binDir = join(workspacePath, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const cliPath = join(binDir, 'codex')
+  writeFileSync(
+    cliPath,
+    `#!/usr/bin/env node
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+const args = process.argv.slice(2)
+const sessionIndex = args.indexOf('--session-id-test')
+const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '019dc277-0e8e-75c1-9794-94929426288e'
+const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
+const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
+mkdirSync(sessionDir, { recursive: true })
+writeFileSync(
+  join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl'),
+  JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n'
+)
+process.stdout.write('ARGS:' + args.join(' ') + '\\n')
+if (existsSync(join(process.cwd(), '.expect-resume')) && !(args[0] === 'resume' && args[1] === sessionId)) process.exit(2)
+setInterval(() => {}, 1000)
+`
+  )
+  chmodSync(cliPath, 0o755)
+  return cliPath
+}
+
+const writeFakeGemini = (workspacePath: string) => {
+  const binDir = join(workspacePath, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const cliPath = join(binDir, 'gemini')
+  writeFileSync(
+    cliPath,
+    `#!/usr/bin/env node
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+const args = process.argv.slice(2)
+const sessionIndex = args.indexOf('--session-id-test')
+const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '29405746-aa9b-40bf-961b-f3d77fdcda40'
+const geminiHome = process.env.HIVE_GEMINI_HOME ?? join(homedir(), '.gemini')
+const projectDir = join(geminiHome, 'tmp', 'hive-test-project')
+mkdirSync(join(projectDir, 'chats'), { recursive: true })
+writeFileSync(join(projectDir, '.project_root'), process.cwd() + '\\n')
+writeFileSync(join(projectDir, 'chats', 'session-2026-04-30T00-00-29405746.json'), JSON.stringify({ sessionId }))
+process.stdout.write('ARGS:' + args.join(' ') + '\\n')
+if (existsSync(join(process.cwd(), '.expect-resume')) && !(args.includes('--resume') && args.includes(sessionId))) process.exit(2)
+setInterval(() => {}, 1000)
+`
+  )
+  chmodSync(cliPath, 0o755)
+  return cliPath
+}
+
+const writeFakeOpenCode = (workspacePath: string) => {
+  const binDir = join(workspacePath, 'bin')
+  mkdirSync(binDir, { recursive: true })
+  const cliPath = join(binDir, 'opencode')
+  const packageJsonPath = join(process.cwd(), 'package.json')
+  writeFileSync(
+    cliPath,
+    `#!/usr/bin/env node
+import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
+
+const require = createRequire(${JSON.stringify(packageJsonPath)})
+const Database = require('better-sqlite3')
+const args = process.argv.slice(2)
+const sessionIndex = args.indexOf('--session-id-test')
+const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : 'ses_25c8f572efferzSV4Mgjo99WqB'
+const db = new Database(process.env.HIVE_OPENCODE_DB_PATH)
+db.exec('CREATE TABLE IF NOT EXISTS session (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_archived INTEGER)')
+db.prepare('INSERT OR REPLACE INTO session (id, directory, time_archived) VALUES (?, ?, NULL)').run(sessionId, process.cwd())
+db.close()
+process.stdout.write('ARGS:' + args.join(' ') + '\\n')
+if (existsSync(process.cwd() + '/.expect-resume') && !(args.includes('--session') && args.includes(sessionId))) process.exit(2)
+setInterval(() => {}, 1000)
+`
+  )
+  chmodSync(cliPath, 0o755)
+  return cliPath
+}
+
 const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspacePath: string) => {
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
@@ -151,6 +241,12 @@ afterEach(() => {
   } else {
     process.env.HIVE_CLAUDE_PROJECTS_DIR = originalClaudeProjectsDir
   }
+  if (originalCodexHome === undefined) delete process.env.CODEX_HOME
+  else process.env.CODEX_HOME = originalCodexHome
+  if (originalGeminiHome === undefined) delete process.env.HIVE_GEMINI_HOME
+  else process.env.HIVE_GEMINI_HOME = originalGeminiHome
+  if (originalOpenCodeDbPath === undefined) delete process.env.HIVE_OPENCODE_DB_PATH
+  else process.env.HIVE_OPENCODE_DB_PATH = originalOpenCodeDbPath
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
@@ -277,6 +373,82 @@ describe('preset-driven Layer A', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 250))
       expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBeUndefined()
+    } finally {
+      await server.close()
+    }
+  })
+
+  test.each([
+    {
+      env: (homeDir: string) => {
+        process.env.CODEX_HOME = join(homeDir, '.codex')
+      },
+      expectedArgs: (sessionId: string) =>
+        `ARGS:resume ${sessionId} --session-id-test ${sessionId}`,
+      presetId: 'codex',
+      sessionId: '019dc277-0e8e-75c1-9794-94929426288e',
+      writeCli: writeFakeCodex,
+    },
+    {
+      env: (homeDir: string) => {
+        process.env.HIVE_GEMINI_HOME = join(homeDir, '.gemini')
+      },
+      expectedArgs: (sessionId: string) =>
+        `ARGS:--resume ${sessionId} --session-id-test ${sessionId}`,
+      presetId: 'gemini',
+      sessionId: '29405746-aa9b-40bf-961b-f3d77fdcda40',
+      writeCli: writeFakeGemini,
+    },
+    {
+      env: (homeDir: string) => {
+        process.env.HIVE_OPENCODE_DB_PATH = join(homeDir, 'opencode.db')
+      },
+      expectedArgs: (sessionId: string) =>
+        `ARGS:--session ${sessionId} --session-id-test ${sessionId}`,
+      presetId: 'opencode',
+      sessionId: 'ses_25c8f572efferzSV4Mgjo99WqB',
+      writeCli: writeFakeOpenCode,
+    },
+  ])('bound $presetId preset captures and reuses native session id on restart', async (input) => {
+    const homeDir = mkdtempSync(join(tmpdir(), `hive-${input.presetId}-resume-`))
+    const workspacePathRaw = join(homeDir, 'workspace')
+    tempDirs.push(homeDir)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    input.env(homeDir)
+    const fakeCli = input.writeCli(workspacePath)
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
+        command: fakeCli,
+        args: ['--session-id-test', input.sessionId],
+        command_preset_id: input.presetId,
+      })
+      expect(readConfiguredPresetId(server.dataDir, workspace.id, worker.id)).toBe(input.presetId)
+
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(() => {
+        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(input.sessionId)
+      })
+
+      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.status).toBe('exited')
+      })
+
+      writeFileSync(join(workspacePath, '.expect-resume'), '1\n')
+      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain(input.expectedArgs(input.sessionId))
+      })
     } finally {
       await server.close()
     }

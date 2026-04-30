@@ -12,6 +12,7 @@ import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 interface RuntimeStore {
   close: () => Promise<void>
   createWorkspace: (path: string, name: string) => WorkspaceSummary
+  deleteWorkspace: (workspaceId: string) => Promise<void>
   listWorkspaces: () => WorkspaceSummary[]
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
   deleteWorker: (workspaceId: string, workerId: string) => void
@@ -96,6 +97,19 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       return workspace
     },
     listWorkspaces: () => services.workspaceStore.listWorkspaces(),
+    deleteWorkspace: async (workspaceId) => {
+      const workspace = services.workspaceStore.getWorkspaceSnapshot(workspaceId)
+      for (const agent of workspace.agents) {
+        const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, agent.id)
+        if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
+        services.agentRuntime.deleteAgentLaunchConfig(workspaceId, agent.id)
+      }
+      await services.tasksFileWatcher.stop(workspaceId)
+      services.workspaceStore.deleteWorkspace(workspaceId)
+      if (services.settings.getAppState('active_workspace_id')?.value === workspaceId) {
+        services.settings.setAppState('active_workspace_id', null)
+      }
+    },
     addWorker: (workspaceId, input) => services.workspaceStore.addWorker(workspaceId, input),
     deleteWorker: (workspaceId, workerId) => {
       const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, workerId)

@@ -14,6 +14,7 @@ export interface WorkerInput {
 export interface WorkspaceStore {
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
   createWorkspace: (path: string, name: string) => WorkspaceSummary
+  deleteWorkspace: (workspaceId: string) => void
   deleteWorker: (workspaceId: string, workerId: string) => void
   getAgent: (workspaceId: string, agentId: string) => AgentSummary
   getWorker: (workspaceId: string, workerId: string) => AgentSummary

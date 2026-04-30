@@ -92,7 +92,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 process.stdin.setEncoding('utf8')
-process.stdin.on('data', (chunk) => process.stdout.write('STDIN:' + chunk))
+process.stdin.on('data', (chunk) => {
+  process.stdout.write('STDIN:' + chunk)
+  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+})
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
@@ -488,5 +491,5 @@ describe('Layer B fallback integration', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 10_000)
 })
