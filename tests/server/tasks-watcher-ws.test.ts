@@ -46,11 +46,11 @@ afterEach(() => {
 })
 
 describe('tasks watcher websocket', () => {
-  test('external tasks.md change broadcasts tasks-updated over websocket', async () => {
+  test('external .hive/tasks.md change broadcasts tasks-updated over websocket', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'hive-tasks-watcher-ws-'))
     tempDirs.push(workspacePath)
-    mkdirSync(workspacePath, { recursive: true })
-    writeFileSync(join(workspacePath, 'tasks.md'), '- [ ] initial\n', 'utf8')
+    mkdirSync(join(workspacePath, '.hive'), { recursive: true })
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [ ] initial\n', 'utf8')
 
     const server = await startTestServer()
     try {
@@ -67,7 +67,7 @@ describe('tasks watcher websocket', () => {
       const messages: string[] = []
       socket.on('message', (chunk) => messages.push(chunk.toString()))
 
-      writeFileSync(join(workspacePath, 'tasks.md'), '- [x] updated externally\n', 'utf8')
+      writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [x] updated externally\n', 'utf8')
 
       await waitFor(() => {
         const payload = messages.map(

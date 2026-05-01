@@ -266,7 +266,7 @@ describe('Layer B fallback integration', () => {
     }
   })
 
-  test('custom command restart receives Layer B summary built from messages, tasks.md and worker list', async () => {
+  test('custom command restart receives Layer B summary built from messages, .hive/tasks.md and worker list', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hive-layer-b-home-'))
     const workspacePathRaw = join(root, 'workspace')
     tempDirs.push(root)

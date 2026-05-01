@@ -89,8 +89,8 @@ export const ConfirmWorkspaceDialog = ({
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-md font-medium text-pri">Add workspace</Dialog.Title>
                 <Dialog.Description className="text-[11px] text-ter">
-                  Hive will load <span className="mono">tasks.md</span> and start the Orchestrator
-                  here.
+                  Hive will load <span className="mono">.hive/tasks.md</span> and start the
+                  Orchestrator here.
                 </Dialog.Description>
               </div>
             </div>

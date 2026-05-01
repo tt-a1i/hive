@@ -1,12 +1,11 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 
 import chokidar, { type FSWatcher } from 'chokidar'
 
-const DEBOUNCE_MS = 100
+import { ensureTasksFile, getTasksFilePath } from './tasks-file.js'
 
-const getTasksPath = (workspacePath: string) => join(workspacePath, 'tasks.md')
+const DEBOUNCE_MS = 100
 
 export interface TasksFileWatcher {
   close: () => Promise<void>
@@ -30,7 +29,7 @@ export const createTasksFileWatcher = ({
   }
 
   const emitCurrentContent = async (workspaceId: string, workspacePath: string) => {
-    const tasksPath = getTasksPath(workspacePath)
+    const tasksPath = getTasksFilePath(workspacePath)
     try {
       const content = existsSync(tasksPath) ? await readFile(tasksPath, 'utf8') : ''
       onTasksUpdated(workspaceId, content)
@@ -53,7 +52,8 @@ export const createTasksFileWatcher = ({
     },
     start: async (workspaceId, workspacePath) => {
       await stop(workspaceId)
-      const watcher = chokidar.watch(getTasksPath(workspacePath), {
+      ensureTasksFile(workspacePath)
+      const watcher = chokidar.watch(getTasksFilePath(workspacePath), {
         ignoreInitial: true,
       })
       const scheduleEmit = () => {

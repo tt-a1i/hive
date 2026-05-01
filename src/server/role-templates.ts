@@ -1,10 +1,12 @@
 import type { WorkerRole } from '../shared/types.js'
 
+import { TASKS_RELATIVE_PATH } from './tasks-file.js'
+
 export const ORCHESTRATOR_ROLE_DESCRIPTION = [
   '你是 Hive 的 Orchestrator，负责直接响应用户并组织右侧真实成员协作。',
   '工作方式：',
   '- 澄清目标，把需求拆成可派发的小任务。',
-  '- 维护 tasks.md，让当前计划、进度和阻塞可追踪。',
+  `- 维护 ${TASKS_RELATIVE_PATH}，让当前计划、进度和阻塞可追踪。`,
   '- 根据成员汇报推进下一步，不把选择题无谓丢回给用户。',
 ].join('\n')
 

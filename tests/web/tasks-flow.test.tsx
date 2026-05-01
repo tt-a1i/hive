@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -145,7 +145,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     expect(within(drawer).getByTestId('task-line-1')).toHaveTextContent('wire submit')
   })
 
-  test('toggling a checkbox persists to tasks.md', async () => {
+  test('toggling a checkbox persists to .hive/tasks.md', async () => {
     render(<App />)
     await openTaskGraph()
 
@@ -166,7 +166,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     })
   })
 
-  test('raw editor save persists edits to tasks.md', async () => {
+  test('raw editor save persists edits to .hive/tasks.md', async () => {
     render(<App />)
     await enterRawEditor('- [ ] implement login\n')
 
@@ -184,14 +184,15 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     await expect(savedResponse.json()).resolves.toEqual({ content: '- [x] implement login\n' })
   })
 
-  test('raw editor shows conflict banner when tasks.md changes externally during dirty edit', async () => {
+  test('raw editor shows conflict banner when .hive/tasks.md changes externally during dirty edit', async () => {
     render(<App />)
     await enterRawEditor('- [ ] implement login\n')
 
     fireEvent.change(screen.getByLabelText('Tasks Markdown'), {
       target: { value: '- [ ] local draft\n' },
     })
-    writeFileSync(join(workspacePath, 'tasks.md'), '- [x] external change\n', 'utf8')
+    mkdirSync(join(workspacePath, '.hive'), { recursive: true })
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [x] external change\n', 'utf8')
 
     await waitFor(() => {
       expect(screen.getByText('文件已在外部变化')).toBeInTheDocument()
@@ -212,7 +213,8 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     render(<App />)
     await enterRawEditor('- [ ] implement login\n')
 
-    writeFileSync(join(workspacePath, 'tasks.md'), '- [x] auto sync\n', 'utf8')
+    mkdirSync(join(workspacePath, '.hive'), { recursive: true })
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [x] auto sync\n', 'utf8')
 
     await waitFor(() => {
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [x] auto sync\n')

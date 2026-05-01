@@ -3,6 +3,7 @@ import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import { getHiveTeamRules } from './hive-team-guidance.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import { wrapSystemMessage } from './system-message.js'
+import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
 const TASKS_HEAD_LIMIT = 1024
 
@@ -43,11 +44,11 @@ export const buildEnvSyncMessage = ({
       `- 当前 workspace: ${workspace.name}`,
       '- 现有 worker:',
       ...formatWorkers(workers),
-      '- tasks.md 当前内容:',
+      `- ${TASKS_RELATIVE_PATH} 当前内容:`,
       tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
       ...formatRestartWindow(restartWindowMessages),
       agent.role === 'orchestrator' ? '- Hive worker 派单规则:' : '- Hive worker 边界:',
       ...getHiveTeamRules(agent).map((rule) => `  - ${rule}`),
-      '请继续。如果不确定，用 team list / Read tasks.md 自查或问 user。',
+      `请继续。如果不确定，用 team list / Read ${TASKS_RELATIVE_PATH} 自查或问 user。`,
     ].join('\n')
   )

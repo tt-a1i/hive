@@ -7,8 +7,9 @@ import { applySchemaVersion9 } from './sqlite-schema-v9.js'
 import { applySchemaVersion10 } from './sqlite-schema-v10.js'
 import { applySchemaVersion11 } from './sqlite-schema-v11.js'
 import { applySchemaVersion12 } from './sqlite-schema-v12.js'
+import { applySchemaVersion13 } from './sqlite-schema-v13.js'
 
-export const CURRENT_SCHEMA_VERSION = 12
+export const CURRENT_SCHEMA_VERSION = 13
 
 export const initializeRuntimeDatabase = (db: Database) => {
   db.exec(`
@@ -184,5 +185,10 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(12)) {
     applySchemaVersion12(db)
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(12, Date.now())
+  }
+
+  if (!appliedVersions.has(13)) {
+    applySchemaVersion13(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(13, Date.now())
   }
 }

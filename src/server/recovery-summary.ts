@@ -3,6 +3,7 @@ import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import { getHiveTeamRules } from './hive-team-guidance.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import { wrapSystemMessage } from './system-message.js'
+import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
 const TASKS_HEAD_LIMIT = 1536
 
@@ -116,7 +117,7 @@ export const buildRecoverySummary = ({
       '## 当前未完成任务',
       ...formatOpenTasks(allTaskMessages ?? messages, agent, workers),
       '',
-      '## 当前 tasks.md 状态',
+      `## 当前 ${TASKS_RELATIVE_PATH} 状态`,
       tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
       '',
       '## 当前活跃 worker',

@@ -31,11 +31,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 汇报回灌 | worker 调 `team report` → 系统作为系统消息注入 orch 的 stdin |
 | 路由信息 | 每个 PTY 注入 env: `HIVE_PORT + HIVE_PROJECT_ID + HIVE_AGENT_ID` |
 | `team` CLI 部署 | **PATH prepend** 注入到 PTY env（不全局安装），自带 `<hive-pkg>/bin/team`，零污染用户系统 |
-| Crash 恢复模型 | 4 种场景明确（§3.5.1：单崩 / 主动停 / 正常 exit / runtime 重启）。两层引擎：**Layer A** 用 CLI 原生 session resume（CC `--resume <id>`），完整恢复对话；**Layer B** fallback 摘要换班（拼装 messages + tasks.md + worker 状态注入 stdin）。Hive runtime 重启**不自动启动** agent，提供 [Restart] / [Restart All] 按钮 |
+| Crash 恢复模型 | 4 种场景明确（§3.5.1：单崩 / 主动停 / 正常 exit / runtime 重启）。两层引擎：**Layer A** 用 CLI 原生 session resume（CC `--resume <id>`），完整恢复对话；**Layer B** fallback 摘要换班（拼装 messages + .hive/tasks.md + worker 状态注入 stdin）。Hive runtime 重启**不自动启动** agent，提供 [Restart] / [Restart All] 按钮 |
 | Agent 状态机 | 仅 `working` / `idle` / `stopped` 三态（§3.6）。状态完全由协议事件驱动：send → working、report → idle（pending_count 归零时）、PTY exit → stopped。**不做超时/卡死检测，不增加心跳**；卡死的 agent 持续显示 working，由用户手动判断 |
 | 角色模板 | **4 个内置**（1 Orchestrator + 3 Worker：Coder / Reviewer / Tester）+ 用户自定义；MVP 不内置 Architect（语义跟 Orch 重叠）。Orchestrator 模板系统级唯一、不出现在 Add Worker 列表；其他可"复制为自定义"修改 |
 | 兜底 | **不做静默检测、不做心跳**——worker 必须显式 report，否则视为未完成 |
-| 任务图 | 每个 workspace 的项目根 `tasks.md`（GFM task list），文件 watch 同步 UI |
+| 任务图 | 每个 workspace 的项目根 `.hive/tasks.md`（GFM task list），文件 watch 同步 UI |
 | 工作目录隔离 | **不做 worktree**，所有 agent 共享对应 workspace 根，冲突由 orch 拆分负责 |
 | 默认权限 | YOLO 模式（自动跳过 CLI agent 的权限确认） |
 
@@ -74,7 +74,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - tRPC 11 + WebSocket（终端流）
 - node-pty + xterm.js（含 WebGL addon）
 - better-sqlite3 + Drizzle ORM（项目元数据/角色模板/对话历史）
-- chokidar（监听 `tasks.md`）
+- chokidar（监听 `.hive/tasks.md`）
 - Biome + Vitest
 - commander（`hive` 主命令 + `team` 子命令）
 

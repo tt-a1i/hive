@@ -1,6 +1,7 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 
 import { getHiveTeamRules } from './hive-team-guidance.js'
+import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
 export const buildAgentStartupInstructions = ({
   agent,
@@ -24,7 +25,7 @@ export const buildAgentStartupInstructions = ({
     lines.push(
       '你的职责：',
       '- 直接响应 user，澄清需求并拆解任务',
-      '- 维护 tasks.md',
+      `- 维护 ${TASKS_RELATIVE_PATH}`,
       '- 按 worker 名称派单，并根据汇报推进下一步',
       '',
       '可用 team 命令：',

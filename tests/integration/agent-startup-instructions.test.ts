@@ -138,7 +138,7 @@ describe('agent startup instructions', () => {
         expect(output).toContain('你是 Alpha 的 Orchestrator')
         expect(output).toContain('team send <worker-name> "<task>"')
         expect(output).toContain('team list')
-        expect(output).toContain('维护 tasks.md')
+        expect(output).toContain('维护 .hive/tasks.md')
         expect(output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
         expect(output).toContain('先执行 `team list` 确认真实 Hive worker')
         expect(output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')

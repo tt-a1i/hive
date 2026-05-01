@@ -145,12 +145,12 @@ export const TaskGraphDrawer = ({
           <div className="flex items-center gap-2">
             <span className="font-semibold text-pri">Task Graph</span>
             <span className="rounded bg-2 px-1.5 py-0.5 text-[10px] uppercase text-ter">
-              tasks.md
+              .hive/tasks.md
             </span>
           </div>
           {workspacePath ? (
             <div className="mono mt-0.5 truncate text-[11px] text-ter">
-              {workspacePath}/tasks.md
+              {workspacePath}/.hive/tasks.md
             </div>
           ) : null}
         </div>
@@ -183,7 +183,7 @@ export const TaskGraphDrawer = ({
             <div>
               <div className="font-medium text-sec">没有任务条目</div>
               <div className="mt-1 text-xs text-ter">
-                Orchestrator 写入 tasks.md 后会自动显示在这里。
+                Orchestrator 写入 .hive/tasks.md 后会自动显示在这里。
               </div>
             </div>
           </div>

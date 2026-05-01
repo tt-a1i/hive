@@ -456,8 +456,79 @@ describe('schema version', () => {
     expect(byId.reviewer).toContain('blocking 问题')
     expect(byId.tester).toContain('验证型 Tester')
     expect(byId.orchestrator).toContain('组织右侧真实成员协作')
+    expect(byId.orchestrator).toContain('.hive/tasks.md')
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(12)).toEqual({
       version: 12,
+    })
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(13)).toEqual({
+      version: 13,
+    })
+
+    db.close()
+  })
+
+  test('migration refreshes v12 builtin role prompts to .hive tasks path', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-v13-role-template-descriptions-'))
+    tempDirs.push(dataDir)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+
+      INSERT INTO schema_version (version, applied_at)
+      VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      INSERT INTO role_templates (
+        id,
+        name,
+        role_type,
+        description,
+        default_command,
+        default_args,
+        default_env,
+        is_builtin,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        'orchestrator',
+        'Orchestrator',
+        'orchestrator',
+        '你是 Hive 的 Orchestrator。维护 tasks.md。',
+        'claude',
+        '[]',
+        '{}',
+        1,
+        1,
+        1
+      );
+    `)
+
+    initializeRuntimeDatabase(db)
+
+    const row = db
+      .prepare('SELECT description FROM role_templates WHERE id = ?')
+      .get('orchestrator') as { description: string }
+    expect(row.description).toContain('.hive/tasks.md')
+    expect(row.description).not.toContain('维护 tasks.md')
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(13)).toEqual({
+      version: 13,
     })
 
     db.close()

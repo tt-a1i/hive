@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -52,9 +52,11 @@ const startServer = async () => {
 }
 
 describe('tasks api', () => {
-  test('GET returns current tasks.md content and PUT persists updates', async () => {
+  test('GET returns current .hive/tasks.md content and PUT persists updates there', async () => {
     const { baseUrl, workspace } = await startServer()
     const cookie = await getUiCookie(baseUrl)
+    const hiveTasksPath = join(workspace.path, '.hive', 'tasks.md')
+    const legacyTasksPath = join(workspace.path, 'tasks.md')
 
     const initialResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
       headers: { cookie },
@@ -73,6 +75,8 @@ describe('tasks api', () => {
     await expect(updateResponse.json()).resolves.toEqual({
       content: '- [ ] implement login\n',
     })
+    expect(readFileSync(hiveTasksPath, 'utf8')).toBe('- [ ] implement login\n')
+    expect(existsSync(legacyTasksPath)).toBe(false)
 
     const readBackResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
       headers: { cookie },
