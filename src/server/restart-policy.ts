@@ -1,16 +1,12 @@
 import type { WorkspaceSummary } from '../shared/types.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
-import { buildEnvSyncMessage } from './env-sync-message.js'
 import { buildRecoverySummary } from './recovery-summary.js'
 import {
   findPreviousRun,
   type RestartPolicyInput,
   writeSystemMessage,
 } from './restart-policy-support.js'
-import {
-  createSystemEnvSyncMessage,
-  createSystemRecoverySummaryMessage,
-} from './runtime-message-builders.js'
+import { createSystemRecoverySummaryMessage } from './runtime-message-builders.js'
 
 const RECOVERY_WINDOW_MS = 60 * 60 * 1000
 
@@ -50,25 +46,7 @@ export const createRestartPolicy = ({
     )
     const tasksContent = readTasks(snapshot.summary.path)
 
-    if (startConfig.resumedSessionId) {
-      const sinceMs = previousRun.endedAt ?? previousRun.startedAt
-      const text = buildEnvSyncMessage({
-        agent,
-        tasksContent,
-        workers,
-        workspace,
-        restartWindowMessages: listMessagesForRecovery(workspace.id, sinceMs),
-      })
-      writeSystemMessage({
-        deleteMessage,
-        insertMessage,
-        record: createSystemEnvSyncMessage(workspace.id, agentId, text),
-        runId,
-        text,
-        writeToRun,
-      })
-      return true
-    }
+    if (startConfig.resumedSessionId) return true
 
     const text = buildRecoverySummary({
       agent,

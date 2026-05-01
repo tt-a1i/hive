@@ -16,6 +16,7 @@ interface RuntimeStore {
   listWorkspaces: () => WorkspaceSummary[]
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
   deleteWorker: (workspaceId: string, workerId: string) => void
+  renameWorker: (workspaceId: string, workerId: string, name: string) => AgentSummary
   recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => void
   dispatchTask: (
     workspaceId: string,
@@ -55,6 +56,15 @@ interface RuntimeStore {
     agentId: string,
     input: StartAgentOptions
   ) => Promise<LiveAgentRun>
+  autostartConfiguredAgents: (input: StartAgentOptions) => Promise<
+    Array<{
+      agent_id: string
+      error: string | null
+      ok: boolean
+      run_id: string | null
+      workspace_id: string
+    }>
+  >
   startWorkspaceWatch: (workspaceId: string) => Promise<void>
   getLiveRun: (runId: string) => LiveAgentRun
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
@@ -111,6 +121,8 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       }
     },
     addWorker: (workspaceId, input) => services.workspaceStore.addWorker(workspaceId, input),
+    renameWorker: (workspaceId, workerId, name) =>
+      services.workspaceStore.renameWorker(workspaceId, workerId, name),
     deleteWorker: (workspaceId, workerId) => {
       const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
       if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
@@ -131,6 +143,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     configureAgentLaunch: lifecycle.configureAgentLaunch,
     peekAgentLaunchConfig: lifecycle.peekAgentLaunchConfig,
     startAgent: lifecycle.startAgent,
+    autostartConfiguredAgents: lifecycle.autostartConfiguredAgents,
     startWorkspaceWatch: lifecycle.startWorkspaceWatch,
     getLiveRun: (runId) => services.agentRuntime.getLiveRun(runId),
     getActiveRunByAgentId: (workspaceId, agentId) =>

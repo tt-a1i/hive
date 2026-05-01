@@ -16,6 +16,7 @@ const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
 beforeEach(async () => {
+  window.localStorage.removeItem?.('hive.workspace-sidebar.width')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-app-shell-fs-'))
   mkdirSync(join(sandboxRoot, 'placeholder'), { recursive: true })
   tempDirs.push(sandboxRoot)
@@ -72,29 +73,32 @@ describe('app shell with real server', () => {
       name: 'Workspace sidebar',
       hidden: true,
     })
-    expect(sidebar).toHaveClass('w-56')
+    expect(sidebar).toHaveStyle({ width: '256px' })
     expect(sidebar.closest('.h-screen')).toBeInTheDocument()
-
-    expect(screen.getByRole('contentinfo', { hidden: true })).toHaveClass('h-6')
+    expect(screen.queryByRole('contentinfo', { hidden: true })).toBeNull()
   })
 
-  test('workspace sidebar can collapse to a narrow rail and expand again', async () => {
+  test('workspace sidebar can be resized from its right edge', async () => {
     render(<App />)
 
     const sidebar = screen.getByRole('complementary', { name: 'Workspace sidebar' })
-    expect(sidebar).toHaveClass('w-56')
-    expect(sidebar).toHaveAttribute('data-collapsed', 'false')
+    expect(sidebar).toHaveStyle({ width: '256px' })
+    expect(screen.getByTestId('workspace-sidebar-title')).toHaveTextContent('Workspaces')
+    expect(screen.queryByRole('button', { name: 'Collapse workspace sidebar' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse workspace sidebar' }))
+    const separator = screen.getByRole('separator', { name: 'Resize workspace sidebar' })
+    expect(separator).toHaveAttribute('aria-valuenow', '256')
 
-    expect(sidebar).toHaveClass('w-14')
-    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
-    expect(screen.queryByLabelText('Workspaces')).toBeNull()
+    fireEvent.mouseDown(separator, { clientX: 256 })
+    fireEvent.mouseMove(document, { clientX: 320 })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand workspace sidebar' }))
+    expect(sidebar).toHaveStyle({ width: '320px' })
+    expect(separator).toHaveAttribute('aria-valuenow', '320')
 
-    expect(sidebar).toHaveClass('w-56')
-    expect(sidebar).toHaveAttribute('data-collapsed', 'false')
-    expect(screen.getByLabelText('Workspaces')).toBeInTheDocument()
+    fireEvent.mouseUp(document)
+    fireEvent.keyDown(separator, { key: 'ArrowLeft' })
+
+    expect(sidebar).toHaveStyle({ width: '304px' })
+    expect(separator).toHaveAttribute('aria-valuenow', '304')
   })
 })

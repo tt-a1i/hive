@@ -16,6 +16,7 @@ export interface WorkspaceStore {
   createWorkspace: (path: string, name: string) => WorkspaceSummary
   deleteWorkspace: (workspaceId: string) => void
   deleteWorker: (workspaceId: string, workerId: string) => void
+  renameWorker: (workspaceId: string, workerId: string, name: string) => AgentSummary
   getAgent: (workspaceId: string, agentId: string) => AgentSummary
   getWorker: (workspaceId: string, workerId: string) => AgentSummary
   getWorkerByName: (workspaceId: string, workerName: string) => AgentSummary

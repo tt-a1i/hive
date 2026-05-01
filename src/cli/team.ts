@@ -39,11 +39,26 @@ const getBaseUrl = (env: HiveEnv) => `http://127.0.0.1:${env.HIVE_PORT}`
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const postJson = async (url: string, body: unknown) => {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
+const describeFetchError = (baseUrl: string, error: unknown) => {
+  const cause =
+    error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : ''
+  const message = error instanceof Error ? error.message : String(error)
+  return `Failed to reach Hive runtime at ${baseUrl}: ${message}${cause}. Check HIVE_PORT and make sure the Hive runtime is still running.`
+}
+
+const fetchRuntime = async (baseUrl: string, path: string, init: RequestInit) => {
+  try {
+    return await fetch(`${baseUrl}${path}`, init)
+  } catch (error) {
+    throw new Error(describeFetchError(baseUrl, error))
+  }
+}
+
+const postJson = async (baseUrl: string, path: string, body: unknown) => {
+  const response = await fetchRuntime(baseUrl, path, {
     body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
   })
 
   if (!response.ok) {
@@ -97,7 +112,7 @@ export const runTeamCommand = async (argv: string[]) => {
   if (command === 'list') {
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
-    const response = await fetch(`${baseUrl}/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
+    const response = await fetchRuntime(baseUrl, `/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
       method: 'GET',
       headers: {
         'x-hive-agent-id': env.HIVE_AGENT_ID,
@@ -121,7 +136,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
-    await postJson(`${baseUrl}/api/team/send`, {
+    await postJson(baseUrl, '/api/team/send', {
       hive_port: env.HIVE_PORT,
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
@@ -137,7 +152,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
-    await postJson(`${baseUrl}/api/team/report`, {
+    await postJson(baseUrl, '/api/team/report', {
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,

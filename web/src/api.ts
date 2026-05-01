@@ -281,6 +281,22 @@ export const deleteWorker = async (workspaceId: string, workerId: string): Promi
   }
 }
 
+export const renameWorker = async (
+  workspaceId: string,
+  workerId: string,
+  name: string
+): Promise<void> => {
+  const response = await apiFetch(`/api/workspaces/${workspaceId}/workers/${workerId}`, {
+    body: JSON.stringify({ name }),
+    headers: { 'content-type': 'application/json' },
+    method: 'PATCH',
+  })
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to rename worker'))
+  }
+}
+
 export const getWorkspaceTasks = async (workspaceId: string): Promise<{ content: string }> => {
   const response = await apiFetch(`/api/workspaces/${workspaceId}/tasks`)
 

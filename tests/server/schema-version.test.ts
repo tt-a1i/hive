@@ -261,12 +261,13 @@ describe('schema version', () => {
 
     const rows = db
       .prepare(
-        'SELECT id, resume_args_template, session_id_capture FROM command_presets ORDER BY id'
+        'SELECT id, resume_args_template, session_id_capture, yolo_args_template FROM command_presets ORDER BY id'
       )
       .all() as Array<{
       id: string
       resume_args_template: string | null
       session_id_capture: string | null
+      yolo_args_template: string | null
     }>
     const byId = Object.fromEntries(rows.map((row) => [row.id, row])) as Record<
       string,
@@ -291,16 +292,102 @@ describe('schema version', () => {
     expect(JSON.parse(codex.session_id_capture ?? '{}')).toMatchObject({
       source: 'codex_session_jsonl_dir',
     })
+    expect(JSON.parse(codex.yolo_args_template ?? '[]')).toEqual([
+      '--dangerously-bypass-approvals-and-sandbox',
+    ])
     expect(gemini.resume_args_template).toBe('--resume {session_id}')
     expect(JSON.parse(gemini.session_id_capture ?? '{}')).toMatchObject({
       source: 'gemini_session_json_dir',
     })
+    expect(JSON.parse(gemini.yolo_args_template ?? '[]')).toEqual(['--yolo'])
     expect(opencode.resume_args_template).toBe('--session {session_id}')
     expect(JSON.parse(opencode.session_id_capture ?? '{}')).toMatchObject({
       source: 'opencode_session_db',
     })
+    expect(JSON.parse(opencode.yolo_args_template ?? '[]')).toEqual([
+      '--dangerously-skip-permissions',
+    ])
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(10)).toEqual({
       version: 10,
+    })
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(11)).toEqual({
+      version: 11,
+    })
+
+    db.close()
+  })
+
+  test('migration updates builtin yolo args for existing v10 databases', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-agent-yolo-'))
+    tempDirs.push(dataDir)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+
+      INSERT INTO schema_version (version, applied_at)
+      VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10);
+
+      CREATE TABLE command_presets (
+        id TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        command TEXT NOT NULL,
+        args TEXT NOT NULL,
+        env TEXT NOT NULL,
+        resume_args_template TEXT,
+        session_id_capture TEXT,
+        yolo_args_template TEXT,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `)
+    const insert = db.prepare(
+      `INSERT INTO command_presets (
+        id,
+        display_name,
+        command,
+        args,
+        env,
+        resume_args_template,
+        session_id_capture,
+        yolo_args_template,
+        is_builtin,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    for (const [id, displayName, command] of [
+      ['claude', 'Claude Code (CC)', 'claude'],
+      ['codex', 'Codex', 'codex'],
+      ['opencode', 'OpenCode', 'opencode'],
+      ['gemini', 'Gemini', 'gemini'],
+    ] as const) {
+      insert.run(id, displayName, command, '[]', '{}', null, null, null, 1, 1, 1)
+    }
+
+    initializeRuntimeDatabase(db)
+
+    const rows = db
+      .prepare('SELECT id, yolo_args_template FROM command_presets ORDER BY id')
+      .all() as Array<{ id: string; yolo_args_template: string | null }>
+    const byId = Object.fromEntries(
+      rows.map((row) => [row.id, JSON.parse(row.yolo_args_template ?? '[]') as string[]])
+    )
+
+    expect(byId.claude).toEqual([
+      '--dangerously-skip-permissions',
+      '--permission-mode=bypassPermissions',
+      '--disallowedTools=Task',
+    ])
+    expect(byId.codex).toEqual(['--dangerously-bypass-approvals-and-sandbox'])
+    expect(byId.gemini).toEqual(['--yolo'])
+    expect(byId.opencode).toEqual(['--dangerously-skip-permissions'])
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(11)).toEqual({
+      version: 11,
     })
 
     db.close()

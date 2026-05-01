@@ -11,6 +11,7 @@ import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 let cleanupServer: (() => Promise<void>) | undefined
+let serverContext: Awaited<ReturnType<typeof startTestServer>> | undefined
 let sandboxRoot = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
@@ -31,6 +32,7 @@ beforeEach(async () => {
   process.env.HIVE_ORCHESTRATOR_ARGS_JSON = JSON.stringify(['-c', 'echo queen up; sleep 60'])
 
   const server = await startTestServer()
+  serverContext = server
   cleanupServer = server.close
   let cookie = ''
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
@@ -51,6 +53,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
+  serverContext = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
   delete process.env.HIVE_MOCK_PICK_FOLDER
   delete process.env.HIVE_ORCHESTRATOR_COMMAND
@@ -90,10 +93,37 @@ describe('workspace flow with real server', () => {
       },
       { timeout: 3000 }
     )
-    expect(screen.queryByTestId('orchestrator-idle-body')).toBeNull()
+    expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
     expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
+  })
+
+  test('existing workspace auto-starts Queen without exposing a manual Start Queen CTA', async () => {
+    const existingPath = join(sandboxRoot, 'existing-project')
+    mkdirSync(existingPath, { recursive: true })
+    serverContext?.store.createWorkspace(existingPath, 'Existing')
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Existing' })).toHaveAttribute(
+        'aria-current',
+        'true'
+      )
+    })
+
+    expect(screen.queryByTestId('orchestrator-start')).toBeNull()
+    expect(screen.queryByText('Queen is offline')).toBeNull()
+
+    await waitFor(
+      () => {
+        expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
+      },
+      { timeout: 3000 }
+    )
+    expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
+    expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
   })
 })

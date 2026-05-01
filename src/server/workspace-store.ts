@@ -83,6 +83,28 @@ export const createWorkspaceStore = (
       })()
       workspaces.delete(workspaceId)
     },
+    renameWorker(workspaceId, workerId, name) {
+      const worker = getWorkerRecord(workspaces, workspaceId, workerId)
+      const trimmed = name.trim()
+      if (!trimmed) throw new Error('Worker name must not be empty')
+      if (trimmed.length > 64) throw new Error('Worker name must be 64 characters or fewer')
+      if (trimmed === worker.name) return worker
+      const workspace = getWorkspace(workspaceId)
+      if (
+        workspace.agents.some(
+          (agent) => agent.id !== workerId && agent.name === trimmed && isWorkerAgent(agent)
+        )
+      ) {
+        throw new ConflictError(`Worker name already exists: ${trimmed}`)
+      }
+      db?.prepare('UPDATE workers SET name = ? WHERE workspace_id = ? AND id = ?').run(
+        trimmed,
+        workspaceId,
+        workerId
+      )
+      worker.name = trimmed
+      return worker
+    },
     deleteWorker(workspaceId, workerId) {
       const workspace = getWorkspace(workspaceId)
       getWorkerRecord(workspaces, workspaceId, workerId)

@@ -177,9 +177,9 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
-describe('Layer A env sync integration', () => {
-  test('successful Layer A resume injects persisted env-sync system message', async () => {
-    const homeDir = mkdtempSync(join(tmpdir(), 'hive-layer-a-env-sync-home-'))
+describe('Layer A native resume integration', () => {
+  test('successful Layer A resume does not inject fallback prompts', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-layer-a-native-resume-home-'))
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
@@ -232,26 +232,13 @@ describe('Layer A env sync integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain(`ARGS:--resume ${sessionId}`)
-        expect(state.output).toContain(
-          'STDIN:\u001b[200~[Hive 系统消息：你刚被 Hive 重启了。期间环境变化：'
-        )
-        expect(state.output).toContain('\u001b[201~')
-        expect(state.output).toContain('当前 workspace: Alpha')
-        expect(state.output).toContain('Bob')
-        expect(state.output).toContain('env sync task')
-        expect(state.output).toContain('重启期间未派新单')
+        expect(state.output).toContain(`--resume ${sessionId}`)
+        expect(state.output).not.toContain('STDIN:')
+        expect(state.output).not.toContain('[Hive 系统消息')
       })
 
-      const envSyncMessages = listSystemMessages(server.dataDir, 'system_env_sync')
-      expect(envSyncMessages).toHaveLength(1)
-      expect(envSyncMessages).toContainEqual(
-        expect.objectContaining({
-          type: 'system_env_sync',
-          worker_id: alice.id,
-          text: expect.stringContaining('env sync task'),
-        })
-      )
+      expect(listSystemMessages(server.dataDir, 'system_env_sync')).toHaveLength(0)
+      expect(listSystemMessages(server.dataDir, 'system_recovery_summary')).toHaveLength(0)
     } finally {
       await server.close()
     }

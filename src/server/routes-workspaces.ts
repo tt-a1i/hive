@@ -186,6 +186,36 @@ export const workspaceRoutes: RouteDefinition[] = [
     }
   ),
   route(
+    'PATCH',
+    '/api/workspaces/:workspaceId/workers/:workerId',
+    async ({ params, request, response, store }) => {
+      const workspaceId = getRequiredParam(
+        response,
+        params,
+        'workspaceId',
+        'Workspace id and worker id are required'
+      )
+      const workerId = getRequiredParam(
+        response,
+        params,
+        'workerId',
+        'Workspace id and worker id are required'
+      )
+      if (!workspaceId || !workerId) {
+        return
+      }
+
+      requireUiTokenFromRequest(request, store.validateUiToken)
+      const body = await readJsonBody<{ name?: string }>(request)
+      if (typeof body.name !== 'string') {
+        sendJson(response, 400, { error: 'name is required' })
+        return
+      }
+      store.renameWorker(workspaceId, workerId, body.name)
+      sendJson(response, 200, getSerializedWorker(workspaceId, workerId, store.listWorkers))
+    }
+  ),
+  route(
     'POST',
     '/api/workspaces/:workspaceId/user-input',
     async ({ params, request, response, store }) => {

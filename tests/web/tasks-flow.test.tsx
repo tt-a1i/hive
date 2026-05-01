@@ -20,6 +20,7 @@ let uiCookie = ''
 const tempDirs: string[] = []
 
 class ForwardedWebSocket {
+  readonly OPEN = 1
   private socket: WebSocket
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
@@ -38,6 +39,14 @@ class ForwardedWebSocket {
 
   close() {
     this.socket.close()
+  }
+
+  get readyState() {
+    return this.socket.readyState
+  }
+
+  send(payload: string) {
+    this.socket.send(payload)
   }
 }
 

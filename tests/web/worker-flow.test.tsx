@@ -36,6 +36,37 @@ let workspaceId = ''
 let sleeperPresetId = ''
 let uiCookie = ''
 
+const fetchThroughServer = (input: RequestInfo | URL, init?: RequestInit) => {
+  const value =
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  const url = value.startsWith('http') ? value : `${serverContext?.baseUrl}${value}`
+  const headers = new Headers(init?.headers)
+  headers.set('cookie', uiCookie)
+  return { headers, url }
+}
+
+const stubFetch = () => {
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const { headers, url } = fetchThroughServer(input, init)
+    return nativeFetch(url, { ...init, headers })
+  })
+}
+
+const stubFetchWithEmptyTerminalRuns = () => {
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const { headers, url } = fetchThroughServer(input, init)
+    if (url.endsWith(`/api/ui/workspaces/${workspaceId}/runs`)) {
+      return Promise.resolve(
+        new Response(JSON.stringify([]), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        })
+      )
+    }
+    return nativeFetch(url, { ...init, headers })
+  })
+}
+
 beforeEach(async () => {
   window.matchMedia =
     window.matchMedia ??
@@ -79,14 +110,7 @@ beforeEach(async () => {
     }),
   })
   sleeperPresetId = ((await presetResponse.json()) as { id: string }).id
-  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-    const value =
-      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-    const url = value.startsWith('http') ? value : `${server.baseUrl}${value}`
-    const headers = new Headers(init?.headers)
-    headers.set('cookie', cookie)
-    return nativeFetch(url, { ...init, headers })
-  })
+  stubFetch()
 })
 
 afterEach(async () => {
@@ -114,6 +138,9 @@ describe('worker flow with real server', () => {
     fireEvent.click(newWorkerButtons[0] as HTMLElement)
 
     const dialog = await screen.findByRole('form', { name: 'Add team member' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Generate random member name' }))
+    const nameInput = within(dialog).getByPlaceholderText('e.g. Alice') as HTMLInputElement
+    expect(nameInput.value).toMatch(/^[a-z]+-[a-z]+-[0-9]{2}$/)
     fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
       target: { value: 'Alice' },
     })
@@ -146,14 +173,20 @@ describe('worker flow with real server', () => {
       .find((run) => run.agent_name === 'Alice')
     expect(workerRun?.run_id).toEqual(expect.any(String))
 
+    // Verify clicking the card opens the modal and the PTY portal mounts.
     fireEvent.click(card)
-    // Radix Dialog labels itself via Dialog.Title which is the bare worker name.
-    const modal = await screen.findByRole('dialog', { name: 'Alice' })
+    await screen.findByRole('dialog', { name: 'Alice' })
     await waitFor(() => {
       expect(document.querySelector('[id^="worker-pty-"]')).not.toBeNull()
     })
-    // Delete is destructive: button opens Confirm; confirm-action performs.
-    fireEvent.click(within(modal).getByTestId('worker-delete'))
+    // Close modal — control actions (Stop/Restart/Delete) live on the card now.
+    fireEvent.click(screen.getByLabelText('Close worker detail'))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Alice' })).toBeNull()
+    })
+
+    // Delete via the card's hover-revealed action cluster.
+    fireEvent.click(screen.getByRole('button', { name: /^Delete Alice$/ }))
     const confirm = await screen.findByTestId('confirm-title')
     expect(confirm).toHaveTextContent('Delete Alice?')
     fireEvent.click(screen.getByTestId('confirm-action'))
@@ -162,7 +195,36 @@ describe('worker flow with real server', () => {
       expect(screen.queryByRole('button', { name: /^Open Alice$/ })).toBeNull()
     })
     expect(serverContext?.store.listWorkers(workspaceId)).toHaveLength(0)
-    expect(serverContext?.store.listTerminalRuns(workspaceId)).toHaveLength(0)
+    expect(
+      serverContext?.store.listTerminalRuns(workspaceId).filter((run) => run.agent_name === 'Alice')
+    ).toHaveLength(0)
+  })
+
+  test('new member opens with its PTY before terminal-runs polling catches up', async () => {
+    stubFetchWithEmptyTerminalRuns()
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Add Member/ }).length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: /Add Member/ })[0] as HTMLElement)
+
+    const dialog = await screen.findByRole('form', { name: 'Add team member' })
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
+      target: { value: 'Immediate' },
+    })
+    await waitFor(() => {
+      expect(within(dialog).queryByTestId(`agent-radio-${sleeperPresetId}`)).toBeInTheDocument()
+    })
+    fireEvent.click(within(dialog).getByTestId(`agent-radio-${sleeperPresetId}`))
+    fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
+
+    const card = await screen.findByRole('button', { name: /^Open Immediate$/ })
+    fireEvent.click(card)
+
+    const modal = await screen.findByRole('dialog', { name: 'Immediate' })
+    expect(within(modal).queryByTestId('worker-start-empty')).toBeNull()
+    expect(document.querySelector('[id^="worker-pty-"]')).not.toBeNull()
   })
 
   test('stopped worker can be started from the detail modal after reload', async () => {

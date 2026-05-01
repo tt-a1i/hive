@@ -1,78 +1,152 @@
-import type { TeamListItem, WorkerRole } from '../../../src/shared/types.js'
+import { Pencil, Play, Trash2 } from 'lucide-react'
+import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
+
+import type { TeamListItem } from '../../../src/shared/types.js'
 import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
 
+export type WorkerCardActionKind = 'start' | 'rename' | 'delete'
+
 type WorkerCardProps = {
+  hasRun: boolean
+  isPending?: boolean
+  onAction?: (kind: WorkerCardActionKind, worker: TeamListItem) => void
   onClick: (worker: TeamListItem) => void
   worker: TeamListItem
 }
 
-const roleStripeColor: Record<WorkerRole, string> = {
-  coder: 'var(--status-blue)',
-  reviewer: 'var(--status-purple)',
-  tester: 'var(--status-orange)',
-  custom: 'var(--text-tertiary)',
-}
-
-const shortId = (id: string): string => id.replace(/-/g, '').slice(0, 6)
-
-export const WorkerCard = ({ onClick, worker }: WorkerCardProps) => {
+/**
+ * Worker tile — Vercel/Linear-style left-aligned identity card. Avatar at the
+ * top, then name / role / status stacked beneath, each at a distinct
+ * typographic weight so the eye walks down the card cleanly. Queue badge
+ * sits top-right; hover action cluster floats over the same corner.
+ */
+export const WorkerCard = ({
+  hasRun,
+  isPending = false,
+  onAction,
+  onClick,
+  worker,
+}: WorkerCardProps) => {
   const role = getRolePresentation(worker.role)
   const status = presentWorkerStatus(worker)
   const queue = presentWorkerQueue(worker)
-  const stripe = roleStripeColor[worker.role]
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(worker)}
-      aria-label={`Open ${worker.name}`}
-      className="card card--interactive relative w-full overflow-hidden p-0 text-left"
-      data-testid={`worker-card-${worker.id}`}
-      data-status={status.kind}
-    >
-      {/* Role-color left stripe — gradient falloff + right-side soft glow so
-          the role tint reads as light leaking into the card, not a hard bar. */}
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-[2px]"
-        style={{
-          background: `linear-gradient(180deg, ${stripe} 0%, color-mix(in oklab, ${stripe} 55%, transparent) 100%)`,
-          boxShadow: `2px 0 10px -2px color-mix(in oklab, ${stripe} 35%, transparent)`,
-        }}
-      />
 
-      <div className="flex items-start gap-3 px-4 py-3.5">
-        <RoleAvatar role={worker.role} size={36} statusRing={status.kind} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-pri">{worker.name}</span>
-            <span className={`role-badge ${role.badgeClass}`}>{role.label}</span>
-            <span className="mono shrink-0 text-[10px] text-ter" title={`agent id ${worker.id}`}>
-              {shortId(worker.id)}
-            </span>
-          </div>
-          <div className="mt-2 flex items-center gap-2">
+  const handleAction =
+    (kind: WorkerCardActionKind): ((event: ReactMouseEvent<HTMLButtonElement>) => void) =>
+    (event) => {
+      event.stopPropagation()
+      onAction?.(kind, worker)
+    }
+
+  return (
+    <div className="worker-card-shell relative" data-status={status.kind}>
+      <button
+        type="button"
+        onClick={() => onClick(worker)}
+        aria-label={`Open ${worker.name}`}
+        className="card card--interactive worker-card relative flex w-full flex-col gap-3 overflow-hidden p-4 text-left"
+        data-testid={`worker-card-${worker.id}`}
+        data-status={status.kind}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <RoleAvatar role={worker.role} size={40} statusRing={status.kind} />
+          {queue ? (
             <span
-              className={`status-pill status-pill--${status.kind}`}
-              role="status"
-              title={status.label}
+              className="worker-card__queue"
+              title={`${queue.count} pending dispatch(es) — independent of PTY state`}
             >
-              <span className={status.dotClass} aria-hidden />
-              {status.label}
+              {queue.label}
             </span>
-          </div>
+          ) : null}
         </div>
-        {queue ? (
+        <div className="flex min-w-0 flex-col gap-0.5">
           <span
-            className="queue-badge shrink-0"
-            title={`${queue.count} pending dispatch(es) — independent of PTY state`}
+            className="truncate text-[14px] font-medium leading-tight text-pri"
+            title={worker.name}
           >
-            <span className="status-dot status-dot--queued" aria-hidden />
-            {queue.label}
+            {worker.name}
           </span>
-        ) : null}
-      </div>
-    </button>
+          <span className="truncate text-[11px] leading-tight text-ter">{role.label}</span>
+        </div>
+        <span
+          className={`worker-card__status worker-card__status--${status.kind}`}
+          role="status"
+          title={status.label}
+        >
+          <span className={status.dotClass} aria-hidden />
+          {status.label}
+        </span>
+      </button>
+
+      {onAction ? (
+        <div className="worker-card__actions">
+          {!hasRun ? (
+            <CardActionBtn
+              title="Start"
+              onClick={handleAction('start')}
+              disabled={isPending}
+              variant="primary"
+              testId={`worker-card-start-${worker.id}`}
+              ariaLabel={`Start ${worker.name}`}
+            >
+              <Play size={12} aria-hidden />
+            </CardActionBtn>
+          ) : null}
+          <CardActionBtn
+            title="Rename"
+            onClick={handleAction('rename')}
+            disabled={isPending}
+            testId={`worker-card-rename-${worker.id}`}
+            ariaLabel={`Rename ${worker.name}`}
+          >
+            <Pencil size={12} aria-hidden />
+          </CardActionBtn>
+          <CardActionBtn
+            title="Delete"
+            onClick={handleAction('delete')}
+            variant="danger"
+            testId={`worker-card-delete-${worker.id}`}
+            ariaLabel={`Delete ${worker.name}`}
+          >
+            <Trash2 size={12} aria-hidden />
+          </CardActionBtn>
+        </div>
+      ) : null}
+    </div>
   )
 }
+
+interface CardActionBtnProps {
+  ariaLabel: string
+  children: ReactNode
+  disabled?: boolean
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  testId: string
+  title: string
+  variant?: 'default' | 'primary' | 'danger'
+}
+
+const CardActionBtn = ({
+  ariaLabel,
+  children,
+  disabled,
+  onClick,
+  testId,
+  title,
+  variant = 'default',
+}: CardActionBtnProps) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    aria-label={ariaLabel}
+    data-testid={testId}
+    data-variant={variant}
+    className="worker-card__action"
+  >
+    {children}
+  </button>
+)

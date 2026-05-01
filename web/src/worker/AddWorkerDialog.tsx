@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, UserPlus } from 'lucide-react'
+import { Check, Dices, UserPlus } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
@@ -13,6 +13,7 @@ type AddWorkerDialogProps = {
   onClose: () => void
   onNameChange: (value: string) => void
   onPresetChange: (value: string) => void
+  onRandomName: () => void
   onRoleChange: (value: WorkerRole) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   workerName: string
@@ -137,6 +138,7 @@ export const AddWorkerDialog = ({
   onClose,
   onNameChange,
   onPresetChange,
+  onRandomName,
   onRoleChange,
   onSubmit,
   workerName,
@@ -189,7 +191,20 @@ export const AddWorkerDialog = ({
 
               <div className="flex flex-col gap-4 px-5 py-4">
                 <label className="flex flex-col gap-1.5">
-                  <FieldLabel>Name</FieldLabel>
+                  <div className="flex items-center justify-between gap-2">
+                    <FieldLabel>Name</FieldLabel>
+                    <button
+                      type="button"
+                      aria-label="Generate random member name"
+                      title="Generate random member name"
+                      className="icon-btn h-7 px-2 text-[11px]"
+                      onClick={onRandomName}
+                      data-testid="random-worker-name"
+                    >
+                      <Dices size={13} aria-hidden />
+                      Random
+                    </button>
+                  </div>
                   <input
                     value={workerName}
                     onChange={(event) => onNameChange(event.target.value)}

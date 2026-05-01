@@ -162,6 +162,30 @@ describe('claude session support', () => {
     )
   })
 
+  test('withPresetResumeArgs trusts Codex last_session_id without a filesystem preflight', () => {
+    const result = withPresetResumeArgs(
+      {
+        command: 'codex',
+        args: [],
+      },
+      {
+        resumeArgsTemplate: 'resume {session_id}',
+        sessionIdCapture: {
+          source: 'codex_session_jsonl_dir',
+          pattern: '~/.codex/sessions/**/*.jsonl',
+        },
+        yoloArgsTemplate: null,
+      },
+      '019dc277-0e8e-75c1-9794-94929426288e',
+      '/tmp/no-such-codex-workspace'
+    )
+
+    expect(result).toMatchObject({
+      args: ['resume', '019dc277-0e8e-75c1-9794-94929426288e'],
+      resumedSessionId: '019dc277-0e8e-75c1-9794-94929426288e',
+    })
+  })
+
   test('withPresetResumeArgs skips resume when capture source is unsupported', () => {
     const config = {
       command: 'claude',

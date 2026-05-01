@@ -16,6 +16,8 @@ interface UseWorkspaceCreateInput {
 interface UseWorkspaceCreateOutput {
   /** workspaceId → sticky autostart error (cleared on Retry). */
   orchestratorAutostartErrors: Record<string, string | null>
+  /** workspaceId → recent server-side autostart run id; used only to avoid immediate duplicate starts. */
+  orchestratorAutostartRunIds: Record<string, string | null>
   recordOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   createNewWorkspace: (input: WorkspaceCreateInput) => Promise<CreateWorkspaceResponse>
 }
@@ -30,10 +32,12 @@ export const useWorkspaceCreate = ({
   onWorkspaceCreated,
 }: UseWorkspaceCreateInput): UseWorkspaceCreateOutput => {
   const [orchestratorAutostartErrors, setErrors] = useState<Record<string, string | null>>({})
+  const [orchestratorAutostartRunIds, setRunIds] = useState<Record<string, string | null>>({})
 
   const recordOrchestratorResult = useCallback(
     (workspaceId: string, result: OrchestratorStartResult) => {
       setErrors((current) => ({ ...current, [workspaceId]: result.ok ? null : result.error }))
+      setRunIds((current) => ({ ...current, [workspaceId]: result.ok ? result.run_id : null }))
     },
     []
   )
@@ -54,5 +58,10 @@ export const useWorkspaceCreate = ({
     [hivePort, onWorkspaceCreated, recordOrchestratorResult]
   )
 
-  return { orchestratorAutostartErrors, recordOrchestratorResult, createNewWorkspace }
+  return {
+    orchestratorAutostartErrors,
+    orchestratorAutostartRunIds,
+    recordOrchestratorResult,
+    createNewWorkspace,
+  }
 }

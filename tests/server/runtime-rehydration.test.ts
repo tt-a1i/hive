@@ -127,11 +127,11 @@ describe('runtime rehydration', () => {
       '--disallowedTools=Task',
     ])
     expect(secondCallArgs).toEqual([
-      '--resume',
-      '11111111-1111-4111-8111-111111111111',
       '--dangerously-skip-permissions',
       '--permission-mode=bypassPermissions',
       '--disallowedTools=Task',
+      '--resume',
+      '11111111-1111-4111-8111-111111111111',
     ])
     expect(persistedSession).toEqual({ last_session_id: '11111111-1111-4111-8111-111111111111' })
     expect(mirroredWorkerSession).toEqual({

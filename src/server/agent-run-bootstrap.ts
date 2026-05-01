@@ -59,10 +59,9 @@ export const buildAgentRunBootstrap = (
     sessionStore.getLastSessionId(workspace.id, agentId),
     workspace.path
   )
-  const sessionCaptureSnapshot = snapshotSessionIdsForCapture(
-    workspace.path,
-    startConfig.sessionIdCapture
-  )
+  const sessionCaptureSnapshot = startConfig.resumedSessionId
+    ? undefined
+    : snapshotSessionIdsForCapture(workspace.path, startConfig.sessionIdCapture)
   return {
     sessionCaptureSnapshot,
     startConfig,

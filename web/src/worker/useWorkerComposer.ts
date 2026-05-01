@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import { type CommandPreset, listCommandPresets } from '../api.js'
+import { generateWorkerName } from './randomWorkerName.js'
 import type { WorkerActions } from './useWorkerActions.js'
 
 interface UseWorkerComposerInput {
@@ -19,6 +20,7 @@ export interface WorkerComposerState {
   setCommandPresetId: (value: string) => void
   setWorkerName: (value: string) => void
   setWorkerRole: (value: WorkerRole) => void
+  randomizeWorkerName: () => void
   resetError: () => void
   submit: (event: FormEvent<HTMLFormElement>, onSuccess: () => void) => void
 }
@@ -84,6 +86,7 @@ export const useWorkerComposer = ({
     setCommandPresetId,
     setWorkerName,
     setWorkerRole,
+    randomizeWorkerName: () => setWorkerName(generateWorkerName()),
     resetError: () => setCreateWorkerError(null),
     submit,
   }

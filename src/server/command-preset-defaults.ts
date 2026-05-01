@@ -10,6 +10,10 @@ export interface BuiltinCommandPresetDefaults {
   yoloArgsTemplate: string[] | null
 }
 
+const CODEX_DEFAULT_YOLO_ARGS = ['--dangerously-bypass-approvals-and-sandbox']
+const OPENCODE_DEFAULT_YOLO_ARGS = ['--dangerously-skip-permissions']
+const GEMINI_DEFAULT_YOLO_ARGS = ['--yolo']
+
 export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [
   {
     command: 'claude',
@@ -31,7 +35,7 @@ export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [
       pattern: '~/.codex/sessions/**/*.jsonl',
       source: 'codex_session_jsonl_dir',
     },
-    yoloArgsTemplate: null,
+    yoloArgsTemplate: CODEX_DEFAULT_YOLO_ARGS,
   },
   {
     command: 'opencode',
@@ -42,7 +46,7 @@ export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [
       pattern: '~/.local/share/opencode/opencode.db',
       source: 'opencode_session_db',
     },
-    yoloArgsTemplate: null,
+    yoloArgsTemplate: OPENCODE_DEFAULT_YOLO_ARGS,
   },
   {
     command: 'gemini',
@@ -53,7 +57,7 @@ export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [
       pattern: '~/.gemini/tmp/*/chats/*.json',
       source: 'gemini_session_json_dir',
     },
-    yoloArgsTemplate: null,
+    yoloArgsTemplate: GEMINI_DEFAULT_YOLO_ARGS,
   },
 ]
 

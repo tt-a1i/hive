@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
-import type { OrchestratorStartResult, TerminalRunSummary } from './api.js'
+import { type OrchestratorStartResult, renameWorker, type TerminalRunSummary } from './api.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
+import { usePaneSplit } from './usePaneSplit.js'
 import type { WorkspaceStats } from './useWorkspaceStats.js'
 import { AddWorkerDialog } from './worker/AddWorkerDialog.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
@@ -18,12 +19,12 @@ type WorkspaceDetailProps = {
     name: string,
     role: WorkerRole,
     commandPresetId: string
-  ) => Promise<{ error: string | null }>
+  ) => Promise<{ error: string | null; runId: string | null }>
   onDeleteWorker: (workerId: string) => Promise<void>
-  onStartWorker: (workerId: string) => Promise<{ error: string | null }>
-  onStopWorkerRun: (runId: string) => Promise<{ error: string | null }>
+  onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   orchestratorAutostartError: string | null
+  orchestratorAutostartRunId: string | null
   /** Kept for API stability — sub-header consumed it; M6-A removed the bar but the prop signature stays so caller wiring is untouched. */
   stats?: WorkspaceStats
   terminalRuns: TerminalRunSummary[]
@@ -36,9 +37,9 @@ export const WorkspaceDetail = ({
   onCreateWorker,
   onDeleteWorker,
   onStartWorker,
-  onStopWorkerRun,
   onOrchestratorResult,
   orchestratorAutostartError,
+  orchestratorAutostartRunId,
   terminalRuns,
   workers,
   workspace,
@@ -82,6 +83,7 @@ export const WorkspaceDetail = ({
     hivePort,
     terminalRuns,
     autostartError: orchestratorAutostartError,
+    suppressAutostartRunId: orchestratorAutostartRunId,
     onClearAutostartError: () => {
       if (workspace) onOrchestratorResult(workspace.id, { ok: true, error: null, run_id: null })
     },
@@ -89,6 +91,7 @@ export const WorkspaceDetail = ({
       if (workspace) onOrchestratorResult(workspace.id, result)
     },
   })
+  const split = usePaneSplit()
 
   if (!workspace) return null
 
@@ -116,34 +119,71 @@ export const WorkspaceDetail = ({
       .finally(() => setStartingWorkerId(null))
   }
 
-  const handleRestartWorker = async (worker: TeamListItem, runId: string) => {
-    const stopResult = await onStopWorkerRun(runId)
-    if (stopResult.error) return stopResult
-    return onStartWorker(worker.id)
+  const handleRenameWorker = async (
+    worker: TeamListItem,
+    newName: string
+  ): Promise<{ error: string | null }> => {
+    try {
+      await renameWorker(workspace.id, worker.id, newName)
+      toast.show({
+        kind: 'success',
+        message: `Renamed to "${newName}".`,
+      })
+      return { error: null }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.show({ kind: 'error', message: `Rename failed: ${message}` })
+      return { error: message }
+    }
   }
+
+  const orchWidth = `${(split.orchPct * 100).toFixed(2)}%`
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1">
-        <OrchestratorPane
-          state={orchestrator.state}
-          onStart={orchestrator.start}
-          onStop={orchestrator.stop}
-          onRestart={orchestrator.restart}
+      <div ref={split.containerRef} className="relative flex min-h-0 flex-1">
+        <div
+          className="flex min-w-[480px] shrink-0 flex-col border-r"
+          style={{ width: orchWidth, borderColor: 'var(--border)' }}
+          data-testid="orchestrator-pane-shell"
+        >
+          <OrchestratorPane
+            state={orchestrator.state}
+            onStop={orchestrator.stop}
+            onRestart={orchestrator.restart}
+          />
+        </div>
+        {/* biome-ignore lint/a11y/useSemanticElements: <hr> can't host pointer/keyboard handlers and the visible accent line; aria role="separator" is the canonical resize-handle role */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize Orchestrator and Team Members panes"
+          aria-valuenow={Math.round(split.orchPct * 100)}
+          aria-valuemin={30}
+          aria-valuemax={78}
+          tabIndex={0}
+          className="pane-splitter"
+          style={{ left: `calc(${orchWidth} - 4px)` }}
+          data-dragging={split.dragging || undefined}
+          data-testid="pane-splitter"
+          onPointerDown={split.beginDrag}
+          onKeyDown={split.onKeyDown}
         />
         <WorkersPane
           onAddWorkerClick={() => setComposerOpen(true)}
+          onDeleteWorker={handleDeleteWorker}
           onOpenWorker={(worker) => setActiveWorkerId(worker.id)}
+          onRenameWorker={handleRenameWorker}
+          onStartWorker={handleStartWorker}
+          startingWorkerId={startingWorkerId}
+          terminalRuns={terminalRuns}
           workers={workers}
         />
       </div>
       {activeWorker ? (
         <WorkerModal
           onClose={() => setActiveWorkerId(null)}
-          onDelete={handleDeleteWorker}
-          onRestart={handleRestartWorker}
           onStart={handleStartWorker}
-          onStop={onStopWorkerRun}
           runId={activeWorkerRun?.run_id ?? null}
           startError={startWorkerError}
           starting={startingWorkerId === activeWorker.id}
@@ -159,6 +199,7 @@ export const WorkspaceDetail = ({
           onClose={() => setComposerOpen(false)}
           onNameChange={composer.setWorkerName}
           onPresetChange={composer.setCommandPresetId}
+          onRandomName={composer.randomizeWorkerName}
           onRoleChange={composer.setWorkerRole}
           onSubmit={(event) => composer.submit(event, () => setComposerOpen(false))}
           workerName={composer.workerName}

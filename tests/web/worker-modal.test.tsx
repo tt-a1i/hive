@@ -29,76 +29,54 @@ const renderModal = (
   } = {}
 ) => {
   const onClose = vi.fn()
-  const onDelete = vi.fn()
   const onStart = vi.fn()
-  const onStop = vi.fn().mockResolvedValue({ error: null })
-  const onRestart = vi.fn().mockResolvedValue({ error: null })
   render(
     <WorkerModal
       onClose={onClose}
-      onDelete={onDelete}
-      onRestart={onRestart}
       onStart={onStart}
-      onStop={onStop}
       runId={options.runId === undefined ? 'run-1' : options.runId}
       startError={options.startError ?? null}
       starting={options.starting ?? false}
       worker={options.worker ?? buildWorker()}
     />
   )
-  return { onClose, onDelete, onStart, onStop, onRestart }
+  return { onClose, onStart }
 }
 
-describe('WorkerModal — destructive actions go through Confirm dialog', () => {
-  test('Stop opens Confirm with worker name; confirm-action dispatches onStop(runId)', () => {
-    const { onStop } = renderModal()
-
-    fireEvent.click(screen.getByTestId('worker-stop'))
-    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Stop Alice?')
-    expect(onStop).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByTestId('confirm-action'))
-    expect(onStop).toHaveBeenCalledTimes(1)
-    expect(onStop).toHaveBeenCalledWith('run-1')
+describe('WorkerModal — pure PTY view (control actions live on WorkerCard)', () => {
+  test('mounts the PTY slot when runId is provided', () => {
+    const runId = 'run-abc'
+    renderModal({ runId })
+    const slot = document.getElementById(`worker-pty-${runId}`)
+    expect(slot).not.toBeNull()
+    expect(slot?.getAttribute('data-pty-slot')).toBe('worker')
   })
 
-  test('Stop → Cancel keeps onStop untouched', () => {
-    const { onStop } = renderModal()
-    fireEvent.click(screen.getByTestId('worker-stop'))
-    fireEvent.click(screen.getByTestId('confirm-cancel'))
-    expect(onStop).not.toHaveBeenCalled()
-  })
-
-  test('Restart opens Confirm; confirm-action dispatches onRestart(worker, runId)', () => {
-    const worker = buildWorker()
-    const { onRestart } = renderModal({ worker })
-    fireEvent.click(screen.getByTestId('worker-restart'))
-    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Restart Alice?')
-
-    fireEvent.click(screen.getByTestId('confirm-action'))
-    expect(onRestart).toHaveBeenCalledTimes(1)
-    expect(onRestart).toHaveBeenCalledWith(worker, 'run-1')
-  })
-
-  test('Delete opens danger Confirm; confirm-action dispatches onDelete(worker)', () => {
-    const worker = buildWorker()
-    const { onDelete } = renderModal({ worker })
-    fireEvent.click(screen.getByTestId('worker-delete'))
-    expect(screen.getByTestId('confirm-title')).toHaveTextContent('Delete Alice?')
-    expect(screen.getByTestId('confirm-action').className).toContain('icon-btn--danger')
-
-    fireEvent.click(screen.getByTestId('confirm-action'))
-    expect(onDelete).toHaveBeenCalledTimes(1)
-    expect(onDelete).toHaveBeenCalledWith(worker)
-  })
-
-  test('Start (no runId) is non-destructive — no Confirm, dispatches immediately', () => {
+  test('renders the empty-state Start affordance when no PTY is running', () => {
     const stoppedWorker = buildWorker({ status: 'stopped' })
     const { onStart } = renderModal({ runId: null, worker: stoppedWorker })
 
-    fireEvent.click(screen.getByTestId('worker-start'))
-    expect(screen.queryByTestId('confirm-title')).toBeNull()
+    fireEvent.click(screen.getByTestId('worker-start-empty'))
     expect(onStart).toHaveBeenCalledTimes(1)
     expect(onStart).toHaveBeenCalledWith(stoppedWorker)
+  })
+
+  test('Close button dispatches onClose via Dialog close', () => {
+    const { onClose } = renderModal()
+    fireEvent.click(screen.getByLabelText('Close worker detail'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  test('startError surfaces as an alert banner', () => {
+    renderModal({ startError: 'claude CLI not found in PATH', runId: null })
+    expect(screen.getByRole('alert')).toHaveTextContent('claude CLI not found in PATH')
+  })
+
+  test('control actions (Stop / Restart / Delete) are NOT rendered inside the modal', () => {
+    renderModal()
+    expect(screen.queryByTestId('worker-stop')).toBeNull()
+    expect(screen.queryByTestId('worker-restart')).toBeNull()
+    expect(screen.queryByTestId('worker-delete')).toBeNull()
+    // (Card-level testids: worker-card-stop-*, worker-card-restart-*, worker-card-delete-*)
   })
 })

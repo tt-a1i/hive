@@ -206,6 +206,51 @@ html, body {
   color: var(--text-primary);
 }
 
+/* Container-query driven compaction — when the sidebar is dragged narrower
+   than ~140px, hide row paths and the "Add Workspace" label so only icons /
+   names show, preventing visual overflow. */
+.workspace-sidebar {
+  container-type: inline-size;
+  container-name: ws-sidebar;
+}
+@container ws-sidebar (max-width: 140px) {
+  .ws-row__path { display: none; }
+  .ws-add__label { display: none; }
+  .ws-add { padding-left: 8px; padding-right: 8px; }
+}
+
+.workspace-sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 20;
+  width: 8px;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+.workspace-sidebar-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.workspace-sidebar-resizer:hover::before,
+.workspace-sidebar-resizer:focus-visible::before,
+.workspace-sidebar-resizer[data-resizing="true"]::before {
+  background: color-mix(in oklab, var(--accent) 68%, var(--border-bright));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
 /* Status dot — neutral baseline used by sidebar / inline indicators */
 .dot {
   display: inline-block;
@@ -397,15 +442,17 @@ html, body {
   .card--interactive:hover { transform: none; }
 }
 
-/* Role badges */
+/* Role badges — flex-shrink:0 + nowrap so they never clip in narrow rows. */
 .role-badge {
   display: inline-block;
+  flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.3px;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .role-badge--coder { background: #1c3d5a; color: var(--status-blue); }
 .role-badge--tester { background: #3a2c1c; color: var(--status-orange); }
@@ -643,6 +690,287 @@ html, body {
 .toast-pop { animation: toast-in 320ms var(--ease-overshoot); }
 @media (prefers-reduced-motion: reduce) {
   .toast-pop { animation: none; }
+}
+
+/* Floating action button — used in WorkerModal's top-right cluster, sits
+   over the PTY with a frosted backdrop so it's readable on any content. */
+.float-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--border-bright) 80%, transparent);
+  background: color-mix(in oklab, var(--bg-1) 70%, transparent);
+  color: var(--text-secondary);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform 80ms var(--ease-out);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px rgba(0, 0, 0, 0.30);
+}
+.float-action:hover {
+  background: color-mix(in oklab, var(--bg-2) 85%, transparent);
+  border-color: var(--border-bright);
+  color: var(--text-primary);
+}
+.float-action:active { transform: scale(0.95); }
+.float-action:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px rgba(0, 0, 0, 0.30),
+    0 0 0 3px var(--ring-focus);
+}
+.float-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.float-action[data-variant="primary"] {
+  background: color-mix(in oklab, var(--accent) 88%, transparent);
+  color: var(--text-primary);
+  border-color: color-mix(in oklab, #fff 20%, var(--accent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.float-action[data-variant="primary"]:hover {
+  background: var(--accent-hover);
+}
+.float-action[data-variant="danger"] {
+  color: var(--status-red);
+}
+.float-action[data-variant="danger"]:hover {
+  background: color-mix(in oklab, var(--status-red) 18%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 50%, var(--border-bright));
+  color: var(--status-red);
+}
+.float-action-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: color-mix(in oklab, var(--border-bright) 80%, transparent);
+}
+
+/* Worker tile grid — elastic auto-fill. Each tile has a 200px minimum and
+   stretches to fill the remaining row width, so columns adapt smoothly to
+   the WorkersPane width: ~200 → 1, ~440 → 2, ~660 → 3, ~880 → 4 … */
+.worker-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 10px;
+}
+
+/* Worker card — centered "person tile" with hero avatar, name, role text,
+   status indicator. Uses .card / .card--interactive shadow + hover lift. */
+.worker-card-shell {
+  position: relative;
+}
+
+/* Status indicator — dot + label, color-coded text. Sits at the bottom of
+   the card with a subtle pill background tinted to the status color so the
+   eye scans cards' moods at a glance without heavy chrome. */
+.worker-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 3px 8px 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.worker-card__status--working {
+  color: var(--status-green);
+  background: color-mix(in oklab, var(--status-green) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-green) 24%, transparent);
+}
+.worker-card__status--queued {
+  color: var(--status-orange);
+  background: color-mix(in oklab, var(--status-orange) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-orange) 24%, transparent);
+}
+.worker-card__status--idle {
+  color: var(--text-secondary);
+  background: var(--bg-3);
+}
+.worker-card__status--stopped {
+  color: var(--status-red);
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 24%, transparent);
+}
+
+/* Queue marker — small pill at top-right (under the hover action cluster
+   slot, but only visible when not hovering). Tnum digit, orange tint. */
+.worker-card__queue {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  font-feature-settings: "tnum" 1;
+  color: var(--status-orange);
+  background: color-mix(in oklab, var(--status-orange) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--status-orange) 32%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+/* When hover action cluster is showing, fade the queue badge out so it
+   doesn't visually clash with the floating buttons. */
+.worker-card-shell:hover .worker-card__queue,
+.worker-card-shell:focus-within .worker-card__queue {
+  opacity: 0;
+}
+
+.worker-card-shell:hover .worker-card__actions,
+.worker-card-shell:focus-within .worker-card__actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.worker-card__actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+  z-index: 2;
+}
+.worker-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border-bright);
+  background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform 80ms var(--ease-out);
+}
+.worker-card__action:hover {
+  background: var(--bg-3);
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+.worker-card__action:active { transform: scale(0.94); }
+.worker-card__action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.worker-card__action[data-variant="primary"] {
+  background: color-mix(in oklab, var(--accent) 88%, transparent);
+  border-color: color-mix(in oklab, #fff 18%, var(--accent));
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.30);
+}
+.worker-card__action[data-variant="primary"]:hover {
+  background: var(--accent-hover);
+  border-color: color-mix(in oklab, #fff 24%, var(--accent-hover));
+}
+.worker-card__action[data-variant="danger"]:hover {
+  background: color-mix(in oklab, var(--status-red) 14%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 40%, var(--border-bright));
+  color: var(--status-red);
+}
+
+/* WorkerModal width-resize handles — left + right edges. Same aesthetic as
+   the workspace-sidebar / pane-splitter: invisible 8px hit zone, accent
+   1px line on hover / drag. */
+.modal-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 6;
+  outline: none;
+  user-select: none;
+  touch-action: none;
+}
+.modal-resize-handle--left  { left: -4px; }
+.modal-resize-handle--right { right: -4px; }
+.modal-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.modal-resize-handle--left::before  { left: 4px; }
+.modal-resize-handle--right::before { right: 4px; }
+.modal-resize-handle:hover::before,
+.modal-resize-handle[data-resizing]::before {
+  background: color-mix(in oklab, var(--accent) 68%, var(--border-bright));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+/* Vertical splitter between Orchestrator and Workers panes — absolute-
+   positioned overlay so it takes no layout space (panes touch directly).
+   Mirrors workspace-sidebar-resizer: invisible 8px hit zone at rest,
+   accent-tinted 1px line on hover / focus / drag. */
+.pane-splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 5;
+  outline: none;
+  user-select: none;
+  touch-action: none;
+}
+.pane-splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.pane-splitter:hover::before,
+.pane-splitter:focus-visible::before,
+.pane-splitter[data-dragging]::before {
+  background: color-mix(in oklab, var(--accent) 68%, var(--border-bright));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
 /* CLI / preset select — wraps a native <select> with custom chrome.

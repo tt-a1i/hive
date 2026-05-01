@@ -176,4 +176,12 @@ describe('team cli with real server', () => {
 
     await expect(runTeamCommand(['list'])).rejects.toThrow('Request failed with status 403')
   })
+
+  test('team list explains when the Hive runtime cannot be reached', async () => {
+    process.env.HIVE_PORT = '9'
+
+    await expect(runTeamCommand(['list'])).rejects.toThrow(
+      'Failed to reach Hive runtime at http://127.0.0.1:9'
+    )
+  })
 })

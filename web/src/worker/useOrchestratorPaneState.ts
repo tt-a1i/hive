@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { TerminalRunSummary } from '../api.js'
 import { type OrchestratorStartResult, startAgentRun, stopAgentRun } from '../api.js'
 import { findOrchestratorRun, orchestratorAgentId } from '../terminal/useTerminalRuns.js'
@@ -10,6 +10,11 @@ interface UseOrchestratorPaneStateInput {
   terminalRuns: TerminalRunSummary[]
   /** Latest known autostart error for this workspace (sticky until cleared). */
   autostartError: string | null
+  /**
+   * A just-created workspace may already have a server-side autostart run.
+   * Suppress client-side auto-start briefly until terminalRuns catches up.
+   */
+  suppressAutostartRunId?: string | null
   onClearAutostartError: () => void
   /** Optional callback fired after a manual start succeeds — lets parent
    *  invalidate caches / refresh runs immediately. */
@@ -33,30 +38,93 @@ export const useOrchestratorPaneState = ({
   hivePort,
   terminalRuns,
   autostartError,
+  suppressAutostartRunId,
   onClearAutostartError,
   onAfterStart,
 }: UseOrchestratorPaneStateInput): UseOrchestratorPaneStateOutput => {
   const orchestratorRun = findOrchestratorRun(terminalRuns, workspaceId)
   const agentId = orchestratorAgentId(workspaceId)
+  const [pendingStartWorkspaceId, setPendingStartWorkspaceId] = useState<string | null>(null)
+  const [optimisticRun, setOptimisticRun] = useState<{
+    workspaceId: string
+    runId: string
+  } | null>(null)
+  const [suppressedRunId, setSuppressedRunId] = useState<string | null>(null)
+  const optimisticRunId = optimisticRun?.workspaceId === workspaceId ? optimisticRun.runId : null
+  const suppressingAutostart = Boolean(suppressedRunId && !orchestratorRun && !optimisticRunId)
+
+  useEffect(() => {
+    setSuppressedRunId(suppressAutostartRunId ?? null)
+  }, [suppressAutostartRunId])
+
+  useEffect(() => {
+    if (orchestratorRun) {
+      setPendingStartWorkspaceId(null)
+      setOptimisticRun(null)
+      setSuppressedRunId(null)
+    }
+  }, [orchestratorRun])
+
+  useEffect(() => {
+    if (!suppressedRunId || orchestratorRun) return
+    const timer = window.setTimeout(() => setSuppressedRunId(null), 1500)
+    return () => window.clearTimeout(timer)
+  }, [suppressedRunId, orchestratorRun])
+
+  useEffect(() => {
+    if (!optimisticRunId || orchestratorRun) return
+    const timer = window.setTimeout(() => setOptimisticRun(null), 2000)
+    return () => window.clearTimeout(timer)
+  }, [optimisticRunId, orchestratorRun])
 
   let state: OrchestratorPaneState
   if (orchestratorRun) {
     state = { kind: 'running', runId: orchestratorRun.run_id }
+  } else if (optimisticRunId) {
+    state = { kind: 'running', runId: optimisticRunId }
   } else if (autostartError) {
     state = { kind: 'failed', error: autostartError }
   } else {
-    state = { kind: 'idle' }
+    state = { kind: 'starting' }
   }
 
   const start = useCallback(() => {
+    if (!workspaceId || pendingStartWorkspaceId === workspaceId || orchestratorRun) return
     onClearAutostartError()
+    setPendingStartWorkspaceId(workspaceId)
     void startAgentRun(workspaceId, agentId, hivePort)
-      .then((result) => onAfterStart?.({ ok: true, error: null, run_id: result.runId }))
+      .then((result) => {
+        setOptimisticRun({ workspaceId, runId: result.runId })
+        onAfterStart?.({ ok: true, error: null, run_id: result.runId })
+      })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Failed to start Queen'
+        setOptimisticRun(null)
         onAfterStart?.({ ok: false, error: message, run_id: null })
       })
-  }, [agentId, hivePort, onAfterStart, onClearAutostartError, workspaceId])
+      .finally(() =>
+        setPendingStartWorkspaceId((current) => (current === workspaceId ? null : current))
+      )
+  }, [
+    agentId,
+    hivePort,
+    onAfterStart,
+    onClearAutostartError,
+    orchestratorRun,
+    pendingStartWorkspaceId,
+    workspaceId,
+  ])
+
+  useEffect(() => {
+    if (
+      state.kind !== 'starting' ||
+      suppressingAutostart ||
+      pendingStartWorkspaceId === workspaceId
+    ) {
+      return
+    }
+    start()
+  }, [pendingStartWorkspaceId, start, state.kind, suppressingAutostart, workspaceId])
 
   const stop = useCallback(() => {
     if (!orchestratorRun) return
@@ -75,7 +143,10 @@ export const useOrchestratorPaneState = ({
           console.error('[hive] swallowed:orchestrator.restart.stop', error)
         })
         .then(() => startAgentRun(workspaceId, agentId, hivePort))
-        .then((result) => onAfterStart?.({ ok: true, error: null, run_id: result.runId }))
+        .then((result) => {
+          setOptimisticRun({ workspaceId, runId: result.runId })
+          onAfterStart?.({ ok: true, error: null, run_id: result.runId })
+        })
         .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : 'Failed to restart Queen'
           onAfterStart?.({ ok: false, error: message, run_id: null })

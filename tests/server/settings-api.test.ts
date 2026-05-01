@@ -57,9 +57,21 @@ describe('settings api', () => {
           '--disallowedTools=Task',
         ],
       }),
-      expect.objectContaining({ id: 'codex', display_name: 'Codex' }),
-      expect.objectContaining({ id: 'opencode', display_name: 'OpenCode' }),
-      expect.objectContaining({ id: 'gemini', display_name: 'Gemini' }),
+      expect.objectContaining({
+        id: 'codex',
+        display_name: 'Codex',
+        yolo_args_template: ['--dangerously-bypass-approvals-and-sandbox'],
+      }),
+      expect.objectContaining({
+        id: 'opencode',
+        display_name: 'OpenCode',
+        yolo_args_template: ['--dangerously-skip-permissions'],
+      }),
+      expect.objectContaining({
+        id: 'gemini',
+        display_name: 'Gemini',
+        yolo_args_template: ['--yolo'],
+      }),
     ])
     expect(templates).toEqual([
       expect.objectContaining({

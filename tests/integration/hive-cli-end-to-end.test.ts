@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
+import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -35,6 +36,74 @@ const waitFor = async (
 }
 
 describe('hive cli end to end', () => {
+  test('CLI autostarts persisted orchestrator and members on runtime restart', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-restart-autostart-'))
+    const workspacePath = join(dataDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(dataDir)
+
+    const scriptPath = join(workspacePath, 'steady-agent.js')
+    writeFileSync(
+      scriptPath,
+      [
+        "console.log('AGENT=' + process.env.HIVE_AGENT_ID)",
+        "console.log('PORT=' + process.env.HIVE_PORT)",
+        'setInterval(() => {}, 1000)',
+      ].join('\n')
+    )
+
+    const setupStore = createRuntimeStore({ dataDir })
+    const workspace = setupStore.createWorkspace(workspacePath, 'Persisted')
+    const orchestratorId = `${workspace.id}:orchestrator`
+    const worker = setupStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    for (const agentId of [orchestratorId, worker.id]) {
+      setupStore.configureAgentLaunch(workspace.id, agentId, {
+        args: [scriptPath],
+        command: process.execPath,
+      })
+    }
+    await setupStore.close()
+
+    const originalDataDir = process.env.HIVE_DATA_DIR
+    process.env.HIVE_DATA_DIR = dataDir
+    const hive = await runHiveCommand(['--port', '0'])
+
+    try {
+      const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
+
+      await waitFor(async () => {
+        const runsResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/runs`, {
+          headers: { cookie: uiCookie },
+        })
+        expect(runsResponse.status).toBe(200)
+        const runs = (await runsResponse.json()) as Array<{
+          agent_id: string
+          run_id: string
+          status: string
+        }>
+        expect(runs.map((run) => run.agent_id).sort()).toEqual([orchestratorId, worker.id].sort())
+        expect(runs.every((run) => run.status === 'running' || run.status === 'starting')).toBe(
+          true
+        )
+
+        for (const run of runs) {
+          const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${run.run_id}`, {
+            headers: { cookie: uiCookie },
+          })
+          expect(runResponse.status).toBe(200)
+          const state = (await runResponse.json()) as { output: string }
+          expect(state.output).toContain(`AGENT=${run.agent_id}`)
+          expect(state.output).toContain(`PORT=${hive.port}`)
+        }
+      })
+    } finally {
+      if (originalDataDir === undefined) delete process.env.HIVE_DATA_DIR
+      else process.env.HIVE_DATA_DIR = originalDataDir
+      await hive.close()
+    }
+  }, 10_000)
+
   test('real hive runtime can start and stop an agent over HTTP', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-e2e-'))
     const workspacePath = join(dataDir, 'workspace')

@@ -6,6 +6,7 @@ import { logSwallowed } from './lib/log-swallowed.js'
 import { Sidebar } from './sidebar/Sidebar.js'
 import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
+import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { Toaster } from './ui/toast.js'
 import { ToastProvider } from './ui/useToast.js'
@@ -15,14 +16,12 @@ import { useMountedWorkspaceIds } from './useMountedWorkspaceIds.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
 import { useWorkspaceSelection } from './useWorkspaceSelection.js'
-import { useWorkspaceStats } from './useWorkspaceStats.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
 import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
-const RUNTIME_ADDRESS = '127.0.0.1:4010'
 const HIVE_PORT = '4010'
 
 export const App = () => {
@@ -35,15 +34,19 @@ export const App = () => {
 
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
 
-  const { orchestratorAutostartErrors, recordOrchestratorResult, createNewWorkspace } =
-    useWorkspaceCreate({
-      hivePort: HIVE_PORT,
-      onWorkspaceCreated: (workspace) => {
-        setWorkspaces((current) => (current === null ? [workspace] : [...current, workspace]))
-        selectWorkspace(workspace.id)
-        setWorkersByWorkspaceId((current) => ({ ...current, [workspace.id]: [] }))
-      },
-    })
+  const {
+    orchestratorAutostartErrors,
+    orchestratorAutostartRunIds,
+    recordOrchestratorResult,
+    createNewWorkspace,
+  } = useWorkspaceCreate({
+    hivePort: HIVE_PORT,
+    onWorkspaceCreated: (workspace) => {
+      setWorkspaces((current) => (current === null ? [workspace] : [...current, workspace]))
+      selectWorkspace(workspace.id)
+      setWorkersByWorkspaceId((current) => ({ ...current, [workspace.id]: [] }))
+    },
+  })
 
   useEmptyStateAutoOpen(workspaces, () => setAddDialogTrigger((value) => value + 1))
 
@@ -52,11 +55,14 @@ export const App = () => {
   const activeWorkers: TeamListItem[] = activeWorkspace
     ? (workersByWorkspaceId[activeWorkspace.id] ?? [])
     : []
-  const terminalRuns = useTerminalRuns(activeWorkspaceId)
-  const stats = useWorkspaceStats(activeWorkspaceId, activeWorkers, terminalRuns)
+  const rawTerminalRuns = useTerminalRuns(activeWorkspaceId)
+  const terminalRunOptimism = useOptimisticTerminalRuns(activeWorkspaceId, rawTerminalRuns)
+  const terminalRuns = terminalRunOptimism.terminalRuns
   const workerActions = useWorkerActions({
     activeWorkspaceId,
     hivePort: HIVE_PORT,
+    onWorkerDeleted: terminalRunOptimism.forgetOptimisticAgent,
+    onWorkerRunStarted: terminalRunOptimism.recordOptimisticRun,
     setWorkersByWorkspaceId,
   })
   const deleteWorkspace = useWorkspaceDelete({
@@ -73,8 +79,6 @@ export const App = () => {
     <ToastProvider>
       <MainLayout
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
-        running={terminalRuns.length}
-        runtimeAddress={RUNTIME_ADDRESS}
         sidebar={
           <Sidebar
             activeWorkspaceId={activeWorkspaceId}
@@ -85,9 +89,7 @@ export const App = () => {
             workspaces={workspaces}
           />
         }
-        stopped={stats.stopped}
         taskGraphOpen={taskGraphOpen}
-        workspaceCount={workspaces?.length ?? 0}
       >
         {workspaces
           ?.filter((workspace) => mountedWorkspaceIds.includes(workspace.id))
@@ -95,6 +97,7 @@ export const App = () => {
             <WorkspaceTerminalPanels
               key={`terminal-${workspace.id}`}
               hidden={workspace.id !== activeWorkspaceId}
+              optimisticRuns={terminalRunOptimism.optimisticRunsByWorkspaceId[workspace.id] ?? []}
               workspaceId={workspace.id}
             />
           ))}
@@ -103,10 +106,12 @@ export const App = () => {
           onCreateWorker={workerActions.createWorker}
           onDeleteWorker={workerActions.deleteWorker}
           onStartWorker={workerActions.startWorker}
-          onStopWorkerRun={workerActions.stopWorkerRun}
           onOrchestratorResult={recordOrchestratorResult}
           orchestratorAutostartError={
             activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
+          }
+          orchestratorAutostartRunId={
+            activeWorkspace ? (orchestratorAutostartRunIds[activeWorkspace.id] ?? null) : null
           }
           terminalRuns={terminalRuns}
           workers={activeWorkers}

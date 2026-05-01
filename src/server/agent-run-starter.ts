@@ -146,7 +146,12 @@ export const createAgentRunStarter =
           workspace,
           writeToRun: postStartWriter,
         })
-        if (!injectedRestartMessage && agent && isInteractiveAgentCommand(startConfig.command)) {
+        if (
+          !startConfig.resumedSessionId &&
+          !injectedRestartMessage &&
+          agent &&
+          isInteractiveAgentCommand(startConfig.command)
+        ) {
           postStartWriter(run.runId, buildAgentStartupInstructions({ agent, workspace }))
         }
       } catch {

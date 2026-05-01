@@ -18,8 +18,6 @@ type SidebarProps = {
 const hasWorkingMember = (workers: TeamListItem[] | undefined): boolean =>
   !!workers?.some((worker) => worker.status === 'working')
 
-const branchLabel = (workspace: WorkspaceSummary): string => workspace.path.split('/').pop() ?? ''
-
 const workerSummary = (workers: TeamListItem[] | undefined): string => {
   if (!workers || workers.length === 0) return 'no team members yet'
   const working = workers.filter((worker) => worker.status === 'working').length
@@ -64,15 +62,40 @@ export const Sidebar = ({
       })
   }
 
+  const confirm = (
+    <Confirm
+      open={pendingDelete !== null}
+      onOpenChange={(open) => {
+        if (!open && !deleting) setPendingDelete(null)
+      }}
+      title={pendingDelete ? `Delete workspace "${pendingDelete.name}"?` : 'Delete workspace?'}
+      description={
+        pendingDelete
+          ? `This stops its agents and removes it from Hive. The folder on disk (${pendingDelete.path}) is left untouched. ${workerSummary(workersByWorkspaceId[pendingDelete.id])}.`
+          : ''
+      }
+      confirmLabel={deleting ? 'Deleting…' : 'Delete workspace'}
+      confirmKind="danger"
+      onConfirm={confirmDelete}
+    />
+  )
+
   return (
     <nav aria-label="Workspaces" className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-3 pt-3 pb-1.5 pr-11">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-ter">
-          Workspaces
-        </span>
-        {workspaces && workspaces.length > 0 ? (
-          <span className="mono text-[10px] text-ter">{workspaces.length}</span>
-        ) : null}
+      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="text-[10px] font-medium uppercase tracking-wider text-ter"
+            data-testid="workspace-sidebar-title"
+          >
+            Workspaces
+          </span>
+          {workspaces && workspaces.length > 0 ? (
+            <span className="mono rounded bg-2 px-1.5 py-0.5 text-[10px] text-ter">
+              {workspaces.length}
+            </span>
+          ) : null}
+        </div>
       </div>
       {workspaces === null ? (
         <p className="px-3 py-2 text-xs text-ter">Loading…</p>
@@ -117,9 +140,8 @@ export const Sidebar = ({
                       />
                     ) : null}
                   </div>
-                  <div className="mt-0.5 truncate text-[11px] text-ter">{workspace.path}</div>
-                  <div className="mono mt-0.5 truncate text-[10px] text-ter">
-                    {branchLabel(workspace)}
+                  <div className="ws-row__path mt-0.5 truncate text-[11px] text-ter">
+                    {workspace.path}
                   </div>
                 </button>
                 <button
@@ -140,28 +162,15 @@ export const Sidebar = ({
         type="button"
         onClick={onCreateClick}
         aria-label="New workspace"
+        title="New workspace"
         className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors"
         style={{ borderColor: 'var(--border-bright)' }}
       >
         <Plus size={13} aria-hidden />
-        Add Workspace
+        <span className="ws-add__label">Add Workspace</span>
       </button>
 
-      <Confirm
-        open={pendingDelete !== null}
-        onOpenChange={(open) => {
-          if (!open && !deleting) setPendingDelete(null)
-        }}
-        title={pendingDelete ? `Delete workspace "${pendingDelete.name}"?` : 'Delete workspace?'}
-        description={
-          pendingDelete
-            ? `This stops its agents and removes it from Hive. The folder on disk (${pendingDelete.path}) is left untouched. ${workerSummary(workersByWorkspaceId[pendingDelete.id])}.`
-            : ''
-        }
-        confirmLabel={deleting ? 'Deleting…' : 'Delete workspace'}
-        confirmKind="danger"
-        onConfirm={confirmDelete}
-      />
+      {confirm}
     </nav>
   )
 }

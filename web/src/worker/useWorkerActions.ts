@@ -12,6 +12,13 @@ const upsertWorker = (workers: TeamListItem[], worker: TeamListItem): TeamListIt
 interface UseWorkerActionsInput {
   activeWorkspaceId: string | null
   hivePort: string
+  onWorkerDeleted?: (workspaceId: string, workerId: string) => void
+  onWorkerRunStarted?: (input: {
+    agentId: string
+    agentName: string
+    runId: string
+    workspaceId: string
+  }) => void
   setWorkersByWorkspaceId: React.Dispatch<React.SetStateAction<Record<string, TeamListItem[]>>>
 }
 
@@ -20,20 +27,22 @@ export interface WorkerActions {
     workerName: string,
     workerRole: WorkerRole,
     commandPresetId: string
-  ) => Promise<{ error: string | null }>
+  ) => Promise<{ error: string | null; runId: string | null }>
   deleteWorker: (workerId: string) => Promise<void>
-  startWorker: (workerId: string) => Promise<{ error: string | null }>
+  startWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   stopWorkerRun: (runId: string) => Promise<{ error: string | null }>
 }
 
 export const useWorkerActions = ({
   activeWorkspaceId,
   hivePort,
+  onWorkerDeleted,
+  onWorkerRunStarted,
   setWorkersByWorkspaceId,
 }: UseWorkerActionsInput): WorkerActions => {
   const createWorkerAction = useCallback<WorkerActions['createWorker']>(
     async (workerName, workerRole, commandPresetId) => {
-      if (!activeWorkspaceId) return { error: 'No active workspace' }
+      if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       const result = await createWorker(activeWorkspaceId, {
         autostart: true,
         command_preset_id: commandPresetId,
@@ -45,9 +54,20 @@ export const useWorkerActions = ({
         ...current,
         [activeWorkspaceId]: upsertWorker(current[activeWorkspaceId] ?? [], result.worker),
       }))
-      return { error: result.agentStart.ok ? null : result.agentStart.error }
+      if (result.agentStart.ok && result.agentStart.runId) {
+        onWorkerRunStarted?.({
+          agentId: result.worker.id,
+          agentName: result.worker.name,
+          runId: result.agentStart.runId,
+          workspaceId: activeWorkspaceId,
+        })
+      }
+      return {
+        error: result.agentStart.ok ? null : result.agentStart.error,
+        runId: result.agentStart.ok ? result.agentStart.runId : null,
+      }
     },
-    [activeWorkspaceId, hivePort, setWorkersByWorkspaceId]
+    [activeWorkspaceId, hivePort, onWorkerRunStarted, setWorkersByWorkspaceId]
   )
 
   const deleteWorkerAction = useCallback<WorkerActions['deleteWorker']>(
@@ -60,24 +80,34 @@ export const useWorkerActions = ({
           (worker) => worker.id !== workerId
         ),
       }))
+      onWorkerDeleted?.(activeWorkspaceId, workerId)
     },
-    [activeWorkspaceId, setWorkersByWorkspaceId]
+    [activeWorkspaceId, onWorkerDeleted, setWorkersByWorkspaceId]
   )
 
   const startWorkerAction = useCallback<WorkerActions['startWorker']>(
     async (workerId) => {
-      if (!activeWorkspaceId) return { error: 'No active workspace' }
+      if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       try {
-        await startAgentRun(activeWorkspaceId, workerId, hivePort)
+        const result = await startAgentRun(activeWorkspaceId, workerId, hivePort)
+        onWorkerRunStarted?.({
+          agentId: workerId,
+          agentName: workerId,
+          runId: result.runId,
+          workspaceId: activeWorkspaceId,
+        })
         // No optimistic status patch: server is authoritative (working iff
         // pending>0). Next listWorkers tick (≤500ms) reconciles. Optimistic
         // 'idle' would lie when worker had pending dispatches.
-        return { error: null }
+        return { error: null, runId: result.runId }
       } catch (error) {
-        return { error: error instanceof Error ? error.message : String(error) }
+        return {
+          error: error instanceof Error ? error.message : String(error),
+          runId: null,
+        }
       }
     },
-    [activeWorkspaceId, hivePort]
+    [activeWorkspaceId, hivePort, onWorkerRunStarted]
   )
 
   const stopWorkerRunAction = useCallback<WorkerActions['stopWorkerRun']>(async (runId) => {

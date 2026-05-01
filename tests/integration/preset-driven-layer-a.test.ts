@@ -106,6 +106,7 @@ const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '019dc277-0e8e-75c1-9794-94929426288e'
 const delayIndex = args.indexOf('--session-write-delay-ms-test')
 const writeDelayMs = delayIndex >= 0 ? Number.parseInt(args[delayIndex + 1] ?? '0', 10) : 0
+const expectYoloMarker = join(process.cwd(), '.expect-yolo')
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
 const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
 mkdirSync(sessionDir, { recursive: true })
@@ -116,7 +117,9 @@ const writeSession = () => writeFileSync(
 if (writeDelayMs > 0) setTimeout(writeSession, writeDelayMs)
 else writeSession()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
-if (existsSync(join(process.cwd(), '.expect-resume')) && !(args[0] === 'resume' && args[1] === sessionId)) process.exit(2)
+const resumeIndex = args.indexOf('resume')
+if (existsSync(join(process.cwd(), '.expect-resume')) && !(resumeIndex >= 0 && args[resumeIndex + 1] === sessionId)) process.exit(2)
+if (existsSync(expectYoloMarker) && !args.includes('--dangerously-bypass-approvals-and-sandbox')) process.exit(4)
 setInterval(() => {}, 1000)
 `
   )
@@ -138,6 +141,7 @@ import { join } from 'node:path'
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '29405746-aa9b-40bf-961b-f3d77fdcda40'
+const expectYoloMarker = join(process.cwd(), '.expect-yolo')
 const geminiHome = process.env.HIVE_GEMINI_HOME ?? join(homedir(), '.gemini')
 const projectDir = join(geminiHome, 'tmp', 'hive-test-project')
 mkdirSync(join(projectDir, 'chats'), { recursive: true })
@@ -145,6 +149,7 @@ writeFileSync(join(projectDir, '.project_root'), process.cwd() + '\\n')
 writeFileSync(join(projectDir, 'chats', 'session-2026-04-30T00-00-29405746.json'), JSON.stringify({ sessionId }))
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(join(process.cwd(), '.expect-resume')) && !(args.includes('--resume') && args.includes(sessionId))) process.exit(2)
+if (existsSync(expectYoloMarker) && !args.includes('--yolo')) process.exit(4)
 setInterval(() => {}, 1000)
 `
   )
@@ -168,12 +173,14 @@ const Database = require('better-sqlite3')
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : 'ses_25c8f572efferzSV4Mgjo99WqB'
+const expectYoloMarker = process.cwd() + '/.expect-yolo'
 const db = new Database(process.env.HIVE_OPENCODE_DB_PATH)
 db.exec('CREATE TABLE IF NOT EXISTS session (id TEXT PRIMARY KEY, directory TEXT NOT NULL, time_archived INTEGER)')
 db.prepare('INSERT OR REPLACE INTO session (id, directory, time_archived) VALUES (?, ?, NULL)').run(sessionId, process.cwd())
 db.close()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(process.cwd() + '/.expect-resume') && !(args.includes('--session') && args.includes(sessionId))) process.exit(2)
+if (existsSync(expectYoloMarker) && !args.includes('--dangerously-skip-permissions')) process.exit(4)
 setInterval(() => {}, 1000)
 `
   )
@@ -334,7 +341,7 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(
-          `ARGS:--resume ${sessionId} --dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --session-id-test ${sessionId}`
+          `ARGS:--dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --resume ${sessionId} --session-id-test ${sessionId}`
         )
       })
     } finally {
@@ -388,7 +395,7 @@ describe('preset-driven Layer A', () => {
         process.env.CODEX_HOME = join(homeDir, '.codex')
       },
       expectedArgs: (sessionId: string) =>
-        `ARGS:resume ${sessionId} --session-id-test ${sessionId}`,
+        `ARGS:--dangerously-bypass-approvals-and-sandbox resume ${sessionId} --session-id-test ${sessionId}`,
       presetId: 'codex',
       sessionId: '019dc277-0e8e-75c1-9794-94929426288e',
       writeCli: writeFakeCodex,
@@ -398,7 +405,7 @@ describe('preset-driven Layer A', () => {
         process.env.HIVE_GEMINI_HOME = join(homeDir, '.gemini')
       },
       expectedArgs: (sessionId: string) =>
-        `ARGS:--resume ${sessionId} --session-id-test ${sessionId}`,
+        `ARGS:--yolo --resume ${sessionId} --session-id-test ${sessionId}`,
       presetId: 'gemini',
       sessionId: '29405746-aa9b-40bf-961b-f3d77fdcda40',
       writeCli: writeFakeGemini,
@@ -408,7 +415,7 @@ describe('preset-driven Layer A', () => {
         process.env.HIVE_OPENCODE_DB_PATH = join(homeDir, 'opencode.db')
       },
       expectedArgs: (sessionId: string) =>
-        `ARGS:--session ${sessionId} --session-id-test ${sessionId}`,
+        `ARGS:--dangerously-skip-permissions --session ${sessionId} --session-id-test ${sessionId}`,
       presetId: 'opencode',
       sessionId: 'ses_25c8f572efferzSV4Mgjo99WqB',
       writeCli: writeFakeOpenCode,
@@ -434,6 +441,7 @@ describe('preset-driven Layer A', () => {
         command_preset_id: input.presetId,
       })
       expect(readConfiguredPresetId(server.dataDir, workspace.id, worker.id)).toBe(input.presetId)
+      writeFileSync(join(workspacePath, '.expect-yolo'), '1\n')
 
       const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
       await waitFor(() => {
@@ -452,6 +460,53 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(input.expectedArgs(input.sessionId))
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('bound codex preset trusts captured session id even when the session file is gone', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-fast-resume-'))
+    const workspacePathRaw = join(homeDir, 'workspace')
+    tempDirs.push(homeDir)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    const codexHome = join(homeDir, '.codex')
+    process.env.CODEX_HOME = codexHome
+    const fakeCodex = writeFakeCodex(workspacePath)
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id)
+      const sessionId = '019dc277-0e8e-75c1-9794-94929426288e'
+
+      await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id, {
+        command: fakeCodex,
+        args: ['--session-id-test', sessionId],
+        command_preset_id: 'codex',
+      })
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(() => {
+        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(sessionId)
+      })
+      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.status).toBe('exited')
+      })
+      rmSync(codexHome, { force: true, recursive: true })
+      writeFileSync(join(workspacePath, '.expect-resume'), '1\n')
+
+      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain(
+          `ARGS:--dangerously-bypass-approvals-and-sandbox resume ${sessionId} --session-id-test ${sessionId}`
+        )
       })
     } finally {
       await server.close()
