@@ -200,6 +200,47 @@ describe('worker flow with real server', () => {
     ).toHaveLength(0)
   })
 
+  test('Add Worker dialog shows role instructions and saves an edited prompt', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Add Member/ }).length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: /Add Member/ })[0] as HTMLElement)
+
+    const dialog = await screen.findByRole('form', { name: 'Add team member' })
+    const instructions = await within(dialog).findByLabelText('Role instructions')
+    expect((instructions as HTMLTextAreaElement).value).toContain('实现型 worker')
+
+    fireEvent.click(within(dialog).getByTestId('role-card-reviewer'))
+    expect((instructions as HTMLTextAreaElement).value).toContain('审查型 worker')
+
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
+      target: { value: 'ReviewLead' },
+    })
+    fireEvent.change(instructions, {
+      target: {
+        value: '你是审查型 worker。先找高风险问题，再给出最小修复建议，完成后用 team report 汇报。',
+      },
+    })
+    await waitFor(() => {
+      expect(within(dialog).queryByTestId(`agent-radio-${sleeperPresetId}`)).toBeInTheDocument()
+    })
+    fireEvent.click(within(dialog).getByTestId(`agent-radio-${sleeperPresetId}`))
+    fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
+    })
+    const worker = serverContext?.store
+      .getWorkspaceSnapshot(workspaceId)
+      .agents.find((agent) => agent.name === 'ReviewLead')
+    expect(worker?.role).toBe('reviewer')
+    expect(worker?.description).toBe(
+      '你是审查型 worker。先找高风险问题，再给出最小修复建议，完成后用 team report 汇报。'
+    )
+  })
+
   test('new member opens with its PTY before terminal-runs polling catches up', async () => {
     stubFetchWithEmptyTerminalRuns()
     render(<App />)

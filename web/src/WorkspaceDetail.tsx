@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
 import { type OrchestratorStartResult, renameWorker, type TerminalRunSummary } from './api.js'
+import { WorkspaceNotifications } from './notifications/WorkspaceNotifications.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
 import { usePaneSplit } from './usePaneSplit.js'
@@ -18,7 +19,8 @@ type WorkspaceDetailProps = {
   onCreateWorker: (
     name: string,
     role: WorkerRole,
-    commandPresetId: string
+    commandPresetId: string,
+    roleDescription: string
   ) => Promise<{ error: string | null; runId: string | null }>
   onDeleteWorker: (workerId: string) => Promise<void>
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
@@ -141,6 +143,7 @@ export const WorkspaceDetail = ({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <WorkspaceNotifications terminalRuns={terminalRuns} workers={workers} workspace={workspace} />
       <div ref={split.containerRef} className="relative flex min-h-0 flex-1">
         <div
           className="flex min-w-[480px] shrink-0 flex-col border-r"
@@ -200,8 +203,12 @@ export const WorkspaceDetail = ({
           onNameChange={composer.setWorkerName}
           onPresetChange={composer.setCommandPresetId}
           onRandomName={composer.randomizeWorkerName}
+          onRoleDescriptionChange={composer.setRoleDescription}
+          onRoleDescriptionReset={composer.resetRoleDescription}
           onRoleChange={composer.setWorkerRole}
           onSubmit={(event) => composer.submit(event, () => setComposerOpen(false))}
+          roleDescription={composer.roleDescription}
+          roleDescriptionDefault={composer.roleDescriptionDefault}
           workerName={composer.workerName}
           workerRole={composer.workerRole}
         />

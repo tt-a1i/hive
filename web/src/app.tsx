@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
+import { AppProviders } from './AppProviders.js'
 import { MainLayout } from './layout/MainLayout.js'
 import { logSwallowed } from './lib/log-swallowed.js'
 import { Sidebar } from './sidebar/Sidebar.js'
@@ -8,8 +9,6 @@ import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
-import { Toaster } from './ui/toast.js'
-import { ToastProvider } from './ui/useToast.js'
 import { useEmptyStateAutoOpen } from './useEmptyStateAutoOpen.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useMountedWorkspaceIds } from './useMountedWorkspaceIds.js'
@@ -76,7 +75,7 @@ export const App = () => {
   })
 
   return (
-    <ToastProvider>
+    <AppProviders>
       <MainLayout
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
         sidebar={
@@ -143,7 +142,6 @@ export const App = () => {
           trigger={addDialogTrigger}
         />
       </MainLayout>
-      <Toaster />
-    </ToastProvider>
+    </AppProviders>
   )
 }

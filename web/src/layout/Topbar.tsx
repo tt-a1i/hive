@@ -1,4 +1,6 @@
-import { Hexagon, ListChecks, Settings as SettingsIcon } from 'lucide-react'
+import { Hexagon, ListChecks } from 'lucide-react'
+
+import { NotificationSettingsButton } from '../notifications/NotificationSettingsButton.js'
 
 type TopbarProps = {
   onToggleTaskGraph: () => void
@@ -29,18 +31,7 @@ export const Topbar = ({ onToggleTaskGraph, taskGraphOpen, version = 'v0.1' }: T
         <ListChecks size={14} aria-hidden />
         <span>Blueprint</span>
       </button>
-      <button
-        type="button"
-        disabled
-        aria-disabled
-        aria-label="Settings (coming in M7)"
-        title="Coming in M7"
-        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-ter cursor-not-allowed opacity-60"
-        data-testid="topbar-settings"
-      >
-        <SettingsIcon size={14} aria-hidden />
-        <span>Settings</span>
-      </button>
+      <NotificationSettingsButton />
     </div>
   </header>
 )

@@ -72,11 +72,25 @@ export interface CommandPreset {
   id: string
 }
 
+export interface RoleTemplate {
+  description: string
+  id: string
+  name: string
+  roleType: WorkerRole | 'orchestrator'
+}
+
 interface CommandPresetPayload {
   args: string[]
   command: string
   display_name: string
   id: string
+}
+
+interface RoleTemplatePayload {
+  description: string
+  id: string
+  name: string
+  role_type: WorkerRole | 'orchestrator'
 }
 
 export interface AgentStartResult {
@@ -229,6 +243,24 @@ export interface TerminalRunSummary {
   status: string
 }
 
+export const listRoleTemplates = async (): Promise<RoleTemplate[]> => {
+  const response = await apiFetch('/api/settings/role-templates', {
+    mode: 'same-origin',
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to load role templates')
+  }
+
+  const payload = (await response.json()) as RoleTemplatePayload[]
+  return payload.map((template) => ({
+    description: template.description,
+    id: template.id,
+    name: template.name,
+    roleType: template.role_type,
+  }))
+}
+
 export const listTerminalRuns = async (workspaceId: string): Promise<TerminalRunSummary[]> => {
   const response = await apiFetch(`/api/ui/workspaces/${workspaceId}/runs`, {
     mode: 'same-origin',
@@ -246,6 +278,7 @@ export const createWorker = async (
   input: Pick<AgentSummary, 'name'> & {
     autostart?: boolean
     command_preset_id?: string | null
+    description?: string
     hive_port?: string
     role: WorkerRole
   }

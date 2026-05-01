@@ -26,7 +26,8 @@ export interface WorkerActions {
   createWorker: (
     workerName: string,
     workerRole: WorkerRole,
-    commandPresetId: string
+    commandPresetId: string,
+    roleDescription: string
   ) => Promise<{ error: string | null; runId: string | null }>
   deleteWorker: (workerId: string) => Promise<void>
   startWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
@@ -41,11 +42,12 @@ export const useWorkerActions = ({
   setWorkersByWorkspaceId,
 }: UseWorkerActionsInput): WorkerActions => {
   const createWorkerAction = useCallback<WorkerActions['createWorker']>(
-    async (workerName, workerRole, commandPresetId) => {
+    async (workerName, workerRole, commandPresetId, roleDescription) => {
       if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       const result = await createWorker(activeWorkspaceId, {
         autostart: true,
         command_preset_id: commandPresetId,
+        description: roleDescription.trim(),
         hive_port: hivePort,
         name: workerName,
         role: workerRole,

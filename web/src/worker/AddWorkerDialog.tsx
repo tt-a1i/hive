@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, Dices, UserPlus } from 'lucide-react'
+import { Check, Dices, RotateCcw, UserPlus } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
@@ -14,8 +14,12 @@ type AddWorkerDialogProps = {
   onNameChange: (value: string) => void
   onPresetChange: (value: string) => void
   onRandomName: () => void
+  onRoleDescriptionChange: (value: string) => void
+  onRoleDescriptionReset: () => void
   onRoleChange: (value: WorkerRole) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  roleDescription: string
+  roleDescriptionDefault: string
   workerName: string
   workerRole: WorkerRole
 }
@@ -139,8 +143,12 @@ export const AddWorkerDialog = ({
   onNameChange,
   onPresetChange,
   onRandomName,
+  onRoleDescriptionChange,
+  onRoleDescriptionReset,
   onRoleChange,
   onSubmit,
+  roleDescription,
+  roleDescriptionDefault,
   workerName,
   workerRole,
 }: AddWorkerDialogProps) => {
@@ -158,7 +166,7 @@ export const AddWorkerDialog = ({
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
           <Dialog.Content
             data-testid="add-worker-content"
-            className="dialog-scale-pop elev-2 pointer-events-auto w-[480px] max-w-full rounded-lg border"
+            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[560px] max-w-full flex-col rounded-lg border"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
@@ -189,7 +197,7 @@ export const AddWorkerDialog = ({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 px-5 py-4">
+              <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
                 <label className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <FieldLabel>Name</FieldLabel>
@@ -236,6 +244,41 @@ export const AddWorkerDialog = ({
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor="add-worker-role-instructions"
+                      className="text-[10px] font-medium uppercase tracking-wider text-ter"
+                    >
+                      Role instructions
+                    </label>
+                    <button
+                      type="button"
+                      className="icon-btn h-7 px-2 text-[11px]"
+                      disabled={roleDescription === roleDescriptionDefault}
+                      onClick={onRoleDescriptionReset}
+                    >
+                      <RotateCcw size={12} aria-hidden />
+                      Reset
+                    </button>
+                  </div>
+                  <textarea
+                    id="add-worker-role-instructions"
+                    value={roleDescription}
+                    rows={5}
+                    onChange={(event) => onRoleDescriptionChange(event.currentTarget.value)}
+                    className="mono min-h-[118px] resize-y rounded-md border px-3 py-2 text-[12px] leading-relaxed text-pri outline-none transition-colors focus:border-[var(--accent)]"
+                    style={{
+                      background: 'var(--bg-1)',
+                      borderColor: 'var(--border-bright)',
+                    }}
+                  />
+                  <div className="text-[11px] leading-relaxed text-ter">
+                    Hive keeps the team protocol fixed; this text only changes this member's role
+                    behavior.
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
                   <FieldLabel>Agent CLI</FieldLabel>
                   {commandPresets.length === 0 ? (
                     <div className="text-[11px] text-ter">Loading presets…</div>
@@ -268,7 +311,9 @@ export const AddWorkerDialog = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || !workerName.trim() || !commandPresetId}
+                  disabled={
+                    creating || !workerName.trim() || !commandPresetId || !roleDescription.trim()
+                  }
                   className="icon-btn icon-btn--primary"
                   data-testid="add-worker-submit"
                 >
