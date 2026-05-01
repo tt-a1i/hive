@@ -36,6 +36,13 @@ const PRIMARY_ROLES: RoleCardSpec[] = [
   { value: 'tester', label: 'Tester', hint: 'Writes / runs tests.' },
 ]
 
+const ROLE_LABELS: Record<WorkerRole, string> = {
+  coder: 'Coder',
+  custom: 'Custom',
+  reviewer: 'Reviewer',
+  tester: 'Tester',
+}
+
 const FieldLabel = ({ children }: { children: ReactNode }) => (
   <span className="text-[10px] font-medium uppercase tracking-wider text-ter">{children}</span>
 )
@@ -155,6 +162,8 @@ export const AddWorkerDialog = ({
   const handleClose = (open: boolean) => {
     if (!open) onClose()
   }
+  const roleDescriptionModified = roleDescription !== roleDescriptionDefault
+  const roleLabel = ROLE_LABELS[workerRole]
 
   return (
     <Dialog.Root open onOpenChange={handleClose}>
@@ -245,23 +254,31 @@ export const AddWorkerDialog = ({
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2">
-                    <label
-                      htmlFor="add-worker-role-instructions"
-                      className="text-[10px] font-medium uppercase tracking-wider text-ter"
-                    >
-                      Role instructions
+                    <label htmlFor="add-worker-role-instructions" className="flex flex-col gap-0.5">
+                      <FieldLabel>Role instructions</FieldLabel>
+                      <span className="text-[11px] text-ter">
+                        Injected into startup and task context
+                      </span>
                     </label>
-                    <button
-                      type="button"
-                      className="icon-btn h-7 px-2 text-[11px]"
-                      disabled={roleDescription === roleDescriptionDefault}
-                      onClick={onRoleDescriptionReset}
-                    >
-                      <RotateCcw size={12} aria-hidden />
-                      Reset
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {roleDescriptionModified ? (
+                        <span className="rounded-md border px-2 py-1 text-[11px] text-ter">
+                          Modified from {roleLabel} default
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="icon-btn h-7 px-2 text-[11px]"
+                        disabled={!roleDescriptionModified}
+                        onClick={onRoleDescriptionReset}
+                      >
+                        <RotateCcw size={12} aria-hidden />
+                        Reset
+                      </button>
+                    </div>
                   </div>
                   <textarea
+                    aria-label="Role instructions"
                     id="add-worker-role-instructions"
                     value={roleDescription}
                     rows={5}
@@ -276,6 +293,26 @@ export const AddWorkerDialog = ({
                     Hive keeps the team protocol fixed; this text only changes this member's role
                     behavior.
                   </div>
+                  <details className="group rounded-md border px-3 py-2 text-[11px]">
+                    <summary className="cursor-pointer select-none text-ter transition-colors group-open:text-sec">
+                      Preview injected prompt
+                    </summary>
+                    <pre
+                      data-testid="role-instructions-preview"
+                      className="mono mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded border px-3 py-2 text-[11px] leading-relaxed text-sec"
+                      style={{
+                        background: 'var(--bg-0)',
+                        borderColor: 'var(--border)',
+                      }}
+                    >
+                      {`[Hive prompt excerpt]
+你的角色：
+${roleDescription}
+
+任务内容：
+<orchestrator task>`}
+                    </pre>
+                  </details>
                 </div>
 
                 <div className="flex flex-col gap-2">

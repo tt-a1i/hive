@@ -393,6 +393,76 @@ describe('schema version', () => {
     db.close()
   })
 
+  test('migration updates builtin role template descriptions for existing databases', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-role-template-descriptions-'))
+    tempDirs.push(dataDir)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+
+      INSERT INTO schema_version (version, applied_at)
+      VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `)
+    const insert = db.prepare(
+      `INSERT INTO role_templates (
+        id,
+        name,
+        role_type,
+        description,
+        default_command,
+        default_args,
+        default_env,
+        is_builtin,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    for (const [id, name, roleType, description] of [
+      ['orchestrator', 'Orchestrator', 'orchestrator', 'old orch'],
+      ['coder', 'Coder', 'coder', 'old coder'],
+      ['reviewer', 'Reviewer', 'reviewer', 'old reviewer'],
+      ['tester', 'Tester', 'tester', 'old tester'],
+    ] as const) {
+      insert.run(id, name, roleType, description, 'claude', '[]', '{}', 1, 1, 1)
+    }
+
+    initializeRuntimeDatabase(db)
+
+    const rows = db
+      .prepare('SELECT id, description FROM role_templates ORDER BY id')
+      .all() as Array<{ description: string; id: string }>
+    const byId = Object.fromEntries(rows.map((row) => [row.id, row.description]))
+
+    expect(byId.coder).toContain('实现型 Coder')
+    expect(byId.coder).toContain('交付说明要包含')
+    expect(byId.reviewer).toContain('监工型 Reviewer')
+    expect(byId.reviewer).toContain('blocking 问题')
+    expect(byId.tester).toContain('验证型 Tester')
+    expect(byId.orchestrator).toContain('组织右侧真实成员协作')
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(12)).toEqual({
+      version: 12,
+    })
+
+    db.close()
+  })
+
   test('migration upgrades legacy messages.kind data into messages.type', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-migrate-'))
     tempDirs.push(dataDir)

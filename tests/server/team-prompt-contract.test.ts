@@ -70,12 +70,13 @@ describe('team prompt contract', () => {
 
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
-      expect(run?.output).toContain('@Orchestrator')
-      expect(run?.output).toContain(`你的角色：${worker.description}`)
-      expect(run?.output).toContain('执行 `team report "<完整汇报>"`')
-      expect(run?.output).not.toContain('--success')
-      expect(run?.output).not.toContain('--failed')
-      expect(run?.output.trimEnd()).toMatch(/实现登录$/)
+      const output = run?.output.replace(/\r\n/g, '\n')
+      expect(output).toContain('@Orchestrator')
+      expect(output).toContain(`你的角色：${worker.description}`)
+      expect(output).toContain('执行 `team report "<完整汇报>"`')
+      expect(output).not.toContain('--success')
+      expect(output).not.toContain('--failed')
+      expect(output?.trimEnd()).toMatch(/实现登录$/)
     })
   })
 

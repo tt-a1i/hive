@@ -210,19 +210,27 @@ describe('worker flow with real server', () => {
 
     const dialog = await screen.findByRole('form', { name: 'Add team member' })
     const instructions = await within(dialog).findByLabelText('Role instructions')
-    expect((instructions as HTMLTextAreaElement).value).toContain('实现型 worker')
+    expect((instructions as HTMLTextAreaElement).value).toContain('实现型 Coder')
+    expect((instructions as HTMLTextAreaElement).value).toContain('交付说明要包含')
+    expect(within(dialog).getByText('Injected into startup and task context')).toBeInTheDocument()
 
     fireEvent.click(within(dialog).getByTestId('role-card-reviewer'))
-    expect((instructions as HTMLTextAreaElement).value).toContain('审查型 worker')
+    expect((instructions as HTMLTextAreaElement).value).toContain('监工型 Reviewer')
+    expect((instructions as HTMLTextAreaElement).value).toContain('blocking 问题')
 
     fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
       target: { value: 'ReviewLead' },
     })
     fireEvent.change(instructions, {
       target: {
-        value: '你是审查型 worker。先找高风险问题，再给出最小修复建议，完成后用 team report 汇报。',
+        value: '你是审查型 worker。先找高风险问题，再给出最小修复建议。',
       },
     })
+    expect(within(dialog).getByText('Modified from Reviewer default')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByText('Preview injected prompt'))
+    expect(within(dialog).getByTestId('role-instructions-preview')).toHaveTextContent(
+      '你是审查型 worker。先找高风险问题，再给出最小修复建议。'
+    )
     await waitFor(() => {
       expect(within(dialog).queryByTestId(`agent-radio-${sleeperPresetId}`)).toBeInTheDocument()
     })
@@ -236,9 +244,7 @@ describe('worker flow with real server', () => {
       .getWorkspaceSnapshot(workspaceId)
       .agents.find((agent) => agent.name === 'ReviewLead')
     expect(worker?.role).toBe('reviewer')
-    expect(worker?.description).toBe(
-      '你是审查型 worker。先找高风险问题，再给出最小修复建议，完成后用 team report 汇报。'
-    )
+    expect(worker?.description).toBe('你是审查型 worker。先找高风险问题，再给出最小修复建议。')
   })
 
   test('new member opens with its PTY before terminal-runs polling catches up', async () => {
