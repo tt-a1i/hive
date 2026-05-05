@@ -1,4 +1,5 @@
-import { pathToFileURL } from 'node:url'
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const REQUIRED_ENV_KEYS = [
   'HIVE_PORT',
@@ -166,7 +167,7 @@ export const runTeamCommand = async (argv: string[]) => {
 }
 
 const isMainModule = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  ? fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
   : false
 
 if (isMainModule) {

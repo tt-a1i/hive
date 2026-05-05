@@ -1,23 +1,48 @@
 {
-  "name": "hive",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@tt-a1i/hive",
+  "version": "0.6.0-alpha.0",
+  "description": "Local multi-agent CLI collaboration workspace.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tt-a1i/hive.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tt-a1i/hive/issues"
+  },
+  "homepage": "https://github.com/tt-a1i/hive#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist/bin/",
+    "dist/src/",
+    "web/dist/",
+    "scripts/fix-runtime-artifacts.mjs",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "hive": "dist/src/cli/hive.js",
-    "team": "dist/src/cli/team.js"
+    "hive": "dist/src/cli/hive.js"
   },
   "scripts": {
+    "clean": "node scripts/clean-build.mjs",
     "dev": "pnpm dev:all",
     "dev:all": "concurrently \"pnpm dev:runtime\" \"pnpm dev:web\"",
     "dev:runtime": "tsx src/cli/hive.ts --port 4010",
     "dev:web": "vite --config web/vite.config.ts",
-    "build": "tsc -p tsconfig.json && mkdir -p dist/bin && cp bin/team dist/bin/team && chmod +x dist/bin/team && pnpm build:web",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/bin && cp bin/team dist/bin/team && chmod +x dist/bin/team && pnpm build:web",
     "build:web": "vite build --config web/vite.config.ts",
     "check": "pnpm exec biome check .",
     "format": "pnpm exec biome format --write .",
+    "pack:check": "npm pack --dry-run --json",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
     "postinstall": "node scripts/fix-runtime-artifacts.mjs",
+    "release:dry": "pnpm check && pnpm build && pnpm test && pnpm pack:check && pnpm pack:smoke",
     "test": "vitest run",
     "test:watch": "vitest"
   },

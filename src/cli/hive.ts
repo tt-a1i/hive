@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { once } from 'node:events'
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { createAgentManager } from '../server/agent-manager.js'
 import { createApp } from '../server/app.js'
@@ -118,7 +120,11 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
 
 export type { RunHiveCommandResult }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMainModule = process.argv[1]
+  ? fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+  : false
+
+if (isMainModule) {
   runHiveCommand(process.argv.slice(2)).catch((error) => {
     console.error(error)
     process.exit(1)

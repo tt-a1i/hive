@@ -1,78 +1,103 @@
 # Hive
 
-Hive 是一个本地运行的多 CLI agent 协作工作台原型。当前仓库已经具备最小可运行骨架：
+Hive is a local multi-agent CLI collaboration workspace. It runs a Node.js
+runtime on `127.0.0.1`, serves the bundled web UI, and starts CLI agents such as
+Claude Code, Codex, OpenCode, and Gemini inside PTYs.
 
-- `hive` runtime HTTP server
-- `team list` / `team send` / `team report` 最小 CLI
-- 内存版 workspace / worker 状态层
-- 最小 Web 壳子，可展示 workspace 空态和列表
+The Orchestrator talks to the user, maintains each workspace task graph at
+`.hive/tasks.md`, and dispatches work to team members through the internal
+`team` command. Team members report back with `team report`.
 
-## 当前进度
+## Requirements
 
-已完成：
+- Node.js 22+
+- pnpm 10.30.3 for local development
+- At least one supported agent CLI installed on the machine
 
-- 根工程配置（TypeScript + Vitest + React）
-- 共享类型与三态 worker 模型
-- 最小 runtime store
-- 最小 HTTP API
-- 最小 `team` CLI
-- 最小 `hive` 启动命令
-- 最小前端壳子
-
-尚未完成：
-
-- `node-pty` 集成
-- xterm.js 终端渲染
-- SQLite + Drizzle 落库
-- `tasks.md` watcher
-- Crash 恢复 Layer A / Layer B
-- 完整 workspace 创建与 worker 管理 UI
-
-## 安装
+## Development
 
 ```bash
 pnpm install
+pnpm dev
 ```
 
-## 测试
+The development runtime uses `127.0.0.1:4010`; the Vite web server uses
+`127.0.0.1:5180`.
+
+Useful commands:
 
 ```bash
+pnpm check
+pnpm build
 pnpm test
 ```
 
-## 构建
+## Production Build
 
 ```bash
 pnpm build
+node dist/src/cli/hive.js --port 4010
 ```
 
-## 启动当前最小 runtime
+The production server serves `web/dist` directly. No separate Vite server is
+needed after `pnpm build`.
+
+## Package Release
+
+Hive is prepared to publish as the scoped npm package `@tt-a1i/hive`.
+
+Before publishing, run:
 
 ```bash
-pnpm dev -- --port 3000
+pnpm release:dry
 ```
 
-启动后会输出：
+That command runs linting, the production build, the full test suite, npm
+packlist validation, and a tarball install smoke test.
 
-```text
-Hive running at http://127.0.0.1:3000
+Manual publish flow:
+
+```bash
+pnpm release:dry
+git tag v0.6.0-alpha.0
+git push origin v0.6.0-alpha.0
 ```
 
-## 当前 HTTP API
+Tag pushes matching `v*` run the GitHub Actions release workflow. The publish
+job expects an npm token in `NPM_TOKEN` and publishes with provenance:
 
-- `GET /api/workspaces`
-- `POST /api/workspaces`
-- `GET /api/workspaces/:id/team`
-- `POST /api/team/send`
-- `POST /api/team/report`
+```bash
+npm publish --provenance --access public
+```
 
-## 当前前端
+## Installation After Publish
 
-当前前端只实现了最小壳子组件：
+```bash
+npm i -g @tt-a1i/hive
+hive --port 4010
+```
 
-- 标题 `Hive`
-- workspace 列表
-- 空态文案 `No workspaces yet`
-- `Add Workspace` 按钮占位
+or:
 
-后续会补 Vite dev server 配置、布局细节、workspace 创建流和 PTY 终端区。
+```bash
+npx @tt-a1i/hive --port 4010
+```
+
+Only the `hive` command is exposed globally. The `team` command is intentionally
+bundled inside the package and injected into agent PTYs through `PATH`, so it
+does not pollute the user's global shell.
+
+## Updates
+
+For global installs:
+
+```bash
+npm i -g @tt-a1i/hive@latest
+```
+
+For `npx` usage, rerun the command and let the package manager resolve the
+latest version according to its cache policy.
+
+The runtime stores global metadata under `~/.config/hive` by default, or under
+`HIVE_DATA_DIR` when that environment variable is set. Workspace task graphs are
+stored at `<workspace>/.hive/tasks.md`.
