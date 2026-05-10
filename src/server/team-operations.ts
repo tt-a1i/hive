@@ -1,5 +1,6 @@
 import type { AgentRuntime } from './agent-runtime.js'
-import { ConflictError } from './http-errors.js'
+import type { DispatchRecord } from './dispatch-ledger-store.js'
+import { ConflictError, PtyInactiveError } from './http-errors.js'
 import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
 import {
   createReportMessage,
@@ -10,8 +11,23 @@ import type { WorkspaceStore } from './workspace-store.js'
 
 export interface TeamOperationsInput {
   agentRuntime: AgentRuntime
+  createDispatch: (input: {
+    fromAgentId?: string
+    text: string
+    toAgentId: string
+    workspaceId: string
+  }) => DispatchRecord
+  deleteDispatch: (dispatchId: string) => void
   deleteMessage: (handle: MessageLogHandle) => void
+  findOpenDispatch: (workspaceId: string, toAgentId: string) => DispatchRecord | undefined
   insertMessage: (record: MessageLogRecord) => MessageLogHandle
+  markDispatchReportedByWorker: (input: {
+    artifacts: string[]
+    reportText: string
+    toAgentId: string
+    workspaceId: string
+  }) => DispatchRecord | undefined
+  markDispatchSubmitted: (dispatchId: string) => void
   workspaceStore: WorkspaceStore
 }
 
@@ -29,8 +45,13 @@ export interface ReportTaskInput {
 
 export const createTeamOperations = ({
   agentRuntime,
+  createDispatch,
+  deleteDispatch,
   deleteMessage,
+  findOpenDispatch,
   insertMessage,
+  markDispatchReportedByWorker,
+  markDispatchSubmitted,
   workspaceStore,
 }: TeamOperationsInput) => {
   const ensureWorkerRun = async (workspaceId: string, workerId: string, hivePort: string) => {
@@ -68,17 +89,34 @@ export const createTeamOperations = ({
   ) => {
     const message = createSendMessage(workspaceId, workerId, text, input.fromAgentId)
     const messageHandle = insertMessage(message)
+    let dispatch: DispatchRecord | undefined
 
     try {
+      const dispatchInput: {
+        fromAgentId?: string
+        text: string
+        toAgentId: string
+        workspaceId: string
+      } = {
+        text,
+        toAgentId: workerId,
+        workspaceId,
+      }
+      if (input.fromAgentId) dispatchInput.fromAgentId = input.fromAgentId
+      dispatch = createDispatch(dispatchInput)
+
       if (input.fromAgentId) {
         const sender = workspaceStore.getAgent(workspaceId, input.fromAgentId)
-        const worker = workspaceStore.getWorker(workspaceId, workerId)
         await ensureWorkerRun(workspaceId, workerId, input.hivePort ?? '')
+        const worker = workspaceStore.getWorker(workspaceId, workerId)
+        markDispatchSubmitted(dispatch.id)
         agentRuntime.writeSendPrompt(workspaceId, workerId, sender.name, worker.description, text)
       }
 
       workspaceStore.markTaskDispatched(workspaceId, workerId)
+      return dispatch
     } catch (error) {
+      if (dispatch) deleteDispatch(dispatch.id)
       deleteMessage(messageHandle)
       throw error
     }
@@ -104,22 +142,37 @@ export const createTeamOperations = ({
       const text = input.text ?? ''
       const status = input.status
       const artifacts = input.artifacts ?? []
+      const worker = workspaceStore.getWorker(workspaceId, workerId)
+      if (
+        input.requireActiveRun === true &&
+        !agentRuntime.getActiveRunByAgentId(workspaceId, `${workspaceId}:orchestrator`)
+      ) {
+        throw new PtyInactiveError(`No active run for agent: ${workspaceId}:orchestrator`)
+      }
+      const openDispatch = findOpenDispatch(workspaceId, workerId)
+      if (!openDispatch) {
+        throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
+      }
       const messageHandle = insertMessage(
         createReportMessage(workspaceId, workerId, text, status, artifacts)
       )
       try {
         if (input.requireActiveRun === true) {
-          agentRuntime.writeReportPrompt(
-            workspaceId,
-            workspaceStore.getWorker(workspaceId, workerId).name,
-            workerId,
-            text,
-            artifacts,
-            { requireActiveRun: input.requireActiveRun }
-          )
+          agentRuntime.writeReportPrompt(workspaceId, worker.name, workerId, text, artifacts, {
+            requireActiveRun: input.requireActiveRun,
+          })
         }
-
+        const dispatch = markDispatchReportedByWorker({
+          artifacts,
+          reportText: text,
+          toAgentId: workerId,
+          workspaceId,
+        })
+        if (!dispatch) {
+          throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
+        }
         workspaceStore.markTaskReported(workspaceId, workerId)
+        return dispatch
       } catch (error) {
         deleteMessage(messageHandle)
         throw error

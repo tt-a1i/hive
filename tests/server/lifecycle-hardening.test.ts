@@ -235,9 +235,70 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
       .listMessagesForRecovery(workspace.id, 0)
       .filter((m) => m.type === 'send')
     expect(sendMessages).toEqual([])
+    expect(store.listDispatches(workspace.id)).toEqual([])
     expect(store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(0)
 
     await store.close()
+  })
+
+  test('deleteWorker rolls back dispatch ledger when worker deletion fails in sqlite', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const store = createRuntimeStore({ dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    await store.dispatchTask(workspace.id, worker.id, 'keep this dispatch')
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TRIGGER fail_worker_delete
+      BEFORE DELETE ON workers
+      BEGIN
+        SELECT RAISE(ABORT, 'blocked worker delete');
+      END;
+    `)
+
+    try {
+      expect(() => store.deleteWorker(workspace.id, worker.id)).toThrow(/blocked worker delete/)
+      expect(store.listDispatches(workspace.id)).toContainEqual(
+        expect.objectContaining({ text: 'keep this dispatch', toAgentId: worker.id })
+      )
+      expect(store.getWorker(workspace.id, worker.id)).toEqual(
+        expect.objectContaining({ id: worker.id, pendingTaskCount: 1 })
+      )
+    } finally {
+      db.exec('DROP TRIGGER IF EXISTS fail_worker_delete')
+      db.close()
+      await store.close()
+    }
+  })
+
+  test('deleteWorkspace rolls back dispatch ledger when workspace deletion fails in sqlite', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const store = createRuntimeStore({ dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    await store.dispatchTask(workspace.id, worker.id, 'keep workspace dispatch')
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TRIGGER fail_workspace_delete
+      BEFORE DELETE ON workspaces
+      BEGIN
+        SELECT RAISE(ABORT, 'blocked workspace delete');
+      END;
+    `)
+
+    try {
+      await expect(store.deleteWorkspace(workspace.id)).rejects.toThrow(/blocked workspace delete/)
+      expect(store.listWorkspaces()).toContainEqual(workspace)
+      expect(store.listDispatches(workspace.id)).toContainEqual(
+        expect.objectContaining({ text: 'keep workspace dispatch', toAgentId: worker.id })
+      )
+    } finally {
+      db.exec('DROP TRIGGER IF EXISTS fail_workspace_delete')
+      db.close()
+      await store.close()
+    }
   })
 
   test('close removes agent-manager run records after PTY shutdown', async () => {

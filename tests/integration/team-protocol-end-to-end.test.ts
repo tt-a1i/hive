@@ -150,6 +150,59 @@ describe('team protocol end to end', () => {
         }),
       })
       expect(sendResponse.status).toBe(202)
+      const sendBody = (await sendResponse.json()) as { dispatch_id: string; ok: true }
+      expect(sendBody.dispatch_id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      )
+
+      const activeDispatchesResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches`,
+        { headers: { cookie } }
+      )
+      expect(activeDispatchesResponse.status).toBe(200)
+      const activeDispatches = (await activeDispatchesResponse.json()) as Array<{
+        id: string
+        workspace_id: string
+        from_agent_id: string
+        to_agent_id: string
+        status: string
+        text: string
+        report_text: string | null
+        artifacts: string[]
+      }>
+      expect(activeDispatches).toEqual([
+        expect.objectContaining({
+          id: sendBody.dispatch_id,
+          workspace_id: workspace.id,
+          from_agent_id: orchestratorId,
+          to_agent_id: worker.id,
+          status: 'submitted',
+          text: '实现登录接口',
+          report_text: null,
+          artifacts: [],
+        }),
+      ])
+      const anonymousDispatchesResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches`
+      )
+      expect(anonymousDispatchesResponse.status).toBe(403)
+
+      const secondSendResponse = await fetch(`${baseUrl}/api/team/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: workspace.id,
+          from_agent_id: orchestratorId,
+          token: hive.store.peekAgentToken(orchestratorId),
+          to: 'Alice',
+          text: '补充测试',
+        }),
+      })
+      expect(secondSendResponse.status).toBe(202)
+      const secondSendBody = (await secondSendResponse.json()) as {
+        dispatch_id: string
+        ok: true
+      }
 
       const reportResponse = await fetch(`${baseUrl}/api/team/report`, {
         method: 'POST',
@@ -163,6 +216,52 @@ describe('team protocol end to end', () => {
         }),
       })
       expect(reportResponse.status).toBe(202)
+      const reportBody = (await reportResponse.json()) as { dispatch_id: string; ok: true }
+      expect(reportBody.dispatch_id).toBe(sendBody.dispatch_id)
+
+      const reportedDispatchesResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches`,
+        { headers: { cookie } }
+      )
+      expect(reportedDispatchesResponse.status).toBe(200)
+      const reportedDispatches = (await reportedDispatchesResponse.json()) as Array<{
+        id: string
+        status: string
+        report_text: string | null
+        artifacts: string[]
+      }>
+      expect(reportedDispatches).toEqual([
+        expect.objectContaining({
+          id: sendBody.dispatch_id,
+          status: 'reported',
+          report_text: '已完成登录接口',
+          artifacts: ['src/auth.ts'],
+        }),
+        expect.objectContaining({
+          id: secondSendBody.dispatch_id,
+          status: 'submitted',
+          report_text: null,
+          artifacts: [],
+        }),
+      ])
+
+      const secondReportResponse = await fetch(`${baseUrl}/api/team/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: workspace.id,
+          from_agent_id: worker.id,
+          token: hive.store.peekAgentToken(worker.id),
+          result: '补充测试已完成',
+          artifacts: ['tests/auth.test.ts'],
+        }),
+      })
+      expect(secondReportResponse.status).toBe(202)
+      const secondReportBody = (await secondReportResponse.json()) as {
+        dispatch_id: string
+        ok: true
+      }
+      expect(secondReportBody.dispatch_id).toBe(secondSendBody.dispatch_id)
 
       await waitFor(async () => {
         const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
@@ -185,16 +284,36 @@ describe('team protocol end to end', () => {
       })
 
       const runtimeStore = createRuntimeStore({ dataDir })
+      const persistedDispatches = runtimeStore.listDispatches(workspace.id)
+      expect(persistedDispatches).toEqual([
+        expect.objectContaining({
+          id: sendBody.dispatch_id,
+          reportText: '已完成登录接口',
+          status: 'reported',
+        }),
+        expect.objectContaining({
+          id: secondSendBody.dispatch_id,
+          reportText: '补充测试已完成',
+          status: 'reported',
+        }),
+      ])
       const messages = runtimeStore.listMessagesForRecovery(workspace.id, 0)
-      expect(messages).toHaveLength(2)
+      expect(messages).toHaveLength(4)
       expect(messages).toContainEqual(
         expect.objectContaining({ type: 'send', to: worker.id, text: '实现登录接口' })
       )
       expect(messages).toContainEqual(
+        expect.objectContaining({ type: 'send', to: worker.id, text: '补充测试' })
+      )
+      expect(messages).toContainEqual(
         expect.objectContaining({ type: 'report', from: worker.id, text: '已完成登录接口' })
+      )
+      expect(messages).toContainEqual(
+        expect.objectContaining({ type: 'report', from: worker.id, text: '补充测试已完成' })
       )
       const report = messages.find((message) => message.type === 'report')
       expect(report).not.toHaveProperty('status')
+      await runtimeStore.close()
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()

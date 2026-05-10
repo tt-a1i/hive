@@ -277,6 +277,42 @@ describe('team API authz (R1.4)', () => {
     }
   })
 
+  test('worker report without an open dispatch is rejected and records no report', async () => {
+    const ctx = await setupHive()
+    try {
+      const workerToken = ctx.hive.store.peekAgentToken(ctx.worker.id)
+      if (!workerToken) {
+        throw new Error('Expected worker token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.worker.id,
+          token: workerToken,
+          result: 'done without dispatch',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toEqual({
+        error: 'No open dispatch for worker: Alice',
+      })
+      expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'report')
+      ).toEqual([])
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toEqual([])
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
   test('orchestrator with valid token succeeds (202) and records send', async () => {
     const ctx = await setupHive()
     try {

@@ -2,6 +2,7 @@ import type { AgentSummary, TeamListItem, WorkspaceSummary } from '../shared/typ
 import type { AgentManager } from './agent-manager.js'
 import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
+import type { DispatchRecord } from './dispatch-ledger-store.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import { createRuntimeStoreLifecycle, createRuntimeStoreServices } from './runtime-store-helpers.js'
@@ -23,14 +24,15 @@ interface RuntimeStore {
     workerId: string,
     text: string,
     input?: DispatchTaskInput
-  ) => Promise<void>
+  ) => Promise<DispatchRecord>
   dispatchTaskByWorkerName: (
     workspaceId: string,
     workerName: string,
     text: string,
     input?: DispatchTaskInput
-  ) => Promise<void>
-  reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => void
+  ) => Promise<DispatchRecord>
+  reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => DispatchRecord
+  listDispatches: (workspaceId: string) => DispatchRecord[]
   listWorkers: (workspaceId: string) => TeamListItem[]
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
   getWorker: (workspaceId: string, workerId: string) => AgentSummary
@@ -99,6 +101,13 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   const lifecycle = createRuntimeStoreLifecycle(
     options.agentManager ? { agentManager: options.agentManager, services } : { services }
   )
+  const runDataMutation = (mutation: () => void) => {
+    if (!services.db) {
+      mutation()
+      return
+    }
+    services.db.transaction(mutation)()
+  }
   return {
     close: lifecycle.close,
     createWorkspace: (path, name) => {
@@ -115,7 +124,10 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
         services.agentRuntime.deleteAgentLaunchConfig(workspaceId, agent.id)
       }
       await services.tasksFileWatcher.stop(workspaceId)
-      services.workspaceStore.deleteWorkspace(workspaceId)
+      runDataMutation(() => {
+        services.dispatchLedgerStore.deleteWorkspaceDispatches(workspaceId)
+        services.workspaceStore.deleteWorkspace(workspaceId)
+      })
       if (services.settings.getAppState('active_workspace_id')?.value === workspaceId) {
         services.settings.setAppState('active_workspace_id', null)
       }
@@ -127,12 +139,16 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
       if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
       services.agentRuntime.deleteAgentLaunchConfig(workspaceId, workerId)
-      services.workspaceStore.deleteWorker(workspaceId, workerId)
+      runDataMutation(() => {
+        services.dispatchLedgerStore.deleteWorkerDispatches(workspaceId, workerId)
+        services.workspaceStore.deleteWorker(workspaceId, workerId)
+      })
     },
     recordUserInput: services.teamOps.recordUserInput,
     dispatchTask: services.teamOps.dispatchTask,
     dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
     reportTask: services.teamOps.reportTask,
+    listDispatches: services.dispatchLedgerStore.listWorkspaceDispatches,
     listWorkers: (workspaceId) => services.workspaceStore.listWorkers(workspaceId),
     getWorkspaceSnapshot: (workspaceId) =>
       services.workspaceStore.getWorkspaceSnapshot(workspaceId),

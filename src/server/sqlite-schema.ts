@@ -8,8 +8,9 @@ import { applySchemaVersion10 } from './sqlite-schema-v10.js'
 import { applySchemaVersion11 } from './sqlite-schema-v11.js'
 import { applySchemaVersion12 } from './sqlite-schema-v12.js'
 import { applySchemaVersion13 } from './sqlite-schema-v13.js'
+import { applySchemaVersion14 } from './sqlite-schema-v14.js'
 
-export const CURRENT_SCHEMA_VERSION = 13
+export const CURRENT_SCHEMA_VERSION = 14
 
 export const initializeRuntimeDatabase = (db: Database) => {
   db.exec(`
@@ -80,6 +81,28 @@ export const initializeRuntimeDatabase = (db: Database) => {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (workspace_id, agent_id)
     );
+
+    CREATE TABLE IF NOT EXISTS dispatches (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT NOT NULL UNIQUE,
+      workspace_id TEXT NOT NULL,
+      from_agent_id TEXT,
+      to_agent_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      delivered_at INTEGER,
+      submitted_at INTEGER,
+      reported_at INTEGER,
+      report_text TEXT,
+      artifacts TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dispatches_workspace_created_at
+      ON dispatches (workspace_id, sequence);
+
+    CREATE INDEX IF NOT EXISTS idx_dispatches_open_by_worker
+      ON dispatches (workspace_id, to_agent_id, status, sequence);
   `)
 
   const versions = db
@@ -190,5 +213,10 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(13)) {
     applySchemaVersion13(db)
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(13, Date.now())
+  }
+
+  if (!appliedVersions.has(14)) {
+    applySchemaVersion14(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(14, Date.now())
   }
 }

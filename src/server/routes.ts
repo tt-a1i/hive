@@ -8,6 +8,7 @@ import type {
   SendTaskBody,
   WorkerRole,
 } from './route-types.js'
+import { dispatchRoutes } from './routes-dispatches.js'
 import { fsRoutes } from './routes-fs.js'
 import { runtimeRoutes } from './routes-runtime.js'
 import { settingsRoutes } from './routes-settings.js'
@@ -18,6 +19,7 @@ import { workspaceRoutes } from './routes-workspaces.js'
 
 const routes: RouteDefinition[] = [
   ...workspaceRoutes,
+  ...dispatchRoutes,
   ...uiRoutes,
   ...settingsRoutes,
   ...taskRoutes,

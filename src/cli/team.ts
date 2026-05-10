@@ -137,7 +137,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
-    await postJson(baseUrl, '/api/team/send', {
+    const response = await postJson(baseUrl, '/api/team/send', {
       hive_port: env.HIVE_PORT,
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
@@ -145,6 +145,7 @@ export const runTeamCommand = async (argv: string[]) => {
       to: workerName,
       text: task,
     })
+    console.log(JSON.stringify(await response.json()))
     return
   }
 

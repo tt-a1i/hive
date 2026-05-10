@@ -13,12 +13,12 @@ export const teamRoutes: RouteDefinition[] = [
       workspaceId: body.project_id,
     })
     requireCommandForRole(agent, 'send')
-    await store.dispatchTaskByWorkerName(body.project_id, body.to, body.text, {
+    const dispatch = await store.dispatchTaskByWorkerName(body.project_id, body.to, body.text, {
       fromAgentId: body.from_agent_id,
       hivePort: body.hive_port ?? String(request.socket.localPort ?? ''),
     })
 
-    sendJson(response, 202, { ok: true })
+    sendJson(response, 202, { dispatch_id: dispatch.id, ok: true })
   }),
   route('POST', '/api/team/report', async ({ request, response, store }) => {
     const body = await readJsonBody<ReportTaskBody>(request)
@@ -36,13 +36,16 @@ export const teamRoutes: RouteDefinition[] = [
       text: body.result,
     }
     if (typeof body.status === 'string') {
-      store.reportTask(body.project_id, body.from_agent_id, {
+      const dispatch = store.reportTask(body.project_id, body.from_agent_id, {
         ...reportInput,
         status: body.status,
       })
+      sendJson(response, 202, { dispatch_id: dispatch.id, ok: true })
+      return
     } else {
-      store.reportTask(body.project_id, body.from_agent_id, reportInput)
+      const dispatch = store.reportTask(body.project_id, body.from_agent_id, reportInput)
+      sendJson(response, 202, { dispatch_id: dispatch.id, ok: true })
+      return
     }
-    sendJson(response, 202, { ok: true })
   }),
 ]

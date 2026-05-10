@@ -109,6 +109,7 @@ describe('team report cli', () => {
       if (!workerToken) {
         throw new Error('Expected worker token after start')
       }
+      await hive.store.dispatchTask(workspace.id, worker.id, 'Report this CLI task')
       process.env = {
         ...originalEnv,
         HIVE_AGENT_ID: worker.id,

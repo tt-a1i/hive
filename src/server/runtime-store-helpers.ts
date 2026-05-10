@@ -3,6 +3,7 @@ import { type AgentLaunchConfigInput, createAgentRunStore } from './agent-run-st
 import { createAgentRuntime } from './agent-runtime.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
+import { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
@@ -19,6 +20,7 @@ export interface RuntimeStoreServices {
   agentRunStore: ReturnType<typeof createAgentRunStore>
   agentRuntime: ReturnType<typeof createAgentRuntime>
   db: ReturnType<typeof openRuntimeDatabase>
+  dispatchLedgerStore: ReturnType<typeof createDispatchLedgerStore>
   messageLogStore: ReturnType<typeof createMessageLogStore>
   settings: ReturnType<typeof createSettingsStore>
   tasksFileWatcher: ReturnType<typeof createTasksFileWatcher>
@@ -54,6 +56,7 @@ export const createRuntimeStoreServices = (
 ): RuntimeStoreServices => {
   const db = openRuntimeDatabase(options.dataDir)
   const messageLogStore = createMessageLogStore(db)
+  const dispatchLedgerStore = createDispatchLedgerStore(db)
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
   const settings = createSettingsStore(db)
@@ -95,8 +98,13 @@ export const createRuntimeStoreServices = (
   )
   const teamOps = createTeamOperations({
     agentRuntime,
+    createDispatch: dispatchLedgerStore.createDispatch,
+    deleteDispatch: dispatchLedgerStore.deleteDispatch,
     deleteMessage: messageLogStore.deleteMessage,
+    findOpenDispatch: dispatchLedgerStore.findOpenDispatch,
     insertMessage: messageLogStore.insertMessage,
+    markDispatchReportedByWorker: dispatchLedgerStore.markReportedByWorker,
+    markDispatchSubmitted: dispatchLedgerStore.markSubmitted,
     workspaceStore,
   })
   startExistingWorkspaceWatches()
@@ -105,6 +113,7 @@ export const createRuntimeStoreServices = (
     agentRunStore,
     agentRuntime,
     db,
+    dispatchLedgerStore,
     messageLogStore,
     settings,
     tasksFileWatcher,

@@ -170,6 +170,7 @@ describe('team runtime flow (unit)', () => {
     await store.startAgent(workspace.id, worker.id, {
       hivePort: '4010',
     })
+    await store.dispatchTask(workspace.id, worker.id, 'Report this task')
 
     const app = createApp({ store })
     await new Promise<void>((resolve) => {

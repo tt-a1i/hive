@@ -109,6 +109,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   process.env = { ...originalEnv }
   serverStore = undefined
   workerId = ''
@@ -140,14 +141,23 @@ describe('team cli with real server', () => {
         status: 'idle',
       },
     ])
+    logSpy.mockRestore()
   })
 
   test('team send Alice reaches the real backend', async () => {
     if (!serverStore) {
       throw new Error('Expected test server store')
     }
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await expect(runTeamCommand(['send', 'Alice', 'Implement login'])).resolves.toBeUndefined()
+    const output = logSpy.mock.calls[0]?.[0] ?? ''
+    const parsed = JSON.parse(output) as { dispatch_id: string; ok: true }
+    expect(parsed).toEqual({
+      dispatch_id: expect.any(String),
+      ok: true,
+    })
+    logSpy.mockRestore()
 
     const workspaceId = process.env.HIVE_PROJECT_ID
     if (!workspaceId) {
