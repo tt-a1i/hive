@@ -2,7 +2,7 @@ import type { AgentSummary, TeamListItem, WorkspaceSummary } from '../shared/typ
 import type { AgentManager } from './agent-manager.js'
 import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
-import type { DispatchRecord } from './dispatch-ledger-store.js'
+import type { DispatchRecord, ListDispatchesOptions } from './dispatch-ledger-store.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import { createRuntimeStoreLifecycle, createRuntimeStoreServices } from './runtime-store-helpers.js'
@@ -32,7 +32,7 @@ interface RuntimeStore {
     input?: DispatchTaskInput
   ) => Promise<DispatchRecord>
   reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => DispatchRecord
-  listDispatches: (workspaceId: string) => DispatchRecord[]
+  listDispatches: (workspaceId: string, options?: ListDispatchesOptions) => DispatchRecord[]
   listWorkers: (workspaceId: string) => TeamListItem[]
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
   getWorker: (workspaceId: string, workerId: string) => AgentSummary

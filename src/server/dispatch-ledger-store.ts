@@ -50,6 +50,12 @@ interface ReportDispatchInput {
   workspaceId: string
 }
 
+export interface ListDispatchesOptions {
+  limit?: number
+  offset?: number
+  status?: DispatchStatus
+}
+
 const parseArtifacts = (value: string | null) => {
   if (!value) return []
   try {
@@ -224,11 +230,33 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
     }
   }
 
-  const listWorkspaceDispatches = (workspaceId: string) => {
+  const listWorkspaceDispatches = (workspaceId: string, options: ListDispatchesOptions = {}) => {
+    const offset = options.offset ?? 0
+    const limit = options.limit ?? 100
     if (!db) {
       return Array.from(memoryDispatches.values())
-        .filter((record) => record.workspaceId === workspaceId)
+        .filter(
+          (record) =>
+            record.workspaceId === workspaceId &&
+            (options.status === undefined || record.status === options.status)
+        )
         .sort((a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt))
+        .slice(offset, offset + limit)
+    }
+
+    if (options.status) {
+      return (
+        db
+          .prepare(
+            `SELECT *
+             FROM dispatches
+             WHERE workspace_id = ?
+               AND status = ?
+             ORDER BY sequence ASC
+             LIMIT ? OFFSET ?`
+          )
+          .all(workspaceId, options.status, limit, offset) as DispatchRow[]
+      ).map(toRecord)
     }
 
     return (
@@ -237,9 +265,10 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
           `SELECT *
            FROM dispatches
            WHERE workspace_id = ?
-           ORDER BY sequence ASC`
+           ORDER BY sequence ASC
+           LIMIT ? OFFSET ?`
         )
-        .all(workspaceId) as DispatchRow[]
+        .all(workspaceId, limit, offset) as DispatchRow[]
     ).map(toRecord)
   }
 

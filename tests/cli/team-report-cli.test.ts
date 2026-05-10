@@ -109,7 +109,18 @@ describe('team report cli', () => {
       if (!workerToken) {
         throw new Error('Expected worker token after start')
       }
-      await hive.store.dispatchTask(workspace.id, worker.id, 'Report this CLI task')
+      const orchestratorToken = hive.store.peekAgentToken(orchestratorId)
+      if (!orchestratorToken) {
+        throw new Error('Expected orchestrator token after start')
+      }
+      process.env = {
+        ...originalEnv,
+        HIVE_AGENT_ID: orchestratorId,
+        HIVE_AGENT_TOKEN: orchestratorToken,
+        HIVE_PORT: String(hive.port),
+        HIVE_PROJECT_ID: workspace.id,
+      }
+      await runTeamCommand(['send', 'Alice', 'Report this CLI task'])
       process.env = {
         ...originalEnv,
         HIVE_AGENT_ID: worker.id,

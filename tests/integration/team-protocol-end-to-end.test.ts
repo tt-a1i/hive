@@ -165,7 +165,7 @@ describe('team protocol end to end', () => {
         workspace_id: string
         from_agent_id: string
         to_agent_id: string
-        status: string
+        state: string
         text: string
         report_text: string | null
         artifacts: string[]
@@ -176,7 +176,7 @@ describe('team protocol end to end', () => {
           workspace_id: workspace.id,
           from_agent_id: orchestratorId,
           to_agent_id: worker.id,
-          status: 'submitted',
+          state: 'submitted',
           text: '实现登录接口',
           report_text: null,
           artifacts: [],
@@ -226,24 +226,69 @@ describe('team protocol end to end', () => {
       expect(reportedDispatchesResponse.status).toBe(200)
       const reportedDispatches = (await reportedDispatchesResponse.json()) as Array<{
         id: string
-        status: string
+        state: string
         report_text: string | null
         artifacts: string[]
       }>
       expect(reportedDispatches).toEqual([
         expect.objectContaining({
           id: sendBody.dispatch_id,
-          status: 'reported',
+          state: 'reported',
           report_text: '已完成登录接口',
           artifacts: ['src/auth.ts'],
         }),
         expect.objectContaining({
           id: secondSendBody.dispatch_id,
-          status: 'submitted',
+          state: 'submitted',
           report_text: null,
           artifacts: [],
         }),
       ])
+
+      const pagedDispatchesResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?limit=1&offset=1`,
+        { headers: { cookie } }
+      )
+      expect(pagedDispatchesResponse.status).toBe(200)
+      const pagedDispatches = (await pagedDispatchesResponse.json()) as Array<{ id: string }>
+      expect(pagedDispatches).toEqual([expect.objectContaining({ id: secondSendBody.dispatch_id })])
+
+      const submittedDispatchesResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?state=submitted`,
+        { headers: { cookie } }
+      )
+      expect(submittedDispatchesResponse.status).toBe(200)
+      const submittedDispatches = (await submittedDispatchesResponse.json()) as Array<{
+        id: string
+        state: string
+      }>
+      expect(submittedDispatches).toEqual([
+        expect.objectContaining({ id: secondSendBody.dispatch_id, state: 'submitted' }),
+      ])
+
+      const invalidStateResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?state=working`,
+        { headers: { cookie } }
+      )
+      expect(invalidStateResponse.status).toBe(400)
+
+      const deprecatedStatusResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?status=submitted`,
+        { headers: { cookie } }
+      )
+      expect(deprecatedStatusResponse.status).toBe(400)
+
+      const malformedLimitResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?limit=1abc`,
+        { headers: { cookie } }
+      )
+      expect(malformedLimitResponse.status).toBe(400)
+
+      const hugeOffsetResponse = await fetch(
+        `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches?offset=999999999999999999999`,
+        { headers: { cookie } }
+      )
+      expect(hugeOffsetResponse.status).toBe(400)
 
       const secondReportResponse = await fetch(`${baseUrl}/api/team/report`, {
         method: 'POST',

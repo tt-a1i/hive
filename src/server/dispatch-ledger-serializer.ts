@@ -8,7 +8,7 @@ export const serializeDispatchRecord = (record: DispatchRecord) => ({
   id: record.id,
   reported_at: record.reportedAt,
   report_text: record.reportText,
-  status: record.status,
+  state: record.status,
   submitted_at: record.submittedAt,
   text: record.text,
   to_agent_id: record.toAgentId,
