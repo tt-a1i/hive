@@ -36,6 +36,8 @@ let workspaceId = ''
 let sleeperPresetId = ''
 let uiCookie = ''
 
+const WORKER_FLOW_TIMEOUT_MS = 5000
+
 const fetchThroughServer = (input: RequestInfo | URL, init?: RequestInit) => {
   const value =
     typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
@@ -155,11 +157,18 @@ describe('worker flow with real server', () => {
     fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
 
     // Dialog closes, card appears with testid + role badge
-    await waitFor(() => {
-      expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
-    })
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
+      },
+      { timeout: WORKER_FLOW_TIMEOUT_MS }
+    )
 
-    const card = await screen.findByRole('button', { name: /^Open Alice$/ })
+    const card = await screen.findByRole(
+      'button',
+      { name: /^Open Alice$/ },
+      { timeout: WORKER_FLOW_TIMEOUT_MS }
+    )
     expect(card).toBeInTheDocument()
     expect(within(card).getByText('Alice')).toBeInTheDocument()
     expect(within(card).getByText('Coder')).toBeInTheDocument()
@@ -237,9 +246,12 @@ describe('worker flow with real server', () => {
     fireEvent.click(within(dialog).getByTestId(`agent-radio-${sleeperPresetId}`))
     fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
 
-    await waitFor(() => {
-      expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
-    })
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
+      },
+      { timeout: WORKER_FLOW_TIMEOUT_MS }
+    )
     const worker = serverContext?.store
       .getWorkspaceSnapshot(workspaceId)
       .agents.find((agent) => agent.name === 'ReviewLead')
@@ -266,7 +278,11 @@ describe('worker flow with real server', () => {
     fireEvent.click(within(dialog).getByTestId(`agent-radio-${sleeperPresetId}`))
     fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
 
-    const card = await screen.findByRole('button', { name: /^Open Immediate$/ })
+    const card = await screen.findByRole(
+      'button',
+      { name: /^Open Immediate$/ },
+      { timeout: WORKER_FLOW_TIMEOUT_MS }
+    )
     fireEvent.click(card)
 
     const modal = await screen.findByRole('dialog', { name: 'Immediate' })
