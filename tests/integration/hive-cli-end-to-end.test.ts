@@ -139,7 +139,7 @@ describe('hive cli end to end', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
       })
       expect(workspaceResponse.status).toBe(201)
       const workspace = (await workspaceResponse.json()) as { id: string }

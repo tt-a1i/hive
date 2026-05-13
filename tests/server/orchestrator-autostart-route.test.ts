@@ -122,6 +122,44 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     if (orchestratorRun) store.stopAgentRun(orchestratorRun.run_id)
   })
 
+  test('manual start during workspace autostart reuses the active orchestrator run', async () => {
+    const { store, baseUrl } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ path: makeWorkspacePath('dedupe'), name: 'Dedupe' }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
+    expect(typeof body.orchestrator_start.run_id).toBe('string')
+
+    const startResponse = await fetch(
+      `${baseUrl}/api/workspaces/${body.id}/agents/${body.id}:orchestrator/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
+      }
+    )
+    expect(startResponse.status).toBe(201)
+    const startBody = (await startResponse.json()) as { runId: string }
+    expect(startBody.runId).toBe(body.orchestrator_start.run_id)
+
+    const orchestratorRuns = store
+      .listTerminalRuns(body.id)
+      .filter((run) => run.agent_id === `${body.id}:orchestrator`)
+    expect(orchestratorRuns).toHaveLength(1)
+
+    store.stopAgentRun(startBody.runId)
+  })
+
   test('autostart_orchestrator: false skips spawn, no run started', async () => {
     const { store, baseUrl } = await startServer()
     const cookie = await getUiCookie(baseUrl)

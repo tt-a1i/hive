@@ -63,7 +63,7 @@ describe('user input stdin injection', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
       const orchestratorId = `${workspace.id}:orchestrator`

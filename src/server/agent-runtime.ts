@@ -103,6 +103,14 @@ export const createAgentRuntime = (
     },
     async startAgent(workspace, agentId, input) {
       launchCache.setWorkspaceId(agentId, workspace.id)
+      const activeRun = getActiveRunByAgent(
+        registry,
+        launchCache.getWorkspaceId,
+        syncRun,
+        workspace.id,
+        agentId
+      )
+      if (activeRun) return activeRun
       return startLiveRun(
         workspace,
         agentId,

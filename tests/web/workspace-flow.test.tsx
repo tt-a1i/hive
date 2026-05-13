@@ -108,9 +108,11 @@ describe('workspace flow with real server', () => {
     if (!workspace) throw new Error('Expected created workspace')
     const realRuntimePort = new URL(serverContext?.baseUrl ?? '').port
     await waitFor(() => {
-      const run = serverContext?.store
+      const orchestratorRuns = serverContext?.store
         .listTerminalRuns(workspace.id)
-        .find((item) => item.agent_id.endsWith(':orchestrator'))
+        .filter((item) => item.agent_id.endsWith(':orchestrator'))
+      expect(orchestratorRuns).toHaveLength(1)
+      const run = orchestratorRuns?.[0]
       if (!run) throw new Error('Expected orchestrator run')
       expect(serverContext?.store.getLiveRun(run.run_id).output).toContain(
         `queen port:${realRuntimePort}`
