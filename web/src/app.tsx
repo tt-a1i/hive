@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import { AppProviders } from './AppProviders.js'
@@ -9,6 +9,7 @@ import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
+import { useToast } from './ui/useToast.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
@@ -19,14 +20,22 @@ import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
 import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
-export const App = () => {
+const AppInner = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const { activeWorkspaceId, selectWorkspace, setActiveWorkspaceId } = useWorkspaceSelection()
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(activeWorkspaceId)
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
+  const toast = useToast()
 
-  useInitializeUiSession(setWorkspaces, setActiveWorkspaceId)
+  const onBootstrapError = useCallback(
+    (message: string) => {
+      toast.show({ kind: 'error', message })
+    },
+    [toast]
+  )
+
+  useInitializeUiSession(setWorkspaces, setActiveWorkspaceId, onBootstrapError)
 
   const {
     orchestratorAutostartErrors,
@@ -65,73 +74,75 @@ export const App = () => {
   })
 
   return (
-    <AppProviders>
-      <MainLayout
-        hideTopbarActions={!activeWorkspace}
-        onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
-        sidebar={
-          <Sidebar
-            activeWorkspaceId={activeWorkspaceId}
-            onCreateClick={() => setAddDialogTrigger((value) => value + 1)}
-            onDeleteWorkspace={deleteWorkspace}
-            onSelectWorkspace={selectWorkspace}
-            workersByWorkspaceId={workersByWorkspaceId}
-            workspaces={workspaces}
-          />
+    <MainLayout
+      hideTopbarActions={!activeWorkspace}
+      onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
+      sidebar={
+        <Sidebar
+          activeWorkspaceId={activeWorkspaceId}
+          onCreateClick={() => setAddDialogTrigger((value) => value + 1)}
+          onDeleteWorkspace={deleteWorkspace}
+          onSelectWorkspace={selectWorkspace}
+          workersByWorkspaceId={workersByWorkspaceId}
+          workspaces={workspaces}
+        />
+      }
+      taskGraphOpen={taskGraphOpen}
+    >
+      {activeWorkspace ? (
+        <WorkspaceTerminalPanels
+          key={`terminal-${activeWorkspace.id}`}
+          optimisticRuns={terminalRunOptimism.optimisticRunsByWorkspaceId[activeWorkspace.id] ?? []}
+          workspaceId={activeWorkspace.id}
+        />
+      ) : null}
+      <WorkspaceDetail
+        onCreateWorker={workerActions.createWorker}
+        onDeleteWorker={workerActions.deleteWorker}
+        onStartWorker={workerActions.startWorker}
+        onOrchestratorResult={recordOrchestratorResult}
+        onRequestAddWorkspace={() => setAddDialogTrigger((v) => v + 1)}
+        orchestratorAutostartError={
+          activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
         }
-        taskGraphOpen={taskGraphOpen}
-      >
-        {activeWorkspace ? (
-          <WorkspaceTerminalPanels
-            key={`terminal-${activeWorkspace.id}`}
-            optimisticRuns={
-              terminalRunOptimism.optimisticRunsByWorkspaceId[activeWorkspace.id] ?? []
-            }
-            workspaceId={activeWorkspace.id}
-          />
-        ) : null}
-        <WorkspaceDetail
-          onCreateWorker={workerActions.createWorker}
-          onDeleteWorker={workerActions.deleteWorker}
-          onStartWorker={workerActions.startWorker}
-          onOrchestratorResult={recordOrchestratorResult}
-          onRequestAddWorkspace={() => setAddDialogTrigger((v) => v + 1)}
-          orchestratorAutostartError={
-            activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
-          }
-          orchestratorAutostartRunId={
-            activeWorkspace ? (orchestratorAutostartRunIds[activeWorkspace.id] ?? null) : null
-          }
-          terminalRuns={terminalRuns}
-          workers={activeWorkers}
-          workspace={activeWorkspace}
-        />
-        {activeWorkspace ? (
-          <TaskGraphDrawer
-            content={activeTasksFile.content}
-            hasConflict={activeTasksFile.hasConflict}
-            onClose={() => setTaskGraphOpen(false)}
-            onContentChange={activeTasksFile.onChange}
-            onKeepLocal={activeTasksFile.onKeepLocal}
-            onReload={activeTasksFile.onReload}
-            onSave={activeTasksFile.onSave}
-            onToggleTaskLine={(line) => {
-              void activeTasksFile
-                .toggleTaskAtLine(line)
-                .catch(logSwallowed('tasks.toggleTaskAtLine'))
-            }}
-            open={taskGraphOpen}
-            workspacePath={activeWorkspace.path}
-          />
-        ) : null}
-        <AddWorkspaceDialog
-          onClose={() => {}}
-          onCreate={(input) => {
-            void createNewWorkspace(input)
+        orchestratorAutostartRunId={
+          activeWorkspace ? (orchestratorAutostartRunIds[activeWorkspace.id] ?? null) : null
+        }
+        terminalRuns={terminalRuns}
+        workers={activeWorkers}
+        workspace={activeWorkspace}
+      />
+      {activeWorkspace ? (
+        <TaskGraphDrawer
+          content={activeTasksFile.content}
+          hasConflict={activeTasksFile.hasConflict}
+          onClose={() => setTaskGraphOpen(false)}
+          onContentChange={activeTasksFile.onChange}
+          onKeepLocal={activeTasksFile.onKeepLocal}
+          onReload={activeTasksFile.onReload}
+          onSave={activeTasksFile.onSave}
+          onToggleTaskLine={(line) => {
+            void activeTasksFile
+              .toggleTaskAtLine(line)
+              .catch(logSwallowed('tasks.toggleTaskAtLine'))
           }}
-          trigger={addDialogTrigger}
+          open={taskGraphOpen}
+          workspacePath={activeWorkspace.path}
         />
-      </MainLayout>
-    </AppProviders>
+      ) : null}
+      <AddWorkspaceDialog
+        onClose={() => {}}
+        onCreate={(input) => {
+          void createNewWorkspace(input)
+        }}
+        trigger={addDialogTrigger}
+      />
+    </MainLayout>
   )
 }
+
+export const App = () => (
+  <AppProviders>
+    <AppInner />
+  </AppProviders>
+)

@@ -34,7 +34,8 @@ export const useInitializeUiSession = (
       | null
       | ((current: WorkspaceSummary[] | null) => WorkspaceSummary[] | null)
   ) => void,
-  setActiveWorkspaceId: (value: string | null) => void
+  setActiveWorkspaceId: (value: string | null) => void,
+  onError?: (message: string) => void
 ) => {
   useEffect(() => {
     let cancelled = false
@@ -63,13 +64,18 @@ export const useInitializeUiSession = (
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setWorkspaces([])
+          // Keep workspaces=null on bootstrap failure so the UI does NOT fall
+          // into the empty-workspaces branch (which would render WelcomePane,
+          // making "runtime down" indistinguishable from "no workspaces yet").
           setActiveWorkspaceId(null)
+          if (onError) {
+            onError('Could not reach Hive runtime. Refresh once the runtime is back up.')
+          }
         }
         console.error('[hive] swallowed:initSession.bootstrap', error)
       })
     return () => {
       cancelled = true
     }
-  }, [setActiveWorkspaceId, setWorkspaces])
+  }, [setActiveWorkspaceId, setWorkspaces, onError])
 }

@@ -98,6 +98,16 @@ describe('app shell with real server', () => {
     expect(await screen.findByTestId('confirm-workspace-dialog')).toBeInTheDocument()
   })
 
+  test('init failure surfaces error toast (distinguishes runtime-down from empty list)', async () => {
+    // Override the per-test fetch stub from beforeEach with a hard-rejecting
+    // one so bootstrap fails on the first call.
+    vi.stubGlobal('fetch', () => Promise.reject(new Error('ECONNREFUSED')))
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByText(/could not reach hive runtime/i)).toBeInTheDocument()
+    })
+  })
+
   test('workspace sidebar can be resized from its right edge', async () => {
     render(<App />)
 
