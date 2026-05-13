@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -9,8 +9,27 @@ import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
 const tempDirs: string[] = []
+const originalPath = process.env.PATH
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
-afterEach(() => {
+const writeFakeClaudeCli = (binDir: string) => {
+  const scriptPath = join(binDir, 'fake-claude.js')
+  writeFileSync(scriptPath, 'process.stdin.resume(); setInterval(() => {}, 1000)\n')
+
+  const unixCli = join(binDir, 'claude')
+  writeFileSync(unixCli, `#!/usr/bin/env sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`)
+  chmodSync(unixCli, 0o755)
+
+  const winCli = join(binDir, 'claude.cmd')
+  writeFileSync(winCli, `@echo off\r\n"${process.execPath}" "%~dp0fake-claude.js" %*\r\n`)
+}
+
+afterEach(async () => {
+  for (const store of stores.splice(0)) {
+    await store.close()
+  }
+  process.env.PATH = originalPath
+  delete process.env.HIVE_CLAUDE_PROJECTS_DIR
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true })
   }
@@ -22,6 +41,7 @@ describe('runtime rehydration', () => {
     tempDirs.push(dataDir)
 
     const firstStore = createRuntimeStore({ dataDir })
+    stores.push(firstStore)
     const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
     const bob = firstStore.addWorker(workspace.id, { name: 'Bob', role: 'tester' })
@@ -31,6 +51,7 @@ describe('runtime rehydration', () => {
     firstStore.reportTask(workspace.id, bob.id)
 
     const secondStore = createRuntimeStore({ dataDir })
+    stores.push(secondStore)
 
     expect(secondStore.listWorkers(workspace.id)).toEqual([
       {
@@ -54,11 +75,16 @@ describe('runtime rehydration', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-session-'))
     const workspacePath = join(dataDir, 'workspace')
     const claudeProjectsDir = join(dataDir, 'claude-projects')
+    const binDir = join(dataDir, 'bin')
     tempDirs.push(dataDir)
     mkdirSync(workspacePath, { recursive: true })
+    mkdirSync(binDir, { recursive: true })
     mkdirSync(join(claudeProjectsDir, '-tmp-hive-alpha'), { recursive: true })
+    writeFakeClaudeCli(binDir)
+    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ''}`
 
     const firstStore = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    stores.push(firstStore)
     const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
     firstStore.configureAgentLaunch(workspace.id, worker.id, {
@@ -82,6 +108,7 @@ describe('runtime rehydration', () => {
     const startSpy = vi.spyOn(manager, 'startAgent')
 
     const secondStore = createRuntimeStore({ agentManager: manager, dataDir })
+    stores.push(secondStore)
     secondStore.configureAgentLaunch(workspace.id, worker.id, {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
@@ -111,6 +138,7 @@ describe('runtime rehydration', () => {
     db.close()
 
     const thirdStore = createRuntimeStore({ agentManager: manager, dataDir })
+    stores.push(thirdStore)
     thirdStore.configureAgentLaunch(workspace.id, worker.id, {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],

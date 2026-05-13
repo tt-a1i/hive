@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 const tempDirs: string[] = []
+const describeUnixOnly = process.platform === 'win32' ? describe.skip : describe
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -34,7 +35,7 @@ afterEach(() => {
   }
 })
 
-describe('hive runtime SIGTERM shutdown', () => {
+describeUnixOnly('hive runtime SIGTERM shutdown', () => {
   test('SIGTERM exits runtime and cleans up active PTY child', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hive-sigterm-test-'))
     const workspacePath = join(root, 'workspace')
@@ -52,7 +53,7 @@ describe('hive runtime SIGTERM shutdown', () => {
         "import { runHiveCommand } from './src/cli/hive.ts'; await runHiveCommand(['--port','40128']);",
       ],
       {
-        cwd: '/Users/admin/code/hive',
+        cwd: process.cwd(),
         env: { ...process.env, HIVE_DATA_DIR: join(root, 'data') },
         stdio: 'ignore',
       }

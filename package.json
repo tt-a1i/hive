@@ -48,7 +48,7 @@
     "dev:all": "concurrently \"pnpm dev:runtime\" \"pnpm dev:web\"",
     "dev:runtime": "tsx src/cli/hive.ts --port 4010",
     "dev:web": "vite --config web/vite.config.ts",
-    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/bin && cp bin/team dist/bin/team && chmod +x dist/bin/team && pnpm build:web",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && node scripts/prepare-build-artifacts.mjs && pnpm build:web",
     "build:web": "vite build --config web/vite.config.ts",
     "check": "pnpm exec biome check .",
     "format": "pnpm exec biome format --write .",
@@ -57,6 +57,7 @@
     "postinstall": "node scripts/fix-runtime-artifacts.mjs",
     "release:dry": "pnpm check && pnpm build && pnpm test && pnpm pack:check && pnpm pack:smoke",
     "test": "vitest run",
+    "test:windows": "vitest run tests/unit/agent-command-resolver.test.ts tests/unit/session-capture-multi-cli.test.ts tests/unit/claude-session-support.test.ts tests/unit/worker-name-generator.test.ts tests/server/fs-pick-folder.test.ts tests/server/fs-browse.test.ts tests/server/schema-version.test.ts tests/server/runtime-rehydration.test.ts tests/web/workspace-picker.test.tsx tests/web/confirm-dialog.test.tsx tests/web/toast.test.tsx --no-file-parallelism --maxWorkers=1 --testTimeout=30000 --hookTimeout=30000",
     "test:watch": "vitest"
   },
   "dependencies": {

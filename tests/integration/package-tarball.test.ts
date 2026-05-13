@@ -14,15 +14,22 @@ interface PackResult {
   version: string
 }
 
+const runNpm = (args: string[]) =>
+  execFileSync(
+    process.platform === 'win32' ? 'cmd.exe' : 'npm',
+    process.platform === 'win32' ? ['/d', '/s', '/c', 'npm', ...args] : args,
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  )
+
 describe('npm package tarball', () => {
   test('publish dry-run exposes only runtime files and the hive bin', () => {
     expect(existsSync(join(process.cwd(), 'dist', 'src', 'cli', 'hive.js'))).toBe(true)
     expect(existsSync(join(process.cwd(), 'web', 'dist', 'index.html'))).toBe(true)
 
-    const output = execFileSync('npm', ['pack', '--dry-run', '--json'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const output = runNpm(['pack', '--dry-run', '--json'])
     const [result] = JSON.parse(output) as PackResult[]
     const paths = result.files.map((file) => file.path)
 
@@ -31,6 +38,7 @@ describe('npm package tarball', () => {
     expect(paths).toContain('dist/src/cli/hive.js')
     expect(paths).toContain('dist/src/cli/team.js')
     expect(paths).toContain('dist/bin/team')
+    expect(paths).toContain('dist/bin/team.cmd')
     expect(paths).toContain('web/dist/index.html')
     expect(paths).toContain('scripts/fix-runtime-artifacts.mjs')
     expect(paths).toContain('CHANGELOG.md')

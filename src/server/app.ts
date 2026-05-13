@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { dirname, extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { type PickFolderResponse, pickFolder } from './fs-pick-folder.js'
 import { HttpError } from './http-errors.js'
 import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
@@ -12,6 +13,7 @@ import { createTerminalWebSocketServer } from './terminal-ws-server.js'
 
 interface CreateAppOptions {
   store: RuntimeStore
+  pickFolderService?: () => Promise<PickFolderResponse>
   tasksFileService?: TasksFileService
 }
 
@@ -91,6 +93,7 @@ const sendJson = (response: ServerResponse, statusCode: number, body: unknown) =
 
 export const createApp = ({
   store,
+  pickFolderService = pickFolder,
   tasksFileService = createTasksFileService(),
 }: CreateAppOptions) => {
   const staticDir = process.env.HIVE_STATIC_DIR ?? getDefaultStaticDir()
@@ -107,6 +110,7 @@ export const createApp = ({
           response,
           store,
           tasksFileService,
+          pickFolderService,
           params: match.params,
         })
         return

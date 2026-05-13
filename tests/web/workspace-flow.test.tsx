@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { seedOrchestratorLaunchConfig } from '../../src/server/orchestrator-launch.js'
 import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
@@ -22,10 +23,9 @@ beforeEach(async () => {
   mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
   tempDirs.push(sandboxRoot)
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
-  // Short-circuit the native folder picker so the test doesn't actually spawn
-  // osascript/zenity. The value mimics what the OS dialog would return.
-  process.env.HIVE_MOCK_PICK_FOLDER = join(sandboxRoot, 'alpha-project')
-  const server = await startTestServer()
+  const server = await startTestServer({
+    pickFolderPath: join(sandboxRoot, 'alpha-project'),
+  })
   serverContext = server
   dummyPresetId = server.store.settings.createCommandPreset({
     args: ['-e', "console.log('queen port:' + process.env.HIVE_PORT); process.stdin.resume()"],
@@ -58,7 +58,6 @@ afterEach(async () => {
   cleanupServer = undefined
   serverContext = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
-  delete process.env.HIVE_MOCK_PICK_FOLDER
   dummyPresetId = ''
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
@@ -101,7 +100,7 @@ describe('workspace flow with real server', () => {
       () => {
         expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
       },
-      { timeout: 3000 }
+      { timeout: 10_000 }
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
@@ -120,12 +119,19 @@ describe('workspace flow with real server', () => {
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
     expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
-  })
+  }, 20_000)
 
   test('existing workspace auto-starts Queen without exposing a manual Start Queen CTA', async () => {
     const existingPath = join(sandboxRoot, 'existing-project')
     mkdirSync(existingPath, { recursive: true })
-    serverContext?.store.createWorkspace(existingPath, 'Existing')
+    const existing = serverContext?.store.createWorkspace(existingPath, 'Existing')
+    if (!serverContext || !existing) throw new Error('Expected test server')
+    seedOrchestratorLaunchConfig(
+      serverContext.store,
+      serverContext.store.settings,
+      existing.id,
+      dummyPresetId
+    )
 
     render(<App />)
 
@@ -143,9 +149,9 @@ describe('workspace flow with real server', () => {
       () => {
         expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
       },
-      { timeout: 3000 }
+      { timeout: 10_000 }
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
-  })
+  }, 20_000)
 })

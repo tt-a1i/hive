@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
+import { probeDirectory } from '../../src/server/fs-browse.js'
+import type { PickFolderResponse } from '../../src/server/fs-pick-folder.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
 interface TestServerContext {
@@ -14,12 +16,27 @@ interface TestServerContext {
 }
 
 export const startTestServer = async (
-  input: { dataDir?: string } = {}
+  input: {
+    dataDir?: string
+    pickFolderPath?: string
+    pickFolderService?: () => Promise<PickFolderResponse>
+  } = {}
 ): Promise<TestServerContext> => {
   const ownsDataDir = !input.dataDir
   const dataDir = input.dataDir ?? mkdtempSync(join(tmpdir(), 'hive-test-server-'))
   const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
-  const app = createApp({ store })
+  const pickFolderService =
+    input.pickFolderService ??
+    (input.pickFolderPath
+      ? async () => ({
+          canceled: false,
+          error: null,
+          path: input.pickFolderPath ?? null,
+          probe: input.pickFolderPath ? await probeDirectory(input.pickFolderPath) : null,
+          supported: true,
+        })
+      : undefined)
+  const app = createApp({ pickFolderService, store })
 
   await new Promise<void>((resolve) => {
     app.server.listen(0, '127.0.0.1', () => resolve())

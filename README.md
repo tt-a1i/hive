@@ -9,8 +9,7 @@ Hive is built for people who already use CLI coding agents and want a tighter
 way to coordinate several of them without giving up each agent's native
 terminal workflow.
 
-> Public preview status: macOS and Linux are the Tier 1 targets. Windows is not
-> a supported target yet; use WSL/Linux for now.
+> Public preview status: macOS, Linux, and Windows are the Tier 1 targets.
 
 ## 60 Second Start
 
@@ -70,7 +69,7 @@ CLI before selecting it in Hive.
 | --- | --- | --- |
 | macOS | Tier 1 | Local development and release verification target. |
 | Linux | Tier 1 | CI verification target; folder picking expects `zenity` when using the native picker. |
-| Windows | Not supported yet | Folder picking and packaged `node-pty` behavior are not part of the public preview. Use WSL/Linux. |
+| Windows | Tier 1 | CI verification target; folder picking uses Windows PowerShell and the packaged internal `team.cmd`. |
 
 ## Safety Model
 
@@ -142,11 +141,17 @@ hive --port 4020
 **Native PTY install fails**
 
 Hive depends on `node-pty`, which ships native binaries. Use Node.js 22+, keep
-your package manager cache clean, and verify your platform is macOS or Linux.
+your package manager cache clean, and verify your platform is macOS, Linux, or
+Windows.
 
 **Folder picker does not open on Linux**
 
 Install `zenity`, or paste the workspace path manually.
+
+**Folder picker does not open on Windows**
+
+Verify Windows PowerShell is available as `powershell.exe`, or paste the
+workspace path manually.
 
 **Tasks file conflict banner appears**
 
