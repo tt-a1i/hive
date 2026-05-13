@@ -89,6 +89,15 @@ describe('app shell with real server', () => {
     expect(screen.queryByRole('contentinfo', { hidden: true })).toBeNull()
   })
 
+  test('empty state renders WelcomePane in main area and CTA opens add dialog', async () => {
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByTestId('welcome-pane')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
+    expect(await screen.findByTestId('confirm-workspace-dialog')).toBeInTheDocument()
+  })
+
   test('workspace sidebar can be resized from its right edge', async () => {
     render(<App />)
 

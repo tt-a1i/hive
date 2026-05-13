@@ -11,6 +11,7 @@ import { AddWorkerDialog } from './worker/AddWorkerDialog.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
 import { useOrchestratorPaneState } from './worker/useOrchestratorPaneState.js'
 import { useWorkerComposer } from './worker/useWorkerComposer.js'
+import { WelcomePane } from './worker/WelcomePane.js'
 import { WorkerModal } from './worker/WorkerModal.js'
 import { WorkersPane } from './worker/WorkersPane.js'
 
@@ -24,6 +25,7 @@ type WorkspaceDetailProps = {
   onDeleteWorker: (workerId: string) => Promise<void>
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
+  onRequestAddWorkspace: () => void
   orchestratorAutostartError: string | null
   orchestratorAutostartRunId: string | null
   /** Kept for API stability — sub-header consumed it; M6-A removed the bar but the prop signature stays so caller wiring is untouched. */
@@ -38,6 +40,7 @@ export const WorkspaceDetail = ({
   onDeleteWorker,
   onStartWorker,
   onOrchestratorResult,
+  onRequestAddWorkspace,
   orchestratorAutostartError,
   orchestratorAutostartRunId,
   terminalRuns,
@@ -92,7 +95,7 @@ export const WorkspaceDetail = ({
   })
   const split = usePaneSplit()
 
-  if (!workspace) return null
+  if (!workspace) return <WelcomePane onAddWorkspace={onRequestAddWorkspace} />
 
   const activeWorkerRun = activeWorker ? findRunByAgentId(terminalRuns, activeWorker.id) : undefined
 

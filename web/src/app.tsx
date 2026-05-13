@@ -95,6 +95,7 @@ export const App = () => {
           onDeleteWorker={workerActions.deleteWorker}
           onStartWorker={workerActions.startWorker}
           onOrchestratorResult={recordOrchestratorResult}
+          onRequestAddWorkspace={() => setAddDialogTrigger((v) => v + 1)}
           orchestratorAutostartError={
             activeWorkspace ? (orchestratorAutostartErrors[activeWorkspace.id] ?? null) : null
           }

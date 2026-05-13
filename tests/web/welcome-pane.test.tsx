@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { WelcomePane } from '../../web/src/worker/WelcomePane.js'
 
 afterEach(() => cleanup())

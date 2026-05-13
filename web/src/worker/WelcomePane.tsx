@@ -7,9 +7,21 @@ type WelcomePaneProps = {
 }
 
 const STEPS: Array<{ icon: ReactNode; title: string; description: string }> = [
-  { icon: <FolderPlus size={18} />, title: 'Add a workspace', description: 'Pick a project folder.' },
-  { icon: <Users size={18} />, title: 'Choose an Orchestrator', description: 'Claude / Codex / Gemini / OpenCode.' },
-  { icon: <Send size={18} />, title: 'Dispatch tasks', description: 'The Orchestrator routes work via team send.' },
+  {
+    icon: <FolderPlus size={18} />,
+    title: 'Add a workspace',
+    description: 'Pick a project folder.',
+  },
+  {
+    icon: <Users size={18} />,
+    title: 'Choose an Orchestrator',
+    description: 'Claude / Codex / Gemini / OpenCode.',
+  },
+  {
+    icon: <Send size={18} />,
+    title: 'Dispatch tasks',
+    description: 'The Orchestrator routes work via team send.',
+  },
 ]
 
 export const WelcomePane = ({ onAddWorkspace, heroImageSrc }: WelcomePaneProps) => (
@@ -21,11 +33,17 @@ export const WelcomePane = ({ onAddWorkspace, heroImageSrc }: WelcomePaneProps) 
     {heroImageSrc ? <img src={heroImageSrc} alt="" className="h-24 w-24" aria-hidden /> : null}
     <div className="space-y-2">
       <div className="text-2xl font-semibold text-pri">Welcome to Hive</div>
-      <div className="text-sm text-sec">Coordinate Claude Code, Codex, Gemini, OpenCode — locally.</div>
+      <div className="text-sm text-sec">
+        Coordinate Claude Code, Codex, Gemini, OpenCode — locally.
+      </div>
     </div>
     <ol className="grid w-full grid-cols-3 gap-3 text-left">
       {STEPS.map((step, idx) => (
-        <li key={step.title} className="rounded-md border bg-1 p-3" style={{ borderColor: 'var(--border)' }}>
+        <li
+          key={step.title}
+          className="rounded-md border bg-1 p-3"
+          style={{ borderColor: 'var(--border)' }}
+        >
           <div className="mb-1 flex items-center gap-2 text-pri">
             <span className="font-medium text-xs text-ter">{idx + 1}</span>
             {step.icon}
