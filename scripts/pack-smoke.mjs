@@ -6,8 +6,12 @@ import { join, resolve } from 'node:path'
 const root = process.cwd()
 const tempDir = mkdtempSync(join(tmpdir(), 'hive-pack-smoke-'))
 let packedFile
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const binLinkName = (name) => (process.platform === 'win32' ? `${name}.cmd` : name)
+
+const runNpm = (args, options = {}) =>
+  process.platform === 'win32'
+    ? execFileSync('cmd.exe', ['/d', '/s', '/c', 'npm', ...args], options)
+    : execFileSync('npm', args, options)
 
 const waitFor = async (predicate, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
@@ -36,7 +40,7 @@ const stopChild = async (child) => {
 }
 
 try {
-  const packJson = execFileSync(npmCommand, ['pack', '--json'], {
+  const packJson = runNpm(['pack', '--json'], {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -44,7 +48,7 @@ try {
   const [packResult] = JSON.parse(packJson)
   packedFile = resolve(root, packResult.filename)
 
-  execFileSync(npmCommand, ['install', '--silent', '--prefix', tempDir, packedFile], {
+  runNpm(['install', '--silent', '--prefix', tempDir, packedFile], {
     stdio: 'inherit',
   })
 

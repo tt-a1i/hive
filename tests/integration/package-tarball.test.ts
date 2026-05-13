@@ -14,17 +14,22 @@ interface PackResult {
   version: string
 }
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const runNpm = (args: string[]) =>
+  execFileSync(
+    process.platform === 'win32' ? 'cmd.exe' : 'npm',
+    process.platform === 'win32' ? ['/d', '/s', '/c', 'npm', ...args] : args,
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  )
 
 describe('npm package tarball', () => {
   test('publish dry-run exposes only runtime files and the hive bin', () => {
     expect(existsSync(join(process.cwd(), 'dist', 'src', 'cli', 'hive.js'))).toBe(true)
     expect(existsSync(join(process.cwd(), 'web', 'dist', 'index.html'))).toBe(true)
 
-    const output = execFileSync(npmCommand, ['pack', '--dry-run', '--json'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const output = runNpm(['pack', '--dry-run', '--json'])
     const [result] = JSON.parse(output) as PackResult[]
     const paths = result.files.map((file) => file.path)
 

@@ -34,6 +34,9 @@ jobs:
       - run: pnpm check
       - run: pnpm build
       - run: pnpm test
+        if: runner.os != 'Windows'
+      - run: pnpm test:windows
+        if: runner.os == 'Windows'
       - run: pnpm pack:check
       - run: pnpm pack:smoke
 
