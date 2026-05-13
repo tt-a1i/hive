@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import { seedOrchestratorLaunchConfig } from '../../src/server/orchestrator-launch.js'
 import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
@@ -125,7 +126,14 @@ describe('workspace flow with real server', () => {
   test('existing workspace auto-starts Queen without exposing a manual Start Queen CTA', async () => {
     const existingPath = join(sandboxRoot, 'existing-project')
     mkdirSync(existingPath, { recursive: true })
-    serverContext?.store.createWorkspace(existingPath, 'Existing')
+    const existing = serverContext?.store.createWorkspace(existingPath, 'Existing')
+    if (!serverContext || !existing) throw new Error('Expected test server')
+    seedOrchestratorLaunchConfig(
+      serverContext.store,
+      serverContext.store.settings,
+      existing.id,
+      dummyPresetId
+    )
 
     render(<App />)
 
