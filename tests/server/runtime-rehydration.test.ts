@@ -11,10 +11,14 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 const tempDirs: string[] = []
 const originalPath = process.env.PATH
 const stores: Array<ReturnType<typeof createRuntimeStore>> = []
+const FAKE_CLAUDE_EXIT_MS = 250
 
 const writeFakeClaudeCli = (binDir: string) => {
   const scriptPath = join(binDir, 'fake-claude.js')
-  writeFileSync(scriptPath, 'process.stdin.resume(); setInterval(() => {}, 1000)\n')
+  writeFileSync(
+    scriptPath,
+    `process.stdin.resume(); setTimeout(() => process.exit(0), ${FAKE_CLAUDE_EXIT_MS})\n`
+  )
 
   const unixCli = join(binDir, 'claude')
   writeFileSync(unixCli, `#!/usr/bin/env sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`)
@@ -169,6 +173,10 @@ describe('runtime rehydration', () => {
     expect(mirroredWorkerSession).toEqual({
       last_session_id: '11111111-1111-4111-8111-111111111111',
     })
+
+    // The fake CLI only needs to stay up long enough for spawn + session capture.
+    // Let it exit naturally so Windows ConPTY cleanup does not need a forced kill.
+    await new Promise((resolve) => setTimeout(resolve, FAKE_CLAUDE_EXIT_MS + 250))
 
     delete process.env.HIVE_CLAUDE_PROJECTS_DIR
   })
