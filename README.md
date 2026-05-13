@@ -14,6 +14,8 @@ the web UI keeps tasks, terminals, and reports in one place.
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
+English · [简体中文](./README.zh-CN.md)
+
 > Public preview: `0.6.0-alpha.0`. Hive is local-first, runs on `127.0.0.1`,
 > and is intended for developers who already use CLI coding agents.
 
