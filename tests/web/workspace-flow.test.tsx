@@ -67,7 +67,12 @@ describe('workspace flow with real server', () => {
   test('Add Workspace native-picker flow: compact confirm → create → sidebar + sub-header', async () => {
     render(<App />)
 
-    // Empty-state triggers pick-folder → mock returns the sandbox dir → compact confirm opens.
+    await waitFor(() => {
+      expect(screen.getByText('No workspaces')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+
+    // User-triggered pick-folder → mock returns the sandbox dir → compact confirm opens.
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     expect(within(confirm).getByTestId('confirm-workspace-path')).toHaveValue(
       join(sandboxRoot, 'alpha-project')

@@ -52,6 +52,11 @@ describe('workspace create initial state', () => {
   test('newly created workspace immediately shows the Linear workspace view with empty drawer', async () => {
     render(<App />)
 
+    await waitFor(() => {
+      expect(screen.getByText('No workspaces')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
       target: { value: 'Alpha' },

@@ -84,6 +84,33 @@ afterEach(() => {
 })
 
 describe('AddWorkspaceDialog — native folder picker default flow', () => {
+  test('native picker loading surface is centered in the viewport while the request is pending', async () => {
+    let resolvePick!: (value: PickFolderResponse) => void
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const u = new URL(url, 'http://127.0.0.1')
+      if (u.pathname === '/api/settings/command-presets') return json(commandPresets)
+      if (u.pathname === '/api/fs/pick-folder') {
+        return json(
+          await new Promise<PickFolderResponse>((resolve) => {
+            resolvePick = resolve
+          })
+        )
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+
+    const picking = await screen.findByTestId('add-workspace-picking')
+    expect(picking).toHaveClass('fixed', 'inset-0', 'items-center', 'justify-center')
+    expect(within(picking).getByTestId('add-workspace-picking-panel')).toHaveTextContent(
+      'Opening system folder picker'
+    )
+
+    resolvePick({ canceled: true, error: null, path: null, probe: null, supported: true })
+  })
+
   test('trigger bump fires POST /api/fs/pick-folder then opens the compact ConfirmDialog', async () => {
     const calls = stubFetch(() => ({
       canceled: false,

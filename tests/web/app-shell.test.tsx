@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
@@ -14,6 +14,7 @@ let cleanupServer: (() => Promise<void>) | undefined
 let sandboxRoot = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
+let fetchCalls: Array<{ method: string; pathname: string }> = []
 
 beforeEach(async () => {
   window.localStorage.removeItem?.('hive.workspace-sidebar.width')
@@ -29,10 +30,13 @@ beforeEach(async () => {
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
     cookie = response.headers.get('set-cookie') ?? ''
   })
+  fetchCalls = []
   vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
     const value =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
     const url = value.startsWith('http') ? value : `${server.baseUrl}${value}`
+    const parsed = new URL(url)
+    fetchCalls.push({ method: init?.method ?? 'GET', pathname: parsed.pathname })
     const headers = new Headers(init?.headers)
     headers.set('cookie', cookie)
     return nativeFetch(url, { ...init, headers })
@@ -50,7 +54,7 @@ afterEach(async () => {
 })
 
 describe('app shell with real server', () => {
-  test('renders Linear dark shell + auto-opens native picker → compact confirm on empty state', async () => {
+  test('renders Linear dark shell without auto-opening the folder picker on empty state', async () => {
     render(<App />)
 
     const banner = screen.getByRole('banner')
@@ -61,15 +65,17 @@ describe('app shell with real server', () => {
     expect(screen.getByTestId('notification-settings')).toBeInTheDocument()
     expect(screen.getByRole('radiogroup', { name: 'Sound' })).toBeInTheDocument()
 
-    // Empty state fires POST /api/fs/pick-folder (mocked to return the sandbox dir),
-    // which resolves to the compact confirm dialog — not the server-browse dialog.
     await waitFor(() => {
-      expect(screen.getByTestId('confirm-workspace-dialog')).toBeInTheDocument()
+      expect(screen.getByText('No workspaces')).toBeInTheDocument()
     })
-    // Radix Dialog labels itself via Dialog.Title — now 'Add workspace'.
-    expect(screen.getByRole('dialog', { name: 'Add workspace' })).toBeInTheDocument()
-    expect(screen.getByTestId('confirm-workspace-create')).toBeInTheDocument()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.queryByTestId('confirm-workspace-dialog')).toBeNull()
     expect(screen.queryByTestId('add-workspace-dialog')).toBeNull()
+    expect(fetchCalls).not.toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    expect(within(confirm).getByTestId('confirm-workspace-create')).toBeInTheDocument()
 
     // Radix Dialog locks the rest of the tree (aria-hidden) — query with
     // `hidden: true` so testing-library traverses past the inert node.

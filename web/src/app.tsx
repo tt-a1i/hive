@@ -9,7 +9,6 @@ import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
-import { useEmptyStateAutoOpen } from './useEmptyStateAutoOpen.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
@@ -41,8 +40,6 @@ export const App = () => {
       setWorkersByWorkspaceId((current) => ({ ...current, [workspace.id]: [] }))
     },
   })
-
-  useEmptyStateAutoOpen(workspaces, () => setAddDialogTrigger((value) => value + 1))
 
   const activeWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
   const activeTasksFile = useTasksFile(activeWorkspaceId)

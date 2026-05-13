@@ -9,6 +9,7 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 
 const tempDirs: string[] = []
 const originalPath = process.env.PATH
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
   const deadline = Date.now() + timeoutMs
@@ -27,8 +28,9 @@ const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25)
   throw lastError
 }
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PATH = originalPath
+  await Promise.all(stores.splice(0).map((store) => store.close()))
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true })
   }
@@ -51,6 +53,7 @@ describe('team prompt contract', () => {
     )
 
     const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {
@@ -118,6 +121,7 @@ describe('team prompt contract', () => {
     process.env.PATH = `${binDir}:${originalPath ?? ''}`
 
     const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    stores.push(store)
     const workspace = store.createWorkspace(workspacePath, 'Alpha')
     const orchestrator = store.getWorkspaceSnapshot(workspace.id).agents[0]
     if (!orchestrator) {

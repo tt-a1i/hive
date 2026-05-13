@@ -125,14 +125,17 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
           <Dialog.Content
             data-testid="add-workspace-picking"
             aria-describedby={undefined}
-            className="dialog-pop elev-2 fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border px-5 py-4"
-            style={{
-              background: 'var(--bg-elevated)',
-              borderColor: 'var(--border-bright)',
-            }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <Dialog.Title className="sr-only">Opening folder picker</Dialog.Title>
-            <div className="flex items-center gap-3">
+            <div
+              data-testid="add-workspace-picking-panel"
+              className="dialog-scale-pop elev-2 flex items-center gap-3 rounded-lg border px-5 py-4"
+              style={{
+                background: 'var(--bg-elevated)',
+                borderColor: 'var(--border-bright)',
+              }}
+            >
               <FolderSearch
                 size={18}
                 aria-hidden
