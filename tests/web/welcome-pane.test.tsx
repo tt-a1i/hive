@@ -20,3 +20,15 @@ test('WelcomePane stays within max-width so it does not stretch absurdly on wide
   const card = container.querySelector('[data-testid="welcome-pane"]') as HTMLElement
   expect(card).toHaveStyle({ maxWidth: '540px' })
 })
+
+test('WelcomePane "Try Demo" link is absent when onTryDemo is not provided', () => {
+  render(<WelcomePane onAddWorkspace={() => {}} />)
+  expect(screen.queryByRole('button', { name: /try demo/i })).toBeNull()
+})
+
+test('WelcomePane "Try Demo" button fires onTryDemo', () => {
+  const onDemo = vi.fn()
+  render(<WelcomePane onAddWorkspace={() => {}} onTryDemo={onDemo} />)
+  fireEvent.click(screen.getByRole('button', { name: /try the demo/i }))
+  expect(onDemo).toHaveBeenCalledOnce()
+})

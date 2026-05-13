@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 type WelcomePaneProps = {
   onAddWorkspace: () => void
+  onTryDemo?: () => void
   heroImageSrc?: string
 }
 
@@ -24,7 +25,7 @@ const STEPS: Array<{ icon: ReactNode; title: string; description: string }> = [
   },
 ]
 
-export const WelcomePane = ({ onAddWorkspace, heroImageSrc }: WelcomePaneProps) => (
+export const WelcomePane = ({ onAddWorkspace, onTryDemo, heroImageSrc }: WelcomePaneProps) => (
   <div
     data-testid="welcome-pane"
     className="m-auto flex w-full flex-col items-center gap-6 px-6 py-12 text-center"
@@ -61,5 +62,14 @@ export const WelcomePane = ({ onAddWorkspace, heroImageSrc }: WelcomePaneProps) 
       <span>Add your first workspace</span>
       <ArrowRight size={14} aria-hidden />
     </button>
+    {onTryDemo ? (
+      <button
+        type="button"
+        onClick={onTryDemo}
+        className="text-xs text-sec underline hover:text-pri"
+      >
+        or try the demo (no install needed)
+      </button>
+    ) : null}
   </div>
 )
