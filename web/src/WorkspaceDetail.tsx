@@ -15,7 +15,6 @@ import { WorkerModal } from './worker/WorkerModal.js'
 import { WorkersPane } from './worker/WorkersPane.js'
 
 type WorkspaceDetailProps = {
-  hivePort: string
   onCreateWorker: (
     name: string,
     role: WorkerRole,
@@ -35,7 +34,6 @@ type WorkspaceDetailProps = {
 }
 
 export const WorkspaceDetail = ({
-  hivePort,
   onCreateWorker,
   onDeleteWorker,
   onStartWorker,
@@ -82,7 +80,6 @@ export const WorkspaceDetail = ({
   }, [workspace?.id])
   const orchestrator = useOrchestratorPaneState({
     workspaceId: workspace?.id ?? '',
-    hivePort,
     terminalRuns,
     autostartError: orchestratorAutostartError,
     suppressAutostartRunId: orchestratorAutostartRunId,

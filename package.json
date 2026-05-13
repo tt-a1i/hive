@@ -1,10 +1,20 @@
 {
   "name": "@tt-a1i/hive",
   "version": "0.6.0-alpha.0",
-  "description": "Local multi-agent CLI collaboration workspace.",
+  "description": "Local multi-agent workspace for coordinating CLI coding agents through a web UI.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ai-agents",
+    "cli",
+    "coding-agent",
+    "collaboration",
+    "local-first",
+    "multi-agent",
+    "pty",
+    "workspace"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tt-a1i/hive.git"
@@ -17,11 +27,14 @@
     "node": ">=22"
   },
   "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
     "dist/bin/",
     "dist/src/",
     "web/dist/",
-    "scripts/fix-runtime-artifacts.mjs",
-    "README.md"
+    "scripts/fix-runtime-artifacts.mjs"
   ],
   "publishConfig": {
     "access": "public"

@@ -33,6 +33,10 @@ describe('npm package tarball', () => {
     expect(paths).toContain('dist/bin/team')
     expect(paths).toContain('web/dist/index.html')
     expect(paths).toContain('scripts/fix-runtime-artifacts.mjs')
+    expect(paths).toContain('CHANGELOG.md')
+    expect(paths).toContain('LICENSE')
+    expect(paths).toContain('README.md')
+    expect(paths).toContain('SECURITY.md')
 
     expect(paths.some((path) => path.startsWith('src/'))).toBe(false)
     expect(paths.some((path) => path.startsWith('tests/'))).toBe(false)

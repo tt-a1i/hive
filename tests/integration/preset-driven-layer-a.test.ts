@@ -109,6 +109,11 @@ const writeDelayMs = delayIndex >= 0 ? Number.parseInt(args[delayIndex + 1] ?? '
 const expectYoloMarker = join(process.cwd(), '.expect-yolo')
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
 const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk) => {
+  process.stdout.write('STDIN:' + chunk)
+  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+})
 mkdirSync(sessionDir, { recursive: true })
 const writeSession = () => writeFileSync(
     join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl'),
@@ -120,6 +125,7 @@ process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 const resumeIndex = args.indexOf('resume')
 if (existsSync(join(process.cwd(), '.expect-resume')) && !(resumeIndex >= 0 && args[resumeIndex + 1] === sessionId)) process.exit(2)
 if (existsSync(expectYoloMarker) && !args.includes('--dangerously-bypass-approvals-and-sandbox')) process.exit(4)
+process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
@@ -192,7 +198,7 @@ const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspace
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
   })
   return (await response.json()) as { id: string }
 }

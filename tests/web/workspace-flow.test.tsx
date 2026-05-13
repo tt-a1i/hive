@@ -13,6 +13,7 @@ import { startTestServer } from '../helpers/test-server.js'
 let cleanupServer: (() => Promise<void>) | undefined
 let serverContext: Awaited<ReturnType<typeof startTestServer>> | undefined
 let sandboxRoot = ''
+let dummyPresetId = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
@@ -24,15 +25,17 @@ beforeEach(async () => {
   // Short-circuit the native folder picker so the test doesn't actually spawn
   // osascript/zenity. The value mimics what the OS dialog would return.
   process.env.HIVE_MOCK_PICK_FOLDER = join(sandboxRoot, 'alpha-project')
-  // Drive autostart with a deterministic dummy CLI instead of `claude` so the
-  // test does not depend on the real binary being on PATH and so the running
-  // state is observable (the bash sleep keeps the PTY alive past the
-  // assertions).
-  process.env.HIVE_ORCHESTRATOR_COMMAND = 'bash'
-  process.env.HIVE_ORCHESTRATOR_ARGS_JSON = JSON.stringify(['-c', 'echo queen up; sleep 60'])
-
   const server = await startTestServer()
   serverContext = server
+  dummyPresetId = server.store.settings.createCommandPreset({
+    args: ['-e', "console.log('queen port:' + process.env.HIVE_PORT); process.stdin.resume()"],
+    command: process.execPath,
+    displayName: 'Dummy Orchestrator',
+    env: {},
+    resumeArgsTemplate: null,
+    sessionIdCapture: null,
+    yoloArgsTemplate: null,
+  }).id
   cleanupServer = server.close
   let cookie = ''
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
@@ -56,8 +59,7 @@ afterEach(async () => {
   serverContext = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
   delete process.env.HIVE_MOCK_PICK_FOLDER
-  delete process.env.HIVE_ORCHESTRATOR_COMMAND
-  delete process.env.HIVE_ORCHESTRATOR_ARGS_JSON
+  dummyPresetId = ''
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
@@ -72,6 +74,9 @@ describe('workspace flow with real server', () => {
     )
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
       target: { value: 'Alpha' },
+    })
+    fireEvent.change(within(confirm).getByTestId('workspace-command-preset'), {
+      target: { value: dummyPresetId },
     })
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
@@ -95,6 +100,18 @@ describe('workspace flow with real server', () => {
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
+    const workspace = serverContext?.store.listWorkspaces()[0]
+    if (!workspace) throw new Error('Expected created workspace')
+    const realRuntimePort = new URL(serverContext?.baseUrl ?? '').port
+    await waitFor(() => {
+      const run = serverContext?.store
+        .listTerminalRuns(workspace.id)
+        .find((item) => item.agent_id.endsWith(':orchestrator'))
+      if (!run) throw new Error('Expected orchestrator run')
+      expect(serverContext?.store.getLiveRun(run.run_id).output).toContain(
+        `queen port:${realRuntimePort}`
+      )
+    })
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
     expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()

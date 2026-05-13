@@ -29,25 +29,18 @@ export interface CreateWorkspaceBody {
   autostart_orchestrator?: boolean
   /** Optional command preset to use for the initial orchestrator launch. */
   command_preset_id?: string | null
-  /** HTTP port the orchestrator child should call back to (HIVE_PORT env). */
-  hive_port?: string
 }
 
 export interface CreateWorkerBody {
   autostart?: boolean
   command_preset_id?: string | null
   description?: string
-  hive_port?: string
   name: string
   role: WorkerRole
 }
 
 export interface UserInputBody {
   text: string
-}
-
-export interface LaunchAgentBody {
-  hive_port: string
 }
 
 export interface ConfigureAgentLaunchBody {

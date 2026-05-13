@@ -11,7 +11,6 @@ const upsertWorker = (workers: TeamListItem[], worker: TeamListItem): TeamListIt
 
 interface UseWorkerActionsInput {
   activeWorkspaceId: string | null
-  hivePort: string
   onWorkerDeleted?: (workspaceId: string, workerId: string) => void
   onWorkerRunStarted?: (input: {
     agentId: string
@@ -36,7 +35,6 @@ export interface WorkerActions {
 
 export const useWorkerActions = ({
   activeWorkspaceId,
-  hivePort,
   onWorkerDeleted,
   onWorkerRunStarted,
   setWorkersByWorkspaceId,
@@ -48,7 +46,6 @@ export const useWorkerActions = ({
         autostart: true,
         command_preset_id: commandPresetId,
         description: roleDescription.trim(),
-        hive_port: hivePort,
         name: workerName,
         role: workerRole,
       })
@@ -69,7 +66,7 @@ export const useWorkerActions = ({
         runId: result.agentStart.ok ? result.agentStart.runId : null,
       }
     },
-    [activeWorkspaceId, hivePort, onWorkerRunStarted, setWorkersByWorkspaceId]
+    [activeWorkspaceId, onWorkerRunStarted, setWorkersByWorkspaceId]
   )
 
   const deleteWorkerAction = useCallback<WorkerActions['deleteWorker']>(
@@ -91,7 +88,7 @@ export const useWorkerActions = ({
     async (workerId) => {
       if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       try {
-        const result = await startAgentRun(activeWorkspaceId, workerId, hivePort)
+        const result = await startAgentRun(activeWorkspaceId, workerId)
         onWorkerRunStarted?.({
           agentId: workerId,
           agentName: workerId,
@@ -109,7 +106,7 @@ export const useWorkerActions = ({
         }
       }
     },
-    [activeWorkspaceId, hivePort, onWorkerRunStarted]
+    [activeWorkspaceId, onWorkerRunStarted]
   )
 
   const stopWorkerRunAction = useCallback<WorkerActions['stopWorkerRun']>(async (runId) => {

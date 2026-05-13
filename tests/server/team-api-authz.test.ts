@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,21 @@ import { runHiveCommand } from '../../src/cli/hive.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
+
+const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
+  const deadline = Date.now() + timeoutMs
+  let lastError: unknown
+  while (Date.now() <= deadline) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+  throw lastError
+}
 
 interface HiveContext {
   baseUrl: string
@@ -33,7 +48,7 @@ const setupHive = async (): Promise<HiveContext> => {
   const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie: uiCookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
   })
   const workspace = (await workspaceResponse.json()) as { id: string }
   const orchestratorId = `${workspace.id}:orchestrator`
@@ -336,6 +351,66 @@ describe('team API authz (R1.4)', () => {
       expect(messages.some((item) => item.type === 'send' && item.text === 'Implement login')).toBe(
         true
       )
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
+  test('team send auto-start uses runtime socket port instead of client hive_port', async () => {
+    const ctx = await setupHive()
+    try {
+      const uiCookie = await getUiCookie(ctx.baseUrl)
+      const workspacePath = join(tempDirs[0] ?? '', 'workspace')
+      const portFile = join(workspacePath, 'worker-port.txt')
+
+      const stoppedWorkerResponse = await fetch(
+        `${ctx.baseUrl}/api/workspaces/${ctx.workspaceId}/workers`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ name: 'Bob', role: 'coder' }),
+        }
+      )
+      const stoppedWorker = (await stoppedWorkerResponse.json()) as { id: string }
+      const scriptPath = join(workspacePath, 'write-port.js')
+      writeFileSync(
+        scriptPath,
+        `require('node:fs').writeFileSync(${JSON.stringify(
+          portFile
+        )}, process.env.HIVE_PORT || ''); setInterval(() => {}, 1000);\n`
+      )
+      await fetch(
+        `${ctx.baseUrl}/api/workspaces/${ctx.workspaceId}/agents/${stoppedWorker.id}/config`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ command: process.execPath, args: [scriptPath] }),
+        }
+      )
+
+      const orchToken = ctx.hive.store.peekAgentToken(ctx.orchestratorId)
+      if (!orchToken) {
+        throw new Error('Expected orchestrator token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          hive_port: '65535',
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.orchestratorId,
+          token: orchToken,
+          to: 'Bob',
+          text: 'start with correct port',
+        }),
+      })
+
+      expect(response.status).toBe(202)
+      await waitFor(() => {
+        expect(existsSync(portFile)).toBe(true)
+        expect(readFileSync(portFile, 'utf8')).toBe(String(ctx.hive.port))
+      })
     } finally {
       await ctx.hive.close()
     }

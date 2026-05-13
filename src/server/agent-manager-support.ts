@@ -30,6 +30,7 @@ export const finishAgentRun = (
 }
 
 export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: PtyOutputBus) => {
+  let stdinClosed = false
   run.process = {
     isStopped() {
       return run.status === 'exited' || run.status === 'error'
@@ -45,14 +46,18 @@ export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: Pty
       pty.resume()
     },
     stop() {
+      if (stdinClosed || run.status === 'exited' || run.status === 'error') return
       try {
         pty.kill()
       } catch (error) {
-        if ((error as NodeJS.ErrnoException | null)?.code === 'ESRCH') return
-        throw error
+        if ((error as NodeJS.ErrnoException | null)?.code !== 'ESRCH') throw error
       }
+      stdinClosed = true
     },
     write(text) {
+      if (stdinClosed || run.status === 'exited' || run.status === 'error') {
+        throw new Error(`PTY is not active for run: ${run.runId}`)
+      }
       pty.write(text)
     },
   }
@@ -65,5 +70,8 @@ export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: Pty
     ptyOutputBus.publish(run.runId, chunk)
   })
 
-  pty.onExit((event) => finishAgentRun(run, event.exitCode, ptyOutputBus))
+  pty.onExit((event) => {
+    stdinClosed = true
+    finishAgentRun(run, event.exitCode, ptyOutputBus)
+  })
 }

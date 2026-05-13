@@ -1,95 +1,20 @@
 # Hive
 
-Hive 是一个本地多 Agent 协作工作台，用来把 Claude Code、Codex、OpenCode、
-Gemini 等 CLI Agent 组织成一个可视化团队。它会在本机启动一个 Node.js
-runtime，提供 Web UI，并把每个 Agent 放在独立 PTY 里运行。
+Hive is a local multi-agent workspace for CLI coding agents. It turns Claude
+Code, Codex, OpenCode, Gemini, and custom CLI agents into a visible team running
+on your machine: one Orchestrator owns the plan, worker agents execute tasks in
+their own PTYs, and the web UI keeps tasks, terminals, and reports in one place.
 
-每个 workspace 都有一个 Orchestrator 负责和用户对话、拆解任务、维护
-`.hive/tasks.md` 任务图，并通过内部 `team` 命令把工作派给团队成员。团队成员
-在自己的 CLI 会话里执行任务，完成或遇到阻塞后用 `team report` 回报。
+Hive is built for people who already use CLI coding agents and want a tighter
+way to coordinate several of them without giving up each agent's native
+terminal workflow.
 
-核心目标是把“一个人同时管理多个 AI 编码助手”的过程产品化：任务可见、成员可见、
-终端可恢复、上下文可接力，并尽量保留各家 CLI Agent 自己的原生能力。
+> Public preview status: macOS and Linux are the Tier 1 targets. Windows is not
+> a supported target yet; use WSL/Linux for now.
 
-## English Overview
+## 60 Second Start
 
-Hive is a local multi-agent CLI collaboration workspace. It turns CLI agents
-such as Claude Code, Codex, OpenCode, and Gemini into a visible team running on
-your machine. Hive starts a Node.js runtime on `127.0.0.1`, serves a bundled web
-UI, and runs each agent inside its own PTY.
-
-Each workspace has an Orchestrator that talks to the user, breaks work down,
-maintains the workspace task graph at `.hive/tasks.md`, and dispatches tasks to
-team members through the internal `team` command. Team members work in their own
-CLI sessions and report progress or blockers with `team report`.
-
-The goal is to make multi-agent coding work manageable: visible tasks, visible
-members, recoverable terminals, handoff-friendly context, and minimal
-interference with each agent CLI's native behavior.
-
-## Requirements
-
-- Node.js 22+
-- pnpm 10.30.3 for local development
-- At least one supported agent CLI installed on the machine
-
-## Development
-
-```bash
-pnpm install
-pnpm dev
-```
-
-The development runtime uses `127.0.0.1:4010`; the Vite web server uses
-`127.0.0.1:5180`.
-
-Useful commands:
-
-```bash
-pnpm check
-pnpm build
-pnpm test
-```
-
-## Production Build
-
-```bash
-pnpm build
-node dist/src/cli/hive.js --port 4010
-```
-
-The production server serves `web/dist` directly. No separate Vite server is
-needed after `pnpm build`.
-
-## Package Release
-
-Hive is prepared to publish as the scoped npm package `@tt-a1i/hive`.
-
-Before publishing, run:
-
-```bash
-pnpm release:dry
-```
-
-That command runs linting, the production build, the full test suite, npm
-packlist validation, and a tarball install smoke test.
-
-Manual publish flow:
-
-```bash
-pnpm release:dry
-git tag v0.6.0-alpha.0
-git push origin v0.6.0-alpha.0
-```
-
-Tag pushes matching `v*` run the GitHub Actions release workflow. The publish
-job expects an npm token in `NPM_TOKEN` and publishes with provenance:
-
-```bash
-npm publish --provenance --access public
-```
-
-## Installation After Publish
+After the package is published:
 
 ```bash
 npm i -g @tt-a1i/hive
@@ -102,21 +27,144 @@ or:
 npx @tt-a1i/hive --port 4010
 ```
 
-Only the `hive` command is exposed globally. The `team` command is intentionally
-bundled inside the package and injected into agent PTYs through `PATH`, so it
-does not pollute the user's global shell.
+Open the printed local URL, usually `http://127.0.0.1:4010/`.
 
-## Updates
+First run flow:
 
-For global installs:
+1. Add a workspace by picking or pasting a project folder.
+2. Choose an Orchestrator preset.
+3. Hive creates `<workspace>/.hive/tasks.md`, starts the Orchestrator PTY, and
+   injects the internal `team` command into agent sessions.
+4. Add workers from the Team Members panel.
+5. The Orchestrator sends work with `team send <worker-name> "<task>"`; workers
+   reply with `team report`.
+
+## What It Does
+
+- Keeps each agent in an isolated recoverable PTY.
+- Shows workspaces, team members, task state, and terminal output in one local
+  web UI.
+- Uses `.hive/tasks.md` as the workspace task graph so the plan remains visible
+  outside the app.
+- Injects the internal `team` command only inside agent sessions; it does not
+  install a global `team` command.
+- Stores runtime metadata under `~/.config/hive` by default, or under
+  `HIVE_DATA_DIR` when set.
+
+## Supported Agent Presets
+
+| Preset | Command expected on PATH | Notes |
+| --- | --- | --- |
+| Claude Code | `claude` | Built-in default preset. |
+| Codex | `codex` | Uses the local Codex CLI. |
+| OpenCode | `opencode` | Uses the local OpenCode CLI. |
+| Gemini | `gemini` | Uses the local Gemini CLI. |
+| Custom | Any executable | Configure command and args in the UI. |
+
+Hive does not install these CLIs for you. Install and authenticate each agent
+CLI before selecting it in Hive.
+
+## Platform Support
+
+| Platform | Status | Notes |
+| --- | --- | --- |
+| macOS | Tier 1 | Local development and release verification target. |
+| Linux | Tier 1 | CI verification target; folder picking expects `zenity` when using the native picker. |
+| Windows | Not supported yet | Folder picking and packaged `node-pty` behavior are not part of the public preview. Use WSL/Linux. |
+
+## Safety Model
+
+Hive is a local development tool, not a hosted multi-user service.
+
+- The runtime binds to `127.0.0.1`. Do not expose the Hive port through a public
+  tunnel, reverse proxy, or shared network interface.
+- Built-in presets intentionally use each CLI's non-interactive or bypass mode
+  where available. Treat workers as able to run arbitrary shell commands inside
+  the selected workspace.
+- Only open trusted workspaces. A worker has the same filesystem access as the
+  shell account running Hive.
+- Agent tokens are session scoped, generated by the local runtime, injected into
+  agent process environments, and not intended as internet-facing credentials.
+- Hive has no multi-user authentication boundary. If another process can reach
+  the local port from the same machine, treat it as trusted local access.
+
+See [SECURITY.md](SECURITY.md) before using Hive with sensitive repositories.
+
+## Development
 
 ```bash
-npm i -g @tt-a1i/hive@latest
+pnpm install
+pnpm dev
 ```
 
-For `npx` usage, rerun the command and let the package manager resolve the
-latest version according to its cache policy.
+The development runtime uses `127.0.0.1:4010`; the Vite web server uses
+`127.0.0.1:5180` and proxies API and WebSocket traffic to the runtime.
 
-The runtime stores global metadata under `~/.config/hive` by default, or under
-`HIVE_DATA_DIR` when that environment variable is set. Workspace task graphs are
-stored at `<workspace>/.hive/tasks.md`.
+Useful checks:
+
+```bash
+pnpm check
+pnpm build
+pnpm test
+```
+
+## Production-Style Local Run
+
+```bash
+pnpm build
+node dist/src/cli/hive.js --port 4010
+```
+
+The production server serves `web/dist` directly. No separate Vite server is
+needed after `pnpm build`.
+
+Use an isolated data directory when testing:
+
+```bash
+HIVE_DATA_DIR=/tmp/hive-data node dist/src/cli/hive.js --port 4010
+```
+
+## Troubleshooting
+
+**Agent CLI not found**
+
+Check that the selected command is installed, authenticated, executable from the
+same shell, and available on `PATH`.
+
+**Port already in use**
+
+Start Hive with a different local port:
+
+```bash
+hive --port 4020
+```
+
+**Native PTY install fails**
+
+Hive depends on `node-pty`, which ships native binaries. Use Node.js 22+, keep
+your package manager cache clean, and verify your platform is macOS or Linux.
+
+**Folder picker does not open on Linux**
+
+Install `zenity`, or paste the workspace path manually.
+
+**Tasks file conflict banner appears**
+
+Hive detected a newer `.hive/tasks.md` on disk. Use `Reload` to accept the file
+from disk, or `Keep Local` to keep the editor contents and save again.
+
+## Package Release
+
+Release commands are intentionally separate from normal development:
+
+```bash
+pnpm release:dry
+```
+
+That command runs linting, the production build, the full test suite, npm
+packlist validation, and a tarball install smoke test. Tag pushes matching `v*`
+run the GitHub Actions release workflow; the publish job requires `NPM_TOKEN`.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).

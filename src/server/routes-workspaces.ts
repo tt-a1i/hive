@@ -1,10 +1,11 @@
+import type { IncomingMessage } from 'node:http'
+
 import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type {
   CreateWorkerBody,
   CreateWorkspaceBody,
-  LaunchAgentBody,
   RouteDefinition,
   UserInputBody,
 } from './route-types.js'
@@ -25,6 +26,8 @@ const getSerializedWorker = (
   }
   return serializeTeamListItem(worker)
 }
+
+const getRuntimePort = (request: IncomingMessage) => String(request.socket.localPort ?? '')
 
 export const workspaceRoutes: RouteDefinition[] = [
   route('GET', '/api/workspaces', ({ request, response, store }) => {
@@ -58,7 +61,7 @@ export const workspaceRoutes: RouteDefinition[] = [
       store,
       workspace.id,
       getOrchestratorId(workspace.id),
-      body.hive_port ?? ''
+      getRuntimePort(request)
     )
     sendJson(response, 201, { ...workspace, orchestrator_start: orchestratorStart })
   }),
@@ -148,7 +151,7 @@ export const workspaceRoutes: RouteDefinition[] = [
 
       const agentStart =
         body.autostart === true
-          ? await autostartAgent(store, workspaceId, worker.id, body.hive_port ?? '', {
+          ? await autostartAgent(store, workspaceId, worker.id, getRuntimePort(request), {
               missingConfigError: 'No worker launch config available',
             })
           : { ok: false, error: null, run_id: null }
@@ -258,7 +261,6 @@ export const workspaceRoutes: RouteDefinition[] = [
 
       requireUiTokenFromRequest(request, store.validateUiToken)
 
-      const body = await readJsonBody<LaunchAgentBody>(request)
       if (
         agentId === getOrchestratorId(workspaceId) &&
         !store.peekAgentLaunchConfig(workspaceId, agentId)
@@ -268,7 +270,7 @@ export const workspaceRoutes: RouteDefinition[] = [
       sendJson(
         response,
         201,
-        await store.startAgent(workspaceId, agentId, { hivePort: body.hive_port })
+        await store.startAgent(workspaceId, agentId, { hivePort: getRuntimePort(request) })
       )
     }
   ),

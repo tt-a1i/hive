@@ -9,7 +9,6 @@ type WorkspaceDeleteOptions = {
   activeWorkspaceId: string | null
   onActiveDeleted: () => void
   selectWorkspace: (workspaceId: string | null) => void
-  setMountedWorkspaceIds: Dispatch<SetStateAction<string[]>>
   setWorkersByWorkspaceId: Dispatch<SetStateAction<WorkersByWorkspaceId>>
   setWorkspaces: Dispatch<SetStateAction<WorkspaceSummary[] | null>>
   workspaces: WorkspaceSummary[] | null
@@ -37,7 +36,6 @@ export const useWorkspaceDelete = ({
   activeWorkspaceId,
   onActiveDeleted,
   selectWorkspace,
-  setMountedWorkspaceIds,
   setWorkersByWorkspaceId,
   setWorkspaces,
   workspaces,
@@ -48,7 +46,6 @@ export const useWorkspaceDelete = ({
 
     await deleteWorkspaceApi(workspace.id)
     setWorkspaces((current) => current?.filter((item) => item.id !== workspace.id) ?? current)
-    setMountedWorkspaceIds((current) => current.filter((id) => id !== workspace.id))
     setWorkersByWorkspaceId((current) => {
       const next = { ...current }
       delete next[workspace.id]

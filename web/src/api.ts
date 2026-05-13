@@ -39,6 +39,7 @@ export const initializeUiSession = async (): Promise<void> => {
   if (!response.ok) {
     throw new Error('Failed to initialize UI session')
   }
+  await response.json()
 }
 
 const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -121,7 +122,6 @@ export const createWorkspace = async (input: {
   path: string
   autostart_orchestrator?: boolean
   command_preset_id?: string | null
-  hive_port?: string
 }): Promise<CreateWorkspaceResponse> => {
   const response = await apiFetch('/api/workspaces', {
     method: 'POST',
@@ -146,13 +146,10 @@ export const deleteWorkspace = async (workspaceId: string): Promise<void> => {
 
 export const startAgentRun = async (
   workspaceId: string,
-  agentId: string,
-  hivePort: string
+  agentId: string
 ): Promise<{ runId: string }> => {
   const response = await apiFetch(`/api/workspaces/${workspaceId}/agents/${agentId}/start`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ hive_port: hivePort }),
   })
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Failed to start agent run'))
@@ -173,8 +170,7 @@ export const stopAgentRun = async (runId: string): Promise<void> => {
 export const restartAgentRun = async (
   workspaceId: string,
   agentId: string,
-  runId: string,
-  hivePort: string
+  runId: string
 ): Promise<{ runId: string }> => {
   // Best-effort stop: a 404 here often means the run already exited on its
   // own; either way we proceed to start a fresh one. Swallowed errors land in
@@ -182,7 +178,7 @@ export const restartAgentRun = async (
   await stopAgentRun(runId).catch((error: unknown) => {
     console.error('[hive] swallowed:restartAgentRun.stop', error)
   })
-  return startAgentRun(workspaceId, agentId, hivePort)
+  return startAgentRun(workspaceId, agentId)
 }
 
 export const getActiveWorkspaceId = async (): Promise<string | null> => {
@@ -279,7 +275,6 @@ export const createWorker = async (
     autostart?: boolean
     command_preset_id?: string | null
     description?: string
-    hive_port?: string
     role: WorkerRole
   }
 ): Promise<CreateWorkerResult> => {

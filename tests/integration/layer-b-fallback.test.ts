@@ -32,6 +32,8 @@ const waitFor = async (
   throw lastError
 }
 
+const waitForPtyOutputFlush = () => new Promise((resolve) => setTimeout(resolve, 50))
+
 const listSystemMessages = (
   dataDir: string,
   type: 'system_env_sync' | 'system_recovery_summary'
@@ -71,8 +73,12 @@ const writeEchoAgent = (workspacePath: string, filename: string) => {
   writeFileSync(
     scriptPath,
     [
+      "for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(0))",
       "process.stdin.setEncoding('utf8')",
-      "process.stdin.on('data', (chunk) => process.stdout.write('STDIN:' + chunk))",
+      "process.stdin.on('data', (chunk) => {",
+      "  process.stdout.write('STDIN:' + chunk)",
+      "  if (chunk.includes('__HIVE_TEST_EXIT__')) setTimeout(() => process.exit(0), 100)",
+      '})',
       "process.stdout.write('ARGS:' + process.argv.slice(2).join(' ') + '\\n')",
       'setInterval(() => {}, 1000)',
     ].join('\n')
@@ -91,10 +97,25 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM']) {
+  process.on(signal, () => process.exit(0))
+}
+
+let pasteOpen = false
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  if (chunk.includes('__HIVE_TEST_EXIT__')) {
+    process.stdout.write('\\nEXITING\\n')
+    setTimeout(() => process.exit(0), 100)
+    return
+  }
+  if (chunk.includes('\\u001b[200~')) pasteOpen = true
+  if (chunk.includes('\\u001b[201~')) {
+    pasteOpen = false
+    process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+  }
+  if (!pasteOpen && /^[\\r\\n]+$/.test(chunk)) process.stdout.write('\\nENTER_SUBMITTED\\n❯ ')
 })
 const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
@@ -106,9 +127,13 @@ const failMarker = join(process.cwd(), '.fail-next-resume')
 mkdirSync(projectDir, { recursive: true })
 writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
-if (args.includes('--resume') && existsSync(failMarker)) process.exit(1)
-process.stdout.write('❯ ')
-setInterval(() => {}, 1000)
+if (args.includes('--resume') && existsSync(failMarker)) {
+  process.stdout.write('RESUME_FAIL\\n')
+  setTimeout(() => process.exit(1), 100)
+} else {
+  process.stdout.write('❯ ')
+  setInterval(() => {}, 1000)
+}
 `
   )
   chmodSync(cliPath, 0o755)
@@ -119,7 +144,7 @@ const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspace
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
   })
   expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
@@ -226,7 +251,7 @@ describe('Layer B fallback integration', () => {
         command: process.execPath,
         args: [bobScript],
       })
-      await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
+      const bobRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
 
       await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, orchestratorId, {
         command: process.execPath,
@@ -238,7 +263,12 @@ describe('Layer B fallback integration', () => {
         workspace.id,
         orchestratorId
       )
-      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.output).toContain('ARGS:')
+      })
+      await waitForPtyOutputFlush()
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\n')
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
@@ -260,6 +290,12 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
         expect(state.output).toContain('team send <worker-name> "<task>"')
         expect(state.output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+      })
+      server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\n')
+      server.store.writeRunInput(bobRun.runId, '__HIVE_TEST_EXIT__\n')
+      await waitFor(async () => {
+        expect((await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)).status).toBe('exited')
+        expect((await getRunViaHttp(server.baseUrl, cookie, bobRun.runId)).status).toBe('exited')
       })
     } finally {
       await server.close()
@@ -300,7 +336,7 @@ describe('Layer B fallback integration', () => {
         command: process.execPath,
         args: [bobScript],
       })
-      await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
+      const bobRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
 
       await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id, {
         command: process.execPath,
@@ -308,7 +344,12 @@ describe('Layer B fallback integration', () => {
       })
 
       const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
-      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.output).toContain('ARGS:')
+      })
+      await waitForPtyOutputFlush()
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\n')
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
@@ -334,6 +375,12 @@ describe('Layer B fallback integration', () => {
       expect(recoverySummaries.at(-1)?.text).toContain('请继续修复 restart bug')
       expect(recoverySummaries.at(-1)?.text).toContain('layer b fallback')
       expect(recoverySummaries.at(-1)?.text).toContain('Bob')
+      server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\n')
+      server.store.writeRunInput(bobRun.runId, '__HIVE_TEST_EXIT__\n')
+      await waitFor(async () => {
+        expect((await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)).status).toBe('exited')
+        expect((await getRunViaHttp(server.baseUrl, cookie, bobRun.runId)).status).toBe('exited')
+      })
     } finally {
       await server.close()
     }
@@ -379,7 +426,12 @@ describe('Layer B fallback integration', () => {
         workspace.id,
         orchestratorId(workspace.id)
       )
-      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.output).toContain('ARGS:')
+      })
+      await waitForPtyOutputFlush()
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\n')
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
@@ -397,6 +449,11 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('## 当前未完成任务')
         expect(state.output).toContain('Bob')
         expect(state.output).toContain('审查 Phase 3 SSE schema 缺口')
+      })
+      server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\n')
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('exited')
       })
     } finally {
       await server.close()
@@ -436,7 +493,7 @@ describe('Layer B fallback integration', () => {
         command: process.execPath,
         args: [bobScript],
       })
-      await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
+      const bobRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, bob.id)
 
       await configureWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id, {
         command: fakeClaude,
@@ -448,7 +505,11 @@ describe('Layer B fallback integration', () => {
       await waitFor(() => {
         expect(readLastSessionId(server.dataDir, workspace.id, alice.id)).toBe(sessionId)
       })
-      server.store.stopAgentRun(firstRun.runId)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
+        expect(state.output).toContain('[Pasted text #1 +1 lines]')
+      })
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\n')
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)
         expect(state.status).toBe('exited')
@@ -488,6 +549,17 @@ describe('Layer B fallback integration', () => {
           text: expect.stringContaining('recover after failed resume'),
         })
       )
+      await waitForPtyOutputFlush()
+      server.store.writeRunInput(thirdRun.runId, '__HIVE_TEST_EXIT__\n')
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, thirdRun.runId)
+        expect(state.status).toBe('exited')
+      })
+      server.store.writeRunInput(bobRun.runId, '__HIVE_TEST_EXIT__\n')
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, bobRun.runId)
+        expect(state.status).toBe('exited')
+      })
     } finally {
       await server.close()
     }

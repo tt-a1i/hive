@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -36,6 +44,21 @@ const setEnv = (key: string, value: string | undefined) => {
   restoreEnv.push([key, process.env[key]])
   if (value === undefined) delete process.env[key]
   else process.env[key] = value
+}
+
+const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25) => {
+  const deadline = Date.now() + timeoutMs
+  let lastError: unknown
+  while (Date.now() <= deadline) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+  throw lastError
 }
 
 const startServer = async (input: { dataDir?: string } = {}) => {
@@ -175,6 +198,45 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     expect(
       store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)?.commandPresetId
     ).toBeNull()
+  })
+
+  test('UI workspace autostart uses the runtime socket port instead of client hive_port', async () => {
+    const portDir = makeWorkspacePath('runtime-port-file')
+    const portFile = join(portDir, 'port.txt')
+    setEnv('HIVE_ORCHESTRATOR_COMMAND', process.execPath)
+    setEnv(
+      'HIVE_ORCHESTRATOR_ARGS_JSON',
+      JSON.stringify([
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(
+          portFile
+        )}, process.env.HIVE_PORT || ''); setInterval(() => {}, 1000)`,
+      ])
+    )
+
+    const { store, baseUrl } = await startServer()
+    const port = baseUrl.split(':').at(-1)
+    const cookie = await getUiCookie(baseUrl)
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        hive_port: '65535',
+        name: 'RuntimePort',
+        path: makeWorkspacePath('runtime-port'),
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      orchestrator_start: { run_id: string | null }
+    }
+    await waitFor(() => {
+      expect(existsSync(portFile)).toBe(true)
+      expect(readFileSync(portFile, 'utf8')).toBe(port)
+    })
+    if (body.orchestrator_start.run_id) store.stopAgentRun(body.orchestrator_start.run_id)
   })
 
   test('command_preset_id selects the orchestrator CLI preset for autostart', async () => {
@@ -366,11 +428,22 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     expect(store.listWorkspaces().some((workspace) => workspace.id === body.id)).toBe(true)
   })
 
-  test('manual orchestrator start seeds missing launch config for pre-existing workspace', async () => {
-    setEnv('HIVE_ORCHESTRATOR_COMMAND', 'bash')
-    setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', JSON.stringify(['-c', 'echo queen up; sleep 60']))
+  test('manual orchestrator start seeds missing launch config and uses runtime socket port', async () => {
+    const portDir = makeWorkspacePath('manual-start-port-file')
+    const portFile = join(portDir, 'port.txt')
+    setEnv('HIVE_ORCHESTRATOR_COMMAND', process.execPath)
+    setEnv(
+      'HIVE_ORCHESTRATOR_ARGS_JSON',
+      JSON.stringify([
+        '-e',
+        `require('node:fs').writeFileSync(${JSON.stringify(
+          portFile
+        )}, process.env.HIVE_PORT || ''); setInterval(() => {}, 1000)`,
+      ])
+    )
 
     const { store, baseUrl } = await startServer()
+    const port = baseUrl.split(':').at(-1)
     const cookie = await getUiCookie(baseUrl)
     const workspace = store.createWorkspace(makeWorkspacePath('manual-seed'), 'ManualSeed')
     const orchestratorId = `${workspace.id}:orchestrator`
@@ -381,14 +454,20 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ hive_port: '4010' }),
+        body: JSON.stringify({ hive_port: '65535' }),
       }
     )
 
     expect(response.status).toBe(201)
     const body = (await response.json()) as { runId: string }
     expect(typeof body.runId).toBe('string')
-    expect(store.peekAgentLaunchConfig(workspace.id, orchestratorId)?.command).toBe('bash')
+    expect(store.peekAgentLaunchConfig(workspace.id, orchestratorId)?.command).toBe(
+      process.execPath
+    )
+    await waitFor(() => {
+      expect(existsSync(portFile)).toBe(true)
+      expect(readFileSync(portFile, 'utf8')).toBe(port)
+    })
     store.stopAgentRun(body.runId)
   })
 })

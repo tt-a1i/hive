@@ -107,19 +107,29 @@ const configureAndStartWorker = async (workspaceId: string, workspacePath: strin
     headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify({ command: process.execPath, args: [scriptPath] }),
   })
-  await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/agents/${worker.id}/start`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
-  })
+  const startResponse = await nativeFetch(
+    `${baseUrl}/api/workspaces/${workspaceId}/agents/${worker.id}/start`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
+    }
+  )
+  const start = (await startResponse.json()) as { runId: string }
+  return start.runId
 }
+
+const openTerminalSockets = () =>
+  MockWebSocket.instances.filter((socket) => socket.url.includes('/ws/terminal/') && !socket.closed)
+
+const waitForTerminalPolling = () => new Promise((resolve) => setTimeout(resolve, 250))
 
 describe('workspace sidebar flow', () => {
   test('switching workspace does not mount detached terminal sockets', async () => {
     const alpha = await createWorkspace('Alpha')
     const beta = await createWorkspace('Beta')
     mkdirSync(alpha.path, { recursive: true })
-    await configureAndStartWorker(alpha.id, alpha.path)
+    const alphaRunId = await configureAndStartWorker(alpha.id, alpha.path)
 
     render(<App />)
 
@@ -127,10 +137,7 @@ describe('workspace sidebar flow', () => {
       expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
     })
     expect(screen.queryByLabelText(/Terminal Alice/)).toBeNull()
-    const terminalSocketCount = MockWebSocket.instances.filter((socket) =>
-      socket.url.includes('/ws/terminal/')
-    ).length
-    expect(terminalSocketCount).toBe(0)
+    expect(openTerminalSockets()).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
 
@@ -149,11 +156,14 @@ describe('workspace sidebar flow', () => {
         value: beta.id,
       })
     })
-    expect(screen.queryByTestId(/^terminal-/)).toBeNull()
-    const terminalSockets = MockWebSocket.instances.filter((socket) =>
-      socket.url.includes('/ws/terminal/')
-    )
-    expect(terminalSockets).toHaveLength(0)
+
+    const staleAlphaSlot = document.createElement('div')
+    staleAlphaSlot.id = `worker-pty-${alphaRunId}`
+    document.body.appendChild(staleAlphaSlot)
+    await waitForTerminalPolling()
+    expect(screen.queryByLabelText(/Terminal Alice/)).toBeNull()
+    expect(openTerminalSockets()).toHaveLength(0)
+    staleAlphaSlot.remove()
   })
 
   test('deleting the active workspace shows Confirm, removes it, selects next', async () => {

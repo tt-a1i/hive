@@ -6,7 +6,6 @@ import type { OrchestratorPaneState } from './OrchestratorPane.js'
 
 interface UseOrchestratorPaneStateInput {
   workspaceId: string
-  hivePort: string
   terminalRuns: TerminalRunSummary[]
   /** Latest known autostart error for this workspace (sticky until cleared). */
   autostartError: string | null
@@ -35,7 +34,6 @@ interface UseOrchestratorPaneStateOutput {
  */
 export const useOrchestratorPaneState = ({
   workspaceId,
-  hivePort,
   terminalRuns,
   autostartError,
   suppressAutostartRunId,
@@ -92,7 +90,7 @@ export const useOrchestratorPaneState = ({
     if (!workspaceId || pendingStartWorkspaceId === workspaceId || orchestratorRun) return
     onClearAutostartError()
     setPendingStartWorkspaceId(workspaceId)
-    void startAgentRun(workspaceId, agentId, hivePort)
+    void startAgentRun(workspaceId, agentId)
       .then((result) => {
         setOptimisticRun({ workspaceId, runId: result.runId })
         onAfterStart?.({ ok: true, error: null, run_id: result.runId })
@@ -107,7 +105,6 @@ export const useOrchestratorPaneState = ({
       )
   }, [
     agentId,
-    hivePort,
     onAfterStart,
     onClearAutostartError,
     orchestratorRun,
@@ -142,7 +139,7 @@ export const useOrchestratorPaneState = ({
           // subsequent .catch on startAgentRun if start fails.
           console.error('[hive] swallowed:orchestrator.restart.stop', error)
         })
-        .then(() => startAgentRun(workspaceId, agentId, hivePort))
+        .then(() => startAgentRun(workspaceId, agentId))
         .then((result) => {
           setOptimisticRun({ workspaceId, runId: result.runId })
           onAfterStart?.({ ok: true, error: null, run_id: result.runId })
@@ -154,7 +151,7 @@ export const useOrchestratorPaneState = ({
       return
     }
     start()
-  }, [agentId, hivePort, onAfterStart, onClearAutostartError, orchestratorRun, start, workspaceId])
+  }, [agentId, onAfterStart, onClearAutostartError, orchestratorRun, start, workspaceId])
 
   return { state, start, stop, restart }
 }

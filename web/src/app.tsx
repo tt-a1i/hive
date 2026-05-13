@@ -11,7 +11,6 @@ import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useEmptyStateAutoOpen } from './useEmptyStateAutoOpen.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
-import { useMountedWorkspaceIds } from './useMountedWorkspaceIds.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
 import { useWorkspaceSelection } from './useWorkspaceSelection.js'
@@ -21,13 +20,10 @@ import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
 import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
-const HIVE_PORT = '4010'
-
 export const App = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const { activeWorkspaceId, selectWorkspace, setActiveWorkspaceId } = useWorkspaceSelection()
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(activeWorkspaceId)
-  const [mountedWorkspaceIds, setMountedWorkspaceIds] = useMountedWorkspaceIds(activeWorkspaceId)
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
 
@@ -39,7 +35,6 @@ export const App = () => {
     recordOrchestratorResult,
     createNewWorkspace,
   } = useWorkspaceCreate({
-    hivePort: HIVE_PORT,
     onWorkspaceCreated: (workspace) => {
       setWorkspaces((current) => (current === null ? [workspace] : [...current, workspace]))
       selectWorkspace(workspace.id)
@@ -59,7 +54,6 @@ export const App = () => {
   const terminalRuns = terminalRunOptimism.terminalRuns
   const workerActions = useWorkerActions({
     activeWorkspaceId,
-    hivePort: HIVE_PORT,
     onWorkerDeleted: terminalRunOptimism.forgetOptimisticAgent,
     onWorkerRunStarted: terminalRunOptimism.recordOptimisticRun,
     setWorkersByWorkspaceId,
@@ -68,7 +62,6 @@ export const App = () => {
     activeWorkspaceId,
     onActiveDeleted: () => setTaskGraphOpen(false),
     selectWorkspace,
-    setMountedWorkspaceIds,
     setWorkersByWorkspaceId,
     setWorkspaces,
     workspaces,
@@ -90,18 +83,16 @@ export const App = () => {
         }
         taskGraphOpen={taskGraphOpen}
       >
-        {workspaces
-          ?.filter((workspace) => mountedWorkspaceIds.includes(workspace.id))
-          .map((workspace) => (
-            <WorkspaceTerminalPanels
-              key={`terminal-${workspace.id}`}
-              hidden={workspace.id !== activeWorkspaceId}
-              optimisticRuns={terminalRunOptimism.optimisticRunsByWorkspaceId[workspace.id] ?? []}
-              workspaceId={workspace.id}
-            />
-          ))}
+        {activeWorkspace ? (
+          <WorkspaceTerminalPanels
+            key={`terminal-${activeWorkspace.id}`}
+            optimisticRuns={
+              terminalRunOptimism.optimisticRunsByWorkspaceId[activeWorkspace.id] ?? []
+            }
+            workspaceId={activeWorkspace.id}
+          />
+        ) : null}
         <WorkspaceDetail
-          hivePort={HIVE_PORT}
           onCreateWorker={workerActions.createWorker}
           onDeleteWorker={workerActions.deleteWorker}
           onStartWorker={workerActions.startWorker}

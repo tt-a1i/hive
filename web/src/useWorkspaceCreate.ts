@@ -8,7 +8,6 @@ import {
 import type { WorkspaceCreateInput } from './workspace/workspace-create-input.js'
 
 interface UseWorkspaceCreateInput {
-  hivePort: string
   /** Mutate workspaces list when create succeeds. */
   onWorkspaceCreated: (workspace: WorkspaceSummary) => void
 }
@@ -28,7 +27,6 @@ interface UseWorkspaceCreateOutput {
  * happens elsewhere), so the OrchestratorPane can keep showing failed-state.
  */
 export const useWorkspaceCreate = ({
-  hivePort,
   onWorkspaceCreated,
 }: UseWorkspaceCreateInput): UseWorkspaceCreateOutput => {
   const [orchestratorAutostartErrors, setErrors] = useState<Record<string, string | null>>({})
@@ -49,13 +47,12 @@ export const useWorkspaceCreate = ({
         path: input.path,
         autostart_orchestrator: true,
         command_preset_id: input.commandPresetId,
-        hive_port: hivePort,
       })
       onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })
       recordOrchestratorResult(response.id, response.orchestrator_start)
       return response
     },
-    [hivePort, onWorkspaceCreated, recordOrchestratorResult]
+    [onWorkspaceCreated, recordOrchestratorResult]
   )
 
   return {

@@ -13,7 +13,13 @@ permissions:
 
 jobs:
   verify:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -28,6 +34,7 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm pack:check
+      - run: pnpm pack:smoke
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')

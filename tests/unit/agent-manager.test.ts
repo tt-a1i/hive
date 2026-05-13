@@ -115,6 +115,32 @@ describe('agent manager (unit)', () => {
     expect(snapshot.status).toBe('exited')
   })
 
+  test('rejects input after a stopped PTY is marked inactive', async () => {
+    const dir = join(tmpdir(), `hive-agent-${Date.now()}-stop`)
+    mkdirSync(dir, { recursive: true })
+    tempDirs.push(dir)
+
+    const scriptPath = join(dir, 'long-running.js')
+    writeFileSync(scriptPath, "process.stdin.resume(); console.log('started')\n")
+
+    const manager = createAgentManager()
+    const run = await manager.startAgent({
+      agentId: 'worker-stop',
+      command: process.execPath,
+      args: [scriptPath],
+      cwd: dir,
+    })
+
+    await waitFor(() => {
+      expect(manager.getRun(run.runId).status).toBe('running')
+    })
+
+    manager.stopRun(run.runId)
+
+    expect(manager.getRun(run.runId).status).toBe('exited')
+    expect(() => manager.writeInput(run.runId, 'late input\n')).toThrow(/PTY is not active/)
+  })
+
   test('exposes an output bus that streams PTY chunks to subscribers', async () => {
     const dir = join(tmpdir(), `hive-agent-${Date.now()}-bus`)
     mkdirSync(dir, { recursive: true })

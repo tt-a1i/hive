@@ -19,7 +19,7 @@ describe('api error messages', () => {
       )
     )
 
-    await expect(startAgentRun('workspace-1', 'workspace-1:orchestrator', '4010')).rejects.toThrow(
+    await expect(startAgentRun('workspace-1', 'workspace-1:orchestrator')).rejects.toThrow(
       'claude CLI not found in PATH'
     )
   })
@@ -33,7 +33,7 @@ describe('api error messages', () => {
           status: 403,
         })
       )
-      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ runId: 'run-after-session-refresh' }), {
           headers: { 'content-type': 'application/json' },
@@ -42,9 +42,9 @@ describe('api error messages', () => {
       )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(startAgentRun('workspace-1', 'workspace-1:orchestrator', '4010')).resolves.toEqual(
-      { runId: 'run-after-session-refresh' }
-    )
+    await expect(startAgentRun('workspace-1', 'workspace-1:orchestrator')).resolves.toEqual({
+      runId: 'run-after-session-refresh',
+    })
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       '/api/workspaces/workspace-1/agents/workspace-1:orchestrator/start',

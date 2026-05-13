@@ -29,6 +29,20 @@ export const hasBracketedPasteAcknowledgement = (output: string, baselineLength:
   /\[Pasted text #\d+/u.test(output.slice(baselineLength))
 
 const isClaudeCommand = (command: string) => basename(command).toLowerCase() === 'claude'
+const isWritableRunStatus = (status: string | undefined) =>
+  status === undefined || status === 'starting' || status === 'running'
+
+const writeIfRunWritable = (agentManager: AgentManager, runId: string, text: string) => {
+  let run: ReturnType<AgentManager['getRun']>
+  try {
+    run = agentManager.getRun(runId)
+  } catch {
+    return false
+  }
+  if (!isWritableRunStatus(run.status)) return false
+  agentManager.writeInput(runId, text)
+  return true
+}
 
 const submitPastedInteractiveInput = (
   agentManager: AgentManager,
@@ -41,9 +55,18 @@ const submitPastedInteractiveInput = (
   const minDelay = getSubmitAfterPasteDelayMs(text)
   let acknowledgedAt: number | null = null
 
+  const getWritableOutput = () => {
+    try {
+      const run = agentManager.getRun(runId)
+      return isWritableRunStatus(run.status) ? run.output : null
+    } catch {
+      return null
+    }
+  }
+
   const submit = () => {
     try {
-      agentManager.writeInput(runId, '\r')
+      writeIfRunWritable(agentManager, runId, '\r')
     } catch {
       // The PTY may have exited between paste and submit.
     }
@@ -55,13 +78,12 @@ const submitPastedInteractiveInput = (
       return
     }
 
-    try {
-      const output = agentManager.getRun(runId).output
-      if (acknowledgedAt === null && hasBracketedPasteAcknowledgement(output, baselineLength)) {
-        acknowledgedAt = Date.now()
-      }
-    } catch {
+    const output = getWritableOutput()
+    if (output === null) {
       return
+    }
+    if (acknowledgedAt === null && hasBracketedPasteAcknowledgement(output, baselineLength)) {
+      acknowledgedAt = Date.now()
     }
 
     const elapsed = Date.now() - pastedAt
@@ -82,21 +104,31 @@ export const createPostStartInputWriter = (
   command: string
 ): ((runId: string, text: string) => void) => {
   if (!isInteractiveAgentCommand(command)) {
-    return (runId, text) => agentManager.writeInput(runId, `${text}\n`)
+    return (runId, text) => {
+      writeIfRunWritable(agentManager, runId, `${text}\n`)
+    }
   }
 
   return (runId, text) => {
     const startedAt = Date.now()
+    let isInitialAttempt = true
     const tryWrite = () => {
-      let output: string
+      let output: string | null
       try {
-        output = agentManager.getRun(runId).output
+        const run = agentManager.getRun(runId)
+        output = isWritableRunStatus(run.status) ? run.output : null
       } catch {
         return
       }
+      if (output === null) return
       if (hasInteractivePromptReady(output) || Date.now() - startedAt >= READY_TIMEOUT_MS) {
         const baselineLength = output.length
-        agentManager.writeInput(runId, toBracketedPasteSubmission(text))
+        try {
+          if (!writeIfRunWritable(agentManager, runId, toBracketedPasteSubmission(text))) return
+        } catch (error) {
+          if (isInitialAttempt) throw error
+          return
+        }
         submitPastedInteractiveInput(
           agentManager,
           runId,
@@ -108,6 +140,10 @@ export const createPostStartInputWriter = (
       }
       setTimeout(tryWrite, READY_CHECK_INTERVAL_MS)
     }
-    tryWrite()
+    try {
+      tryWrite()
+    } finally {
+      isInitialAttempt = false
+    }
   }
 }

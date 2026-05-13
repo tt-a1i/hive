@@ -146,6 +146,9 @@ describe('runtime http app', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('set-cookie')).toContain('HttpOnly')
     expect(response.headers.get('set-cookie')).toContain('SameSite=Strict')
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+    })
   })
 
   test('POST /api/workspaces/:id/workers creates a worker', async () => {
