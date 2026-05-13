@@ -9,10 +9,12 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 
 const tempDirs: string[] = []
+const stores: Array<ReturnType<typeof createRuntimeStore>> = []
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map((store) => store.close()))
   for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { force: true, recursive: true })
+    rmSync(dir, { force: true, maxRetries: 10, recursive: true, retryDelay: 100 })
   }
 })
 
@@ -36,7 +38,7 @@ describe('schema version', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-version-'))
     tempDirs.push(dataDir)
 
-    createRuntimeStore({ dataDir })
+    stores.push(createRuntimeStore({ dataDir }))
 
     const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
     const row = db
@@ -51,7 +53,7 @@ describe('schema version', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-columns-'))
     tempDirs.push(dataDir)
 
-    createRuntimeStore({ dataDir })
+    stores.push(createRuntimeStore({ dataDir }))
 
     const db = new Database(join(dataDir, 'runtime.sqlite'), { readonly: true })
     const workerColumns = new Set(

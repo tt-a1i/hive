@@ -13,6 +13,15 @@ const runNpm = (args, options = {}) =>
     ? execFileSync('cmd.exe', ['/d', '/s', '/c', 'npm', ...args], options)
     : execFileSync('npm', args, options)
 
+const removePath = (path) => {
+  rmSync(path, {
+    force: true,
+    maxRetries: process.platform === 'win32' ? 20 : 0,
+    recursive: true,
+    retryDelay: 100,
+  })
+}
+
 const waitFor = async (predicate, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
   while (Date.now() <= deadline) {
@@ -35,6 +44,16 @@ const stopChild = async (child) => {
       clearTimeout(forceKill)
       resolveExit()
     })
+
+    if (process.platform === 'win32' && child.pid) {
+      try {
+        execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+      } catch {
+        child.kill('SIGKILL')
+      }
+      return
+    }
+
     child.kill('SIGTERM')
   })
 }
@@ -106,6 +125,6 @@ try {
     console.warn(stderr.trim())
   }
 } finally {
-  if (packedFile) rmSync(packedFile, { force: true })
-  rmSync(tempDir, { force: true, recursive: true })
+  if (packedFile) removePath(packedFile)
+  removePath(tempDir)
 }
