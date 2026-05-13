@@ -1,0 +1,22 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { WelcomePane } from '../../web/src/worker/WelcomePane.js'
+
+afterEach(() => cleanup())
+
+test('WelcomePane renders 3-step guide and fires onAddWorkspace from CTA', () => {
+  const onAdd = vi.fn()
+  render(<WelcomePane onAddWorkspace={onAdd} />)
+  expect(screen.getByText(/add a workspace/i)).toBeInTheDocument()
+  expect(screen.getByText(/choose an orchestrator/i)).toBeInTheDocument()
+  expect(screen.getByText(/dispatch tasks/i)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
+  expect(onAdd).toHaveBeenCalledOnce()
+})
+
+test('WelcomePane stays within max-width so it does not stretch absurdly on wide monitors', () => {
+  const { container } = render(<WelcomePane onAddWorkspace={() => {}} />)
+  const card = container.querySelector('[data-testid="welcome-pane"]') as HTMLElement
+  expect(card).toHaveStyle({ maxWidth: '540px' })
+})
