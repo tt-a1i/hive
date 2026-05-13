@@ -359,7 +359,8 @@ html, body {
   background: color-mix(in oklab, var(--status-orange) 10%, transparent);
 }
 
-/* Action button — small icon-button used in modals / cards */
+/* Primary action button — used in dialog footers, EmptyState CTAs,
+   and worker pane actions. Has both icon+label and icon-only variants. */
 .icon-btn {
   display: inline-flex;
   align-items: center;

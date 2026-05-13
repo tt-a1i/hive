@@ -149,6 +149,8 @@ const renderSidebar = (props: Parameters<typeof Sidebar>[0]) =>
   )
 
 describe('Sidebar EmptyState CTA', () => {
+  afterEach(() => vi.clearAllMocks())
+
   test('empty workspaces shows New workspace CTA inside the EmptyState, not at the bottom', () => {
     renderSidebar({ ...emptyProps, workspaces: [] })
     const emptyState = screen.getByTestId('empty-state')
@@ -156,9 +158,12 @@ describe('Sidebar EmptyState CTA', () => {
     // Bottom dashed button is hidden when list is empty:
     const allNewBtns = screen.getAllByRole('button', { name: 'New workspace' })
     expect(allNewBtns).toHaveLength(1)
+    // Callback wiring: clicking the CTA must call onCreateClick.
+    fireEvent.click(within(emptyState).getByRole('button', { name: 'New workspace' }))
+    expect(emptyProps.onCreateClick).toHaveBeenCalledOnce()
   })
 
-  test('non-empty workspaces keeps the dashed bottom Add Workspace button', () => {
+  test('non-empty workspaces keeps the dashed bottom New workspace button', () => {
     renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
     const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
     expect(bottomBtn).toHaveClass('ws-add')
