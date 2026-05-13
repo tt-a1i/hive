@@ -4,10 +4,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { App } from '../../web/src/app.js'
+import { Sidebar } from '../../web/src/sidebar/Sidebar.js'
+import { ToastProvider } from '../../web/src/ui/useToast.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 class MockTerminal {
@@ -123,6 +126,44 @@ const openTerminalSockets = () =>
   MockWebSocket.instances.filter((socket) => socket.url.includes('/ws/terminal/') && !socket.closed)
 
 const waitForTerminalPolling = () => new Promise((resolve) => setTimeout(resolve, 250))
+
+const emptyProps = {
+  activeWorkspaceId: null,
+  onCreateClick: vi.fn(),
+  onDeleteWorkspace: vi.fn(),
+  onSelectWorkspace: vi.fn(),
+  workersByWorkspaceId: {},
+}
+
+const fakeWorkspace: WorkspaceSummary = {
+  id: 'ws-1',
+  name: 'My Project',
+  path: '/home/user/my-project',
+}
+
+const renderSidebar = (props: Parameters<typeof Sidebar>[0]) =>
+  render(
+    <ToastProvider>
+      <Sidebar {...props} />
+    </ToastProvider>
+  )
+
+describe('Sidebar EmptyState CTA', () => {
+  test('empty workspaces shows New workspace CTA inside the EmptyState, not at the bottom', () => {
+    renderSidebar({ ...emptyProps, workspaces: [] })
+    const emptyState = screen.getByTestId('empty-state')
+    expect(within(emptyState).getByRole('button', { name: 'New workspace' })).toBeInTheDocument()
+    // Bottom dashed button is hidden when list is empty:
+    const allNewBtns = screen.getAllByRole('button', { name: 'New workspace' })
+    expect(allNewBtns).toHaveLength(1)
+  })
+
+  test('non-empty workspaces keeps the dashed bottom Add Workspace button', () => {
+    renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
+    const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
+    expect(bottomBtn).toHaveClass('ws-add')
+  })
+})
 
 describe('workspace sidebar flow', () => {
   test('switching workspace does not mount detached terminal sockets', async () => {

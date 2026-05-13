@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { FolderPlus, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
@@ -104,6 +104,18 @@ export const Sidebar = ({
           <EmptyState
             title="No workspaces"
             description="Add one to start. Hive will load .hive/tasks.md and start the Orchestrator."
+            icon={<FolderPlus size={20} />}
+            action={
+              <button
+                type="button"
+                onClick={onCreateClick}
+                aria-label="New workspace"
+                className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
+              >
+                <Plus size={13} aria-hidden />
+                New workspace
+              </button>
+            }
           />
         </div>
       ) : (
@@ -158,17 +170,19 @@ export const Sidebar = ({
           })}
         </ul>
       )}
-      <button
-        type="button"
-        onClick={onCreateClick}
-        aria-label="New workspace"
-        title="New workspace"
-        className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors"
-        style={{ borderColor: 'var(--border-bright)' }}
-      >
-        <Plus size={13} aria-hidden />
-        <span className="ws-add__label">Add Workspace</span>
-      </button>
+      {workspaces && workspaces.length > 0 ? (
+        <button
+          type="button"
+          onClick={onCreateClick}
+          aria-label="New workspace"
+          title="New workspace"
+          className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors"
+          style={{ borderColor: 'var(--border-bright)' }}
+        >
+          <Plus size={13} aria-hidden />
+          <span className="ws-add__label">New workspace</span>
+        </button>
+      ) : null}
 
       {confirm}
     </nav>
