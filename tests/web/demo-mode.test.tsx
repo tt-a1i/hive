@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
+import { DemoBanner } from '../../web/src/demo/DemoBanner.js'
 import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
@@ -76,6 +77,25 @@ afterEach(async () => {
   window.localStorage?.clear?.()
 })
 
+// ── Isolated component tests (no server required) ────────────────────────────
+
+test('DemoBanner has role=region aria-label and fires onExit on Exit Demo click', () => {
+  const onExit = vi.fn()
+  render(<DemoBanner onExit={onExit} />)
+  expect(screen.getByRole('region', { name: /demo mode/i })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /exit demo/i }))
+  expect(onExit).toHaveBeenCalledOnce()
+})
+
+test('DemoBanner does not call onExit when rendered without clicking', () => {
+  const onExit = vi.fn()
+  render(<DemoBanner onExit={onExit} />)
+  // Just rendering must not trigger exit
+  expect(onExit).not.toHaveBeenCalled()
+})
+
+// ── App-level integration tests (real server, fetch tracking) ────────────────
+
 test('clicking Try Demo enters demo mode with banner, demo workspace, alice worker, and her last-output line', async () => {
   render(<App />)
   // Wait for the welcome pane to appear (server has no workspaces)
@@ -126,6 +146,21 @@ test('Exit Demo returns to the welcome state', async () => {
     expect(screen.getByTestId('welcome-pane')).toBeInTheDocument()
   })
   expect(screen.queryByTestId('demo-banner')).toBeNull()
+})
+
+test('demo mode shows DEMO read-only badge and orch scrollback text', async () => {
+  render(<App />)
+  await screen.findByTestId('welcome-pane')
+
+  fireEvent.click(screen.getByRole('button', { name: /try the demo/i }))
+
+  // Read-only badge should appear in demo orchestrator pane
+  expect(screen.getByTestId('terminal-readonly-badge')).toBeInTheDocument()
+  // Orchestrator scrollback content should be visible
+  expect(screen.getByTestId('demo-scrollback-demo-orch')).toBeInTheDocument()
+  expect(screen.getByTestId('demo-scrollback-demo-orch').textContent).toContain(
+    'team send alice'
+  )
 })
 
 test('TaskGraphDrawer shows DEMO_TASKS_MD content when demo is on and Blueprint is opened', async () => {
