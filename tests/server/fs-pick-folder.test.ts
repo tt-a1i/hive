@@ -93,8 +93,34 @@ describe('pickFolder — platform dispatch', () => {
     expect(result.error).toBeNull()
   })
 
-  test('win32 (and other platforms): returns supported=false with guidance', async () => {
-    const result = await pickFolder({ platform: 'win32' })
+  test('win32: PowerShell folder picker stdout path flows through probeDirectory', async () => {
+    const calls: Array<{ command: string; args: string[]; timeout: unknown }> = []
+    const runCommand: RunPickCommand = async (command, args, options) => {
+      calls.push({ command, args, timeout: options.timeout })
+      return { ...emptySpawn, stdout: `${insideDir}\r\n` }
+    }
+    const result = await pickFolder({ platform: 'win32', runCommand })
+    expect(result.canceled).toBe(false)
+    expect(result.supported).toBe(true)
+    expect(result.path).toBe(insideDir)
+    expect(result.probe?.ok).toBe(true)
+    expect(calls[0]?.command).toBe('powershell.exe')
+    expect(calls[0]?.args).toContain('-STA')
+    expect(calls[0]?.args.join(' ')).toContain('FolderBrowserDialog')
+    expect(calls[0]?.timeout).toBeUndefined()
+  })
+
+  test('win32: PowerShell cancel exits without an error', async () => {
+    const runCommand: RunPickCommand = async () => ({ ...emptySpawn, status: 1 })
+    const result = await pickFolder({ platform: 'win32', runCommand })
+    expect(result.canceled).toBe(true)
+    expect(result.error).toBeNull()
+    expect(result.supported).toBe(true)
+    expect(result.path).toBeNull()
+  })
+
+  test('other unsupported platforms still fall back to Advanced paste path', async () => {
+    const result = await pickFolder({ platform: 'freebsd' })
     expect(result.supported).toBe(false)
     expect(result.canceled).toBe(false)
     expect(result.error).toMatch(/Advanced: paste path/)

@@ -48,7 +48,7 @@
     "dev:all": "concurrently \"pnpm dev:runtime\" \"pnpm dev:web\"",
     "dev:runtime": "tsx src/cli/hive.ts --port 4010",
     "dev:web": "vite --config web/vite.config.ts",
-    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/bin && cp bin/team dist/bin/team && chmod +x dist/bin/team && pnpm build:web",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && node scripts/prepare-build-artifacts.mjs && pnpm build:web",
     "build:web": "vite build --config web/vite.config.ts",
     "check": "pnpm exec biome check .",
     "format": "pnpm exec biome format --write .",

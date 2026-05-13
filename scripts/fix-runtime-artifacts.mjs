@@ -4,7 +4,9 @@ import { dirname, join } from 'node:path'
 
 const executablePaths = [
   'bin/team',
+  'bin/team.cmd',
   'dist/bin/team',
+  'dist/bin/team.cmd',
   'node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper',
 ]
 

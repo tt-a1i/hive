@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path'
 const root = process.cwd()
 const tempDir = mkdtempSync(join(tmpdir(), 'hive-pack-smoke-'))
 let packedFile
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const binLinkName = (name) => (process.platform === 'win32' ? `${name}.cmd` : name)
 
 const waitFor = async (predicate, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
@@ -34,7 +36,7 @@ const stopChild = async (child) => {
 }
 
 try {
-  const packJson = execFileSync('npm', ['pack', '--json'], {
+  const packJson = execFileSync(npmCommand, ['pack', '--json'], {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -42,18 +44,23 @@ try {
   const [packResult] = JSON.parse(packJson)
   packedFile = resolve(root, packResult.filename)
 
-  execFileSync('npm', ['install', '--silent', '--prefix', tempDir, packedFile], {
+  execFileSync(npmCommand, ['install', '--silent', '--prefix', tempDir, packedFile], {
     stdio: 'inherit',
   })
 
   const packageRoot = join(tempDir, 'node_modules', '@tt-a1i', 'hive')
-  const hiveBin = join(tempDir, 'node_modules', '.bin', 'hive')
+  const hiveBin = join(tempDir, 'node_modules', '.bin', binLinkName('hive'))
   const teamBin = join(tempDir, 'node_modules', '.bin', 'team')
+  const teamCmdBin = join(tempDir, 'node_modules', '.bin', 'team.cmd')
   const internalTeam = join(packageRoot, 'dist', 'bin', 'team')
+  const internalTeamCmd = join(packageRoot, 'dist', 'bin', 'team.cmd')
 
   if (!existsSync(hiveBin)) throw new Error('Packaged hive bin was not linked')
-  if (existsSync(teamBin)) throw new Error('team must not be exposed as a global package bin')
+  if (existsSync(teamBin) || existsSync(teamCmdBin)) {
+    throw new Error('team must not be exposed as a global package bin')
+  }
   if (!existsSync(internalTeam)) throw new Error('Internal dist/bin/team is missing')
+  if (!existsSync(internalTeamCmd)) throw new Error('Internal dist/bin/team.cmd is missing')
 
   const child = spawn(hiveBin, ['--port', '0'], {
     env: {
@@ -62,6 +69,7 @@ try {
       HIVE_ORCHESTRATOR_COMMAND: process.execPath,
       HIVE_ORCHESTRATOR_ARGS_JSON: JSON.stringify(['-e', 'setInterval(() => {}, 1000)']),
     },
+    shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let stdout = ''

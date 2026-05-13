@@ -129,6 +129,42 @@ const linuxPick = async (run: RunPickCommand): Promise<PickFolderResponse> => {
   return finalizeWithProbe(picked)
 }
 
+const windowsPick = async (run: RunPickCommand): Promise<PickFolderResponse> => {
+  const script = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    '$dialog = New-Object System.Windows.Forms.FolderBrowserDialog',
+    '$dialog.Description = "Select Hive workspace"',
+    '$dialog.ShowNewFolderButton = $false',
+    '$result = $dialog.ShowDialog()',
+    'if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.WriteLine($dialog.SelectedPath); exit 0 }',
+    'exit 1',
+  ].join('; ')
+  const result = await run(
+    'powershell.exe',
+    ['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-Command', script],
+    {}
+  )
+  if (result.spawnError?.code === 'ENOENT') {
+    return emptyResponse({
+      error: 'PowerShell is unavailable on this host. Use Advanced: paste path.',
+      supported: false,
+    })
+  }
+  if (result.timedOut) {
+    return emptyResponse({ error: 'Folder picker timed out before a folder was selected.' })
+  }
+  if (result.status !== 0) {
+    const stderr = result.stderr.trim()
+    if (stderr.length > 0) {
+      return emptyResponse({ error: `Folder picker failed: ${stderr}` })
+    }
+    return emptyResponse({ canceled: true })
+  }
+  const picked = result.stdout.trim()
+  if (picked.length === 0) return emptyResponse({ canceled: true })
+  return finalizeWithProbe(picked)
+}
+
 export const pickFolder = async (options: PickFolderOptions = {}): Promise<PickFolderResponse> => {
   const mock = process.env.HIVE_MOCK_PICK_FOLDER
   if (mock && mock.length > 0) {
@@ -142,6 +178,7 @@ export const pickFolder = async (options: PickFolderOptions = {}): Promise<PickF
 
   if (platform === 'darwin') return macOsPick(run)
   if (platform === 'linux') return linuxPick(run)
+  if (platform === 'win32') return windowsPick(run)
   return emptyResponse({
     error: 'Native folder picker not supported on this platform. Use Advanced: paste path.',
     supported: false,
