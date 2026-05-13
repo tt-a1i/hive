@@ -1,6 +1,7 @@
 import { Crown, LoaderCircle, RotateCcw } from 'lucide-react'
 
 import { EmptyState } from '../ui/EmptyState.js'
+import { OrchestratorHintOverlay } from './OrchestratorHintOverlay.js'
 
 export type OrchestratorPaneState =
   | { kind: 'starting' }
@@ -12,6 +13,10 @@ type OrchestratorPaneProps = {
   /** Kept for API stability; M6-B will surface stop via the ⌘K palette. */
   onStop: () => void
   onRestart: () => void
+  /** True once the user has typed anything into the orchestrator terminal. */
+  hasUserInput?: boolean
+  /** Flip hasUserInput to true (idempotent). */
+  markUserInput?: () => void
 }
 
 const StartingBody = () => (
@@ -48,18 +53,27 @@ const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void
   </div>
 )
 
-export const OrchestratorPane = ({ state, onRestart }: OrchestratorPaneProps) => (
+export const OrchestratorPane = ({
+  state,
+  onRestart,
+  hasUserInput = false,
+  markUserInput,
+}: OrchestratorPaneProps) => (
   <div
     className="relative flex h-full w-full min-w-0 flex-col"
     style={{ background: 'var(--bg-crust)' }}
     data-testid="orchestrator-terminal-slot"
   >
     {state.kind === 'running' ? (
-      <div
-        id={`orch-pty-${state.runId}`}
-        className="flex h-full w-full"
-        data-pty-slot="orchestrator"
-      />
+      // biome-ignore lint/a11y/noStaticElementInteractions: outer div captures keydown bubbling from the xterm hidden textarea so the hint overlay auto-dismisses on first keystroke without touching TerminalView's API
+      <div className="relative flex h-full w-full" onKeyDown={markUserInput}>
+        <div
+          id={`orch-pty-${state.runId}`}
+          className="flex h-full w-full"
+          data-pty-slot="orchestrator"
+        />
+        <OrchestratorHintOverlay visible={!hasUserInput} onDismiss={markUserInput ?? (() => {})} />
+      </div>
     ) : state.kind === 'failed' ? (
       <FailedBody error={state.error} onRestart={onRestart} />
     ) : (

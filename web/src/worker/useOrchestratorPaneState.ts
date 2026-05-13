@@ -25,6 +25,8 @@ interface UseOrchestratorPaneStateOutput {
   start: () => void
   stop: () => void
   restart: () => void
+  hasUserInput: boolean
+  markUserInput: () => void
 }
 
 /**
@@ -42,6 +44,8 @@ export const useOrchestratorPaneState = ({
 }: UseOrchestratorPaneStateInput): UseOrchestratorPaneStateOutput => {
   const orchestratorRun = findOrchestratorRun(terminalRuns, workspaceId)
   const agentId = orchestratorAgentId(workspaceId)
+  const [hasUserInput, setHasUserInput] = useState(false)
+  const markUserInput = useCallback(() => setHasUserInput(true), [])
   const [pendingStartWorkspaceId, setPendingStartWorkspaceId] = useState<string | null>(null)
   const [optimisticRun, setOptimisticRun] = useState<{
     workspaceId: string
@@ -153,5 +157,5 @@ export const useOrchestratorPaneState = ({
     start()
   }, [agentId, onAfterStart, onClearAutostartError, orchestratorRun, start, workspaceId])
 
-  return { state, start, stop, restart }
+  return { state, start, stop, restart, hasUserInput, markUserInput }
 }

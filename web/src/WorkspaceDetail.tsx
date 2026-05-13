@@ -154,6 +154,8 @@ export const WorkspaceDetail = ({
             state={orchestrator.state}
             onStop={orchestrator.stop}
             onRestart={orchestrator.restart}
+            hasUserInput={orchestrator.hasUserInput}
+            markUserInput={orchestrator.markUserInput}
           />
         </div>
         {/* biome-ignore lint/a11y/useSemanticElements: <hr> can't host pointer/keyboard handlers and the visible accent line; aria role="separator" is the canonical resize-handle role */}
