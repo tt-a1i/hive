@@ -9,6 +9,7 @@ import {
 
 type MainLayoutProps = {
   children: ReactNode
+  hideTopbarActions?: boolean
   onToggleTaskGraph: () => void
   sidebar: ReactNode
   taskGraphOpen: boolean
@@ -16,6 +17,7 @@ type MainLayoutProps = {
 
 export const MainLayout = ({
   children,
+  hideTopbarActions = false,
   onToggleTaskGraph,
   sidebar,
   taskGraphOpen,
@@ -27,7 +29,11 @@ export const MainLayout = ({
       className="flex h-screen w-full flex-col overflow-hidden"
       style={{ background: 'var(--bg-0)', color: 'var(--text-primary)' }}
     >
-      <Topbar onToggleTaskGraph={onToggleTaskGraph} taskGraphOpen={taskGraphOpen} />
+      <Topbar
+        hideActions={hideTopbarActions}
+        onToggleTaskGraph={onToggleTaskGraph}
+        taskGraphOpen={taskGraphOpen}
+      />
       <div className="flex min-h-0 flex-1">
         <aside
           aria-label="Workspace sidebar"

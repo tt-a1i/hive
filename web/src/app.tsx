@@ -67,6 +67,7 @@ export const App = () => {
   return (
     <AppProviders>
       <MainLayout
+        hideTopbarActions={!activeWorkspace}
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
         sidebar={
           <Sidebar

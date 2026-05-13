@@ -60,10 +60,11 @@ describe('app shell with real server', () => {
     const banner = screen.getByRole('banner')
     expect(banner).toHaveClass('h-11')
     expect(banner.textContent ?? '').toContain('Hive')
-    expect(screen.getByTestId('topbar-settings')).toHaveTextContent('Notifications')
-    fireEvent.click(screen.getByTestId('topbar-settings'))
-    expect(screen.getByTestId('notification-settings')).toBeInTheDocument()
-    expect(screen.getByRole('radiogroup', { name: 'Sound' })).toBeInTheDocument()
+    // Empty state hides Topbar actions so first-run users only see the brand
+    // and the central Welcome CTA. Notification + Blueprint actions reappear
+    // once a workspace is active (covered in worker-flow / tasks-flow tests).
+    expect(screen.queryByTestId('topbar-settings')).toBeNull()
+    expect(screen.queryByTestId('topbar-blueprint')).toBeNull()
 
     await waitFor(() => {
       expect(screen.getByText('No workspaces')).toBeInTheDocument()

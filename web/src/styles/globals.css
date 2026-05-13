@@ -432,14 +432,9 @@ html, body {
 }
 .card--interactive { cursor: pointer; }
 .card--interactive:hover {
-  transform: translateY(-1px);
   border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
   background: color-mix(in oklab, var(--accent) 4%, var(--bg-2));
   box-shadow: var(--shadow-card-hover);
-}
-.card--interactive:active { transform: translateY(0); transition-duration: 80ms; }
-@media (prefers-reduced-motion: reduce) {
-  .card--interactive:hover { transform: none; }
 }
 
 /* Role badges — flex-shrink:0 + nowrap so they never clip in narrow rows. */
@@ -454,9 +449,18 @@ html, body {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.role-badge--coder { background: #1c3d5a; color: var(--status-blue); }
-.role-badge--tester { background: #3a2c1c; color: var(--status-orange); }
-.role-badge--reviewer { background: #3a1f3a; color: var(--status-purple); }
+.role-badge--coder {
+  background: color-mix(in oklab, var(--status-blue) 22%, var(--bg-2));
+  color: var(--status-blue);
+}
+.role-badge--tester {
+  background: color-mix(in oklab, var(--status-orange) 22%, var(--bg-2));
+  color: var(--status-orange);
+}
+.role-badge--reviewer {
+  background: color-mix(in oklab, var(--status-purple) 22%, var(--bg-2));
+  color: var(--status-purple);
+}
 .role-badge--orch { background: var(--bg-3); color: var(--text-secondary); }
 .role-badge--custom { background: var(--bg-3); color: var(--text-secondary); }
 
