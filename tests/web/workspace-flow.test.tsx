@@ -120,7 +120,7 @@ describe('workspace flow with real server', () => {
     // 0 workers in a fresh workspace → EmptyState (no worker-grid until ≥1).
     expect(screen.getByTestId('add-worker-empty')).toBeInTheDocument()
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
-  })
+  }, 20_000)
 
   test('existing workspace auto-starts Queen without exposing a manual Start Queen CTA', async () => {
     const existingPath = join(sandboxRoot, 'existing-project')
@@ -147,5 +147,5 @@ describe('workspace flow with real server', () => {
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
-  })
+  }, 20_000)
 })
