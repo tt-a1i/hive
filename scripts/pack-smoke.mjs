@@ -78,6 +78,7 @@ try {
   const teamCmdBin = join(tempDir, 'node_modules', '.bin', 'team.cmd')
   const internalTeam = join(packageRoot, 'dist', 'bin', 'team')
   const internalTeamCmd = join(packageRoot, 'dist', 'bin', 'team.cmd')
+  const internalTeamLauncher = process.platform === 'win32' ? internalTeamCmd : internalTeam
 
   if (!existsSync(hiveBin)) throw new Error('Packaged hive bin was not linked')
   if (existsSync(teamBin) || existsSync(teamCmdBin)) {
@@ -90,8 +91,8 @@ try {
     env: {
       ...process.env,
       HIVE_DATA_DIR: join(tempDir, 'data'),
-      HIVE_ORCHESTRATOR_COMMAND: process.execPath,
-      HIVE_ORCHESTRATOR_ARGS_JSON: JSON.stringify(['-e', 'setInterval(() => {}, 1000)']),
+      HIVE_ORCHESTRATOR_COMMAND: internalTeamLauncher,
+      HIVE_ORCHESTRATOR_ARGS_JSON: JSON.stringify(['list']),
     },
     shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -120,6 +121,34 @@ try {
     const html = await response.text()
     if (!html.includes('<div id="root"></div>')) {
       throw new Error('Packaged runtime did not serve the bundled web UI')
+    }
+
+    const sessionResponse = await fetch(`http://127.0.0.1:${port}/api/ui/session`)
+    const cookie = sessionResponse.headers.get('set-cookie')?.split(';')[0]
+    if (!sessionResponse.ok || !cookie) {
+      throw new Error(`Packaged runtime session returned ${sessionResponse.status}`)
+    }
+
+    const workspaceResponse = await fetch(`http://127.0.0.1:${port}/api/workspaces`, {
+      body: JSON.stringify({
+        autostart_orchestrator: true,
+        name: 'Pack Smoke',
+        path: tempDir,
+      }),
+      headers: {
+        'content-type': 'application/json',
+        cookie,
+      },
+      method: 'POST',
+    })
+    if (workspaceResponse.status !== 201) {
+      throw new Error(`Packaged runtime workspace create returned ${workspaceResponse.status}`)
+    }
+    const workspace = await workspaceResponse.json()
+    if (workspace.orchestrator_start?.ok !== true) {
+      throw new Error(
+        `Packaged internal team launcher failed: ${workspace.orchestrator_start?.error ?? 'unknown'}`
+      )
     }
   } finally {
     await stopChild(child)

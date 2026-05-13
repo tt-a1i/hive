@@ -22,12 +22,10 @@ beforeEach(() => {
   writeFileSync(join(insideDir, '.git', 'HEAD'), 'ref: refs/heads/main\n')
   mkdirSync(outsideDir, { recursive: true })
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
-  delete process.env.HIVE_MOCK_PICK_FOLDER
 })
 
 afterEach(() => {
   delete process.env.HIVE_FS_BROWSE_ROOT
-  delete process.env.HIVE_MOCK_PICK_FOLDER
   vi.restoreAllMocks()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
@@ -156,26 +154,5 @@ describe('pickFolder — platform dispatch', () => {
     const result = await pickFolder({ platform: 'darwin', runCommand })
     expect(result.canceled).toBe(false)
     expect(result.error).toMatch(/timed out/)
-  })
-})
-
-describe('pickFolder — HIVE_MOCK_PICK_FOLDER smoke hook', () => {
-  test('mock path short-circuits the native picker and still runs probeDirectory', async () => {
-    process.env.HIVE_MOCK_PICK_FOLDER = insideDir
-    const result = await pickFolder({ platform: 'darwin' })
-    expect(result.path).toBe(insideDir)
-    expect(result.probe?.ok).toBe(true)
-  })
-
-  test('__cancel__ sentinel yields canceled=true', async () => {
-    process.env.HIVE_MOCK_PICK_FOLDER = '__cancel__'
-    const result = await pickFolder()
-    expect(result.canceled).toBe(true)
-  })
-
-  test('__unsupported__ sentinel yields supported=false', async () => {
-    process.env.HIVE_MOCK_PICK_FOLDER = '__unsupported__'
-    const result = await pickFolder()
-    expect(result.supported).toBe(false)
   })
 })

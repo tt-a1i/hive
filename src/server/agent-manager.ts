@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node-pty'
-import { resolveCommandPath } from './agent-command-resolver.js'
+import { resolveSpawnCommand } from './agent-command-resolver.js'
 import { attachAgentPty, toAgentRunSnapshot } from './agent-manager-support.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
@@ -81,7 +81,7 @@ export const createAgentManager = ({
     },
     async startAgent(input) {
       const env = createSpawnEnv(input.env)
-      const command = resolveCommandPath(input.command, input.cwd, env)
+      const spawnCommand = resolveSpawnCommand(input.command, input.cwd, env, input.args ?? [])
 
       const runId = createRunId()
 
@@ -112,7 +112,7 @@ export const createAgentManager = ({
       try {
         attachAgentPty(
           run,
-          spawn(command, input.args ?? [], {
+          spawn(spawnCommand.command, spawnCommand.args, {
             cwd: input.cwd,
             env,
             name: 'xterm-256color',

@@ -1,5 +1,4 @@
 import { browseDirectory, probeDirectory } from './fs-browse.js'
-import { pickFolder } from './fs-pick-folder.js'
 import { route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
@@ -20,9 +19,9 @@ export const fsRoutes: RouteDefinition[] = [
     const body = await probeDirectory(readPathParam(request))
     sendJson(response, 200, body)
   }),
-  route('POST', '/api/fs/pick-folder', async ({ request, response, store }) => {
+  route('POST', '/api/fs/pick-folder', async ({ pickFolderService, request, response, store }) => {
     requireUiTokenFromRequest(request, store.validateUiToken)
-    const body = await pickFolder()
+    const body = await pickFolderService()
     sendJson(response, 200, body)
   }),
 ]

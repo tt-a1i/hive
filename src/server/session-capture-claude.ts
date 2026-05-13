@@ -25,7 +25,7 @@ export const getClaudeProjectsRoot = (pattern?: string) => {
   return root
 }
 
-export const encodeClaudeProjectPath = (cwd: string) => cwd.replace(/[/:\s]/g, '-')
+export const encodeClaudeProjectPath = (cwd: string) => cwd.replace(/[\\/:\s]/g, '-')
 
 const listSessionIds = (cwd: string, projectsRoot = getDefaultProjectsRoot()) => {
   const projectDir = join(projectsRoot, encodeClaudeProjectPath(cwd))

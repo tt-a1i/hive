@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import type { WorkerRole } from '../shared/types.js'
+import type { PickFolderResponse } from './fs-pick-folder.js'
 import type { RuntimeStore } from './runtime-store.js'
 import type { TasksFileService } from './tasks-file.js'
 
@@ -54,6 +55,7 @@ export interface RouteContext {
   response: ServerResponse
   store: RuntimeStore
   tasksFileService: TasksFileService
+  pickFolderService: () => Promise<PickFolderResponse>
   params: Record<string, string>
 }
 

@@ -39,6 +39,10 @@ afterEach(() => {
 })
 
 describe('claude session support', () => {
+  test('encodeClaudeProjectPath handles Windows separators', () => {
+    expect(encodeClaudeProjectPath('C:\\Users\\admin\\project')).toBe('C--Users-admin-project')
+  })
+
   test('snapshotClaudeSessionIds returns an empty set when the project directory is missing', () => {
     createTempRoot()
 

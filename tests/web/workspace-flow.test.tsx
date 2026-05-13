@@ -23,10 +23,9 @@ beforeEach(async () => {
   mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
   tempDirs.push(sandboxRoot)
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
-  // Short-circuit the native folder picker so the test doesn't actually spawn
-  // osascript/zenity. The value mimics what the OS dialog would return.
-  process.env.HIVE_MOCK_PICK_FOLDER = join(sandboxRoot, 'alpha-project')
-  const server = await startTestServer()
+  const server = await startTestServer({
+    pickFolderPath: join(sandboxRoot, 'alpha-project'),
+  })
   serverContext = server
   dummyPresetId = server.store.settings.createCommandPreset({
     args: ['-e', "console.log('queen port:' + process.env.HIVE_PORT); process.stdin.resume()"],
@@ -59,7 +58,6 @@ afterEach(async () => {
   cleanupServer = undefined
   serverContext = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
-  delete process.env.HIVE_MOCK_PICK_FOLDER
   dummyPresetId = ''
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })

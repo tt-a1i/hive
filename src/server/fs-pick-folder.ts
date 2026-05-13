@@ -166,13 +166,6 @@ const windowsPick = async (run: RunPickCommand): Promise<PickFolderResponse> => 
 }
 
 export const pickFolder = async (options: PickFolderOptions = {}): Promise<PickFolderResponse> => {
-  const mock = process.env.HIVE_MOCK_PICK_FOLDER
-  if (mock && mock.length > 0) {
-    if (mock === '__cancel__') return emptyResponse({ canceled: true })
-    if (mock === '__unsupported__') return emptyResponse({ supported: false })
-    return finalizeWithProbe(mock)
-  }
-
   const platform = options.platform ?? process.platform
   const run = options.runCommand ?? defaultRunCommand
 
