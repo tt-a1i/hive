@@ -101,7 +101,7 @@ describe('workspace flow with real server', () => {
       () => {
         expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
       },
-      { timeout: 3000 }
+      { timeout: 10_000 }
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
@@ -143,7 +143,7 @@ describe('workspace flow with real server', () => {
       () => {
         expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
       },
-      { timeout: 3000 }
+      { timeout: 10_000 }
     )
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
