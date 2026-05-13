@@ -32,6 +32,7 @@ export type SessionIdCaptureConfig =
   | { source: 'banner_parse'; pattern?: string }
 
 export interface SessionCaptureSnapshot {
+  discriminator?: { contentIncludes: string | readonly string[] }
   knownSessionIds: Set<string>
   env?: Record<string, string>
   root?: string
@@ -63,7 +64,8 @@ export const parseSessionIdCapture = (value: unknown): SessionIdCaptureConfig | 
 
 export const snapshotSessionIdsForCapture = (
   cwd: string,
-  capture: SessionIdCaptureConfig | null | undefined
+  capture: SessionIdCaptureConfig | null | undefined,
+  discriminator?: SessionCaptureSnapshot['discriminator']
 ) => {
   if (!capture) return undefined
   if (capture.source === 'claude_project_jsonl_dir') {
@@ -72,6 +74,7 @@ export const snapshotSessionIdsForCapture = (
       env: { HIVE_CLAUDE_PROJECTS_DIR: projectsRoot },
       knownSessionIds: snapshotClaudeSessionIds(cwd, projectsRoot),
       root: projectsRoot,
+      ...(discriminator ? { discriminator } : {}),
     }
   }
   if (capture.source === 'codex_session_jsonl_dir') {
@@ -120,7 +123,8 @@ export const captureSessionIdForCapture = async (
       onCapture,
       timeoutMs,
       intervalMs,
-      snapshot.root
+      snapshot.root,
+      snapshot.discriminator
     )
   }
   if (capture.source === 'codex_session_jsonl_dir') {
@@ -158,10 +162,11 @@ export const captureSessionIdForCapture = async (
 export const doesCapturedSessionExist = (
   cwd: string,
   capture: SessionIdCaptureConfig,
-  sessionId: string
+  sessionId: string,
+  discriminator?: SessionCaptureSnapshot['discriminator']
 ) => {
   if (capture.source === 'claude_project_jsonl_dir') {
-    return hasClaudeSessionFile(cwd, sessionId, capture.pattern)
+    return hasClaudeSessionFile(cwd, sessionId, capture.pattern, discriminator)
   }
   if (capture.source === 'codex_session_jsonl_dir') {
     return hasCodexSession(cwd, sessionId, capture.pattern)

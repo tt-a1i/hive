@@ -77,6 +77,7 @@ describe('runtime rehydration', () => {
       '-tmp-hive-alpha',
       '11111111-1111-4111-8111-111111111111.jsonl'
     )
+    const workerPromptMarker = `Hive session binding: workspace_id=${workspace.id}; agent_id=${worker.id}`
     const manager = createAgentManager()
     const startSpy = vi.spyOn(manager, 'startAgent')
 
@@ -92,7 +93,10 @@ describe('runtime rehydration', () => {
     })
 
     const startPromise = secondStore.startAgent(workspace.id, worker.id, { hivePort: '4010' })
-    writeFileSync(sessionFile, '{}\n')
+    writeFileSync(
+      sessionFile,
+      `${JSON.stringify({ message: { content: workerPromptMarker, role: 'user' } })}\n`
+    )
     await startPromise
 
     await new Promise((resolve) => setTimeout(resolve, 150))

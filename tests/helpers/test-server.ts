@@ -13,8 +13,11 @@ interface TestServerContext {
   store: ReturnType<typeof createRuntimeStore>
 }
 
-export const startTestServer = async (): Promise<TestServerContext> => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'hive-test-server-'))
+export const startTestServer = async (
+  input: { dataDir?: string } = {}
+): Promise<TestServerContext> => {
+  const ownsDataDir = !input.dataDir
+  const dataDir = input.dataDir ?? mkdtempSync(join(tmpdir(), 'hive-test-server-'))
   const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
   const app = createApp({ store })
 
@@ -32,7 +35,7 @@ export const startTestServer = async (): Promise<TestServerContext> => {
     async close() {
       await store.close()
       await new Promise<void>((resolve) => app.server.close(() => resolve()))
-      rmSync(dataDir, { force: true, recursive: true })
+      if (ownsDataDir) rmSync(dataDir, { force: true, recursive: true })
     },
     dataDir,
     store,

@@ -1,5 +1,6 @@
 type CaptureWaiter = {
   knownSessionIds: Set<string>
+  matchesSessionId?: (sessionId: string) => boolean
   onCapture: (sessionId: string) => void
   resolve: () => void
 }
@@ -28,7 +29,9 @@ const flushWaiters = (projectKey: string, listSessionIds: () => string[]) => {
 
   for (const waiter of waiters) {
     const nextSessionId = availableSessionIds.find(
-      (sessionId) => !waiter.knownSessionIds.has(sessionId)
+      (sessionId) =>
+        !waiter.knownSessionIds.has(sessionId) &&
+        (!waiter.matchesSessionId || waiter.matchesSessionId(sessionId))
     )
     if (!nextSessionId) {
       remainingWaiters.push(waiter)
@@ -51,17 +54,28 @@ export const captureSessionIdWithCoordinator = async ({
   onCapture,
   projectKey,
   timeoutMs = 5000,
+  matchesSessionId,
 }: {
   intervalMs?: number
   knownSessionIds: Set<string>
   listSessionIds: () => string[]
+  matchesSessionId?: (sessionId: string) => boolean
   onCapture: (sessionId: string) => void
   projectKey: string
   timeoutMs?: number
 }) => {
   await new Promise<void>((resolve) => {
-    let waiter: CaptureWaiter | undefined
-    const timeout = setTimeout(() => {
+    let timeout: ReturnType<typeof setTimeout>
+    const waiter: CaptureWaiter = {
+      knownSessionIds,
+      ...(matchesSessionId ? { matchesSessionId } : {}),
+      onCapture,
+      resolve: () => {
+        clearTimeout(timeout)
+        resolve()
+      },
+    }
+    timeout = setTimeout(() => {
       waitersByProjectKey.set(
         projectKey,
         (waitersByProjectKey.get(projectKey) ?? []).filter((candidate) => candidate !== waiter)
@@ -70,14 +84,6 @@ export const captureSessionIdWithCoordinator = async ({
       resolve()
     }, timeoutMs)
     timeout.unref?.()
-    waiter = {
-      knownSessionIds,
-      onCapture,
-      resolve: () => {
-        clearTimeout(timeout)
-        resolve()
-      },
-    }
     waitersByProjectKey.set(projectKey, [...(waitersByProjectKey.get(projectKey) ?? []), waiter])
     if (!pollersByProjectKey.has(projectKey)) {
       pollersByProjectKey.set(

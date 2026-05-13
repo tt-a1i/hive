@@ -3,6 +3,22 @@ import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import { getHiveTeamRules } from './hive-team-guidance.js'
 import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
+export const buildAgentSessionBindingMarker = ({
+  agent,
+  workspace,
+}: {
+  agent: AgentSummary
+  workspace: WorkspaceSummary
+}) => `Hive session binding: workspace_id=${workspace.id}; agent_id=${agent.id}`
+
+export const buildAgentLegacyIdentityMarker = ({
+  agent,
+  workspace,
+}: {
+  agent: AgentSummary
+  workspace: WorkspaceSummary
+}) => `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`
+
 export const buildAgentStartupInstructions = ({
   agent,
   workspace,
@@ -13,9 +29,10 @@ export const buildAgentStartupInstructions = ({
   const lines = [
     '[Hive 系统消息：启动说明]',
     '',
-    `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
+    buildAgentLegacyIdentityMarker({ agent, workspace }),
     `当前 workspace: ${workspace.name}`,
     `项目路径: ${workspace.path}`,
+    buildAgentSessionBindingMarker({ agent, workspace }),
     '',
     `你的角色：${agent.description}`,
     '',

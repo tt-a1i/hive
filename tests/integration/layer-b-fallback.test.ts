@@ -93,7 +93,7 @@ const writeResumableClaudeEcho = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -102,9 +102,20 @@ for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM']) {
 }
 
 let pasteOpen = false
+const args = process.argv.slice(2)
+const sessionIndex = args.indexOf('--session-id-test')
+const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
+const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
+const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
+const projectDir = join(projectsRoot, encoded)
+const failMarker = join(process.cwd(), '.fail-next-resume')
+mkdirSync(projectDir, { recursive: true })
+const sessionPath = join(projectDir, sessionId + '.jsonl')
+writeFileSync(sessionPath, '{}\\n')
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
   if (chunk.includes('__HIVE_TEST_EXIT__')) {
     process.stdout.write('\\nEXITING\\n')
     setTimeout(() => process.exit(0), 100)
@@ -117,15 +128,6 @@ process.stdin.on('data', (chunk) => {
   }
   if (!pasteOpen && /^[\\r\\n]+$/.test(chunk)) process.stdout.write('\\nENTER_SUBMITTED\\n❯ ')
 })
-const args = process.argv.slice(2)
-const sessionIndex = args.indexOf('--session-id-test')
-const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '11111111-1111-4111-8111-111111111111'
-const encoded = process.cwd().replace(/[\\/:\\s]/g, '-')
-const projectsRoot = process.env.HIVE_CLAUDE_PROJECTS_DIR ?? join(homedir(), '.claude', 'projects')
-const projectDir = join(projectsRoot, encoded)
-const failMarker = join(process.cwd(), '.fail-next-resume')
-mkdirSync(projectDir, { recursive: true })
-writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (args.includes('--resume') && existsSync(failMarker)) {
   process.stdout.write('RESUME_FAIL\\n')

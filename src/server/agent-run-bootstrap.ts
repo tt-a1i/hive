@@ -1,9 +1,13 @@
 import { delimiter, dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { WorkspaceSummary } from '../shared/types.js'
+import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
+import {
+  buildAgentLegacyIdentityMarker,
+  buildAgentSessionBindingMarker,
+} from './agent-startup-instructions.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { withPresetResumeArgs } from './preset-launch-support.js'
 import {
@@ -45,23 +49,40 @@ const resolveLaunchPreset = (
   }
 }
 
+const createSessionCaptureDiscriminator = (
+  workspace: WorkspaceSummary,
+  agent: AgentSummary | undefined
+) => {
+  if (!agent) return undefined
+  return {
+    contentIncludes: [
+      buildAgentSessionBindingMarker({ agent, workspace }),
+      buildAgentLegacyIdentityMarker({ agent, workspace }),
+    ],
+  }
+}
+
 export const buildAgentRunBootstrap = (
   workspace: WorkspaceSummary,
   agentId: string,
   config: AgentLaunchConfigInput,
   sessionStore: AgentSessionStorePort,
-  getCommandPreset: (id: string) => CommandPresetRecord | undefined
+  getCommandPreset: (id: string) => CommandPresetRecord | undefined,
+  agent?: AgentSummary
 ) => {
   const preset = resolveLaunchPreset(config, getCommandPreset)
+  const discriminator = createSessionCaptureDiscriminator(workspace, agent)
   const startConfig = withPresetResumeArgs(
     config,
     preset,
     sessionStore.getLastSessionId(workspace.id, agentId),
-    workspace.path
+    workspace.path,
+    discriminator,
+    () => sessionStore.clearLastSessionId(workspace.id, agentId)
   )
   const sessionCaptureSnapshot = startConfig.resumedSessionId
     ? undefined
-    : snapshotSessionIdsForCapture(workspace.path, startConfig.sessionIdCapture)
+    : snapshotSessionIdsForCapture(workspace.path, startConfig.sessionIdCapture, discriminator)
   return {
     sessionCaptureSnapshot,
     startConfig,

@@ -46,6 +46,19 @@ export const createAgentSessionStore = (db: Database | undefined): AgentSessionS
     setLastSessionId(workspaceId, agentId, sessionId) {
       const updatedAt = Date.now()
       if (db) {
+        const workerExists = Boolean(
+          db
+            .prepare('SELECT 1 FROM workers WHERE workspace_id = ? AND id = ?')
+            .get(workspaceId, agentId)
+        )
+        const isOrchestrator = agentId === `${workspaceId}:orchestrator`
+        const workspaceExists =
+          isOrchestrator &&
+          Boolean(db.prepare('SELECT 1 FROM workspaces WHERE id = ?').get(workspaceId))
+        if (!workerExists && !workspaceExists) {
+          lastSessionIds.delete(`${workspaceId}:${agentId}`)
+          return
+        }
         db.transaction(() => {
           db.prepare(
             `INSERT INTO agent_sessions (agent_id, workspace_id, last_session_id, updated_at)
@@ -55,9 +68,11 @@ export const createAgentSessionStore = (db: Database | undefined): AgentSessionS
                last_session_id = excluded.last_session_id,
                updated_at = excluded.updated_at`
           ).run(agentId, workspaceId, sessionId, updatedAt)
-          db.prepare(
-            'UPDATE workers SET last_session_id = ? WHERE id = ? AND workspace_id = ?'
-          ).run(sessionId, agentId, workspaceId)
+          if (workerExists) {
+            db.prepare(
+              'UPDATE workers SET last_session_id = ? WHERE id = ? AND workspace_id = ?'
+            ).run(sessionId, agentId, workspaceId)
+          }
         })()
       }
       lastSessionIds.set(`${workspaceId}:${agentId}`, sessionId)

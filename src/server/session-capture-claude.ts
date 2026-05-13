@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -39,12 +39,52 @@ const listSessionIds = (cwd: string, projectsRoot = getDefaultProjectsRoot()) =>
   }
 }
 
+interface ClaudeSessionCaptureDiscriminator {
+  contentIncludes?: string | readonly string[]
+}
+
+const includesAny = (content: string, needles: string | readonly string[]) => {
+  const normalizedNeedles = Array.isArray(needles) ? needles : [needles]
+  return normalizedNeedles.some((needle) => content.includes(needle))
+}
+
+const sessionFileContainsAny = (
+  cwd: string,
+  projectsRoot: string,
+  sessionId: string,
+  contentIncludes: string | readonly string[]
+) => {
+  try {
+    const content = readFileSync(
+      join(projectsRoot, encodeClaudeProjectPath(cwd), `${sessionId}.jsonl`),
+      'utf8'
+    )
+    return includesAny(content, contentIncludes)
+  } catch {
+    return false
+  }
+}
+
 export const getClaudeSessionFilePath = (cwd: string, sessionId: string, pattern?: string) =>
   join(getClaudeProjectsRoot(pattern), encodeClaudeProjectPath(cwd), `${sessionId}.jsonl`)
 
-export const hasClaudeSessionFile = (cwd: string, sessionId: string, pattern?: string) =>
-  SESSION_FILE.test(`${sessionId}.jsonl`) &&
-  existsSync(getClaudeSessionFilePath(cwd, sessionId, pattern))
+export const hasClaudeSessionFile = (
+  cwd: string,
+  sessionId: string,
+  pattern?: string,
+  discriminator: ClaudeSessionCaptureDiscriminator = {}
+) => {
+  if (
+    !SESSION_FILE.test(`${sessionId}.jsonl`) ||
+    !existsSync(getClaudeSessionFilePath(cwd, sessionId, pattern))
+  ) {
+    return false
+  }
+  const projectsRoot = getClaudeProjectsRoot(pattern)
+  return discriminator.contentIncludes
+    ? sessionFileContainsAny(cwd, projectsRoot, sessionId, discriminator.contentIncludes)
+    : true
+}
 
 export const captureClaudeSessionId = async (
   cwd: string,
@@ -52,8 +92,10 @@ export const captureClaudeSessionId = async (
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
   intervalMs = 100,
-  projectsRoot = getDefaultProjectsRoot()
+  projectsRoot = getDefaultProjectsRoot(),
+  discriminator: ClaudeSessionCaptureDiscriminator = {}
 ) => {
+  const contentIncludes = discriminator.contentIncludes
   await captureSessionIdWithCoordinator({
     intervalMs,
     knownSessionIds,
@@ -61,6 +103,12 @@ export const captureClaudeSessionId = async (
     onCapture,
     projectKey: join(projectsRoot, encodeClaudeProjectPath(cwd)),
     timeoutMs,
+    ...(contentIncludes
+      ? {
+          matchesSessionId: (sessionId: string) =>
+            sessionFileContainsAny(cwd, projectsRoot, sessionId, contentIncludes),
+        }
+      : {}),
   })
 }
 

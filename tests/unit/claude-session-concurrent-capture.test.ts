@@ -65,4 +65,46 @@ describe('claude session concurrent capture', () => {
     expect(bob).toHaveLength(1)
     expect(new Set([alice[0], bob[0]])).toEqual(new Set([firstId, secondId]))
   })
+
+  test('two concurrent captures in one workspace bind ids to the matching worker prompt', async () => {
+    const root = join(tmpdir(), `hive-concurrent-capture-owner-${crypto.randomUUID()}`)
+    const cwd = '/tmp/hive-concurrent-capture-owner-workspace'
+    const projectDir = join(root, encodeClaudeProjectPath(cwd))
+    mkdirSync(projectDir, { recursive: true })
+    tempDirs.push(root)
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = root
+    const bobSessionId = '11111111-1111-4111-8111-111111111111'
+    const aliceSessionId = '22222222-2222-4222-8222-222222222222'
+    const aliceNeedle = '你是 Demo 的 Alice（coder）。'
+    const bobNeedle = '你是 Demo 的 Bob（coder）。'
+    const alice: string[] = []
+    const bob: string[] = []
+
+    const aliceCapture = captureClaudeSessionId(
+      cwd,
+      new Set(),
+      (sessionId) => alice.push(sessionId),
+      200,
+      2,
+      root,
+      { contentIncludes: aliceNeedle }
+    )
+    const bobCapture = captureClaudeSessionId(
+      cwd,
+      new Set(),
+      (sessionId) => bob.push(sessionId),
+      200,
+      2,
+      root,
+      { contentIncludes: bobNeedle }
+    )
+
+    writeFileSync(join(projectDir, `${bobSessionId}.jsonl`), `${bobNeedle}\n`)
+    writeFileSync(join(projectDir, `${aliceSessionId}.jsonl`), `${aliceNeedle}\n`)
+
+    await Promise.all([aliceCapture, bobCapture])
+
+    expect(alice).toEqual([aliceSessionId])
+    expect(bob).toEqual([bobSessionId])
+  })
 })

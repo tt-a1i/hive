@@ -26,10 +26,10 @@ const createTempRoot = () => {
   return root
 }
 
-const writeSession = (root: string, cwd: string, sessionId: string) => {
+const writeSession = (root: string, cwd: string, sessionId: string, content = '{}\n') => {
   const projectDir = join(root, encodeClaudeProjectPath(cwd))
   mkdirSync(projectDir, { recursive: true })
-  writeFileSync(join(projectDir, `${sessionId}.jsonl`), '{}\n')
+  writeFileSync(join(projectDir, `${sessionId}.jsonl`), content)
 }
 
 afterEach(() => {
@@ -160,6 +160,37 @@ describe('claude session support', () => {
     expect(hasClaudeSessionFile('/tmp/project-g', '66666666-6666-4666-8666-666666666666')).toBe(
       false
     )
+  })
+
+  test('withPresetResumeArgs skips Claude resume when the session file belongs to another worker', () => {
+    const root = createTempRoot()
+    const cwd = '/tmp/project-owner-check'
+    const sessionId = '88888888-8888-4888-8888-888888888888'
+    const config = {
+      command: 'claude',
+      args: ['--dangerously-skip-permissions'],
+      resumeArgsTemplate: '--resume {session_id}',
+      sessionIdCapture: presetCapture,
+    }
+    writeSession(root, cwd, sessionId, '你是 Demo 的 Bob（coder）。\n')
+    const invalidSessionIds: string[] = []
+
+    const result = withPresetResumeArgs(
+      config,
+      null,
+      sessionId,
+      cwd,
+      {
+        contentIncludes: '你是 Demo 的 Alice（coder）。',
+      },
+      (invalidSessionId) => invalidSessionIds.push(invalidSessionId)
+    )
+
+    expect(result).toMatchObject({
+      args: ['--dangerously-skip-permissions'],
+    })
+    expect(result).not.toHaveProperty('resumedSessionId')
+    expect(invalidSessionIds).toEqual([sessionId])
   })
 
   test('withPresetResumeArgs trusts Codex last_session_id without a filesystem preflight', () => {

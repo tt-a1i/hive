@@ -57,7 +57,7 @@ const writeFakeClaude = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -71,7 +71,14 @@ const failMarker = join(process.cwd(), '.fail-next-resume')
 const expectFreshMarker = join(process.cwd(), '.expect-fresh')
 const expectResumeMarker = join(process.cwd(), '.expect-resume')
 mkdirSync(projectDir, { recursive: true })
-writeFileSync(join(projectDir, sessionId + '.jsonl'), '{}\\n')
+const sessionPath = join(projectDir, sessionId + '.jsonl')
+writeFileSync(sessionPath, '{}\\n')
+process.stdin.setEncoding('utf8')
+process.stdin.on('data', (chunk) => {
+  process.stdout.write('STDIN:' + chunk)
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  if (chunk.includes('\\u001b[201~')) process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
+})
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(expectResumeMarker) && !args.includes('--resume')) {
   process.exit(2)
@@ -82,6 +89,7 @@ if (existsSync(expectFreshMarker) && args.includes('--resume')) {
 if (args.includes('--resume') && existsSync(failMarker)) {
   process.exit(1)
 }
+process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
 `
   )
@@ -314,5 +322,5 @@ describe('Layer A resume recovery integration', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 10_000)
 })

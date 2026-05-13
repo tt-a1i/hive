@@ -45,12 +45,14 @@ export const createAgentRunStarter =
   ) => {
     if (!agentManager) throw new Error('Agent manager is required to start agents')
 
+    const agent = getAgent?.(workspace.id, agentId)
     const { sessionCaptureSnapshot, startConfig, startEnv } = buildAgentRunBootstrap(
       workspace,
       agentId,
       config,
       sessionStore,
-      getCommandPreset
+      getCommandPreset,
+      agent
     )
     const handledRunExits = new Set<string>()
     const abortedRunIds = new Set<string>()
@@ -135,7 +137,6 @@ export const createAgentRunStarter =
     }
 
     startAgentRunCapture({ agentId, sessionCaptureSnapshot, sessionStore, startConfig, workspace })
-    const agent = getAgent?.(workspace.id, agentId)
     const postStartWriter = createPostStartInputWriter(agentManager, startConfig.command)
     queueMicrotask(() => {
       try {

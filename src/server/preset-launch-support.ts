@@ -1,6 +1,6 @@
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
-import type { SessionIdCaptureConfig } from './session-capture.js'
+import type { SessionCaptureSnapshot, SessionIdCaptureConfig } from './session-capture.js'
 import { doesCapturedSessionExist } from './session-capture.js'
 
 type BoundPreset = Pick<
@@ -67,7 +67,9 @@ export const withPresetResumeArgs = (
   config: AgentLaunchConfigInput,
   preset: BoundPreset | null | undefined,
   lastSessionId: string | undefined,
-  cwd?: string
+  cwd?: string,
+  discriminator?: SessionCaptureSnapshot['discriminator'],
+  onInvalidSessionId?: (sessionId: string) => void
 ) => {
   let nextConfig = withPresetYoloArgs(config, preset)
   const sessionIdCapture = getEffectiveCapture(nextConfig, preset)
@@ -82,8 +84,9 @@ export const withPresetResumeArgs = (
     cwd &&
     sessionIdCapture &&
     shouldVerifySessionBeforeResume(sessionIdCapture) &&
-    !doesCapturedSessionExist(cwd, sessionIdCapture, lastSessionId)
+    !doesCapturedSessionExist(cwd, sessionIdCapture, lastSessionId, discriminator)
   ) {
+    onInvalidSessionId?.(lastSessionId)
     return nextConfig
   }
   const args = config.args ?? []
