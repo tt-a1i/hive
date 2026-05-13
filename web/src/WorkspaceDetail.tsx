@@ -97,7 +97,8 @@ export const WorkspaceDetail = ({
   })
   const split = usePaneSplit()
 
-  if (!workspace) return <WelcomePane onAddWorkspace={onRequestAddWorkspace} onTryDemo={onTryDemo} />
+  if (!workspace)
+    return <WelcomePane onAddWorkspace={onRequestAddWorkspace} onTryDemo={onTryDemo} />
 
   const activeWorkerRun = activeWorker ? findRunByAgentId(terminalRuns, activeWorker.id) : undefined
 

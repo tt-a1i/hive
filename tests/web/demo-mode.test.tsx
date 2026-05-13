@@ -2,9 +2,8 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-
-import { DemoBanner } from '../../web/src/demo/DemoBanner.js'
 import { App } from '../../web/src/app.js'
+import { DemoBanner } from '../../web/src/demo/DemoBanner.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 vi.mock('@xterm/xterm', () => ({
@@ -56,17 +55,19 @@ beforeEach(async () => {
     return nativeFetch(url, { ...init, headers })
   })
   // Stub WebSocket so no WS connections are made in jsdom
-  vi.stubGlobal('WebSocket', class {
-    readonly OPEN = 1
-    onopen: (() => void) | null = null
-    onmessage: ((e: { data: string }) => void) | null = null
-    onclose: (() => void) | null = null
-    onerror: (() => void) | null = null
-    readyState = 3
-    constructor() {}
-    close() {}
-    send() {}
-  } as never)
+  vi.stubGlobal(
+    'WebSocket',
+    class {
+      readonly OPEN = 1
+      onopen: (() => void) | null = null
+      onmessage: ((e: { data: string }) => void) | null = null
+      onclose: (() => void) | null = null
+      onerror: (() => void) | null = null
+      readyState = 3
+      close() {}
+      send() {}
+    } as never
+  )
 })
 
 afterEach(async () => {
@@ -158,9 +159,7 @@ test('demo mode shows DEMO read-only badge and orch scrollback text', async () =
   expect(screen.getByTestId('terminal-readonly-badge')).toBeInTheDocument()
   // Orchestrator scrollback content should be visible
   expect(screen.getByTestId('demo-scrollback-demo-orch')).toBeInTheDocument()
-  expect(screen.getByTestId('demo-scrollback-demo-orch').textContent).toContain(
-    'team send alice'
-  )
+  expect(screen.getByTestId('demo-scrollback-demo-orch').textContent).toContain('team send alice')
 })
 
 test('TaskGraphDrawer shows DEMO_TASKS_MD content when demo is on and Blueprint is opened', async () => {

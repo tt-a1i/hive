@@ -1,6 +1,6 @@
-import { DEMO_TERMINAL_SCROLLBACK, DEMO_WORKERS } from './demo-fixture.js'
-import { DemoBanner } from './DemoBanner.js'
 import { WorkersPane } from '../worker/WorkersPane.js'
+import { DemoBanner } from './DemoBanner.js'
+import { DEMO_TERMINAL_SCROLLBACK, DEMO_WORKERS } from './demo-fixture.js'
 
 type DemoWorkspaceViewProps = {
   onExit: () => void
