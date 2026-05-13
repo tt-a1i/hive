@@ -26,6 +26,8 @@ export interface TeamListItem {
   role: WorkerRole
   status: AgentStatus
   pendingTaskCount: number
+  /** Optional: last output line shown in the worker card when status is working. */
+  lastOutputLine?: string
 }
 
 /**
