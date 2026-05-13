@@ -43,6 +43,5 @@ Please include:
 
 - Running Hive as a shared server for multiple users.
 - Exposing Hive through a public tunnel or reverse proxy.
-- Windows production support.
+- Operating Hive as a hardened production service.
 - Sandboxing third-party CLI agents beyond the controls provided by those CLIs.
-

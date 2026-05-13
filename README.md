@@ -1,127 +1,157 @@
 # Hive
 
-Hive is a local multi-agent workspace for CLI coding agents. It turns Claude
-Code, Codex, OpenCode, Gemini, and custom CLI agents into a visible team running
-on your machine: one Orchestrator owns the plan, worker agents execute tasks in
-their own PTYs, and the web UI keeps tasks, terminals, and reports in one place.
+Hive is a local multi-agent workspace for CLI coding agents. It lets you run
+Claude Code, Codex, OpenCode, Gemini, or any custom CLI agent as a visible team:
+one Orchestrator coordinates the plan, worker agents run in their own PTYs, and
+the web UI keeps tasks, terminals, and reports in one place.
 
-Hive is built for people who already use CLI coding agents and want a tighter
-way to coordinate several of them without giving up each agent's native
-terminal workflow.
+[![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
 
-> Public preview status: macOS, Linux, and Windows are the Tier 1 targets.
+> Public preview: `0.6.0-alpha.0`. Hive is local-first, runs on `127.0.0.1`,
+> and is intended for developers who already use CLI coding agents.
 
-## 60 Second Start
+## Why Hive
 
-After the package is published:
+CLI coding agents are powerful, but coordinating several of them manually is
+awkward:
+
+- Long-running sessions are spread across terminals.
+- It is hard to split a task into implementation, review, and testing without a
+  routing layer.
+- Worker progress disappears into scrollback.
+- Restart recovery depends on each CLI's native session behavior.
+
+Hive adds that coordination layer without replacing the CLIs. The agents remain
+real terminal processes running on your machine; Hive manages the team shell
+around them.
+
+## Quick Start
+
+Prerequisites:
+
+- Node.js 22 or newer.
+- At least one supported agent CLI installed, authenticated, and available on
+  `PATH`.
+
+Install and start Hive:
 
 ```bash
-npm i -g @tt-a1i/hive
+npm install -g @tt-a1i/hive
 hive --port 4010
-```
-
-or:
-
-```bash
-npx @tt-a1i/hive --port 4010
 ```
 
 Open the printed local URL, usually `http://127.0.0.1:4010/`.
 
-First run flow:
+First-run flow:
 
-1. Add a workspace by picking or pasting a project folder.
+1. Create a workspace from a project folder.
 2. Choose an Orchestrator preset.
 3. Hive creates `<workspace>/.hive/tasks.md`, starts the Orchestrator PTY, and
-   injects the internal `team` command into agent sessions.
+   injects the internal `team` command into the agent session.
 4. Add workers from the Team Members panel.
-5. The Orchestrator sends work with `team send <worker-name> "<task>"`; workers
-   reply with `team report`.
+5. Ask the Orchestrator to delegate work. It sends tasks with
+   `team send <worker-name> "<task>"`; workers report back with `team report`.
 
-## What It Does
+## How It Works
 
-- Keeps each agent in an isolated recoverable PTY.
-- Shows workspaces, team members, task state, and terminal output in one local
-  web UI.
-- Uses `.hive/tasks.md` as the workspace task graph so the plan remains visible
-  outside the app.
-- Injects the internal `team` command only inside agent sessions; it does not
-  install a global `team` command.
-- Stores runtime metadata under `~/.config/hive` by default, or under
-  `HIVE_DATA_DIR` when set.
+```text
+Browser UI on 127.0.0.1
+  tasks, team, terminals, reports
+          |
+          | HTTP + WebSocket
+          v
+Hive runtime
+  SQLite metadata, PTY lifecycle, task dispatch
+          |
+          +-- Orchestrator PTY
+          |     can call: team send, team list, team report
+          |
+          +-- Worker PTY
+          |     can call: team report
+          |
+          +-- Worker PTY
+                can call: team report
 
-## Supported Agent Presets
+Workspace task graph:
+  <workspace>/.hive/tasks.md
+```
 
-| Preset | Command expected on PATH | Notes |
-| --- | --- | --- |
-| Claude Code | `claude` | Built-in default preset. |
-| Codex | `codex` | Uses the local Codex CLI. |
-| OpenCode | `opencode` | Uses the local OpenCode CLI. |
-| Gemini | `gemini` | Uses the local Gemini CLI. |
-| Custom | Any executable | Configure command and args in the UI. |
+Three details matter:
 
-Hive does not install these CLIs for you. Install and authenticate each agent
-CLI before selecting it in Hive.
+- Agents are real CLI processes, not simulated subagents.
+- `team` is injected only inside Hive-managed agent sessions by prepending the
+  package's internal bin directory to `PATH`; it is not installed as a global
+  command.
+- The task graph is a markdown file in the workspace, so you can inspect or
+  edit it outside the app.
+
+## Agent Presets
+
+| Preset | Command expected on `PATH` | Default bypass mode | Session resume |
+| --- | --- | --- | --- |
+| Claude Code | `claude` | `--dangerously-skip-permissions`, `--permission-mode=bypassPermissions` | `--resume <session_id>` |
+| Codex | `codex` | `--dangerously-bypass-approvals-and-sandbox` | `resume <session_id>` |
+| OpenCode | `opencode` | `--dangerously-skip-permissions` | `--session <session_id>` |
+| Gemini | `gemini` | `--yolo` | `--resume <session_id>` |
+| Custom | Any executable | User configured | User configured |
+
+Hive does not install these CLIs for you. Install and authenticate them in the
+same shell environment you use to start Hive.
+
+## What Hive Provides
+
+- Workspace sidebar for switching between local projects.
+- Orchestrator and worker terminals backed by real PTYs.
+- Add Worker flow with role presets for coder, reviewer, tester, and custom
+  members.
+- `.hive/tasks.md` editor with external-file conflict handling.
+- Background PTY preservation and best-effort native session resume.
+- Local SQLite metadata under `~/.config/hive` by default, or `$HIVE_DATA_DIR`
+  when set.
+
+Hive does not provide sandboxing, multi-user auth, cloud hosting, or its own
+coding model. It coordinates tools you already run locally.
 
 ## Platform Support
 
 | Platform | Status | Notes |
 | --- | --- | --- |
-| macOS | Tier 1 | Local development and release verification target. |
-| Linux | Tier 1 | CI verification target; folder picking expects `zenity` when using the native picker. |
-| Windows | Tier 1 | CI verification target; folder picking uses Windows PowerShell and the packaged internal `team.cmd`. |
+| macOS | Tier 1 | Main development and release verification target. |
+| Linux | Tier 1 | CI verified. Native folder picking expects `zenity`; manual path entry works without it. |
+| Windows | Tier 1 | CI verified. Folder picking uses Windows PowerShell and the package includes `team.cmd`. |
+
+All platforms require Node.js 22+. Hive depends on `node-pty`, so native install
+tooling may be required when prebuilt binaries are unavailable.
 
 ## Safety Model
 
-Hive is a local development tool, not a hosted multi-user service.
+Hive is a local development tool, not a hosted service.
 
 - The runtime binds to `127.0.0.1`. Do not expose the Hive port through a public
   tunnel, reverse proxy, or shared network interface.
 - Built-in presets intentionally use each CLI's non-interactive or bypass mode
   where available. Treat workers as able to run arbitrary shell commands inside
   the selected workspace.
-- Only open trusted workspaces. A worker has the same filesystem access as the
+- Open only trusted workspaces. A worker has the same filesystem access as the
   shell account running Hive.
 - Agent tokens are session scoped, generated by the local runtime, injected into
   agent process environments, and not intended as internet-facing credentials.
-- Hive has no multi-user authentication boundary. If another process can reach
-  the local port from the same machine, treat it as trusted local access.
+- Hive has no multi-user authentication boundary. Treat same-machine processes
+  that can reach the local port as trusted local access.
 
-See [SECURITY.md](SECURITY.md) before using Hive with sensitive repositories.
+Read [SECURITY.md](SECURITY.md) before using Hive with sensitive repositories.
 
-## Development
+## Data Locations
 
-```bash
-pnpm install
-pnpm dev
-```
-
-The development runtime uses `127.0.0.1:4010`; the Vite web server uses
-`127.0.0.1:5180` and proxies API and WebSocket traffic to the runtime.
-
-Useful checks:
-
-```bash
-pnpm check
-pnpm build
-pnpm test
-```
-
-## Production-Style Local Run
-
-```bash
-pnpm build
-node dist/src/cli/hive.js --port 4010
-```
-
-The production server serves `web/dist` directly. No separate Vite server is
-needed after `pnpm build`.
-
-Use an isolated data directory when testing:
-
-```bash
-HIVE_DATA_DIR=/tmp/hive-data node dist/src/cli/hive.js --port 4010
-```
+| Data | Location |
+| --- | --- |
+| Runtime metadata | `~/.config/hive` or `$HIVE_DATA_DIR` |
+| Workspace tasks | `<workspace>/.hive/tasks.md` |
+| Internal `team` command | Packaged under `dist/bin/`, injected into PTYs |
+| Web UI assets | Served by the runtime from the packaged `web/dist` build |
 
 ## Troubleshooting
 
@@ -132,7 +162,7 @@ same shell, and available on `PATH`.
 
 **Port already in use**
 
-Start Hive with a different local port:
+Start Hive with another local port:
 
 ```bash
 hive --port 4020
@@ -140,9 +170,9 @@ hive --port 4020
 
 **Native PTY install fails**
 
-Hive depends on `node-pty`, which ships native binaries. Use Node.js 22+, keep
-your package manager cache clean, and verify your platform is macOS, Linux, or
-Windows.
+Hive depends on `node-pty`, which uses native binaries. Use Node.js 22+, keep
+your package manager cache clean, and verify your platform build tools are
+available.
 
 **Folder picker does not open on Linux**
 
@@ -158,17 +188,55 @@ workspace path manually.
 Hive detected a newer `.hive/tasks.md` on disk. Use `Reload` to accept the file
 from disk, or `Keep Local` to keep the editor contents and save again.
 
-## Package Release
+**Worker appears stuck in `working`**
 
-Release commands are intentionally separate from normal development:
+Hive does not guess task completion from process activity. Workers move back to
+`idle` when they call `team report`. If a worker is blocked, stop or restart it
+from the UI.
+
+## Development
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Development mode runs the runtime on `127.0.0.1:4010`; Vite runs on
+`127.0.0.1:5180` and proxies API and WebSocket traffic to the runtime.
+
+Useful checks:
+
+```bash
+pnpm check
+pnpm build
+pnpm test
+```
+
+Production-style local run:
+
+```bash
+pnpm build
+node dist/src/cli/hive.js --port 4010
+```
+
+The production server serves the built web UI directly. No Vite server is
+needed after `pnpm build`.
+
+## Release
+
+Maintainer dry run:
 
 ```bash
 pnpm release:dry
 ```
 
-That command runs linting, the production build, the full test suite, npm
-packlist validation, and a tarball install smoke test. Tag pushes matching `v*`
-run the GitHub Actions release workflow; the publish job requires `NPM_TOKEN`.
+Tag pushes matching `v*` run the GitHub Actions release workflow. The workflow
+verifies macOS, Ubuntu, and Windows, then publishes to npm with `NPM_TOKEN`.
+
+## Status
+
+Hive is in alpha public preview. Expect UI and protocol details to keep moving
+while the core local orchestration model hardens.
 
 ## License
 
