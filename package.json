@@ -27,6 +27,7 @@
     "node": ">=22"
   },
   "files": [
+    "assets/",
     "CHANGELOG.md",
     "LICENSE",
     "README.md",

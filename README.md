@@ -1,5 +1,9 @@
 # Hive
 
+<p align="center">
+  <img src="./assets/hive-hero.png" alt="Hive local-first multi-agent coding workspace hero image" />
+</p>
+
 Hive is a local multi-agent workspace for CLI coding agents. It lets you run
 Claude Code, Codex, OpenCode, Gemini, or any custom CLI agent as a visible team:
 one Orchestrator coordinates the plan, worker agents run in their own PTYs, and
