@@ -37,6 +37,8 @@ let fetchCalls: Array<{ method: string; pathname: string }> = []
 
 beforeEach(async () => {
   window.localStorage?.clear?.()
+  // Suppress first-run wizard in these tests — demo mode has its own entry point (Try Demo button)
+  window.localStorage.setItem('hive.first-run-seen', '1')
   const server = await startTestServer()
   cleanupServer = server.close
   serverBaseUrl = server.baseUrl

@@ -19,6 +19,7 @@ const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
 beforeEach(async () => {
+  window.localStorage.setItem('hive.first-run-seen', '1')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-fs-sandbox-'))
   mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
   tempDirs.push(sandboxRoot)

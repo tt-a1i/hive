@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import { AppProviders } from './AppProviders.js'
@@ -20,6 +20,8 @@ import { useWorkspaceSelection } from './useWorkspaceSelection.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
+import { FirstRunWizard } from './wizard/FirstRunWizard.js'
+import { useFirstRunFlag } from './wizard/useFirstRunFlag.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
 import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
@@ -33,6 +35,8 @@ const AppInner = () => {
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
   const toast = useToast()
+  const { seen, markSeen } = useFirstRunFlag()
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   const onBootstrapError = useCallback(
     (message: string) => {
@@ -42,6 +46,17 @@ const AppInner = () => {
   )
 
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId, onBootstrapError)
+
+  useEffect(() => {
+    if (!seen && workspaces !== null && workspaces.length === 0) {
+      setWizardOpen(true)
+    }
+  }, [seen, workspaces])
+
+  const closeWizard = useCallback(() => {
+    markSeen()
+    setWizardOpen(false)
+  }, [markSeen])
 
   const {
     orchestratorAutostartErrors,
@@ -168,6 +183,12 @@ const AppInner = () => {
           void createNewWorkspace(input)
         }}
         trigger={addDialogTrigger}
+      />
+      <FirstRunWizard
+        open={wizardOpen}
+        onClose={closeWizard}
+        onAddWorkspace={() => setAddDialogTrigger((v) => v + 1)}
+        onTryDemo={enableDemo}
       />
     </MainLayout>
   )

@@ -18,6 +18,7 @@ let fetchCalls: Array<{ method: string; pathname: string }> = []
 
 beforeEach(async () => {
   window.localStorage.removeItem?.('hive.workspace-sidebar.width')
+  window.localStorage.setItem('hive.first-run-seen', '1')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-app-shell-fs-'))
   mkdirSync(join(sandboxRoot, 'placeholder'), { recursive: true })
   tempDirs.push(sandboxRoot)
