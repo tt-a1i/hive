@@ -1,5 +1,31 @@
 import '@testing-library/jest-dom/vitest'
 
+// Node 25 ships an experimental localStorage that overrides jsdom's implementation
+// but lacks standard methods (setItem, getItem, clear, removeItem). Polyfill when needed.
+if (typeof window !== 'undefined' && typeof window.localStorage?.setItem !== 'function') {
+  const store: Record<string, string> = {}
+  Object.defineProperty(window, 'localStorage', {
+    writable: true,
+    configurable: true,
+    value: {
+      getItem: (key: string) => (Object.hasOwn(store, key) ? store[key] : null),
+      setItem: (key: string, value: string) => {
+        store[key] = String(value)
+      },
+      removeItem: (key: string) => {
+        delete store[key]
+      },
+      clear: () => {
+        for (const k of Object.keys(store)) delete store[k]
+      },
+      get length() {
+        return Object.keys(store).length
+      },
+      key: (idx: number) => Object.keys(store)[idx] ?? null,
+    },
+  })
+}
+
 if (typeof window !== 'undefined' && !window.matchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
