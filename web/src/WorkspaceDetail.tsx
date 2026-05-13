@@ -26,6 +26,7 @@ type WorkspaceDetailProps = {
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   onRequestAddWorkspace: () => void
+  onTryDemo?: () => void
   orchestratorAutostartError: string | null
   orchestratorAutostartRunId: string | null
   /** Kept for API stability — sub-header consumed it; M6-A removed the bar but the prop signature stays so caller wiring is untouched. */
@@ -41,6 +42,7 @@ export const WorkspaceDetail = ({
   onStartWorker,
   onOrchestratorResult,
   onRequestAddWorkspace,
+  onTryDemo,
   orchestratorAutostartError,
   orchestratorAutostartRunId,
   terminalRuns,
@@ -95,7 +97,7 @@ export const WorkspaceDetail = ({
   })
   const split = usePaneSplit()
 
-  if (!workspace) return <WelcomePane onAddWorkspace={onRequestAddWorkspace} />
+  if (!workspace) return <WelcomePane onAddWorkspace={onRequestAddWorkspace} onTryDemo={onTryDemo} />
 
   const activeWorkerRun = activeWorker ? findRunByAgentId(terminalRuns, activeWorker.id) : undefined
 

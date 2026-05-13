@@ -14,7 +14,7 @@ const shouldIgnoreRemoteUpdate = (
   currentContent: string
 ) => nextContent === savedContent || nextContent === currentContent
 
-export const useTasksFile = (workspaceId: string | null) => {
+export const useTasksFile = (workspaceId: string | null, demoContent?: string) => {
   const [content, setContent] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [hasConflict, setHasConflict] = useState(false)
@@ -109,6 +109,21 @@ export const useTasksFile = (workspaceId: string | null) => {
       socket.close()
     }
   }, [applyRemoteContent, workspaceId])
+
+  // Demo short-circuit: all hooks have run above; now return static fixture data.
+  // workspaceId is null when demoContent is provided, so no server calls were made.
+  if (demoContent !== undefined) {
+    return {
+      content: demoContent,
+      hasConflict: false,
+      loaded: true,
+      onChange: (_value: string) => {},
+      onKeepLocal: () => {},
+      onReload: () => {},
+      onSave: async () => {},
+      toggleTaskAtLine: async (_lineIndex: number) => {},
+    }
+  }
 
   return {
     content,
