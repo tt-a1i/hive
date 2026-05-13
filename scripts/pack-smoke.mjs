@@ -7,6 +7,7 @@ const root = process.cwd()
 const tempDir = mkdtempSync(join(tmpdir(), 'hive-pack-smoke-'))
 let packedFile
 const binLinkName = (name) => (process.platform === 'win32' ? `${name}.cmd` : name)
+const runtimeStartTimeoutMs = process.platform === 'win32' ? 60_000 : 5_000
 
 const runNpm = (args, options = {}) =>
   process.platform === 'win32'
@@ -108,6 +109,9 @@ try {
     const port = await waitFor(() => {
       const match = stdout.match(/Hive running at http:\/\/127\.0\.0\.1:(\d+)/)
       return match?.[1]
+    }, runtimeStartTimeoutMs).catch((error) => {
+      const childOutput = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n')
+      throw new Error(`${error.message}${childOutput ? `\n${childOutput}` : ''}`)
     })
     const response = await fetch(`http://127.0.0.1:${port}/`)
     if (response.status !== 200) {
