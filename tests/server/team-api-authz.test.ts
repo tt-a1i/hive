@@ -201,6 +201,7 @@ describe('team API authz (R1.4)', () => {
       await expect(response.json()).resolves.toEqual([
         {
           id: ctx.worker.id,
+          last_output_line: null,
           name: 'Alice',
           pending_task_count: 0,
           role: 'coder',

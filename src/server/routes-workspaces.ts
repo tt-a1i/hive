@@ -15,16 +15,23 @@ import { serializeTeamListItem } from './team-list-serializer.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 
-const getSerializedWorker = (
+const enrichWithLastOutput = (
   workspaceId: string,
-  workerId: string,
-  listWorkers: RuntimeStore['listWorkers']
-) => {
-  const worker = listWorkers(workspaceId).find((item) => item.id === workerId)
+  store: Pick<RuntimeStore, 'getLastOutputLineForAgent'>,
+  workers: ReturnType<RuntimeStore['listWorkers']>
+) =>
+  workers.map((worker) => {
+    const line = store.getLastOutputLineForAgent(workspaceId, worker.id)
+    return line === null ? worker : { ...worker, lastOutputLine: line }
+  })
+
+const getSerializedWorker = (workspaceId: string, workerId: string, store: RuntimeStore) => {
+  const worker = store.listWorkers(workspaceId).find((item) => item.id === workerId)
   if (!worker) {
     throw new Error(`Worker not found: ${workerId}`)
   }
-  return serializeTeamListItem(worker)
+  const line = store.getLastOutputLineForAgent(workspaceId, workerId)
+  return serializeTeamListItem(line === null ? worker : { ...worker, lastOutputLine: line })
 }
 
 const getRuntimePort = (request: IncomingMessage) => String(request.socket.localPort ?? '')
@@ -94,7 +101,13 @@ export const workspaceRoutes: RouteDefinition[] = [
 
     requireUiTokenFromRequest(request, store.validateUiToken)
 
-    sendJson(response, 200, store.listWorkers(workspaceId).map(serializeTeamListItem))
+    sendJson(
+      response,
+      200,
+      enrichWithLastOutput(workspaceId, store, store.listWorkers(workspaceId)).map(
+        serializeTeamListItem
+      )
+    )
   }),
   route('GET', '/api/workspaces/:workspaceId/team', ({ params, request, response, store }) => {
     const workspaceId = getRequiredParam(
@@ -118,7 +131,13 @@ export const workspaceRoutes: RouteDefinition[] = [
     })
     requireCommandForRole(agent, 'list')
 
-    sendJson(response, 200, store.listWorkers(workspaceId).map(serializeTeamListItem))
+    sendJson(
+      response,
+      200,
+      enrichWithLastOutput(workspaceId, store, store.listWorkers(workspaceId)).map(
+        serializeTeamListItem
+      )
+    )
   }),
   route(
     'POST',
@@ -157,7 +176,7 @@ export const workspaceRoutes: RouteDefinition[] = [
           : { ok: false, error: null, run_id: null }
 
       sendJson(response, 201, {
-        ...getSerializedWorker(workspaceId, worker.id, store.listWorkers),
+        ...getSerializedWorker(workspaceId, worker.id, store),
         agent_start: agentStart,
       })
     }
@@ -215,7 +234,7 @@ export const workspaceRoutes: RouteDefinition[] = [
         return
       }
       store.renameWorker(workspaceId, workerId, body.name)
-      sendJson(response, 200, getSerializedWorker(workspaceId, workerId, store.listWorkers))
+      sendJson(response, 200, getSerializedWorker(workspaceId, workerId, store))
     }
   ),
   route(

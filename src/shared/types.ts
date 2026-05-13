@@ -41,4 +41,5 @@ export interface TeamListItemPayload {
   role: WorkerRole
   status: AgentStatus
   pending_task_count: number
+  last_output_line: string | null
 }

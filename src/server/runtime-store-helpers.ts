@@ -14,6 +14,7 @@ import { createTasksFileService } from './tasks-file.js'
 import { createTasksFileWatcher } from './tasks-file-watcher.js'
 import { createTeamOperations } from './team-operations.js'
 import { createUiAuth } from './ui-auth.js'
+import { createWorkerOutputTracker, type WorkerOutputTracker } from './worker-output-tracker.js'
 import { createWorkspaceStore } from './workspace-store.js'
 
 export interface RuntimeStoreServices {
@@ -28,6 +29,7 @@ export interface RuntimeStoreServices {
   tasksFileService: ReturnType<typeof createTasksFileService>
   teamOps: ReturnType<typeof createTeamOperations>
   uiAuth: ReturnType<typeof createUiAuth>
+  workerOutputTracker: WorkerOutputTracker | null
   workspaceStore: ReturnType<typeof createWorkspaceStore>
 }
 
@@ -84,12 +86,16 @@ export const createRuntimeStoreServices = (
     tasksFileService,
     workspaceStore,
   })
+  const workerOutputTracker = options.agentManager
+    ? createWorkerOutputTracker(options.agentManager.getOutputBus())
+    : null
   const agentRuntime = createAgentRuntime(
     options.agentManager,
     agentRunStore,
     agentSessionStore,
     settings.getCommandPreset,
     (workspaceId, agentId) => {
+      workerOutputTracker?.detach(workspaceId, agentId)
       if (!workspaceStore.hasAgent(workspaceId, agentId)) return
       workspaceStore.markAgentStopped(workspaceId, agentId)
     },
@@ -121,6 +127,7 @@ export const createRuntimeStoreServices = (
     tasksFileService,
     teamOps,
     uiAuth,
+    workerOutputTracker,
     workspaceStore,
   }
 }
@@ -144,6 +151,8 @@ export const createRuntimeStoreLifecycle = ({
       )
       if (run.status === 'error') {
         services.workspaceStore.markAgentStopped(workspaceId, agentId)
+      } else {
+        services.workerOutputTracker?.attach(workspaceId, agentId, run.runId, run.output)
       }
       return run
     } catch (error) {
@@ -191,6 +200,7 @@ export const createRuntimeStoreLifecycle = ({
     close: async () => {
       await services.agentRuntime.close()
       await services.tasksFileWatcher.close()
+      services.workerOutputTracker?.closeAll()
       services.agentRunStore.close?.()
       services.db?.close()
     },

@@ -16,6 +16,12 @@ const normalizeTerminalSize = ({ cols, rows }: TerminalMirrorSize): TerminalMirr
   rows: Math.max(1, Math.floor(rows)),
 })
 
+// Strips CSI escape sequences emitted by interactive CLIs (color, cursor moves,
+// etc.) before exposing a single line of scrollback to JSON consumers. Built
+// from a String so the regex source does not embed a literal control character
+// (lint/suspicious/noControlCharactersInRegex would otherwise flag the file).
+const ANSI_CSI_PATTERN = new RegExp(`${String.fromCharCode(0x1b)}\\[[0-9;?]*[a-zA-Z]`, 'g')
+
 export class TerminalStateMirror {
   private readonly serializeAddon = new SerializeAddon()
   private readonly terminal: InstanceType<typeof Terminal>
@@ -39,6 +45,22 @@ export class TerminalStateMirror {
   async getSnapshot() {
     await this.operationQueue
     return this.serializeAddon.serialize()
+  }
+
+  /**
+   * Returns the most recent non-empty scrollback line (trimmed, ANSI-stripped,
+   * truncated to `maxLen`). Returns `null` when scrollback has no printable
+   * content, so the wire protocol can express "no output yet" as a null.
+   */
+  lastOutputLine(maxLen = 60): string | null {
+    const buffer = this.terminal.buffer.active
+    for (let row = buffer.length - 1; row >= 0; row -= 1) {
+      const raw = buffer.getLine(row)?.translateToString(true) ?? ''
+      const cleaned = raw.replace(ANSI_CSI_PATTERN, '').trim()
+      if (cleaned.length === 0) continue
+      return cleaned.slice(0, maxLen)
+    }
+    return null
   }
 
   resize(cols: number, rows: number) {

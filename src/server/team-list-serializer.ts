@@ -1,21 +1,17 @@
-import type { TeamListItem } from '../shared/types.js'
+import type { TeamListItem, TeamListItemPayload } from '../shared/types.js'
 
 export const serializeTeamListItem = ({
   id,
+  lastOutputLine,
   name,
   pendingTaskCount,
   role,
   status,
-}: TeamListItem): {
-  id: string
-  name: string
-  role: string
-  status: string
-  pending_task_count: number
-} => ({
+}: TeamListItem): TeamListItemPayload => ({
   id,
   name,
   role,
   status,
   pending_task_count: pendingTaskCount,
+  last_output_line: lastOutputLine ?? null,
 })
