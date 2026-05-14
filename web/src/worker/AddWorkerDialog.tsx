@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, Dices, RotateCcw, UserPlus } from 'lucide-react'
+import { Check, ChevronDown, Dices, RotateCcw, UserPlus } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
@@ -127,6 +127,16 @@ export const AddWorkerDialog = ({
     if (shouldAutoExpandInstructions) setInstructionsOpen(true)
   }, [shouldAutoExpandInstructions])
 
+  // Surface why Submit is disabled — silent grey-out is the worst kind of
+  // form friction, especially after we hide the textarea behind a disclosure.
+  const submitBlockedReason: string | null = !workerName.trim()
+    ? 'Enter a name'
+    : !commandPresetId
+      ? 'Pick a CLI agent'
+      : !roleDescription.trim()
+        ? 'Add role instructions'
+        : null
+
   return (
     <Dialog.Root open onOpenChange={handleClose}>
       <Dialog.Portal>
@@ -216,7 +226,12 @@ export const AddWorkerDialog = ({
                   className="group flex flex-col gap-2"
                 >
                   <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-                    <span className="flex items-center gap-2 text-ter group-open:text-sec">
+                    <span className="flex items-center gap-2 text-sec">
+                      <ChevronDown
+                        size={12}
+                        aria-hidden
+                        className="-rotate-90 text-ter transition-transform duration-150 group-open:rotate-0"
+                      />
                       <FieldLabel>Role instructions</FieldLabel>
                       {roleDescriptionModified ? (
                         <span className="text-[12px] text-ter">
@@ -231,6 +246,7 @@ export const AddWorkerDialog = ({
                           className="icon-btn h-7 px-2 text-[12px]"
                           onClick={(event) => {
                             event.preventDefault()
+                            event.stopPropagation()
                             onRoleDescriptionReset()
                           }}
                         >
@@ -238,7 +254,9 @@ export const AddWorkerDialog = ({
                           Reset
                         </button>
                       ) : null}
-                      <span className="text-[12px] text-ter group-open:hidden">Customize</span>
+                      <span className="text-[12px] text-sec">
+                        {instructionsOpen ? 'Hide' : 'Customize'}
+                      </span>
                     </span>
                   </summary>
                   <textarea
@@ -247,6 +265,11 @@ export const AddWorkerDialog = ({
                     value={roleDescription}
                     rows={5}
                     onChange={(event) => onRoleDescriptionChange(event.currentTarget.value)}
+                    placeholder={
+                      workerRole === 'custom'
+                        ? 'You are a security reviewer focused on auth and input validation. Use team report to hand findings back to the orchestrator.'
+                        : undefined
+                    }
                     title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
                     className="input mono resize-y leading-relaxed"
                     style={{ minHeight: 118, fontSize: 12 }}
@@ -274,9 +297,14 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex items-center justify-end gap-2 border-t px-5 py-3"
+                className="flex items-center justify-end gap-3 border-t px-5 py-3"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
+                {submitBlockedReason && !creating ? (
+                  <span className="text-[12px] text-ter" data-testid="add-worker-submit-hint">
+                    {submitBlockedReason}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   onClick={onClose}
@@ -287,9 +315,7 @@ export const AddWorkerDialog = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={
-                    creating || !workerName.trim() || !commandPresetId || !roleDescription.trim()
-                  }
+                  disabled={creating || submitBlockedReason !== null}
                   className="icon-btn icon-btn--primary"
                   data-testid="add-worker-submit"
                 >
