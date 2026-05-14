@@ -126,6 +126,10 @@ describe('app shell with real server', () => {
     await screen.findByTestId('welcome-pane')
     fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
+    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+      target: { value: `${process.execPath} -e "process.stdin.resume()"` },
+    })
     const createButton = within(confirm).getByTestId('confirm-workspace-create')
     await waitFor(() => expect(createButton).toBeEnabled(), { timeout: 15000 })
     fireEvent.click(createButton)

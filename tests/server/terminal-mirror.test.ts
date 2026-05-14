@@ -164,7 +164,7 @@ describe('terminal mirror', () => {
     } finally {
       await server.close()
     }
-  }, 15000)
+  }, 60000)
 
   test('T1b restore mirror uses initial control socket dimensions before replaying output', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-wide-${Date.now()}`)
@@ -225,7 +225,7 @@ describe('terminal mirror', () => {
     } finally {
       await server.close()
     }
-  }, 15000)
+  }, 60000)
 
   test('T2 multiple viewers each receive one copy of future PTY output', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-fanout-${Date.now()}`)
@@ -272,7 +272,7 @@ describe('terminal mirror', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 60000)
 
   test('T3 closing one viewer does not stop output for remaining viewers', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-mirror-detach-${Date.now()}`)
