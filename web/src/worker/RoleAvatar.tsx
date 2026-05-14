@@ -1,4 +1,5 @@
 import type { WorkerRole } from '../../../src/shared/types.js'
+import { Avatar } from '../ui/Avatar.js'
 
 type FullRole = WorkerRole | 'orchestrator'
 
@@ -33,28 +34,17 @@ const ringColorByStatus: Record<Exclude<StatusRing, 'none'>, string> = {
   stopped: 'var(--status-red)',
 }
 
-export const RoleAvatar = ({ role, size = 32, statusRing = 'none' }: RoleAvatarProps) => {
-  const color = colorByRole[role]
-  const initials = initialsByRole[role]
-  const ringColor = statusRing === 'none' ? null : ringColorByStatus[statusRing]
-  return (
-    <span
-      data-testid="role-avatar"
-      data-role={role}
-      data-status-ring={statusRing}
-      className="mono relative inline-flex shrink-0 items-center justify-center rounded-lg font-semibold"
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        fontSize: `${Math.round(size * 0.34)}px`,
-        color,
-        background: `color-mix(in oklab, ${color} 14%, transparent)`,
-        border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
-        boxShadow: ringColor ? `0 0 0 2px var(--bg-2), 0 0 0 3px ${ringColor}` : undefined,
-      }}
-      aria-hidden
-    >
-      {initials}
-    </span>
-  )
-}
+export const RoleAvatar = ({ role, size = 32, statusRing = 'none' }: RoleAvatarProps) => (
+  <Avatar
+    size={size}
+    color={colorByRole[role]}
+    fontRatio={0.34}
+    mono
+    ringColor={statusRing === 'none' ? null : ringColorByStatus[statusRing]}
+    ringSurface="var(--bg-2)"
+    testId="role-avatar"
+    data={{ role, 'status-ring': statusRing }}
+  >
+    {initialsByRole[role]}
+  </Avatar>
+)

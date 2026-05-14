@@ -1,3 +1,4 @@
+import { Avatar } from '../ui/Avatar.js'
 import { deriveInitial, pickWorkspaceColor } from './derive-workspace-color.js'
 
 type WorkspaceAvatarProps = {
@@ -31,50 +32,47 @@ export const WorkspaceAvatar = ({
   const initial = deriveInitial(name)
   const badgeCount = workingCount && workingCount > 1 ? workingCount : null
   return (
-    <span
-      data-testid="workspace-avatar"
-      data-workspace-id={workspaceId}
-      data-active={isActive ? 'true' : undefined}
-      data-color-label={label}
-      className="relative inline-flex shrink-0 items-center justify-center rounded-lg font-semibold"
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        fontSize: `${Math.round(size * 0.45)}px`,
-        color,
-        background: `color-mix(in oklab, ${color} 14%, transparent)`,
-        border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
-        boxShadow: isActive ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${color}` : undefined,
+    <Avatar
+      size={size}
+      color={color}
+      fontRatio={0.45}
+      ringColor={isActive ? color : null}
+      testId="workspace-avatar"
+      data={{
+        'workspace-id': workspaceId,
+        active: isActive ? 'true' : undefined,
+        'color-label': label,
       }}
-      aria-hidden
+      decoration={
+        badgeCount !== null ? (
+          <span
+            className="absolute flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 font-medium text-xs tabular-nums leading-none"
+            style={{
+              right: '-4px',
+              bottom: '-4px',
+              background: 'var(--status-green)',
+              color: '#0a1f0a',
+              boxShadow: '0 0 0 2px var(--bg-1)',
+            }}
+            data-testid="workspace-avatar-working-count"
+            aria-hidden
+          >
+            {badgeCount > 9 ? '9+' : badgeCount}
+          </span>
+        ) : working ? (
+          <span
+            className="status-dot status-dot--working absolute"
+            style={{
+              right: '-2px',
+              bottom: '-2px',
+              boxShadow: '0 0 0 2px var(--bg-1)',
+            }}
+            aria-hidden
+          />
+        ) : null
+      }
     >
       {initial}
-      {badgeCount !== null ? (
-        <span
-          className="absolute flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 font-medium text-xs tabular-nums leading-none"
-          style={{
-            right: '-4px',
-            bottom: '-4px',
-            background: 'var(--status-green)',
-            color: '#0a1f0a',
-            boxShadow: '0 0 0 2px var(--bg-1)',
-          }}
-          data-testid="workspace-avatar-working-count"
-          aria-hidden
-        >
-          {badgeCount > 9 ? '9+' : badgeCount}
-        </span>
-      ) : working ? (
-        <span
-          className="status-dot status-dot--working absolute"
-          style={{
-            right: '-2px',
-            bottom: '-2px',
-            boxShadow: '0 0 0 2px var(--bg-1)',
-          }}
-          aria-hidden
-        />
-      ) : null}
-    </span>
+    </Avatar>
   )
 }
