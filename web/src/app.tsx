@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
+import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { AppProviders } from './AppProviders.js'
 import { DemoWorkspaceView } from './demo/DemoWorkspaceView.js'
 import { DEMO_TASKS_MD } from './demo/demo-fixture.js'
@@ -55,9 +55,7 @@ const AppInner = () => {
   const wsState = { demoMode, workspaces, activeWorkspaceId, workersByWorkspaceId }
   const eff = useEffectiveWorkspaceState(wsState)
   const activeId = eff.effectiveActiveWorkspace?.id
-  const activeWorkers: TeamListItem[] = activeId
-    ? (eff.effectiveWorkersByWorkspaceId[activeId] ?? [])
-    : []
+  const activeWorkers = activeId ? (eff.effectiveWorkersByWorkspaceId[activeId] ?? []) : []
   const terms = useOptimisticTerminalRuns(eff.pollWorkspaceId, useTerminalRuns(eff.pollWorkspaceId))
   const workerActions = useWorkerActions({
     activeWorkspaceId,
@@ -80,6 +78,7 @@ const AppInner = () => {
       sidebar={
         <Sidebar
           activeWorkspaceId={eff.effectiveActiveWorkspaceId}
+          createDisabledReason={bootstrapError ?? undefined}
           onCreateClick={triggerAddDialog}
           onDeleteWorkspace={deleteWorkspace}
           onSelectWorkspace={selectWorkspace}
@@ -130,7 +129,7 @@ const AppInner = () => {
       ) : null}
       <AddWorkspaceDialog
         onClose={() => {}}
-        onCreate={(input) => void wsCreate.createNewWorkspace(input)}
+        onCreate={wsCreate.createNewWorkspace}
         trigger={addDialogTrigger}
       />
       <FirstRunWizard

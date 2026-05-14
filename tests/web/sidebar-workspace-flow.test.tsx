@@ -168,6 +168,36 @@ describe('Sidebar EmptyState CTA', () => {
     const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
     expect(bottomBtn).toHaveClass('ws-add')
   })
+
+  test('runtime-down state disables every New workspace entry point', () => {
+    const onCreateClick = vi.fn()
+    const disabledReason = 'Could not reach Hive runtime'
+
+    const { unmount } = renderSidebar({
+      ...emptyProps,
+      createDisabledReason: disabledReason,
+      onCreateClick,
+      workspaces: [],
+    })
+    const emptyStateBtn = screen.getByRole('button', { name: 'New workspace' })
+    expect(emptyStateBtn).toBeDisabled()
+    expect(emptyStateBtn).toHaveAttribute('title', disabledReason)
+    fireEvent.click(emptyStateBtn)
+    expect(onCreateClick).not.toHaveBeenCalled()
+
+    unmount()
+    renderSidebar({
+      ...emptyProps,
+      createDisabledReason: disabledReason,
+      onCreateClick,
+      workspaces: [fakeWorkspace],
+    })
+    const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
+    expect(bottomBtn).toBeDisabled()
+    expect(bottomBtn).toHaveAttribute('title', disabledReason)
+    fireEvent.click(bottomBtn)
+    expect(onCreateClick).not.toHaveBeenCalled()
+  })
 })
 
 describe('workspace sidebar flow', () => {

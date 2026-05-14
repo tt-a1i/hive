@@ -12,6 +12,8 @@ import { startTestServer } from '../helpers/test-server.js'
 
 let cleanupServer: (() => Promise<void>) | undefined
 let sandboxRoot = ''
+let baseUrl = ''
+let cookie = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 let fetchCalls: Array<{ method: string; pathname: string }> = []
@@ -28,7 +30,8 @@ beforeEach(async () => {
     pickFolderPath: join(sandboxRoot, 'placeholder'),
   })
   cleanupServer = server.close
-  let cookie = ''
+  baseUrl = server.baseUrl
+  cookie = ''
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
     cookie = response.headers.get('set-cookie') ?? ''
   })
@@ -97,6 +100,34 @@ describe('app shell with real server', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
     expect(await screen.findByTestId('confirm-workspace-dialog')).toBeInTheDocument()
+  })
+
+  test('workspace create failure keeps dialog open and surfaces error toast', async () => {
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const value =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      const url = value.startsWith('http') ? value : `${baseUrl}${value}`
+      const parsed = new URL(url)
+      fetchCalls.push({ method: init?.method ?? 'GET', pathname: parsed.pathname })
+      if (parsed.pathname === '/api/workspaces' && init?.method === 'POST') {
+        return Promise.resolve(new Response('{}', { status: 500 }))
+      }
+      const headers = new Headers(init?.headers)
+      headers.set('cookie', cookie)
+      return nativeFetch(url, { ...init, headers })
+    })
+
+    render(<App />)
+    await screen.findByTestId('welcome-pane')
+    fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+
+    expect(await screen.findByTestId('add-workspace-error')).toBeInTheDocument()
+    expect(screen.getByTestId('add-workspace-error')).toHaveTextContent(
+      /failed to create workspace/i
+    )
+    expect(screen.getByRole('status')).toHaveTextContent(/failed to create workspace/i)
   })
 
   test('init failure surfaces error toast and disables Add Workspace CTA', async () => {

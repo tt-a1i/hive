@@ -8,6 +8,7 @@ import { useToast } from '../ui/useToast.js'
 
 type SidebarProps = {
   activeWorkspaceId: string | null
+  createDisabledReason?: string
   onCreateClick: () => void
   onDeleteWorkspace: (workspace: WorkspaceSummary) => void | Promise<void>
   onSelectWorkspace: (workspaceId: string) => void
@@ -27,6 +28,7 @@ const workerSummary = (workers: TeamListItem[] | undefined): string => {
 
 export const Sidebar = ({
   activeWorkspaceId,
+  createDisabledReason,
   onCreateClick,
   onDeleteWorkspace,
   onSelectWorkspace,
@@ -36,6 +38,7 @@ export const Sidebar = ({
   const [pendingDelete, setPendingDelete] = useState<WorkspaceSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const toast = useToast()
+  const createDisabled = Boolean(createDisabledReason)
 
   const requestDelete = (workspace: WorkspaceSummary) => {
     setPendingDelete(workspace)
@@ -108,9 +111,11 @@ export const Sidebar = ({
             action={
               <button
                 type="button"
-                onClick={onCreateClick}
+                onClick={createDisabled ? undefined : onCreateClick}
+                disabled={createDisabled}
                 aria-label="New workspace"
-                className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium"
+                title={createDisabledReason ?? 'New workspace'}
+                className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={13} aria-hidden />
                 New workspace
@@ -173,10 +178,11 @@ export const Sidebar = ({
       {workspaces && workspaces.length > 0 ? (
         <button
           type="button"
-          onClick={onCreateClick}
+          onClick={createDisabled ? undefined : onCreateClick}
+          disabled={createDisabled}
           aria-label="New workspace"
-          title="New workspace"
-          className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors"
+          title={createDisabledReason ?? 'New workspace'}
+          className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           style={{ borderColor: 'var(--border-bright)' }}
         >
           <Plus size={13} aria-hidden />

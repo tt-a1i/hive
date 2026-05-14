@@ -14,7 +14,7 @@ type AddWorkspaceDialogProps = {
    */
   trigger: number
   onClose: () => void
-  onCreate: (input: WorkspaceCreateInput) => void
+  onCreate: (input: WorkspaceCreateInput) => Promise<unknown> | undefined
 }
 
 type Stage =
@@ -22,7 +22,7 @@ type Stage =
   | { kind: 'picking' }
   | { kind: 'confirm'; probe: FsProbeResponse | null; pasteDefault: boolean }
   | { kind: 'browse' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; title?: string }
 
 const DEFAULT_COMMAND_PRESET_ID = 'claude'
 
@@ -112,8 +112,12 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
   }
 
   const handleCreate = (input: WorkspaceCreateInput) => {
-    setStage({ kind: 'idle' })
-    onCreate(input)
+    void Promise.resolve(onCreate(input))
+      .then(() => setStage({ kind: 'idle' }))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : 'Failed to create workspace'
+        setStage({ kind: 'error', title: 'Could not create workspace', message })
+      })
   }
 
   if (stage.kind === 'idle') return null
@@ -174,7 +178,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
               </div>
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-md font-medium text-pri">
-                  Folder picker failed
+                  {stage.title ?? 'Folder picker failed'}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1.5 break-words text-[12px] leading-snug text-ter">
                   {stage.message}
