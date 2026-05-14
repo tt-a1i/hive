@@ -37,11 +37,11 @@ export const MainLayout = ({
       <div className="flex min-h-0 flex-1">
         <aside
           aria-label="Workspace sidebar"
-          className="workspace-sidebar relative flex shrink-0 flex-col border-r"
+          className="workspace-sidebar relative flex shrink-0 flex-col"
           data-resizing={sidebarResize.resizing ? 'true' : 'false'}
           style={{
-            background: 'var(--bg-1)',
-            borderColor: 'var(--border)',
+            background: 'var(--bg-0)',
+            boxShadow: 'inset -1px 0 0 var(--border)',
             width: `${sidebarResize.width}px`,
           }}
         >

@@ -86,7 +86,10 @@ export const Sidebar = ({
 
   return (
     <nav aria-label="Workspaces" className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+      <div
+        className="flex items-center justify-between gap-2 px-3 pt-3 pb-2"
+        style={{ boxShadow: 'inset 0 -1px 0 var(--border)' }}
+      >
         <div className="flex min-w-0 items-center gap-2">
           <span
             className="ws-sidebar-title__text text-[10px] font-medium uppercase tracking-wider text-ter"

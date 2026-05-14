@@ -155,12 +155,12 @@ export const WorkspaceDetail = ({
   const orchWidth = `${(split.orchPct * 100).toFixed(2)}%`
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col" style={{ background: 'var(--bg-1)' }}>
       <WorkspaceNotifications terminalRuns={terminalRuns} workers={workers} workspace={workspace} />
       <div ref={split.containerRef} className="relative flex min-h-0 flex-1">
         <div
-          className="flex min-w-[480px] shrink-0 flex-col border-r"
-          style={{ width: orchWidth, borderColor: 'var(--border)' }}
+          className="flex min-w-[480px] shrink-0 flex-col"
+          style={{ width: orchWidth }}
           data-testid="orchestrator-pane-shell"
         >
           <OrchestratorPane

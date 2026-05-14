@@ -73,7 +73,10 @@ const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void
 export const OrchestratorPane = ({ state, onRestart, onStart }: OrchestratorPaneProps) => (
   <div
     className="relative flex h-full w-full min-w-0 flex-col"
-    style={{ background: 'var(--bg-crust)' }}
+    style={{
+      background: 'var(--bg-crust)',
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.04), inset -1px 0 0 var(--border)',
+    }}
     data-testid="orchestrator-terminal-slot"
   >
     {state.kind === 'running' ? (

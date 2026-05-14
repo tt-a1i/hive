@@ -102,10 +102,12 @@ export const WorkersPane = ({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--bg-1)' }}>
       <div
-        className="flex shrink-0 flex-col gap-1 border-b px-4 pt-3 pb-2.5"
-        style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
+        className="flex shrink-0 flex-col gap-1 px-4 pt-3 pb-2.5"
+        style={{
+          boxShadow: 'inset 0 -1px 0 var(--border)',
+        }}
       >
         <div className="flex items-center gap-2">
           <span className="font-medium text-pri">Team Members</span>
