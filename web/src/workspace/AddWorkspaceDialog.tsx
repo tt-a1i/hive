@@ -158,46 +158,48 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
       <Dialog.Root open onOpenChange={(open) => !open && handleCancel()}>
         <Dialog.Portal>
           <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
-          <Dialog.Content
-            data-testid="add-workspace-error"
-            className="dialog-pop elev-2 fixed top-1/2 left-1/2 z-50 w-[440px] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border p-5"
-            style={{
-              background: 'var(--bg-elevated)',
-              borderColor: 'var(--border-bright)',
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                style={{
-                  background: 'color-mix(in oklab, var(--status-red) 14%, transparent)',
-                  color: 'var(--status-red)',
-                }}
-              >
-                <AlertTriangle size={18} aria-hidden />
+          <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
+            <Dialog.Content
+              data-testid="add-workspace-error"
+              className="dialog-scale-pop elev-2 pointer-events-auto w-[440px] max-w-[calc(100vw-32px)] rounded-lg border p-5"
+              style={{
+                background: 'var(--bg-elevated)',
+                borderColor: 'var(--border-bright)',
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    background: 'color-mix(in oklab, var(--status-red) 14%, transparent)',
+                    color: 'var(--status-red)',
+                  }}
+                >
+                  <AlertTriangle size={18} aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <Dialog.Title className="text-md font-medium text-pri">
+                    {stage.title ?? 'Folder picker failed'}
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-1.5 break-words text-[12px] leading-snug text-ter">
+                    {stage.message}
+                  </Dialog.Description>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-md font-medium text-pri">
-                  {stage.title ?? 'Folder picker failed'}
-                </Dialog.Title>
-                <Dialog.Description className="mt-1.5 break-words text-[12px] leading-snug text-ter">
-                  {stage.message}
-                </Dialog.Description>
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={handleCancel} className="icon-btn">
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStage({ kind: 'confirm', probe: null, pasteDefault: true })}
+                  className="icon-btn icon-btn--primary"
+                >
+                  Paste path instead
+                </button>
               </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={handleCancel} className="icon-btn">
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => setStage({ kind: 'confirm', probe: null, pasteDefault: true })}
-                className="icon-btn icon-btn--primary"
-              >
-                Paste path instead
-              </button>
-            </div>
-          </Dialog.Content>
+            </Dialog.Content>
+          </div>
         </Dialog.Portal>
       </Dialog.Root>
     )
