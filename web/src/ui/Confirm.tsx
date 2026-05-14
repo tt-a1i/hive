@@ -54,7 +54,7 @@ export const Confirm = ({
             <div className="min-w-0 flex-1">
               <Dialog.Title
                 data-testid="confirm-title"
-                className="display text-[15px] font-medium text-pri"
+                className="display text-lg font-medium text-pri"
               >
                 {title}
               </Dialog.Title>

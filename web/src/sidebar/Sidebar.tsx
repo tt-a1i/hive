@@ -95,13 +95,13 @@ export const Sidebar = ({
       >
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className="ws-sidebar-title__text text-[10px] font-medium uppercase tracking-wider text-ter"
+            className="ws-sidebar-title__text text-xs font-medium uppercase tracking-wider text-ter"
             data-testid="workspace-sidebar-title"
           >
             Workspaces
           </span>
           {workspaces && workspaces.length > 0 ? (
-            <span className="ws-sidebar-count mono rounded bg-2 px-1.5 py-0.5 text-[10px] text-ter">
+            <span className="ws-sidebar-count mono rounded bg-2 px-1.5 py-0.5 text-xs text-ter">
               {workspaces.length}
             </span>
           ) : null}
@@ -160,7 +160,7 @@ export const Sidebar = ({
                     </span>
                     {hasWorking ? (
                       <span
-                        className="inline-flex items-center gap-1.5 text-[11px] text-ter tabular-nums"
+                        className="inline-flex items-center gap-1.5 text-xs text-ter tabular-nums"
                         role="img"
                         aria-label={
                           workingCount > 1
@@ -178,7 +178,7 @@ export const Sidebar = ({
                       </span>
                     ) : null}
                   </div>
-                  <div className="ws-row__path mt-0.5 truncate text-[11px] text-ter">
+                  <div className="ws-row__path mt-0.5 truncate text-xs text-ter">
                     {workspace.path}
                   </div>
                 </button>

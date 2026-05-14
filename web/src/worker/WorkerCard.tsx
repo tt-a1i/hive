@@ -63,12 +63,12 @@ export const WorkerCard = ({
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span
-            className="truncate text-[14px] font-medium leading-tight text-pri"
+            className="truncate text-base font-medium leading-tight text-pri"
             title={worker.name}
           >
             {worker.name}
           </span>
-          <span className="truncate text-[11px] leading-tight text-ter">{role.label}</span>
+          <span className="truncate text-xs leading-tight text-ter">{role.label}</span>
         </div>
         <span
           className={`worker-card__status worker-card__status--${status.kind}`}
@@ -80,7 +80,7 @@ export const WorkerCard = ({
         </span>
         {worker.lastOutputLine ? (
           <span
-            className="mt-1 truncate text-[10px] text-ter"
+            className="mt-1 truncate text-xs text-ter"
             title={worker.lastOutputLine}
             data-testid={`worker-last-output-${worker.id}`}
           >

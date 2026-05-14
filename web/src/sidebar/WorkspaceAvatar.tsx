@@ -51,7 +51,7 @@ export const WorkspaceAvatar = ({
       {initial}
       {badgeCount !== null ? (
         <span
-          className="absolute flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 font-medium text-[10px] tabular-nums leading-none"
+          className="absolute flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 font-medium text-xs tabular-nums leading-none"
           style={{
             right: '-4px',
             bottom: '-4px',

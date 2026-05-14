@@ -111,9 +111,7 @@ export const WorkersPane = ({
       >
         <div className="flex items-center gap-2">
           <span className="font-medium text-pri">Team Members</span>
-          <span className="mono rounded bg-3 px-1.5 py-0.5 text-[10px] text-sec">
-            {workers.length}
-          </span>
+          <span className="mono rounded bg-3 px-1.5 py-0.5 text-xs text-sec">{workers.length}</span>
           <div className="flex-1" />
           <button
             type="button"
@@ -125,7 +123,7 @@ export const WorkersPane = ({
           </button>
         </div>
         {workers.length > 0 ? (
-          <div className="flex items-center gap-3 text-[11px] text-ter">
+          <div className="flex items-center gap-3 text-xs text-ter">
             <span className="inline-flex items-center gap-1.5">
               <span className="status-dot status-dot--working" aria-hidden />
               <span className="text-sec">{summary.working}</span> working
@@ -163,7 +161,7 @@ export const WorkersPane = ({
           <div data-testid="worker-grid">
             {sections.map((section) => (
               <section key={section.kind} className="mb-3 last:mb-0">
-                <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-ter">
+                <div className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-ter">
                   {section.label}
                   <span className="mono ml-1.5 text-ter">{section.workers.length}</span>
                 </div>

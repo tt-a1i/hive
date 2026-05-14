@@ -19,7 +19,7 @@ export const FsSelectionPreview = ({
       data-testid="fs-selection-preview"
     >
       <div className="flex items-center justify-between">
-        <span className="text-ter uppercase tracking-wider text-[10px]">Selected</span>
+        <span className="text-ter uppercase tracking-wider text-xs">Selected</span>
         {probe?.is_git_repository ? (
           <span
             className="role-badge role-badge--coder"
@@ -29,14 +29,14 @@ export const FsSelectionPreview = ({
             git · {probe.current_branch ?? 'detached'}
           </span>
         ) : hasProbe ? (
-          <span className="text-ter text-[10px]">no git</span>
+          <span className="text-ter text-xs">no git</span>
         ) : null}
       </div>
       <span className="mono truncate text-pri" data-testid="fs-preview-path">
         {probe?.path ?? '—'}
       </span>
       <label className="mt-1 flex flex-col gap-1 text-ter">
-        <span className="text-[10px] uppercase tracking-wider">Workspace name</span>
+        <span className="text-xs uppercase tracking-wider">Workspace name</span>
         <input
           type="text"
           value={suggestedName}

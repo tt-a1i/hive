@@ -88,7 +88,7 @@ export const WorkerModal = ({
             {startError ? (
               <div
                 role="alert"
-                className="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-[11px]"
+                className="flex shrink-0 items-center gap-2 border-b px-4 py-2 text-xs"
                 style={{
                   background: 'color-mix(in oklab, var(--status-red) 10%, transparent)',
                   borderColor: 'color-mix(in oklab, var(--status-red) 30%, var(--border))',
@@ -129,7 +129,7 @@ export const WorkerModal = ({
                   <div className="m-auto flex max-w-[400px] flex-col items-center gap-3 px-6 text-center">
                     <RoleAvatar role={worker.role} size={48} />
                     <div className="text-sm text-pri">{worker.name}</div>
-                    <div className="text-[11px] leading-snug text-ter">
+                    <div className="text-xs leading-snug text-ter">
                       {worker.status === 'stopped' ? 'PTY stopped — ' : 'PTY not started yet — '}
                       {worker.pendingTaskCount > 0
                         ? `${worker.pendingTaskCount} pending task(s) will resume after restart.`

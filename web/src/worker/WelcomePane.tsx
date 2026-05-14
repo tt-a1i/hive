@@ -62,7 +62,7 @@ export const WelcomePane = ({
               {step.icon}
             </div>
             <div className="text-xs font-medium text-pri">{step.title}</div>
-            <div className="mt-1 text-[11px] text-ter">{step.description}</div>
+            <div className="mt-1 text-xs text-ter">{step.description}</div>
           </li>
         ))}
       </ol>

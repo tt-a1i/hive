@@ -32,13 +32,13 @@ export const DemoWorkspaceView = ({ onExit }: DemoWorkspaceViewProps) => (
           <span>Orchestrator — pre-recorded</span>
           <span
             data-testid="terminal-readonly-badge"
-            className="rounded bg-2 px-1.5 py-0.5 text-[10px] text-ter"
+            className="rounded bg-2 px-1.5 py-0.5 text-xs text-ter"
           >
             DEMO read-only
           </span>
         </div>
         <pre
-          className="mono flex-1 overflow-auto p-3 text-[11px] leading-relaxed text-sec"
+          className="mono flex-1 overflow-auto p-3 text-xs leading-relaxed text-sec"
           data-testid="demo-scrollback-demo-orch"
           style={{ background: 'var(--bg-crust)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
         >

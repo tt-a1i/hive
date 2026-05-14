@@ -60,7 +60,7 @@ export const FsEntryList = ({
                 <span className="mono flex-1 truncate">{entry.name}</span>
                 {entry.is_git_repository ? (
                   <span
-                    className="text-[10px] uppercase tracking-wider"
+                    className="text-xs uppercase tracking-wider"
                     style={{ color: 'var(--accent)' }}
                   >
                     git

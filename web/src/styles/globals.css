@@ -50,6 +50,20 @@
   /* M6 — overlay & elevated */
   --color-bg-overlay: rgba(0, 0, 0, 0.72);
   --color-bg-elevated: #222222;
+
+  /* Typography scale — Twenty-aligned. Six steps total: the only sizes that
+     should appear in the app. The previous palette mixed Tailwind defaults
+     (xs=12, sm=14, base=16...) with eleven different `text-[Npx]` inline
+     literals; this @theme block overrides Tailwind so every `text-xs` /
+     `text-sm` / `text-base` / `text-lg` resolves to a Twenty step. Use
+     `text-base` (13px) as the body default; `text-xs` is the smallest
+     allowed in the app. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
 }
 
 :root {
@@ -102,13 +116,6 @@
   --status-blue: #3358d4;
   --status-purple: #8551c0;
   --status-gold: #ffeb38;
-
-  /* M6 — typography scale */
-  --text-xs: 10px;
-  --text-sm: 11px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 15px;
 
   /* M6 — icon scale */
   --icon-xs: 12px;
@@ -437,7 +444,7 @@ html, body {
   gap: 5px;
   padding: 0 6px 0 4px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.1px;
   white-space: nowrap;
@@ -621,7 +628,7 @@ html, body {
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 3px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.3px;
   text-transform: uppercase;
@@ -728,7 +735,7 @@ html, body {
   color: var(--status-blue);
   background: color-mix(in oklab, var(--status-blue) 10%, transparent);
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .task-child-count {
@@ -740,7 +747,7 @@ html, body {
   padding: 0 6px 0 4px;
   color: var(--text-tertiary);
   background: var(--bg-3);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .task-empty {
@@ -999,7 +1006,7 @@ html, body {
   height: 20px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1px;
   font-feature-settings: "tnum" 1;

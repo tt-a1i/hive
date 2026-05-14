@@ -161,7 +161,7 @@ export const NotificationSettingsButton = () => {
                       </span>
                       <span className="font-medium text-pri text-xs">{item.label}</span>
                       {item.length === 'long' ? (
-                        <span className="rounded border border-[var(--border-bright)] px-1.5 py-0.5 text-[10px] text-ter uppercase">
+                        <span className="rounded border border-[var(--border-bright)] px-1.5 py-0.5 text-xs text-ter uppercase">
                           longer
                         </span>
                       ) : null}
@@ -219,7 +219,7 @@ export const NotificationSettingsButton = () => {
                     onChange={() => updateSettings({ detail: item.value })}
                   />
                   <span className="block font-medium text-xs">{item.label}</span>
-                  <span className="block text-ter text-[11px]">{item.description}</span>
+                  <span className="block text-ter text-xs">{item.description}</span>
                 </label>
               ))}
             </div>
