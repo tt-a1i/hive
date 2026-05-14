@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -45,6 +45,18 @@ const prepareWorkspace = () => {
   return { dataDir, workspacePath }
 }
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const isProcessAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false
+    throw error
+  }
+}
+
 const createAgentManagerWithDuplicatedOnExit = (): AgentManager => {
   const manager = createAgentManager()
 
@@ -73,6 +85,37 @@ const createAgentManagerWithDuplicatedOnExit = (): AgentManager => {
   }
 }
 
+const createDelayedStartAgentManager = (manager = createAgentManager()) => {
+  let releaseStart: (() => void) | undefined
+  let startRequested = false
+  const startGate = new Promise<void>((resolve) => {
+    releaseStart = resolve
+  })
+
+  const delayedManager: AgentManager = {
+    getRun: manager.getRun,
+    getOutputBus: manager.getOutputBus,
+    pauseRun: manager.pauseRun,
+    removeRun: manager.removeRun,
+    resizeRun: manager.resizeRun,
+    resumeRun: manager.resumeRun,
+    stopRun: manager.stopRun,
+    writeInput: manager.writeInput,
+    async startAgent(input) {
+      startRequested = true
+      await startGate
+      return manager.startAgent(input)
+    },
+  }
+
+  return {
+    manager,
+    delayedManager,
+    releaseStart: () => releaseStart?.(),
+    startRequested: () => startRequested,
+  }
+}
+
 afterEach(() => {
   while (servers.length > 0) {
     servers.pop()?.close()
@@ -83,6 +126,89 @@ afterEach(() => {
 })
 
 describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
+  test('concurrent starts for the same agent share one live PTY run', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const script = join(workspacePath, 'long-running.js')
+    const pidsFile = join(workspacePath, 'concurrent-pids.txt')
+    writeFileSync(
+      script,
+      [
+        "const fs = require('node:fs')",
+        `fs.appendFileSync(${JSON.stringify(pidsFile)}, process.pid + '\\n')`,
+        "process.stdin.resume(); setInterval(() => {}, 1000); console.log('started')",
+      ].join('\n')
+    )
+
+    const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: [script],
+    })
+
+    let closed = false
+    try {
+      const runs = await Promise.all(
+        Array.from({ length: 20 }, () =>
+          store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+        )
+      )
+
+      expect(new Set(runs.map((run) => run.runId)).size).toBe(1)
+      await waitFor(() => {
+        expect(store.getLiveRun(runs[0].runId).status).toBe('running')
+      })
+      let spawnedPid: number | undefined
+      await waitFor(() => {
+        const pids = readFileSync(pidsFile, 'utf8').trim().split('\n').filter(Boolean)
+        expect(new Set(pids).size).toBe(1)
+        expect(pids).toHaveLength(1)
+        spawnedPid = Number(pids[0])
+        expect(isProcessAlive(spawnedPid)).toBe(true)
+      })
+      expect(store.listAgentRuns(worker.id).filter((run) => run.status === 'running')).toHaveLength(
+        1
+      )
+      await store.close()
+      closed = true
+      await waitFor(() => {
+        if (!spawnedPid) throw new Error('Expected spawned pid')
+        expect(isProcessAlive(spawnedPid)).toBe(false)
+      })
+    } finally {
+      if (!closed) await store.close()
+    }
+  })
+
+  test('runtime startup marks persisted unfinished runs as stale errors', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    initializeRuntimeDatabase(db)
+    const workspaceStore = createWorkspaceStore(db, [])
+    const workspace = workspaceStore.createWorkspace(workspacePath, 'Alpha')
+    const worker = workspaceStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    const startedAt = Date.now() - 60_000
+    db.prepare(
+      `INSERT INTO agent_runs (run_id, agent_id, pid, status, exit_code, started_at, ended_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run('stale-run', worker.id, 999_999, 'running', null, startedAt, null, startedAt, startedAt)
+    db.close()
+
+    const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+
+    expect(store.listAgentRuns(worker.id)).toContainEqual(
+      expect.objectContaining({
+        endedAt: expect.any(Number),
+        exitCode: null,
+        runId: 'stale-run',
+        status: 'error',
+      })
+    )
+
+    await store.close()
+  })
+
   test('R2.1: a real node subprocess that exits fast persists agent_runs as exited, not running', async () => {
     const { dataDir, workspacePath } = prepareWorkspace()
     // Real script that exits immediately.
@@ -336,5 +462,145 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
     await store.close()
 
     expect(() => agentManager.getRun(run.runId)).toThrow(/Run not found/)
+  })
+
+  test('close force-kills a PTY that ignores graceful stop signals', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const script = join(workspacePath, 'ignore-stop.js')
+    writeFileSync(
+      script,
+      [
+        "process.on('SIGHUP', () => {})",
+        "process.on('SIGTERM', () => {})",
+        'process.stdin.resume()',
+        'setInterval(() => {}, 1000)',
+        "console.log('stubborn-started')",
+      ].join('\n')
+    )
+
+    const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: [script],
+    })
+
+    const run = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+    await waitFor(() => {
+      expect(store.getLiveRun(run.runId).status).toBe('running')
+    })
+    const pid = store.getLiveRun(run.runId).pid
+    if (pid === null) throw new Error('Expected PTY pid')
+
+    const closeResult = await Promise.race([
+      store.close().then(() => 'closed' as const),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 3000)),
+    ])
+
+    if (closeResult === 'timeout') {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+      }
+      await store.close()
+    }
+
+    expect(closeResult).toBe('closed')
+  })
+
+  test('close waits for an in-flight agent start before tearing down live runs', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const script = join(workspacePath, 'delayed-start.js')
+    writeFileSync(script, "console.log('delayed-started'); setInterval(() => {}, 1000)\n")
+
+    const delayed = createDelayedStartAgentManager()
+    const store = createRuntimeStore({ agentManager: delayed.delayedManager, dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: [script],
+    })
+
+    const startPromise = store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+    await waitFor(() => {
+      expect(delayed.startRequested()).toBe(true)
+    })
+
+    let closeResolved = false
+    const closePromise = store.close().then(() => {
+      closeResolved = true
+    })
+
+    await delay(100)
+    const resolvedBeforeRelease = closeResolved
+    delayed.releaseStart()
+
+    let runId: string | undefined
+    try {
+      runId = (await startPromise).runId
+    } finally {
+      await closePromise
+    }
+
+    expect(resolvedBeforeRelease).toBe(false)
+    if (!runId) throw new Error('Expected delayed start to resolve')
+    expect(() => delayed.manager.getRun(runId)).toThrow(/Run not found/)
+  })
+
+  test('close force-kills child processes that outlive the PTY leader', async () => {
+    if (process.platform === 'win32') return
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const script = join(workspacePath, 'orphan-child.js')
+    const childScript = [
+      "process.on('SIGHUP', () => {})",
+      "process.on('SIGTERM', () => {})",
+      'setInterval(() => {}, 1000)',
+    ].join(';')
+    writeFileSync(
+      script,
+      [
+        "const { spawn } = require('node:child_process')",
+        `const child = spawn(process.execPath, ['-e', ${JSON.stringify(childScript)}], {
+          stdio: 'ignore',
+        })`,
+        'child.unref()',
+        "console.log('CHILD_PID=' + child.pid)",
+        'setTimeout(() => process.exit(0), 300)',
+      ].join('\n')
+    )
+
+    const store = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: [script],
+    })
+
+    let childPid: number | undefined
+    try {
+      const run = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+      await waitFor(() => {
+        const output = store.getLiveRun(run.runId).output
+        const match = output.match(/CHILD_PID=(\d+)/)
+        expect(match?.[1]).toBeTruthy()
+        childPid = Number(match?.[1])
+      })
+      if (!childPid) throw new Error('Expected child pid')
+      expect(isProcessAlive(childPid)).toBe(true)
+      await waitFor(() => {
+        expect(store.getLiveRun(run.runId).status).toBe('exited')
+      })
+      await waitFor(() => {
+        if (!childPid) throw new Error('Expected child pid')
+        expect(isProcessAlive(childPid)).toBe(false)
+      }, 3000)
+      await store.close()
+    } finally {
+      if (childPid && isProcessAlive(childPid)) process.kill(childPid, 'SIGKILL')
+    }
   })
 })

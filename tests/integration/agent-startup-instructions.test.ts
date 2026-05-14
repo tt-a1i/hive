@@ -120,7 +120,8 @@ describe('agent startup instructions', () => {
           }
         )
         expect(response.status).toBe(201)
-        return (await response.json()) as { runId: string }
+        const payload = (await response.json()) as { run_id: string }
+        return { runId: payload.run_id }
       }
 
       await configure(orchestratorId)
@@ -143,6 +144,7 @@ describe('agent startup instructions', () => {
         expect(output).toContain('先执行 `team list` 确认真实 Hive worker')
         expect(output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
         expect(output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+        expect(output).not.toContain('team report')
         expect(output).toContain('SUBMITTED')
       })
 

@@ -20,6 +20,7 @@ export interface AgentRunStorePort {
     config: AgentLaunchConfigInput
     workspaceId: string
   }>
+  markUnfinishedRunsStale?: (endedAt?: number) => void
   deleteLaunchConfig: (workspaceId: string, agentId: string) => void
   saveLaunchConfig: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => void
   updatePersistedRun: (

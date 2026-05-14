@@ -5,7 +5,7 @@ const ORCHESTRATOR_RULES = [
   '当 user 要你“让 worker ... / 给 worker 找活 / 让成员处理”时，先执行 `team list` 确认真实 Hive worker。',
   '如果只有一个可用 worker，直接用 `team send <worker-name> "<task>"` 派给它；不要把选择题丢回给 user。',
   '当 user 要你“让 worker ...”时，必须用 `team send <worker-name> "<task>"` 派给 Hive worker。',
-  '不要使用 Claude Code 内置的 Task / Explore / subagent 来代替 Hive worker；它们不会出现在 Hive UI，也不会触发 pending_task_count / team report。',
+  '不要使用 Claude Code 内置的 Task / Explore / subagent 来代替 Hive worker；它们不会出现在 Hive UI，也不会更新 Hive 调度状态。',
 ]
 
 const WORKER_RULES = [

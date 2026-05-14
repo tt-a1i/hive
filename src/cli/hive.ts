@@ -103,13 +103,6 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
   process.once('SIGINT', gracefulShutdown)
 
   console.log(`Hive running at http://127.0.0.1:${address.port}`)
-  void app.store.autostartConfiguredAgents({ hivePort: String(address.port) }).then((results) => {
-    for (const result of results) {
-      if (!result.ok && result.error) {
-        console.warn(`Failed to autostart ${result.agent_id}: ${result.error}`)
-      }
-    }
-  })
 
   return {
     port: address.port,

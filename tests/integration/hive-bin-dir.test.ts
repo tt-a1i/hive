@@ -95,7 +95,8 @@ describe('hive bin dir', () => {
         throw new Error(`start failed: ${await startResponse.text()}`)
       }
       expect(startResponse.status).toBe(201)
-      const payload = (await startResponse.json()) as { runId: string }
+      const startPayload = (await startResponse.json()) as { run_id: string }
+      const payload = { runId: startPayload.run_id }
 
       await waitFor(async () => {
         const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`, {
@@ -190,7 +191,8 @@ describe('hive bin dir', () => {
         }
       )
       expect(startResponse.status).toBe(201)
-      const payload = (await startResponse.json()) as { runId: string }
+      const startPayload = (await startResponse.json()) as { run_id: string }
+      const payload = { runId: startPayload.run_id }
 
       await waitFor(async () => {
         const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.runId}`, {

@@ -128,7 +128,8 @@ const startWorkerViaHttp = async (
     body: JSON.stringify({ hive_port: port }),
   })
   expect(response.status).toBe(201)
-  return (await response.json()) as { runId: string }
+  const payload = (await response.json()) as { run_id: string }
+  return { runId: payload.run_id }
 }
 
 const getRunOutputViaHttp = async (baseUrl: string, cookie: string, runId: string) => {

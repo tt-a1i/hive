@@ -28,9 +28,9 @@ interface UseOrchestratorPaneStateOutput {
 }
 
 /**
- * Derives the 3-state Orchestrator pane shape from the live terminal runs +
- * the last-known autostart error. Live `running` always wins; `failed` only
- * surfaces when there is no live run AND a sticky error is present.
+ * Derives the Orchestrator pane shape from live terminal runs + explicit
+ * start attempts. Live `running` always wins; runtime restarts intentionally
+ * land in `stopped` instead of silently autostarting a new CLI process.
  */
 export const useOrchestratorPaneState = ({
   workspaceId,
@@ -80,10 +80,12 @@ export const useOrchestratorPaneState = ({
     state = { kind: 'running', runId: orchestratorRun.run_id }
   } else if (optimisticRunId) {
     state = { kind: 'running', runId: optimisticRunId }
+  } else if (pendingStartWorkspaceId === workspaceId || suppressingAutostart) {
+    state = { kind: 'starting' }
   } else if (autostartError) {
     state = { kind: 'failed', error: autostartError }
   } else {
-    state = { kind: 'starting' }
+    state = { kind: 'stopped' }
   }
 
   const start = useCallback(() => {
@@ -111,17 +113,6 @@ export const useOrchestratorPaneState = ({
     pendingStartWorkspaceId,
     workspaceId,
   ])
-
-  useEffect(() => {
-    if (
-      state.kind !== 'starting' ||
-      suppressingAutostart ||
-      pendingStartWorkspaceId === workspaceId
-    ) {
-      return
-    }
-    start()
-  }, [pendingStartWorkspaceId, start, state.kind, suppressingAutostart, workspaceId])
 
   const stop = useCallback(() => {
     if (!orchestratorRun) return

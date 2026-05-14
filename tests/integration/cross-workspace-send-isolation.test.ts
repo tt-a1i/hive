@@ -113,7 +113,8 @@ describe('cross workspace send isolation', () => {
             body: JSON.stringify({ hive_port: String(hive.port) }),
           }
         )
-        return (await response.json()) as { runId: string }
+        const payload = (await response.json()) as { run_id: string }
+        return { runId: payload.run_id }
       }
 
       const runA = await start(a.id, workerA.id)

@@ -213,6 +213,41 @@ describe('team API authz (R1.4)', () => {
     }
   })
 
+  test('rejects orchestrator that invokes team report (403)', async () => {
+    const ctx = await setupHive()
+    try {
+      const orchToken = ctx.hive.store.peekAgentToken(ctx.orchestratorId)
+      if (!orchToken) {
+        throw new Error('Expected orchestrator token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.orchestratorId,
+          token: orchToken,
+          result: 'orchestrator should not self-report',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(403)
+      await expect(response.json()).resolves.toEqual({
+        error: "Role 'orchestrator' is not allowed to run team report",
+      })
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'report')
+      ).toEqual([])
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toEqual([])
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
   test('rejects token from workspace A used against workspace B (401)', async () => {
     const ctxA = await setupHive()
     try {

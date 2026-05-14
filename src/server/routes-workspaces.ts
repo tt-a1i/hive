@@ -286,11 +286,10 @@ export const workspaceRoutes: RouteDefinition[] = [
       ) {
         seedOrchestratorLaunchConfig(store, store.settings, workspaceId)
       }
-      sendJson(
-        response,
-        201,
-        await store.startAgent(workspaceId, agentId, { hivePort: getRuntimePort(request) })
-      )
+      const run = await store.startAgent(workspaceId, agentId, {
+        hivePort: getRuntimePort(request),
+      })
+      sendJson(response, 201, { run_id: run.runId })
     }
   ),
 ]

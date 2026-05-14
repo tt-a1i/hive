@@ -155,8 +155,8 @@ export const startAgentRun = async (
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Failed to start agent run'))
   }
-  const body = (await response.json()) as { runId: string }
-  return body
+  const body = (await response.json()) as { run_id: string }
+  return { runId: body.run_id }
 }
 
 export const stopAgentRun = async (runId: string): Promise<void> => {

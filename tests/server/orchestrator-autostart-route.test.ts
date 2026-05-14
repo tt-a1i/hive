@@ -61,6 +61,16 @@ const waitFor = async (assertion: () => void, timeoutMs = 2000, intervalMs = 25)
   throw lastError
 }
 
+const isProcessAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false
+    throw error
+  }
+}
+
 const startServer = async (input: { dataDir?: string } = {}) => {
   const store = createRuntimeStore({
     agentManager: createAgentManager(),
@@ -149,15 +159,87 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       }
     )
     expect(startResponse.status).toBe(201)
-    const startBody = (await startResponse.json()) as { runId: string }
-    expect(startBody.runId).toBe(body.orchestrator_start.run_id)
+    const startBody = (await startResponse.json()) as { run_id: string }
+    expect(startBody.run_id).toBe(body.orchestrator_start.run_id)
 
     const orchestratorRuns = store
       .listTerminalRuns(body.id)
       .filter((run) => run.agent_id === `${body.id}:orchestrator`)
     expect(orchestratorRuns).toHaveLength(1)
 
-    store.stopAgentRun(startBody.runId)
+    store.stopAgentRun(startBody.run_id)
+  })
+
+  test('concurrent HTTP starts for one orchestrator share a single PTY run', async () => {
+    const { store, baseUrl } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
+    const workspacePath = makeWorkspacePath('http-dedupe')
+    const pidsFile = join(workspacePath, 'pids.txt')
+    const scriptPath = join(workspacePath, 'http-dedupe-agent.js')
+    writeFileSync(
+      scriptPath,
+      [
+        "const fs = require('node:fs')",
+        `fs.appendFileSync(${JSON.stringify(pidsFile)}, process.pid + '\\n')`,
+        "console.log('http-dedupe-started')",
+        'setInterval(() => {}, 1000)',
+      ].join('\n')
+    )
+    setEnv('HIVE_ORCHESTRATOR_COMMAND', process.execPath)
+    setEnv('HIVE_ORCHESTRATOR_ARGS_JSON', JSON.stringify([scriptPath]))
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        path: workspacePath,
+        name: 'HttpDedupe',
+        autostart_orchestrator: false,
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(body.orchestrator_start).toEqual({ ok: false, error: null, run_id: null })
+
+    const startResponses = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        fetch(`${baseUrl}/api/workspaces/${body.id}/agents/${body.id}:orchestrator/start`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie },
+          body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
+        })
+      )
+    )
+    expect(startResponses.every((item) => item.status === 201)).toBe(true)
+    const startBodies = (await Promise.all(startResponses.map((item) => item.json()))) as Array<{
+      run_id: string
+    }>
+    const runIds = new Set(startBodies.map((item) => item.run_id))
+    expect(runIds.size).toBe(1)
+    let spawnedPid: number | undefined
+    await waitFor(() => {
+      expect(existsSync(pidsFile)).toBe(true)
+      const pids = readFileSync(pidsFile, 'utf8').trim().split('\n').filter(Boolean)
+      expect(new Set(pids).size).toBe(1)
+      expect(pids).toHaveLength(1)
+      spawnedPid = Number(pids[0])
+      expect(isProcessAlive(spawnedPid)).toBe(true)
+    })
+
+    const orchestratorRuns = store
+      .listTerminalRuns(body.id)
+      .filter((run) => run.agent_id === `${body.id}:orchestrator`)
+    expect(orchestratorRuns).toHaveLength(1)
+
+    store.stopAgentRun(startBodies[0].run_id)
+    await waitFor(() => {
+      if (!spawnedPid) throw new Error('Expected spawned pid')
+      expect(isProcessAlive(spawnedPid)).toBe(false)
+    })
   })
 
   test('autostart_orchestrator: false skips spawn, no run started', async () => {
@@ -497,8 +579,8 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
     )
 
     expect(response.status).toBe(201)
-    const body = (await response.json()) as { runId: string }
-    expect(typeof body.runId).toBe('string')
+    const body = (await response.json()) as { run_id: string }
+    expect(typeof body.run_id).toBe('string')
     expect(store.peekAgentLaunchConfig(workspace.id, orchestratorId)?.command).toBe(
       process.execPath
     )
@@ -506,6 +588,6 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       expect(existsSync(portFile)).toBe(true)
       expect(readFileSync(portFile, 'utf8')).toBe(port)
     })
-    store.stopAgentRun(body.runId)
+    store.stopAgentRun(body.run_id)
   })
 })

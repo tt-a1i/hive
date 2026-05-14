@@ -83,7 +83,8 @@ describe('team report cli', () => {
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
-      const run = (await startResponse.json()) as { runId: string }
+      const payload = (await startResponse.json()) as { run_id: string }
+      const run = { runId: payload.run_id }
 
       const workerConfig = await fetch(
         `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,

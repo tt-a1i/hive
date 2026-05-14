@@ -75,7 +75,8 @@ const configureAndStartAgent = async (
     }
   )
   expect(startResponse.status).toBe(201)
-  return (await startResponse.json()) as { runId: string }
+  const payload = (await startResponse.json()) as { run_id: string }
+  return { runId: payload.run_id }
 }
 
 describe('workspace delete API', () => {

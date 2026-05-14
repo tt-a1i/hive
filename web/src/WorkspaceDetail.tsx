@@ -166,6 +166,7 @@ export const WorkspaceDetail = ({
           <OrchestratorPane
             state={orchestrator.state}
             onStop={orchestrator.stop}
+            onStart={orchestrator.start}
             onRestart={orchestrator.restart}
           />
         </div>

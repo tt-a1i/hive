@@ -149,7 +149,6 @@ export const createAgentManager = ({
 
     stopRun(runId) {
       const run = getRunRecord(runId)
-      if (run.status === 'exited' || run.status === 'error') return
       run.process.stop()
     },
   }

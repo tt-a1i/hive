@@ -73,6 +73,7 @@ export const createRuntimeStoreServices = (
 
   messageLogStore.initialize()
   agentRunStore.initialize()
+  agentRunStore.markUnfinishedRunsStale?.()
 
   const workspaceStore = createWorkspaceStore(db, messageLogStore.listMessageKinds())
   const startExistingWorkspaceWatches = () => {

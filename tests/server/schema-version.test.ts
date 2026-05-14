@@ -33,6 +33,11 @@ const expectDispatchSchema = (db: Database) => {
   expect(dispatchIndexes.has('idx_dispatches_open_by_worker')).toBe(true)
 }
 
+const indexColumns = (db: Database, indexName: string) =>
+  (db.prepare(`PRAGMA index_info(${indexName})`).all() as Array<{ name: string }>).map(
+    (column) => column.name
+  )
+
 describe('schema version', () => {
   test('runtime sqlite initializes a schema_version table', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-version-'))
@@ -676,6 +681,133 @@ describe('schema version', () => {
       version: 14,
     })
     expectDispatchSchema(db)
+
+    db.close()
+  })
+
+  test('migration repairs v14 dispatch tables that were created without sequence', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-schema-v15-dispatch-sequence-'))
+    tempDirs.push(dataDir)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+
+      INSERT INTO schema_version (version, applied_at)
+      VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (13, 13), (14, 14);
+
+      CREATE TABLE dispatches (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        from_agent_id TEXT,
+        to_agent_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        delivered_at INTEGER,
+        submitted_at INTEGER,
+        reported_at INTEGER,
+        report_text TEXT,
+        artifacts TEXT
+      );
+
+      CREATE INDEX idx_dispatches_workspace_created_at
+        ON dispatches (workspace_id, created_at);
+
+      CREATE INDEX idx_dispatches_open_by_worker
+        ON dispatches (workspace_id, to_agent_id, status, created_at);
+    `)
+    db.prepare(
+      `INSERT INTO dispatches (
+         id,
+         workspace_id,
+         from_agent_id,
+         to_agent_id,
+         text,
+         status,
+         created_at,
+         delivered_at,
+         submitted_at,
+         reported_at,
+         report_text,
+         artifacts
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'dispatch-2',
+      'ws-1',
+      'orch-1',
+      'worker-1',
+      'second',
+      'submitted',
+      200,
+      210,
+      220,
+      null,
+      null,
+      '[]'
+    )
+    db.prepare(
+      `INSERT INTO dispatches (
+         id,
+         workspace_id,
+         from_agent_id,
+         to_agent_id,
+         text,
+         status,
+         created_at,
+         delivered_at,
+         submitted_at,
+         reported_at,
+         report_text,
+         artifacts
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'dispatch-1',
+      'ws-1',
+      'orch-1',
+      'worker-1',
+      'first',
+      'reported',
+      100,
+      110,
+      120,
+      130,
+      'done',
+      '["a.md"]'
+    )
+
+    initializeRuntimeDatabase(db)
+
+    const dispatchColumns = new Set(
+      (db.prepare('PRAGMA table_info(dispatches)').all() as Array<{ name: string }>).map(
+        (column) => column.name
+      )
+    )
+    const rows = db
+      .prepare('SELECT sequence, id, text FROM dispatches ORDER BY sequence ASC')
+      .all() as Array<{ id: string; sequence: number; text: string }>
+
+    expect(dispatchColumns.has('sequence')).toBe(true)
+    expect(rows).toEqual([
+      { id: 'dispatch-1', sequence: 1, text: 'first' },
+      { id: 'dispatch-2', sequence: 2, text: 'second' },
+    ])
+    expect(indexColumns(db, 'idx_dispatches_workspace_created_at')).toEqual([
+      'workspace_id',
+      'sequence',
+    ])
+    expect(indexColumns(db, 'idx_dispatches_open_by_worker')).toEqual([
+      'workspace_id',
+      'to_agent_id',
+      'status',
+      'sequence',
+    ])
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(15)).toEqual({
+      version: 15,
+    })
 
     db.close()
   })

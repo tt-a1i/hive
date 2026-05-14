@@ -118,7 +118,8 @@ const configureAndStartWorker = async (workspaceId: string, workspacePath: strin
       body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
     }
   )
-  const start = (await startResponse.json()) as { runId: string }
+  const startPayload = (await startResponse.json()) as { run_id: string }
+  const start = { runId: startPayload.run_id }
   return start.runId
 }
 

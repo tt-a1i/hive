@@ -174,6 +174,25 @@ describe('team cli with real server', () => {
     )
   })
 
+  test('team report rejects an orchestrator token with the server error detail', async () => {
+    if (!serverStore) {
+      throw new Error('Expected test server store')
+    }
+
+    await expect(runTeamCommand(['report', 'orchestrator should not report'])).rejects.toThrow(
+      "Request failed with status 403: Role 'orchestrator' is not allowed to run team report"
+    )
+
+    const workspaceId = process.env.HIVE_PROJECT_ID
+    if (!workspaceId) {
+      throw new Error('Expected workspace id')
+    }
+
+    expect(
+      serverStore.listMessagesForRecovery(workspaceId, 0).filter((item) => item.type === 'report')
+    ).toEqual([])
+  })
+
   test('team list surfaces 403 when a worker token is used', async () => {
     if (!serverStore) {
       throw new Error('Expected test server store')

@@ -35,7 +35,7 @@ describe('api error messages', () => {
       )
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ runId: 'run-after-session-refresh' }), {
+        new Response(JSON.stringify({ run_id: 'run-after-session-refresh' }), {
           headers: { 'content-type': 'application/json' },
           status: 201,
         })

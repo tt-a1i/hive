@@ -55,6 +55,32 @@ const fetchRuntime = async (baseUrl: string, path: string, init: RequestInit) =>
   }
 }
 
+const readHttpErrorDetail = async (response: Response) => {
+  const text = await response.text().catch(() => '')
+  const trimmed = text.trim()
+  if (!trimmed) return ''
+
+  try {
+    const body = JSON.parse(trimmed) as { error?: unknown }
+    if (typeof body.error === 'string' && body.error.trim()) {
+      return body.error.trim()
+    }
+  } catch {
+    // Non-JSON responses still carry useful diagnostics in their text body.
+  }
+
+  return trimmed
+}
+
+const throwHttpError = async (response: Response): Promise<never> => {
+  const detail = await readHttpErrorDetail(response)
+  throw new Error(
+    detail
+      ? `Request failed with status ${response.status}: ${detail}`
+      : `Request failed with status ${response.status}`
+  )
+}
+
 const postJson = async (baseUrl: string, path: string, body: unknown) => {
   const response = await fetchRuntime(baseUrl, path, {
     body: JSON.stringify(body),
@@ -63,7 +89,7 @@ const postJson = async (baseUrl: string, path: string, body: unknown) => {
   })
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
+    await throwHttpError(response)
   }
 
   return response
@@ -122,7 +148,7 @@ export const runTeamCommand = async (argv: string[]) => {
     })
 
     if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`)
+      await throwHttpError(response)
     }
 
     console.log(JSON.stringify(await response.json()))

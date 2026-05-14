@@ -85,7 +85,7 @@ describe('user input stdin injection', () => {
           body: JSON.stringify({ hive_port: String(hive.port) }),
         }
       )
-      const startPayload = (await startResponse.json()) as { runId: string }
+      const startPayload = (await startResponse.json()) as { run_id: string }
 
       const inputResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/user-input`, {
         method: 'POST',
@@ -96,7 +96,7 @@ describe('user input stdin injection', () => {
       expect(inputResponse.status).toBe(202)
 
       await waitFor(async () => {
-        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.run_id}`, {
           headers: { cookie: uiCookie },
         })
         const run = (await runResponse.json()) as { output: string }

@@ -7,12 +7,9 @@ export const closeAgentRuntime = async (
   registry: LiveRunRegistry,
   syncRun: (run: LiveAgentRun) => LiveAgentRun
 ) => {
-  const activeRuns = registry.list().filter((run) => {
-    const status = syncRun(run).status
-    return status === 'starting' || status === 'running'
-  })
-
-  for (const run of activeRuns) {
+  const runs = registry.list()
+  for (const run of runs) {
+    syncRun(run)
     agentManager?.stopRun(run.runId)
   }
 

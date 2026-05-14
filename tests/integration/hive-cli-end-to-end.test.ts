@@ -36,8 +36,8 @@ const waitFor = async (
 }
 
 describe('hive cli end to end', () => {
-  test('CLI autostarts persisted orchestrator and members on runtime restart', async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'hive-restart-autostart-'))
+  test('CLI leaves persisted launch configs stopped on runtime restart', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-restart-stopped-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
     tempDirs.push(dataDir)
@@ -72,31 +72,22 @@ describe('hive cli end to end', () => {
       const baseUrl = `http://127.0.0.1:${hive.port}`
       const uiCookie = await getUiCookie(baseUrl)
 
-      await waitFor(async () => {
-        const runsResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/runs`, {
-          headers: { cookie: uiCookie },
-        })
-        expect(runsResponse.status).toBe(200)
-        const runs = (await runsResponse.json()) as Array<{
-          agent_id: string
-          run_id: string
-          status: string
-        }>
-        expect(runs.map((run) => run.agent_id).sort()).toEqual([orchestratorId, worker.id].sort())
-        expect(runs.every((run) => run.status === 'running' || run.status === 'starting')).toBe(
-          true
-        )
-
-        for (const run of runs) {
-          const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${run.run_id}`, {
-            headers: { cookie: uiCookie },
-          })
-          expect(runResponse.status).toBe(200)
-          const state = (await runResponse.json()) as { output: string }
-          expect(state.output).toContain(`AGENT=${run.agent_id}`)
-          expect(state.output).toContain(`PORT=${hive.port}`)
-        }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const runsResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/runs`, {
+        headers: { cookie: uiCookie },
       })
+      expect(runsResponse.status).toBe(200)
+      const runs = (await runsResponse.json()) as unknown[]
+      expect(runs).toEqual([])
+      expect(hive.store.listTerminalRuns(workspace.id)).toEqual([])
+      expect(hive.store.listAgentRuns(orchestratorId)).toEqual([])
+      expect(hive.store.listAgentRuns(worker.id)).toEqual([])
+      expect(hive.store.peekAgentLaunchConfig(workspace.id, orchestratorId)?.command).toBe(
+        process.execPath
+      )
+      expect(hive.store.peekAgentLaunchConfig(workspace.id, worker.id)?.command).toBe(
+        process.execPath
+      )
     } finally {
       if (originalDataDir === undefined) delete process.env.HIVE_DATA_DIR
       else process.env.HIVE_DATA_DIR = originalDataDir
@@ -176,15 +167,15 @@ describe('hive cli end to end', () => {
         throw new Error(`start failed: ${await startResponse.text()}`)
       }
       expect(startResponse.status).toBe(201)
-      const startPayload = (await startResponse.json()) as { runId: string }
+      const startPayload = (await startResponse.json()) as { run_id: string }
 
-      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+      const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.run_id}`, {
         headers: { cookie: uiCookie },
       })
       expect(runResponse.status).toBe(200)
       const run = (await runResponse.json()) as { output: string }
       await waitFor(async () => {
-        const stateResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}`, {
+        const stateResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.run_id}`, {
           headers: { cookie: uiCookie },
         })
         const state = (await stateResponse.json()) as { output: string }
@@ -196,7 +187,7 @@ describe('hive cli end to end', () => {
       })
       expect(run.output).toEqual(expect.any(String))
 
-      const stopResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.runId}/stop`, {
+      const stopResponse = await fetch(`${baseUrl}/api/runtime/runs/${startPayload.run_id}/stop`, {
         method: 'POST',
         headers: { cookie: uiCookie },
       })

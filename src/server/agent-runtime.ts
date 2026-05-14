@@ -29,6 +29,8 @@ export const createAgentRuntime = (
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
   const tokenRegistry = createAgentTokenRegistry()
+  const startPromises = new Map<string, Promise<LiveAgentRun>>()
+  let closing = false
   const requireManager = () => {
     if (!agentManager) throw new Error('Agent manager is required for PTY terminal operations')
     return agentManager
@@ -58,6 +60,8 @@ export const createAgentRuntime = (
 
   return {
     async close() {
+      closing = true
+      await Promise.allSettled([...startPromises.values()])
       await closeAgentRuntime(agentManager, registry, syncRun)
     },
     configureAgentLaunch(workspaceId, agentId, input) {
@@ -102,7 +106,9 @@ export const createAgentRuntime = (
       flowAdapter.resumeRun(runId)
     },
     async startAgent(workspace, agentId, input) {
+      if (closing) throw new Error('Agent runtime is closing')
       launchCache.setWorkspaceId(agentId, workspace.id)
+      const key = `${workspace.id}:${agentId}`
       const activeRun = getActiveRunByAgent(
         registry,
         launchCache.getWorkspaceId,
@@ -111,12 +117,20 @@ export const createAgentRuntime = (
         agentId
       )
       if (activeRun) return activeRun
-      return startLiveRun(
+      const pendingStart = startPromises.get(key)
+      if (pendingStart) return pendingStart
+      const startPromise = startLiveRun(
         workspace,
         agentId,
         launchCache.get(workspace.id, agentId),
         input.hivePort
-      )
+      ).finally(() => {
+        if (startPromises.get(key) === startPromise) {
+          startPromises.delete(key)
+        }
+      })
+      startPromises.set(key, startPromise)
+      return startPromise
     },
     stopAgentRun(runId) {
       stopLiveRun(agentManager, registry, syncRun, runId)

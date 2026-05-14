@@ -124,7 +124,7 @@ describe('workspace flow with real server', () => {
     expect(screen.getByTestId('task-graph-drawer')).toBeInTheDocument()
   }, 20_000)
 
-  test('existing workspace auto-starts Queen without exposing a manual Start Queen CTA', async () => {
+  test('existing workspace stays stopped until the user starts Queen', async () => {
     const existingPath = join(sandboxRoot, 'existing-project')
     mkdirSync(existingPath, { recursive: true })
     const existing = serverContext?.store.createWorkspace(existingPath, 'Existing')
@@ -145,15 +145,10 @@ describe('workspace flow with real server', () => {
       )
     })
 
-    expect(screen.queryByTestId('orchestrator-start')).toBeNull()
+    expect(screen.getByTestId('orchestrator-start')).toHaveTextContent('Start Queen')
     expect(screen.queryByText('Queen is offline')).toBeNull()
-
-    await waitFor(
-      () => {
-        expect(document.querySelector('[data-pty-slot="orchestrator"]')).not.toBeNull()
-      },
-      { timeout: 10_000 }
-    )
+    expect(document.querySelector('[data-pty-slot="orchestrator"]')).toBeNull()
+    expect(serverContext.store.listTerminalRuns(existing.id)).toEqual([])
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
   }, 20_000)

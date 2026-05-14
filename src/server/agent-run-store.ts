@@ -211,6 +211,17 @@ export const createAgentRunStore = (db: Database | undefined) => {
       }) satisfies PersistedAgentRun[]
   }
 
+  const markUnfinishedRunsStale = (endedAt = Date.now()) => {
+    if (closed) {
+      return
+    }
+    db?.prepare(
+      `UPDATE agent_runs
+       SET status = 'error', exit_code = NULL, ended_at = ?, updated_at = ?
+       WHERE status IN ('starting', 'running')`
+    ).run(endedAt, endedAt)
+  }
+
   return {
     close,
     initialize,
@@ -218,6 +229,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
     deleteLaunchConfig,
     listAgentRuns,
     listLaunchConfigs,
+    markUnfinishedRunsStale,
     saveLaunchConfig,
     updatePersistedRun,
   }

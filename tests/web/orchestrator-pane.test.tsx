@@ -14,14 +14,15 @@ afterEach(() => {
 
 const renderPane = (state: OrchestratorPaneState) => {
   const onStop = vi.fn()
+  const onStart = vi.fn()
   const onRestart = vi.fn()
-  render(<OrchestratorPane state={state} onStop={onStop} onRestart={onRestart} />)
-  return { onStop, onRestart }
+  render(<OrchestratorPane state={state} onStop={onStop} onStart={onStart} onRestart={onRestart} />)
+  return { onStop, onStart, onRestart }
 }
 
 describe('OrchestratorPane three-state UI', () => {
   test('starting: shows passive startup state without a manual Start Queen CTA', () => {
-    const { onStop, onRestart } = renderPane({ kind: 'starting' })
+    const { onStop, onStart, onRestart } = renderPane({ kind: 'starting' })
 
     expect(screen.getByTestId('orchestrator-starting-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Starting Queen')
@@ -30,11 +31,26 @@ describe('OrchestratorPane three-state UI', () => {
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
     expect(onStop).not.toHaveBeenCalled()
+    expect(onStart).not.toHaveBeenCalled()
+    expect(onRestart).not.toHaveBeenCalled()
+  })
+
+  test('stopped: shows explicit Start Queen CTA', () => {
+    const { onStop, onStart, onRestart } = renderPane({ kind: 'stopped' })
+
+    expect(screen.getByTestId('orchestrator-stopped-body')).toBeInTheDocument()
+    expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Queen is stopped')
+    const start = screen.getByTestId('orchestrator-start')
+    expect(start).toHaveTextContent('Start Queen')
+
+    fireEvent.click(start)
+    expect(onStart).toHaveBeenCalledTimes(1)
+    expect(onStop).not.toHaveBeenCalled()
     expect(onRestart).not.toHaveBeenCalled()
   })
 
   test('running: PTY slot mounts; no overlay actions or empty bodies render', () => {
-    const { onStop, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
+    const { onStop, onStart, onRestart } = renderPane({ kind: 'running', runId: 'run-abc' })
 
     // PTY slot must use the run id so TerminalView can portal into it.
     const slot = document.getElementById('orch-pty-run-abc')
@@ -48,15 +64,17 @@ describe('OrchestratorPane three-state UI', () => {
     expect(screen.queryByTestId('orchestrator-restart')).toBeNull()
     expect(screen.queryByTestId('orchestrator-running-actions')).toBeNull()
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()
+    expect(screen.queryByTestId('orchestrator-stopped-body')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
     expect(onStop).not.toHaveBeenCalled()
+    expect(onStart).not.toHaveBeenCalled()
     expect(onRestart).not.toHaveBeenCalled()
   })
 
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {
     const errorMessage = 'claude CLI not found in PATH'
-    const { onStop, onRestart } = renderPane({ kind: 'failed', error: errorMessage })
+    const { onStop, onStart, onRestart } = renderPane({ kind: 'failed', error: errorMessage })
 
     expect(screen.getByTestId('orchestrator-failed-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-description')).toHaveTextContent(errorMessage)
@@ -67,6 +85,7 @@ describe('OrchestratorPane three-state UI', () => {
 
     fireEvent.click(retryBody)
     expect(onRestart).toHaveBeenCalledTimes(1)
+    expect(onStart).not.toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
   })
 })

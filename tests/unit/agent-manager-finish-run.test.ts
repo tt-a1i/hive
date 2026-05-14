@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-const exitSequences: Array<number[]> = []
+const exitSequences: Array<Array<number | null>> = []
 
 const waitFor = async (assertion: () => void, timeoutMs = 1000, intervalMs = 10) => {
   const deadline = Date.now() + timeoutMs
@@ -22,7 +22,7 @@ const waitFor = async (assertion: () => void, timeoutMs = 1000, intervalMs = 10)
 vi.mock('node-pty', () => ({
   spawn: () => {
     const exitCodes = exitSequences.shift() ?? [0, 0]
-    let exitHandler: ((event: { exitCode: number }) => void) | undefined
+    let exitHandler: ((event: { exitCode: number | null }) => void) | undefined
 
     queueMicrotask(() => {
       for (const exitCode of exitCodes) {
@@ -34,7 +34,7 @@ vi.mock('node-pty', () => ({
       pid: 4242,
       kill() {},
       onData() {},
-      onExit(handler: (event: { exitCode: number }) => void) {
+      onExit(handler: (event: { exitCode: number | null }) => void) {
         exitHandler = handler
       },
       write() {},
@@ -89,5 +89,26 @@ describe('agent manager finishRun', () => {
     expect(onExitSpy).toHaveBeenCalledTimes(1)
     expect(onExitSpy).toHaveBeenCalledWith({ exitCode: 1, runId: run.runId })
     expect(manager.getRun(run.runId)).toMatchObject({ exitCode: 1, status: 'error' })
+  })
+
+  test('treats a null exit result as terminal when PTY exit fires twice', async () => {
+    exitSequences.push([null, 0])
+    const manager = createAgentManager()
+    const onExitSpy = vi.fn()
+
+    const run = await manager.startAgent({
+      agentId: 'agent-3',
+      command: '/bin/bash',
+      cwd: '/tmp',
+      onExit: onExitSpy,
+    })
+
+    await waitFor(() => {
+      expect(manager.getRun(run.runId).status).toBe('error')
+    })
+
+    expect(onExitSpy).toHaveBeenCalledTimes(1)
+    expect(onExitSpy).toHaveBeenCalledWith({ exitCode: null, runId: run.runId })
+    expect(manager.getRun(run.runId)).toMatchObject({ exitCode: null, status: 'error' })
   })
 })
