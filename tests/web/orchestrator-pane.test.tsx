@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import {
@@ -13,36 +12,11 @@ afterEach(() => {
   cleanup()
 })
 
-const renderPane = (
-  state: OrchestratorPaneState,
-  extraProps?: { hasUserInput?: boolean; markUserInput?: () => void }
-) => {
+const renderPane = (state: OrchestratorPaneState) => {
   const onStop = vi.fn()
   const onRestart = vi.fn()
-  render(
-    <OrchestratorPane
-      state={state}
-      onStop={onStop}
-      onRestart={onRestart}
-      hasUserInput={extraProps?.hasUserInput ?? false}
-      markUserInput={extraProps?.markUserInput ?? (() => {})}
-    />
-  )
+  render(<OrchestratorPane state={state} onStop={onStop} onRestart={onRestart} />)
   return { onStop, onRestart }
-}
-
-/** Stateful host that lets the Dismiss action flip hasUserInput=true. */
-const StatefulPaneHost = ({ state }: { state: OrchestratorPaneState }) => {
-  const [hasUserInput, setHasUserInput] = useState(false)
-  return (
-    <OrchestratorPane
-      state={state}
-      onStop={() => {}}
-      onRestart={() => {}}
-      hasUserInput={hasUserInput}
-      markUserInput={() => setHasUserInput(true)}
-    />
-  )
 }
 
 describe('OrchestratorPane three-state UI', () => {
@@ -94,24 +68,5 @@ describe('OrchestratorPane three-state UI', () => {
     fireEvent.click(retryBody)
     expect(onRestart).toHaveBeenCalledTimes(1)
     expect(onStop).not.toHaveBeenCalled()
-  })
-})
-
-describe('OrchestratorPane hint overlay integration', () => {
-  test('hint overlay shows when Orchestrator is running with no input yet', () => {
-    renderPane({ kind: 'running', runId: 'run-hint' }, { hasUserInput: false })
-    expect(screen.getByTestId('orch-hint')).toBeInTheDocument()
-  })
-
-  test('clicking Dismiss on hint hides the overlay', () => {
-    render(<StatefulPaneHost state={{ kind: 'running', runId: 'run-dismiss' }} />)
-    expect(screen.getByTestId('orch-hint')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
-    expect(screen.queryByTestId('orch-hint')).toBeNull()
-  })
-
-  test('overlay does not render when Orchestrator is not running', () => {
-    renderPane({ kind: 'starting' })
-    expect(screen.queryByTestId('orch-hint')).toBeNull()
   })
 })
