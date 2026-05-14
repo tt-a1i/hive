@@ -45,7 +45,7 @@ export const WelcomePane = ({
     >
       {heroImageSrc ? <img src={heroImageSrc} alt="" className="h-24 w-24" aria-hidden /> : null}
       <div className="space-y-2">
-        <div className="text-2xl font-semibold text-pri">Welcome to Hive</div>
+        <div className="display text-2xl font-semibold text-pri">Welcome to Hive</div>
         <div className="text-sm text-sec">
           Coordinate Claude Code, Codex, Gemini, OpenCode — locally.
         </div>

@@ -25,7 +25,7 @@ export const Topbar = ({
   >
     <div className="flex items-center gap-2">
       <Hexagon size={16} className="text-pri" aria-hidden />
-      <span className="font-semibold text-pri">Hive</span>
+      <span className="display font-semibold text-pri">Hive</span>
       <span className="text-ter text-xs">v{version}</span>
     </div>
     <div className="flex-1" />

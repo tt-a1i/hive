@@ -118,12 +118,14 @@
 
 /* Universal text rendering — UI app: tabular numerics + Inter cv11 (single-storey 1). */
 html, body {
-  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1;
+  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1, "ss03" 1;
   -moz-osx-font-smoothing: grayscale;
   caret-color: var(--accent);
 }
+/* Subtle accent-tinted selection — Linear-style. 22% reads as confidently
+   highlighted without screaming, vs. the 32% it used to be. */
 ::selection {
-  background: color-mix(in oklab, var(--accent) 32%, transparent);
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
   color: var(--text-primary);
 }
 
@@ -136,14 +138,26 @@ html, body {
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
+  /* Tiny negative tracking — Inter is designed with positive metrics; UI text
+     in dark themes reads tighter and more "designed" with -0.011em (Linear,
+     Vercel, Stripe all sit in this -0.008 to -0.014em range). Headings get
+     a steeper pull (-0.02em) via the .display utility below. */
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 #root { height: 100%; }
 
-.mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Monospace ignores the global negative tracking — it's metric-correct. */
+  letter-spacing: 0;
+}
+/* Display-class headings — applied to Dialog.Title / hero copy / WelcomePane
+   to pull metrics tighter at larger sizes where Inter starts to feel airy. */
+.display { letter-spacing: -0.02em; }
 
 /* Linear dark palette helpers (class sugar) */
 .bg-0 { background: var(--bg-0); }
@@ -423,6 +437,14 @@ html, body {
     0 1px 2px rgba(0, 0, 0, 0.3);
 }
 .icon-btn:active { transform: scale(0.97); }
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 1px rgba(0, 0, 0, 0.2),
+    0 0 0 2px var(--ring-focus),
+    0 0 0 5px color-mix(in oklab, var(--accent) 14%, transparent);
+}
 .icon-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .icon-btn--primary {
   background: var(--accent);
@@ -492,7 +514,11 @@ html, body {
 }
 .selectable-card:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--ring-focus);
+  /* Two-layer focus ring — matches `.input`. The 2px band sits against the
+     border, the 6px halo softens the edge so focus reads as a glow. */
+  box-shadow:
+    0 0 0 2px var(--ring-focus),
+    0 0 0 6px color-mix(in oklab, var(--accent) 14%, transparent);
 }
 .selectable-card[aria-pressed="true"] {
   border-color: var(--accent);
@@ -691,9 +717,12 @@ html, body {
 .input:hover:not(:focus) { border-color: var(--text-tertiary); }
 .input:focus-visible {
   border-color: var(--accent);
+  /* Two-layer focus ring — tight 2px confidence band + soft 6px halo so focus
+     reads as a glow, not a hard outline. Matches `.selectable-card`. */
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.25),
-    0 0 0 3px var(--ring-focus);
+    0 0 0 2px var(--ring-focus),
+    0 0 0 6px color-mix(in oklab, var(--accent) 14%, transparent);
 }
 .input--readonly { background: var(--bg-0); color: var(--text-secondary); cursor: default; }
 

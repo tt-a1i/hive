@@ -94,7 +94,7 @@ export const ConfirmWorkspaceDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-[15px] font-medium text-pri">
+                <Dialog.Title className="display text-[15px] font-medium text-pri">
                   Add workspace
                 </Dialog.Title>
                 <Dialog.Description className="text-[11px] text-ter">

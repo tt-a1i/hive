@@ -65,7 +65,7 @@ export const FirstRunWizard = ({
                   </div>
                   <div className="space-y-2">
                     {/* Dialog.Title IS the visible welcome heading on slide 0 */}
-                    <Dialog.Title className="text-xl font-semibold text-pri">
+                    <Dialog.Title className="display text-xl font-semibold text-pri">
                       Welcome to Hive
                     </Dialog.Title>
                     <p className="text-sm text-sec">
@@ -84,7 +84,7 @@ export const FirstRunWizard = ({
 
               {slideIdx === 1 && (
                 <div className="flex flex-col gap-4 py-2">
-                  <h2 className="text-lg font-semibold text-pri">How it works</h2>
+                  <h2 className="display text-lg font-semibold text-pri">How it works</h2>
                   <ol className="flex flex-col gap-3">
                     {[
                       {
@@ -126,7 +126,7 @@ export const FirstRunWizard = ({
 
               {slideIdx === 2 && (
                 <div className="flex flex-col gap-3 py-2">
-                  <h2 className="text-lg font-semibold text-pri">Get started</h2>
+                  <h2 className="display text-lg font-semibold text-pri">Get started</h2>
                   <p className="text-sm text-sec">Choose how you want to begin.</p>
                   <div className="mt-2 flex flex-col gap-2">
                     <button
