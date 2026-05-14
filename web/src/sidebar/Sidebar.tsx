@@ -185,23 +185,32 @@ export const Sidebar = ({
                 </button>
                 {/* Compact layout — Discord-style square avatar. Shown by the */}
                 {/* same container query when sidebar width is ≤96px. */}
-                <button
-                  type="button"
-                  aria-label={workspace.name}
-                  aria-current={isActive ? 'true' : undefined}
-                  title={`${workspace.name}\n${workspace.path}`}
-                  onClick={() => onSelectWorkspace(workspace.id)}
-                  className="ws-avatar-cell hidden w-full justify-center py-2"
-                  data-testid="ws-avatar-cell"
+                <Tooltip
+                  side="right"
+                  label={
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-medium">{workspace.name}</span>
+                      <span className="mono text-ter">{workspace.path}</span>
+                    </span>
+                  }
                 >
-                  <WorkspaceAvatar
-                    workspaceId={workspace.id}
-                    name={workspace.name}
-                    isActive={isActive}
-                    working={hasWorking}
-                    workingCount={workingCount}
-                  />
-                </button>
+                  <button
+                    type="button"
+                    aria-label={workspace.name}
+                    aria-current={isActive ? 'true' : undefined}
+                    onClick={() => onSelectWorkspace(workspace.id)}
+                    className="ws-avatar-cell hidden w-full justify-center py-2"
+                    data-testid="ws-avatar-cell"
+                  >
+                    <WorkspaceAvatar
+                      workspaceId={workspace.id}
+                      name={workspace.name}
+                      isActive={isActive}
+                      working={hasWorking}
+                      workingCount={workingCount}
+                    />
+                  </button>
+                </Tooltip>
                 <Tooltip label={`Delete workspace ${workspace.name}`}>
                   <button
                     type="button"

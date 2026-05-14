@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { AlertTriangle, Play, X } from 'lucide-react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { Tooltip } from '../ui/Tooltip.js'
 import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { useWorkerModalResize, WORKER_MODAL_MIN } from './useWorkerModalResize.js'
@@ -104,16 +105,17 @@ export const WorkerModal = ({
               className="relative flex min-h-0 flex-1 flex-col p-3"
               data-testid="worker-modal-terminal-slot"
             >
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  aria-label="Close worker detail"
-                  title="Close"
-                  className="float-action absolute top-4 right-4 z-10"
-                >
-                  <X size={14} aria-hidden />
-                </button>
-              </Dialog.Close>
+              <Tooltip label="Close (Esc)">
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    aria-label="Close worker detail"
+                    className="float-action absolute top-4 right-4 z-10"
+                  >
+                    <X size={14} aria-hidden />
+                  </button>
+                </Dialog.Close>
+              </Tooltip>
 
               <div
                 className="flex min-h-0 flex-1 rounded-lg border"

@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
+import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
 import { RoleAvatar } from './RoleAvatar.js'
 
@@ -190,17 +191,18 @@ export const AddWorkerDialog = ({
                 <label className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <SectionLabel>Name</SectionLabel>
-                    <button
-                      type="button"
-                      aria-label="Generate random member name"
-                      title="Generate random member name"
-                      className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
-                      onClick={onRandomName}
-                      data-testid="random-worker-name"
-                    >
-                      <Dices size={12} aria-hidden />
-                      Random
-                    </button>
+                    <Tooltip label="Roll a random playful name">
+                      <button
+                        type="button"
+                        aria-label="Generate random member name"
+                        className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
+                        onClick={onRandomName}
+                        data-testid="random-worker-name"
+                      >
+                        <Dices size={12} aria-hidden />
+                        Random
+                      </button>
+                    </Tooltip>
                   </div>
                   <input
                     // biome-ignore lint/a11y/noAutofocus: dialog is opt-in; without this Radix parks focus on the first toolbar button (Random) rather than the name field

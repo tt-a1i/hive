@@ -1019,6 +1019,23 @@ html, body {
   position: relative;
 }
 
+/* Stopped worker — the card visually steps back so a grid mixing working
+   and stopped agents reads at a glance. Reduced opacity + slight desat
+   on the card body. Hover restores full saturation so the user can still
+   inspect / restart the agent without the chrome fighting them. */
+.worker-card-shell[data-status='stopped'] .worker-card {
+  opacity: 0.65;
+  filter: saturate(0.6);
+  transition:
+    opacity var(--dur-fast) ease,
+    filter var(--dur-fast) ease;
+}
+.worker-card-shell[data-status='stopped']:hover .worker-card,
+.worker-card-shell[data-status='stopped']:focus-within .worker-card {
+  opacity: 1;
+  filter: none;
+}
+
 /* Worker-card status pill — `.pill` does the chrome; this only adds the
    layout hook so the pill aligns at the start of the flex column. The
    tone modifier (.pill--green / --orange / --red / --ghost) is set by
