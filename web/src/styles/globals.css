@@ -488,8 +488,7 @@ html, body {
 }
 .selectable-card[aria-pressed="true"] {
   border-color: var(--accent);
-  background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
-  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in oklab, var(--accent) 14%, var(--bg-2));
 }
 
 /* Role badges — flex-shrink:0 + nowrap so they never clip in narrow rows. */

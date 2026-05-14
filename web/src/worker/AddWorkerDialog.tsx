@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, Dices, RotateCcw, UserPlus } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { Check, ChevronDown, Dices, RotateCcw } from 'lucide-react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
@@ -27,15 +27,14 @@ type AddWorkerDialogProps = {
 interface RoleCardSpec {
   value: WorkerRole
   label: string
-  hint: string
   dashed?: boolean
 }
 
 const ROLE_CARDS: RoleCardSpec[] = [
-  { value: 'coder', label: 'Coder', hint: 'Implements features.' },
-  { value: 'reviewer', label: 'Reviewer', hint: 'Reviews code.' },
-  { value: 'tester', label: 'Tester', hint: 'Writes / runs tests.' },
-  { value: 'custom', label: 'Custom', hint: 'Describe behavior freely.', dashed: true },
+  { value: 'coder', label: 'Coder' },
+  { value: 'reviewer', label: 'Reviewer' },
+  { value: 'tester', label: 'Tester' },
+  { value: 'custom', label: 'Custom', dashed: true },
 ]
 
 const ROLE_LABELS: Record<WorkerRole, string> = {
@@ -44,10 +43,6 @@ const ROLE_LABELS: Record<WorkerRole, string> = {
   reviewer: 'Reviewer',
   tester: 'Tester',
 }
-
-const FieldLabel = ({ children }: { children: ReactNode }) => (
-  <span className="text-[10px] font-medium uppercase tracking-wider text-ter">{children}</span>
-)
 
 const RoleCard = ({
   active,
@@ -63,14 +58,11 @@ const RoleCard = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`role-card-${spec.value}`}
-    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex flex-col items-start gap-2 p-3`}
+    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-2.5 px-3 py-2.5`}
   >
-    <div className="flex w-full items-center justify-between">
-      <RoleAvatar role={spec.value} size={28} />
-      {active ? <Check size={14} className="text-accent" aria-hidden /> : null}
-    </div>
-    <div className="text-sm font-medium text-pri">{spec.label}</div>
-    <div className="text-[12px] leading-snug text-ter">{spec.hint}</div>
+    <RoleAvatar role={spec.value} size={22} />
+    <span className="flex-1 text-left text-[13px] font-medium text-pri">{spec.label}</span>
+    {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
 )
 
@@ -88,11 +80,18 @@ const AgentChip = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`agent-radio-${preset.id}`}
-    className="selectable-card flex flex-col items-start gap-0.5 px-3 py-2"
+    className="selectable-card flex items-center justify-between gap-2 px-3 py-2.5"
   >
-    <span className="truncate text-[13px] font-medium text-pri">{preset.displayName}</span>
-    <span className="mono truncate text-[10px] text-ter">{preset.command}</span>
+    <span className="flex min-w-0 flex-col items-start gap-0.5">
+      <span className="truncate text-[13px] font-medium text-pri">{preset.displayName}</span>
+      <span className="mono truncate text-[10px] text-ter">{preset.command}</span>
+    </span>
+    {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
+)
+
+const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+  <span className="text-[12px] font-medium text-sec">{children}</span>
 )
 
 export const AddWorkerDialog = ({
@@ -147,7 +146,7 @@ export const AddWorkerDialog = ({
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
           <Dialog.Content
             data-testid="add-worker-content"
-            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[720px] max-w-full flex-col rounded-lg border"
+            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[560px] max-w-full flex-col rounded-xl border"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
@@ -155,42 +154,31 @@ export const AddWorkerDialog = ({
           >
             <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
               <div
-                className="flex items-center gap-3 border-b px-5 py-4"
+                className="flex shrink-0 flex-col gap-0.5 border-b px-6 pt-5 pb-4"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg"
-                  style={{
-                    background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
-                    color: 'var(--accent)',
-                  }}
-                >
-                  <UserPlus size={18} aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <Dialog.Title className="text-[14px] font-medium text-pri">
-                    Add team member
-                  </Dialog.Title>
-                  <Dialog.Description className="text-[12px] text-ter">
-                    Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
-                    <span className="mono">team send</span>.
-                  </Dialog.Description>
-                </div>
+                <Dialog.Title className="text-[15px] font-medium text-pri">
+                  Add team member
+                </Dialog.Title>
+                <Dialog.Description className="text-[12px] text-ter">
+                  Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
+                  <span className="mono">team send</span>.
+                </Dialog.Description>
               </div>
 
-              <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
+              <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
                 <label className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <FieldLabel>Name</FieldLabel>
+                    <SectionLabel>Name</SectionLabel>
                     <button
                       type="button"
                       aria-label="Generate random member name"
                       title="Generate random member name"
-                      className="icon-btn h-7 px-2 text-[12px]"
+                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ter transition-colors hover:bg-3 hover:text-sec"
                       onClick={onRandomName}
                       data-testid="random-worker-name"
                     >
-                      <Dices size={13} aria-hidden />
+                      <Dices size={12} aria-hidden />
                       Random
                     </button>
                   </div>
@@ -205,8 +193,8 @@ export const AddWorkerDialog = ({
                 </label>
 
                 <div className="flex flex-col gap-2">
-                  <FieldLabel>Role</FieldLabel>
-                  <div className="grid grid-cols-4 gap-2">
+                  <SectionLabel>Role</SectionLabel>
+                  <div className="grid grid-cols-2 gap-2">
                     {ROLE_CARDS.map((spec) => (
                       <RoleCard
                         key={spec.value}
@@ -226,38 +214,33 @@ export const AddWorkerDialog = ({
                   className="group flex flex-col gap-2"
                 >
                   <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-                    <span className="flex items-center gap-2 text-sec">
+                    <span className="flex items-center gap-1.5">
                       <ChevronDown
                         size={12}
                         aria-hidden
                         className="-rotate-90 text-ter transition-transform duration-150 group-open:rotate-0"
                       />
-                      <FieldLabel>Role instructions</FieldLabel>
+                      <SectionLabel>Role instructions</SectionLabel>
                       {roleDescriptionModified ? (
                         <span className="text-[12px] text-ter">
                           · Modified from {roleLabel} default
                         </span>
                       ) : null}
                     </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      {roleDescriptionModified ? (
-                        <button
-                          type="button"
-                          className="icon-btn h-7 px-2 text-[12px]"
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            onRoleDescriptionReset()
-                          }}
-                        >
-                          <RotateCcw size={12} aria-hidden />
-                          Reset
-                        </button>
-                      ) : null}
-                      <span className="text-[12px] text-sec">
-                        {instructionsOpen ? 'Hide' : 'Customize'}
-                      </span>
-                    </span>
+                    {roleDescriptionModified ? (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ter transition-colors hover:bg-3 hover:text-sec"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          onRoleDescriptionReset()
+                        }}
+                      >
+                        <RotateCcw size={11} aria-hidden />
+                        Reset
+                      </button>
+                    ) : null}
                   </summary>
                   <textarea
                     aria-label="Role instructions"
@@ -272,17 +255,17 @@ export const AddWorkerDialog = ({
                     }
                     title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
                     className="input mono resize-y leading-relaxed"
-                    style={{ minHeight: 118, fontSize: 12 }}
+                    style={{ minHeight: 110, fontSize: 12 }}
                     data-testid="role-instructions-textarea"
                   />
                 </details>
 
                 <div className="flex flex-col gap-2">
-                  <FieldLabel>Agent CLI</FieldLabel>
+                  <SectionLabel>Agent CLI</SectionLabel>
                   {commandPresets.length === 0 ? (
                     <div className="text-[12px] text-ter">Loading presets…</div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2">
                       {commandPresets.map((preset) => (
                         <AgentChip
                           key={preset.id}
@@ -297,7 +280,7 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex items-center justify-end gap-3 border-t px-5 py-3"
+                className="flex shrink-0 items-center justify-end gap-3 border-t px-6 py-3.5"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
                 {submitBlockedReason && !creating ? (
