@@ -12,12 +12,14 @@ the web UI keeps tasks, terminals, and reports in one place.
 [![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#platform-support)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#platform-support)
 
 English · [简体中文](./README.zh-CN.md)
 
-> Public preview: `0.6.0-alpha.0`. Hive is local-first, runs on `127.0.0.1`,
-> and is intended for developers who already use CLI coding agents.
+> Public preview. Hive is local-first, runs on `127.0.0.1`, and is intended
+> for developers who already use CLI coding agents. The latest published
+> version is on [npm](https://www.npmjs.com/package/@tt-a1i/hive) and the
+> badge above resolves to it.
 
 ## Why Hive
 
@@ -127,7 +129,7 @@ coding model. It coordinates tools you already run locally.
 | --- | --- | --- |
 | macOS | Tier 1 | Main development and release verification target. |
 | Linux | Tier 1 | CI verified. Native folder picking expects `zenity`; manual path entry works without it. |
-| Windows | Tier 1 | CI verified. Folder picking uses Windows PowerShell and the package includes `team.cmd`. |
+| Windows | Tier 2 | CI runs a Windows test subset and a packaged-install smoke. Folder picking uses Windows PowerShell and the package includes `team.cmd`. Treat as best-effort — full Windows verification before each release is manual. |
 
 All platforms require Node.js 22+. Hive depends on `node-pty`, so native install
 tooling may be required when prebuilt binaries are unavailable.

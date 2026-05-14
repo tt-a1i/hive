@@ -99,14 +99,21 @@ describe('app shell with real server', () => {
     expect(await screen.findByTestId('confirm-workspace-dialog')).toBeInTheDocument()
   })
 
-  test('init failure surfaces error toast (distinguishes runtime-down from empty list)', async () => {
+  test('init failure surfaces error toast and disables Add Workspace CTA', async () => {
     // Override the per-test fetch stub from beforeEach with a hard-rejecting
     // one so bootstrap fails on the first call.
     vi.stubGlobal('fetch', () => Promise.reject(new Error('ECONNREFUSED')))
     render(<App />)
+    // Toast surfaces the failure.
     await waitFor(() => {
-      expect(screen.getByText(/could not reach hive runtime/i)).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent(/could not reach hive runtime/i)
     })
+    // WelcomePane Add Workspace CTA becomes disabled so the user cannot
+    // trigger a create flow that will fail against an unreachable runtime.
+    expect(screen.getByTestId('welcome-pane-add')).toBeDisabled()
+    expect(screen.getByTestId('welcome-pane-disabled-reason')).toHaveTextContent(
+      /could not reach hive runtime/i
+    )
   })
 
   test('workspace sidebar can be resized from its right edge', async () => {

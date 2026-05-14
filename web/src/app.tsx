@@ -35,19 +35,22 @@ const AppInner = () => {
   const toast = useToast()
   const { wizardOpen, closeWizard } = useFirstRunWizard(workspaces)
   const triggerAddDialog = useCallback(() => setAddDialogTrigger((v) => v + 1), [])
-
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
   const onBootstrapError = useCallback(
-    (message: string) => toast.show({ kind: 'error', message }),
+    (message: string) => {
+      setBootstrapError(message)
+      toast.show({ kind: 'error', message })
+    },
     [toast]
   )
   useInitializeUiSession(setWorkspaces, setActiveWorkspaceId, onBootstrapError)
-
   const wsCreate = useWorkspaceCreate({
     onWorkspaceCreated: (ws) => {
       setWorkspaces((c) => (c === null ? [ws] : [...c, ws]))
       selectWorkspace(ws.id)
       setWorkersByWorkspaceId((c) => ({ ...c, [ws.id]: [] }))
     },
+    onError: (message) => toast.show({ kind: 'error', message }),
   })
   const wsState = { demoMode, workspaces, activeWorkspaceId, workersByWorkspaceId }
   const eff = useEffectiveWorkspaceState(wsState)
@@ -103,6 +106,7 @@ const AppInner = () => {
           onOrchestratorResult={wsCreate.recordOrchestratorResult}
           onRequestAddWorkspace={triggerAddDialog}
           onTryDemo={enableDemo}
+          welcomeDisabledReason={bootstrapError ?? undefined}
           orchestratorAutostartError={
             activeId ? (wsCreate.orchestratorAutostartErrors[activeId] ?? null) : null
           }

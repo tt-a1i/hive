@@ -42,15 +42,15 @@ const defaultDuration = (kind: ToastKind): number => {
   return 0
 }
 
+// Module-level monotonic counter. Toast ids live only inside the current page
+// session — collisions across page loads would still be uniquely-keyed by the
+// Date.now() suffix. Using a counter sidesteps the AGENTS.md §6 ban on
+// Math.random for ids and does not depend on a secure context the way
+// crypto.randomUUID does.
+let toastIdCounter = 0
 const generateId = (): string => {
-  // crypto.randomUUID requires a secure context (HTTPS or localhost). Hive is
-  // currently 127.0.0.1-bound (secure), but a future LAN deploy would not be —
-  // fall back to a Math.random-derived id so ToastProvider never crashes.
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `t-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`
-  }
-  const random = Math.random().toString(36).slice(2, 10)
-  return `t-${random}-${Date.now().toString(36)}`
+  toastIdCounter += 1
+  return `t-${toastIdCounter.toString(36)}-${Date.now().toString(36)}`
 }
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {

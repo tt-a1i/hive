@@ -10,6 +10,8 @@ import type { WorkspaceCreateInput } from './workspace/workspace-create-input.js
 interface UseWorkspaceCreateInput {
   /** Mutate workspaces list when create succeeds. */
   onWorkspaceCreated: (workspace: WorkspaceSummary) => void
+  /** Surface server / network errors so the caller can toast them. */
+  onError?: (message: string) => void
 }
 
 interface UseWorkspaceCreateOutput {
@@ -28,6 +30,7 @@ interface UseWorkspaceCreateOutput {
  */
 export const useWorkspaceCreate = ({
   onWorkspaceCreated,
+  onError,
 }: UseWorkspaceCreateInput): UseWorkspaceCreateOutput => {
   const [orchestratorAutostartErrors, setErrors] = useState<Record<string, string | null>>({})
   const [orchestratorAutostartRunIds, setRunIds] = useState<Record<string, string | null>>({})
@@ -42,17 +45,23 @@ export const useWorkspaceCreate = ({
 
   const createNewWorkspace = useCallback(
     async (input: WorkspaceCreateInput) => {
-      const response = await createWorkspace({
-        name: input.name,
-        path: input.path,
-        autostart_orchestrator: true,
-        command_preset_id: input.commandPresetId,
-      })
-      recordOrchestratorResult(response.id, response.orchestrator_start)
-      onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })
-      return response
+      try {
+        const response = await createWorkspace({
+          name: input.name,
+          path: input.path,
+          autostart_orchestrator: true,
+          command_preset_id: input.commandPresetId,
+        })
+        recordOrchestratorResult(response.id, response.orchestrator_start)
+        onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })
+        return response
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create workspace'
+        onError?.(message)
+        throw error
+      }
     },
-    [onWorkspaceCreated, recordOrchestratorResult]
+    [onWorkspaceCreated, onError, recordOrchestratorResult]
   )
 
   return {

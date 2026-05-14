@@ -2,6 +2,30 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.2 - 2026-05-14
+
+Follow-up to alpha.1 — corrects a handful of inconsistencies and tightens the
+runtime-down experience that was deferred from the alpha.1 review.
+
+- Removed the OrchestratorHintOverlay introduced in alpha.1. The hint card on
+  the Orchestrator pane was judged as unnecessary; agent terminals are now
+  back to a clean full-bleed PTY.
+- Runtime-down handling is no longer half-finished: when the local Hive
+  runtime is unreachable on startup, the WelcomePane "Add your first
+  workspace" CTA is disabled with an explicit footnote, and `createWorkspace`
+  failures now surface as an error toast instead of being swallowed.
+- npm releases are now published with `--provenance`, matching the prior
+  claim in README/CHANGELOG. The alpha.0 / alpha.1 tarballs do not have
+  provenance attestations; alpha.2 is the first release that actually does.
+- Toast ids no longer use `Math.random()` (AGENTS.md §6); switched to a
+  module-level monotonic counter — `crypto.randomUUID` was the previous
+  fallback but a future LAN deployment would not have a secure context.
+- README and SECURITY no longer pin a specific version number in the public
+  preview banner — the npm badge now carries that responsibility.
+- Windows is documented as Tier 2 (CI smoke + manual verification before
+  release) rather than Tier 1; the previous wording oversold what the CI
+  matrix actually covers.
+
 ## 0.6.0-alpha.1 - 2026-05-14
 
 UI onboarding revamp. Three audits (visual / UX / competitive) called the

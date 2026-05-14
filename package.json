@@ -1,6 +1,6 @@
 {
   "name": "@tt-a1i/hive",
-  "version": "0.6.0-alpha.1",
+  "version": "0.6.0-alpha.2",
   "description": "Local multi-agent workspace for coordinating CLI coding agents through a web UI.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
