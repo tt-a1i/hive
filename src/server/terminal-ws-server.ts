@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server } from 'node:http'
 
 import { WebSocketServer } from 'ws'
-
+import { getLocalRequestRejection } from './local-request-guard.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { createTasksWebSocketServer } from './tasks-websocket-server.js'
 import type { TerminalMirrorSize } from './terminal-state-mirror.js'
@@ -65,6 +65,10 @@ export const createTerminalWebSocketServer = (server: Server, store: RuntimeStor
         return
       }
       rejectUpgrade(socket, '404 Not Found')
+      return
+    }
+    if (getLocalRequestRejection(request)) {
+      rejectUpgrade(socket, '403 Forbidden')
       return
     }
     if (!validateUpgradeSession(request)) {

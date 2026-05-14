@@ -60,7 +60,7 @@ test('Skip closes the wizard from any slide', () => {
   expect(onClose).toHaveBeenCalledOnce()
 })
 
-test('Slide 3 Add Workspace button fires onAddWorkspace and closes', () => {
+test('Slide 3 Add Workspace button fires onAddWorkspace and closes without marking seen', () => {
   const onAdd = vi.fn()
   const onClose = vi.fn()
   render(<FirstRunWizard open onClose={onClose} onAddWorkspace={onAdd} onTryDemo={() => {}} />)
@@ -68,10 +68,10 @@ test('Slide 3 Add Workspace button fires onAddWorkspace and closes', () => {
   fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
   fireEvent.click(screen.getByRole('button', { name: /add workspace/i }))
   expect(onAdd).toHaveBeenCalledOnce()
-  expect(onClose).toHaveBeenCalledOnce()
+  expect(onClose).toHaveBeenCalledWith(false)
 })
 
-test('Slide 3 Try Demo button fires onTryDemo and closes', () => {
+test('Slide 3 Try Demo button fires onTryDemo and closes while marking seen', () => {
   const onDemo = vi.fn()
   const onClose = vi.fn()
   render(<FirstRunWizard open onClose={onClose} onAddWorkspace={() => {}} onTryDemo={onDemo} />)
@@ -79,7 +79,7 @@ test('Slide 3 Try Demo button fires onTryDemo and closes', () => {
   fireEvent.click(screen.getByRole('button', { name: /^next$/i }))
   fireEvent.click(screen.getByRole('button', { name: /try demo/i }))
   expect(onDemo).toHaveBeenCalledOnce()
-  expect(onClose).toHaveBeenCalledOnce()
+  expect(onClose).toHaveBeenCalledWith(true)
 })
 
 // ─── W3: App auto-opens wizard on first run ────────────────────────────────

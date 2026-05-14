@@ -21,7 +21,39 @@ describe('team cli help', () => {
     expect(output).toContain('team list')
     expect(output).toContain('team send <worker-name> "<task>"')
     expect(output).toContain('team report "<result>"')
+    expect(output).toContain('team status "<current status>"')
     expect(output).not.toContain('--success')
     expect(output).not.toContain('--failed')
+  })
+
+  test('team report warns when Hive records the report but cannot live-deliver it', async () => {
+    process.env = {
+      HIVE_AGENT_ID: 'worker-1',
+      HIVE_AGENT_TOKEN: 'token-1',
+      HIVE_PORT: '12345',
+      HIVE_PROJECT_ID: 'workspace-1',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              dispatch_id: 'dispatch-1',
+              forward_error: 'No active run for agent: workspace-1:orchestrator',
+              forwarded: false,
+              ok: true,
+            }),
+            { headers: { 'content-type': 'application/json' }, status: 202 }
+          )
+      )
+    )
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runTeamCommand(['report', 'Done'])
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Hive recorded the report, but could not deliver it to Orchestrator in real time: No active run for agent: workspace-1:orchestrator'
+    )
   })
 })

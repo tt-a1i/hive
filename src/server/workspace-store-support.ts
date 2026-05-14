@@ -31,7 +31,7 @@ export const createOrchestrator = (workspaceId: string): AgentSummary => ({
   name: 'Orchestrator',
   description: getDefaultRoleDescription('orchestrator'),
   role: 'orchestrator',
-  status: 'idle',
+  status: 'stopped',
   pendingTaskCount: 0,
 })
 

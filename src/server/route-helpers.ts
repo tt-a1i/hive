@@ -1,6 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { PayloadTooLargeError } from './http-errors.js'
 import type { RouteDefinition } from './route-types.js'
+
+const DEFAULT_JSON_BODY_LIMIT_BYTES = 1024 * 1024
 
 export const sendJson = (response: ServerResponse, statusCode: number, body: unknown) => {
   response.statusCode = statusCode
@@ -8,11 +11,27 @@ export const sendJson = (response: ServerResponse, statusCode: number, body: unk
   response.end(JSON.stringify(body))
 }
 
-export const readJsonBody = async <T>(request: IncomingMessage): Promise<T> => {
+export const readJsonBody = async <T>(
+  request: IncomingMessage,
+  options: { limitBytes?: number } = {}
+): Promise<T> => {
+  const limitBytes = options.limitBytes ?? DEFAULT_JSON_BODY_LIMIT_BYTES
+  const rawContentLength = request.headers['content-length']
+  const contentLength = Array.isArray(rawContentLength) ? rawContentLength[0] : rawContentLength
+  if (contentLength && Number(contentLength) > limitBytes) {
+    throw new PayloadTooLargeError('Request body too large')
+  }
+
   const chunks: Buffer[] = []
+  let totalBytes = 0
 
   for await (const chunk of request) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+    totalBytes += buffer.byteLength
+    if (totalBytes > limitBytes) {
+      throw new PayloadTooLargeError('Request body too large')
+    }
+    chunks.push(buffer)
   }
 
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as T

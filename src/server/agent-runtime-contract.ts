@@ -44,6 +44,14 @@ export interface AgentRuntime {
     artifacts: string[],
     input?: { requireActiveRun?: boolean }
   ) => void
+  writeStatusPrompt: (
+    workspaceId: string,
+    workerName: string,
+    workerId: string,
+    text: string,
+    artifacts: string[],
+    input?: { requireActiveRun?: boolean }
+  ) => void
   writeSendPrompt: (
     workspaceId: string,
     workerId: string,

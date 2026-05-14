@@ -44,9 +44,14 @@ const openSocket = async (url: string, cookie: string) => {
   })
 }
 
-const expectUpgradeStatus = async (url: string, cookie: string, statusCode: number) => {
+const expectUpgradeStatus = async (
+  url: string,
+  cookie: string,
+  statusCode: number,
+  headers: Record<string, string> = {}
+) => {
   await new Promise<void>((resolve, reject) => {
-    const socket = new WebSocket(url, { headers: { cookie } })
+    const socket = new WebSocket(url, { headers: { cookie, ...headers } })
     socket.once('unexpected-response', (_request, response) => {
       try {
         expect(response.statusCode).toBe(statusCode)
@@ -201,6 +206,57 @@ describe('terminal websocket server', () => {
     try {
       const cookie = await getUiCookie(server.baseUrl)
       await expectUpgradeStatus(toWsUrl(server.baseUrl, '/ws/terminal/missing-run/io'), cookie, 404)
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('rejects terminal websocket upgrades from non-local origins', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(
+        toWsUrl(server.baseUrl, '/ws/terminal/missing-run/io'),
+        cookie,
+        403,
+        {
+          Origin: 'https://attacker.example',
+        }
+      )
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('allows terminal websocket upgrades from a local origin before run lookup', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(
+        toWsUrl(server.baseUrl, '/ws/terminal/missing-run/io'),
+        cookie,
+        404,
+        {
+          Origin: server.baseUrl,
+        }
+      )
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('rejects terminal websocket upgrades from non-local hosts', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(
+        toWsUrl(server.baseUrl, '/ws/terminal/missing-run/io'),
+        cookie,
+        403,
+        {
+          Host: 'attacker.example',
+        }
+      )
     } finally {
       await server.close()
     }

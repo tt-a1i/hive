@@ -36,6 +36,116 @@ afterEach(() => {
 })
 
 describe('team report cli', () => {
+  test('team status without a dispatch forwards and records a status update', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-status-report-cli-'))
+    const workspacePath = join(dataDir, 'workspace')
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(dataDir)
+
+    const orchScript = join(workspacePath, 'orch-echo.js')
+    writeFileSync(
+      orchScript,
+      "process.stdin.setEncoding('utf8')\nprocess.stdin.on('data', c => process.stdout.write('ORCH:' + c))\n"
+    )
+
+    process.env.HIVE_DATA_DIR = dataDir
+    const hive = await runHiveCommand(['--port', '0'])
+    let hiveClosed = false
+    try {
+      const baseUrl = `http://127.0.0.1:${hive.port}`
+      const uiCookie = await getUiCookie(baseUrl)
+      const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
+      })
+      const workspace = (await workspaceResponse.json()) as { id: string }
+      const orchestratorId = `${workspace.id}:orchestrator`
+      const workerResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/workers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ name: 'Alice', role: 'coder' }),
+      })
+      const worker = (await workerResponse.json()) as { id: string }
+
+      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({
+          command: '/bin/bash',
+          args: ['-lc', `"${process.execPath}" "${orchScript}"`],
+        }),
+      })
+      const startResponse = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ hive_port: String(hive.port) }),
+        }
+      )
+      const payload = (await startResponse.json()) as { run_id: string }
+
+      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({
+          command: '/bin/bash',
+          args: ['-lc', `${process.execPath} -e "process.stdin.resume()"`],
+        }),
+      })
+      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ hive_port: String(hive.port) }),
+      })
+
+      process.env = {
+        ...originalEnv,
+        HIVE_DATA_DIR: dataDir,
+        HIVE_AGENT_ID: worker.id,
+        HIVE_AGENT_TOKEN: hive.store.peekAgentToken(worker.id) ?? '',
+        HIVE_PORT: String(hive.port),
+        HIVE_PROJECT_ID: workspace.id,
+      }
+      await runTeamCommand(['status', 'Alice 已接入 workspace，等待派单'])
+
+      await waitFor(async () => {
+        const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.run_id}`, {
+          headers: { cookie: uiCookie },
+        })
+        const body = (await runResponse.json()) as { output: string }
+        expect(body.output).toContain('[Hive 系统消息：来自 @Alice 的状态更新]')
+        expect(body.output).toContain('Alice 已接入 workspace，等待派单')
+      })
+      expect(hive.store.listDispatches(workspace.id)).toEqual([])
+      expect(hive.store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
+        expect.objectContaining({
+          from: worker.id,
+          text: 'Alice 已接入 workspace，等待派单',
+          type: 'status',
+        })
+      )
+      await hive.close()
+      hiveClosed = true
+      const reopenedHive = await runHiveCommand(['--port', '0'])
+      try {
+        expect(reopenedHive.store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
+          expect.objectContaining({
+            from: worker.id,
+            text: 'Alice 已接入 workspace，等待派单',
+            type: 'status',
+          })
+        )
+      } finally {
+        await reopenedHive.close()
+      }
+    } finally {
+      delete process.env.HIVE_DATA_DIR
+      if (!hiveClosed) await hive.close()
+    }
+  })
+
   test('team report writes through to orchestrator stdin and records message', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-report-cli-'))
     const workspacePath = join(dataDir, 'workspace')
@@ -116,6 +226,7 @@ describe('team report cli', () => {
       }
       process.env = {
         ...originalEnv,
+        HIVE_DATA_DIR: dataDir,
         HIVE_AGENT_ID: orchestratorId,
         HIVE_AGENT_TOKEN: orchestratorToken,
         HIVE_PORT: String(hive.port),
@@ -124,6 +235,7 @@ describe('team report cli', () => {
       await runTeamCommand(['send', 'Alice', 'Report this CLI task'])
       process.env = {
         ...originalEnv,
+        HIVE_DATA_DIR: dataDir,
         HIVE_AGENT_ID: worker.id,
         HIVE_AGENT_TOKEN: workerToken,
         HIVE_PORT: String(hive.port),

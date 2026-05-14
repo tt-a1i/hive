@@ -69,6 +69,7 @@ export interface OrchestratorStartResult {
 
 export interface CommandPreset {
   args: string[]
+  available: boolean
   command: string
   displayName: string
   id: string
@@ -83,6 +84,7 @@ export interface RoleTemplate {
 
 interface CommandPresetPayload {
   args: string[]
+  available: boolean
   command: string
   display_name: string
   id: string
@@ -123,6 +125,7 @@ export const createWorkspace = async (input: {
   path: string
   autostart_orchestrator?: boolean
   command_preset_id?: string | null
+  startup_command?: string | null
 }): Promise<CreateWorkspaceResponse> => {
   const response = await apiFetch('/api/workspaces', {
     method: 'POST',
@@ -131,7 +134,7 @@ export const createWorkspace = async (input: {
   })
 
   if (!response.ok) {
-    throw new Error('Failed to create workspace')
+    throw new Error(await readErrorMessage(response, 'Failed to create workspace'))
   }
 
   return (await response.json()) as CreateWorkspaceResponse
@@ -227,6 +230,7 @@ export const listCommandPresets = async (): Promise<CommandPreset[]> => {
 
   return ((await response.json()) as CommandPresetPayload[]).map((preset) => ({
     args: preset.args,
+    available: preset.available,
     command: preset.command,
     displayName: preset.display_name,
     id: preset.id,
@@ -286,7 +290,7 @@ export const createWorker = async (
   })
 
   if (!response.ok) {
-    throw new Error('Failed to create worker')
+    throw new Error(await readErrorMessage(response, 'Failed to create worker'))
   }
 
   const payload = (await response.json()) as CreateWorkerPayload

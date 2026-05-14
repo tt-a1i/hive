@@ -11,7 +11,7 @@ export interface BuiltinCommandPresetDefaults {
 }
 
 const CODEX_DEFAULT_YOLO_ARGS = ['--dangerously-bypass-approvals-and-sandbox']
-const OPENCODE_DEFAULT_YOLO_ARGS = ['--dangerously-skip-permissions']
+const OPENCODE_DEFAULT_YOLO_ARGS: string[] = []
 const GEMINI_DEFAULT_YOLO_ARGS = ['--yolo']
 
 export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [

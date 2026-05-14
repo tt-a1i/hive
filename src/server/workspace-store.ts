@@ -23,6 +23,13 @@ import {
 
 export type { WorkerInput, WorkspaceRecord, WorkspaceStore }
 
+const normalizeWorkerName = (name: string) => {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Worker name must not be empty')
+  if (trimmed.length > 64) throw new Error('Worker name must be 64 characters or fewer')
+  return trimmed
+}
+
 export const createWorkspaceStore = (
   db: Database | undefined,
   messageKinds: MessageKindRecord[]
@@ -40,13 +47,14 @@ export const createWorkspaceStore = (
   return {
     addWorker(workspaceId, input) {
       const workspace = getWorkspace(workspaceId)
-      if (workspace.agents.some((agent) => agent.name === input.name && isWorkerAgent(agent))) {
-        throw new ConflictError(`Worker name already exists: ${input.name}`)
+      const name = normalizeWorkerName(input.name)
+      if (workspace.agents.some((agent) => agent.name === name && isWorkerAgent(agent))) {
+        throw new ConflictError(`Worker name already exists: ${name}`)
       }
       const worker: AgentSummary = {
         id: randomUUID(),
         workspaceId,
-        name: input.name,
+        name,
         description: input.description ?? getDefaultRoleDescription(input.role),
         role: input.role,
         status: 'stopped',
@@ -85,9 +93,7 @@ export const createWorkspaceStore = (
     },
     renameWorker(workspaceId, workerId, name) {
       const worker = getWorkerRecord(workspaces, workspaceId, workerId)
-      const trimmed = name.trim()
-      if (!trimmed) throw new Error('Worker name must not be empty')
-      if (trimmed.length > 64) throw new Error('Worker name must be 64 characters or fewer')
+      const trimmed = normalizeWorkerName(name)
       if (trimmed === worker.name) return worker
       const workspace = getWorkspace(workspaceId)
       if (

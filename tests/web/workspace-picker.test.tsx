@@ -47,13 +47,17 @@ const json = (body: unknown): Response =>
   }) as Response
 
 const commandPresets = [
-  { args: [], command: 'claude', display_name: 'Claude Code (CC)', id: 'claude' },
-  { args: [], command: 'codex', display_name: 'Codex', id: 'codex' },
+  { args: [], available: true, command: 'claude', display_name: 'Claude Code (CC)', id: 'claude' },
+  { args: [], available: true, command: 'codex', display_name: 'Codex', id: 'codex' },
 ]
 
 type PickHandler = () => PickFolderResponse
 
-const stubFetch = (pick: PickHandler, browse?: FsBrowseResponse) => {
+const stubFetch = (
+  pick: PickHandler,
+  browse?: FsBrowseResponse,
+  presets: unknown = commandPresets
+) => {
   const calls: Array<{ method: string; url: string }> = []
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -71,7 +75,7 @@ const stubFetch = (pick: PickHandler, browse?: FsBrowseResponse) => {
       return json({ ...sandboxProbe, path: q, suggested_name: q.split('/').pop() ?? '' })
     }
     if (u.pathname === '/api/settings/command-presets') {
-      return json(commandPresets)
+      return json(presets)
     }
     throw new Error(`Unexpected fetch: ${method} ${url}`)
   })
@@ -248,6 +252,115 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       commandPresetId: 'codex',
       name: 'alpha',
       path: PICKED,
+    })
+  })
+
+  test('defaults to the first available orchestrator preset when Claude is unavailable', async () => {
+    stubFetch(
+      () => ({
+        canceled: false,
+        error: null,
+        path: PICKED,
+        probe: sandboxProbe,
+        supported: true,
+      }),
+      undefined,
+      [
+        {
+          args: [],
+          available: false,
+          command: 'claude',
+          display_name: 'Claude Code (CC)',
+          id: 'claude',
+        },
+        { args: [], available: true, command: 'codex', display_name: 'Codex', id: 'codex' },
+      ]
+    )
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    expect(within(confirm).getByTestId('workspace-command-preset')).toHaveTextContent('Codex')
+
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'codex',
+      name: 'alpha',
+      path: PICKED,
+    })
+  })
+
+  test('blocks an unavailable preset unless the user supplies a startup command', async () => {
+    stubFetch(
+      () => ({
+        canceled: false,
+        error: null,
+        path: PICKED,
+        probe: sandboxProbe,
+        supported: true,
+      }),
+      undefined,
+      [
+        {
+          args: [],
+          available: false,
+          command: 'claude',
+          display_name: 'Claude Code (CC)',
+          id: 'claude',
+        },
+      ]
+    )
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    expect(within(confirm).getByText(/Claude Code.*not installed/)).toBeInTheDocument()
+    expect(within(confirm).getByTestId('confirm-workspace-create')).toBeDisabled()
+
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset'))
+    expect(within(confirm).getByTestId('workspace-command-preset-option-claude')).toBeDisabled()
+
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
+    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+      target: { value: 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19' },
+    })
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'alpha',
+      path: PICKED,
+      startupCommand: 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19',
+    })
+  })
+
+  test('Confirm dialog sends a pasted startup command for manual session resume', async () => {
+    stubFetch(() => ({
+      canceled: false,
+      error: null,
+      path: PICKED,
+      probe: sandboxProbe,
+      supported: true,
+    }))
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
+    expect(within(confirm).getByTestId('confirm-workspace-startup-command')).toHaveAttribute(
+      'placeholder',
+      'claude --resume <session-id>'
+    )
+    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+      target: { value: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19' },
+    })
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: 'claude',
+      name: 'alpha',
+      path: PICKED,
+      startupCommand: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19',
     })
   })
 

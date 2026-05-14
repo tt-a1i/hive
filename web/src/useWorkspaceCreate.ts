@@ -51,6 +51,7 @@ export const useWorkspaceCreate = ({
           path: input.path,
           autostart_orchestrator: true,
           command_preset_id: input.commandPresetId,
+          startup_command: input.startupCommand ?? null,
         })
         recordOrchestratorResult(response.id, response.orchestrator_start)
         onWorkspaceCreated({ id: response.id, name: response.name, path: response.path })

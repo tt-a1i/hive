@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
+import { AppOverlays } from './AppOverlays.js'
 import { AppProviders } from './AppProviders.js'
 import { DemoWorkspaceView } from './demo/DemoWorkspaceView.js'
 import { DEMO_TASKS_MD } from './demo/demo-fixture.js'
@@ -10,7 +11,6 @@ import { MainLayout } from './layout/MainLayout.js'
 import { Sidebar } from './sidebar/Sidebar.js'
 import { parseTaskMarkdown } from './tasks/task-markdown.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
-import { WorkspaceTaskDrawer } from './tasks/WorkspaceTaskDrawer.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
@@ -21,10 +21,8 @@ import { useWorkspaceSelection } from './useWorkspaceSelection.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
-import { FirstRunWizard } from './wizard/FirstRunWizard.js'
 import { useFirstRunWizard } from './wizard/useFirstRunWizard.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
-import { AddWorkspaceDialog } from './workspace/AddWorkspaceDialog.js'
 
 const AppInner = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
@@ -59,9 +57,6 @@ const AppInner = () => {
   const activeId = eff.effectiveActiveWorkspace?.id
   const activeWorkers = activeId ? (eff.effectiveWorkersByWorkspaceId[activeId] ?? []) : []
   const terms = useOptimisticTerminalRuns(eff.pollWorkspaceId, useTerminalRuns(eff.pollWorkspaceId))
-  // Tasks lifted to the app root so Topbar (Blueprint icon) and the
-  // drawer share one fetch + WS subscription. Demo mode uses static
-  // fixture content so the icon still lights up in the showcase.
   const tasksFile = useTasksFile(
     demoMode ? null : (activeWorkspaceId ?? null),
     demoMode ? DEMO_TASKS_MD : undefined
@@ -131,24 +126,17 @@ const AppInner = () => {
           workspace={eff.effectiveActiveWorkspace}
         />
       )}
-      {eff.effectiveActiveWorkspace ? (
-        <WorkspaceTaskDrawer
-          tasksFile={tasksFile}
-          workspacePath={eff.effectiveActiveWorkspace.path}
-          open={taskGraphOpen}
-          onClose={() => setTaskGraphOpen(false)}
-        />
-      ) : null}
-      <AddWorkspaceDialog
-        onClose={() => {}}
-        onCreate={wsCreate.createNewWorkspace}
-        trigger={addDialogTrigger}
-      />
-      <FirstRunWizard
-        open={wizardOpen}
-        onClose={closeWizard}
+      <AppOverlays
+        addDialogTrigger={addDialogTrigger}
+        wizardOpen={wizardOpen}
         onAddWorkspace={triggerAddDialog}
+        onCloseTaskGraph={() => setTaskGraphOpen(false)}
+        onCloseWizard={closeWizard}
+        onCreateWorkspace={wsCreate.createNewWorkspace}
         onTryDemo={enableDemo}
+        taskGraphOpen={taskGraphOpen}
+        tasksFile={tasksFile}
+        workspacePath={eff.effectiveActiveWorkspace?.path ?? null}
       />
     </MainLayout>
   )

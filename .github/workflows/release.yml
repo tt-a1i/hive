@@ -58,6 +58,23 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify release tag
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const pkg = require('./package.json')
+          const tag = process.env.GITHUB_REF_NAME
+          const expected = `v${pkg.version}`
+
+          if (tag !== expected) {
+            throw new Error(`Release tag ${tag} does not match package version ${expected}`)
+          }
+
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8')
+          if (!changelog.includes(`## ${pkg.version} -`)) {
+            throw new Error(`CHANGELOG.md is missing an entry for ${pkg.version}`)
+          }
+          NODE
       - run: pnpm build
       - run: npm publish --provenance --access public
         env:

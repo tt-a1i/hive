@@ -96,8 +96,13 @@ export const useWorkerComposer = ({
         if (cancelled) return
         setCommandPresets(presets)
         setCommandPresetId((current) => {
-          if (presets.some((preset) => preset.id === current)) return current
-          return presets.find((preset) => preset.id === 'claude')?.id ?? presets[0]?.id ?? ''
+          if (presets.some((preset) => preset.id === current && preset.available)) return current
+          return (
+            presets.find((preset) => preset.id === 'claude' && preset.available)?.id ??
+            presets.find((preset) => preset.available)?.id ??
+            presets[0]?.id ??
+            ''
+          )
         })
       })
       .catch((error) => {

@@ -1,3 +1,8 @@
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { request as httpRequest } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { createAgentManager } from '../../src/server/agent-manager.js'
@@ -6,11 +11,13 @@ import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const servers: Array<{ close: () => void }> = []
+const tempDirs: string[] = []
 
 afterEach(() => {
   while (servers.length > 0) {
     servers.pop()?.close()
   }
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 const startServer = async () => {
@@ -34,6 +41,37 @@ const startServer = async () => {
   }
 }
 
+const requestWithHeaders = async (
+  baseUrl: string,
+  path: string,
+  headers: Record<string, string>
+) => {
+  const target = new URL(path, baseUrl)
+  return new Promise<{ body: string; statusCode: number }>((resolve, reject) => {
+    const request = httpRequest(
+      {
+        hostname: target.hostname,
+        path: target.pathname + target.search,
+        port: target.port,
+        method: 'GET',
+        headers,
+      },
+      (response) => {
+        let body = ''
+        response.setEncoding('utf8')
+        response.on('data', (chunk) => {
+          body += chunk
+        })
+        response.on('end', () => {
+          resolve({ body, statusCode: response.statusCode ?? 0 })
+        })
+      }
+    )
+    request.on('error', reject)
+    request.end()
+  })
+}
+
 describe('runtime http app', () => {
   test('GET /api/workspaces returns current workspace list', async () => {
     const { store, baseUrl } = await startServer()
@@ -55,12 +93,14 @@ describe('runtime http app', () => {
   test('POST /api/workspaces creates workspace (autostart skipped)', async () => {
     const { baseUrl } = await startServer()
     const cookie = await getUiCookie(baseUrl)
+    const workspacePath = mkdtempSync(join(tmpdir(), 'hive-beta-'))
+    tempDirs.push(workspacePath)
 
     const response = await fetch(`${baseUrl}/api/workspaces`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({
-        path: '/tmp/hive-beta',
+        path: workspacePath,
         name: 'Beta',
         autostart_orchestrator: false,
       }),
@@ -70,9 +110,28 @@ describe('runtime http app', () => {
     await expect(response.json()).resolves.toEqual({
       id: expect.any(String),
       name: 'Beta',
-      path: '/tmp/hive-beta',
+      path: realpathSync(workspacePath),
       orchestrator_start: { ok: false, error: null, run_id: null },
     })
+  })
+
+  test('POST /api/workspaces rejects oversized JSON bodies before creating workspace', async () => {
+    const { store, baseUrl } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        path: '/tmp/hive-oversized',
+        name: 'Oversized',
+        notes: 'x'.repeat(1024 * 1024),
+      }),
+    })
+
+    expect(response.status).toBe(413)
+    await expect(response.json()).resolves.toEqual({ error: 'Request body too large' })
+    expect(store.listWorkspaces()).toEqual([])
   })
 
   test('GET /api/ui/workspaces/:id/team returns worker team list for the UI', async () => {
@@ -149,6 +208,26 @@ describe('runtime http app', () => {
     expect(response.headers.get('set-cookie')).toContain('SameSite=Strict')
     await expect(response.json()).resolves.toEqual({
       ok: true,
+    })
+  })
+
+  test('rejects non-local Host and Origin headers before issuing a UI token', async () => {
+    const { baseUrl } = await startServer()
+
+    const hostResponse = await requestWithHeaders(baseUrl, '/api/ui/session', {
+      Host: 'attacker.example',
+    })
+    expect(hostResponse.statusCode).toBe(403)
+    expect(JSON.parse(hostResponse.body)).toEqual({
+      error: 'Local runtime rejected non-local Host header',
+    })
+
+    const originResponse = await requestWithHeaders(baseUrl, '/api/ui/session', {
+      Origin: 'https://attacker.example',
+    })
+    expect(originResponse.statusCode).toBe(403)
+    expect(JSON.parse(originResponse.body)).toEqual({
+      error: 'Local runtime rejected non-local Origin header',
     })
   })
 

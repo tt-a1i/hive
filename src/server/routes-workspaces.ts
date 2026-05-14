@@ -13,6 +13,7 @@ import type { RuntimeStore } from './runtime-store.js'
 import { authenticateCliAgent, requireCommandForRole } from './team-authz.js'
 import { serializeTeamListItem } from './team-list-serializer.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
+import { validateWorkspacePath } from './workspace-path-validation.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 
 const enrichWithLastOutput = (
@@ -44,7 +45,16 @@ export const workspaceRoutes: RouteDefinition[] = [
   route('POST', '/api/workspaces', async ({ request, response, store }) => {
     requireUiTokenFromRequest(request, store.validateUiToken)
     const body = await readJsonBody<CreateWorkspaceBody>(request)
-    const workspace = store.createWorkspace(body.path, body.name)
+    const startupCommand = typeof body.startup_command === 'string' ? body.startup_command : null
+    const workspacePath = validateWorkspacePath(body.path)
+    const workspace = store.createWorkspace(workspacePath, body.name)
+    seedOrchestratorLaunchConfig(
+      store,
+      store.settings,
+      workspace.id,
+      body.command_preset_id ?? null,
+      startupCommand
+    )
 
     const autostart = body.autostart_orchestrator !== false
     if (!autostart) {
@@ -55,12 +65,6 @@ export const workspaceRoutes: RouteDefinition[] = [
       return
     }
 
-    seedOrchestratorLaunchConfig(
-      store,
-      store.settings,
-      workspace.id,
-      body.command_preset_id ?? null
-    )
     // Spawn failure must NOT block workspace creation — see AGENTS.md §1
     // (no try/catch fallbacks in production code, but `autostartOrchestrator`
     // captures the failure as a structured result instead of throwing).

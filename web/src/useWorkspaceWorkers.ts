@@ -4,34 +4,66 @@ import type { TeamListItem } from '../../src/shared/types.js'
 import { listWorkers } from './api.js'
 
 const REFRESH_INTERVAL_MS = 500
+const MAX_REFRESH_INTERVAL_MS = 5000
 
-export const useWorkspaceWorkers = (activeWorkspaceId: string | null) => {
+const getRefreshDelay = (failureCount: number) =>
+  Math.min(REFRESH_INTERVAL_MS * 2 ** failureCount, MAX_REFRESH_INTERVAL_MS)
+
+export const useWorkspaceWorkers = (workspaceIds: readonly string[]) => {
+  const workspaceKey = workspaceIds.join('\0')
   const [workersByWorkspaceId, setWorkersByWorkspaceId] = useState<Record<string, TeamListItem[]>>(
     {}
   )
 
   useEffect(() => {
-    if (!activeWorkspaceId) return
+    if (!workspaceKey) {
+      setWorkersByWorkspaceId({})
+      return
+    }
     let cancelled = false
+    let inFlight = false
+    let failureCount = 0
+    let timeout: number | undefined
+    const ids = workspaceKey.split('\0')
+    const scheduleNextLoad = () => {
+      if (!cancelled) timeout = window.setTimeout(loadWorkers, getRefreshDelay(failureCount))
+    }
     const loadWorkers = () => {
-      void listWorkers(activeWorkspaceId)
-        .then((items) => {
-          if (!cancelled)
-            setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: items }))
+      if (inFlight) return
+      inFlight = true
+      void Promise.all(
+        ids.map(async (workspaceId) => {
+          try {
+            return [workspaceId, await listWorkers(workspaceId)] as const
+          } catch (error) {
+            console.error('[hive] swallowed:workspaceWorkers.list', error)
+            return null
+          }
         })
-        .catch((error: unknown) => {
-          if (!cancelled)
-            setWorkersByWorkspaceId((current) => ({ ...current, [activeWorkspaceId]: [] }))
-          console.error('[hive] swallowed:workspaceWorkers.list', error)
+      )
+        .then((results) => {
+          if (cancelled) return
+          failureCount = results.some(Boolean) ? 0 : Math.min(failureCount + 1, 4)
+          setWorkersByWorkspaceId((current) => {
+            const next: Record<string, TeamListItem[]> = {}
+            for (const workspaceId of ids) next[workspaceId] = current[workspaceId] ?? []
+            for (const result of results) {
+              if (result) next[result[0]] = result[1]
+            }
+            return next
+          })
+        })
+        .finally(() => {
+          inFlight = false
+          scheduleNextLoad()
         })
     }
     loadWorkers()
-    const interval = window.setInterval(loadWorkers, REFRESH_INTERVAL_MS)
     return () => {
       cancelled = true
-      window.clearInterval(interval)
+      if (timeout !== undefined) window.clearTimeout(timeout)
     }
-  }, [activeWorkspaceId])
+  }, [workspaceKey])
 
   return [workersByWorkspaceId, setWorkersByWorkspaceId] as const
 }

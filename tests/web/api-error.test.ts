@@ -1,12 +1,29 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { startAgentRun } from '../../web/src/api.js'
+import { createWorkspace, startAgentRun } from '../../web/src/api.js'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
 describe('api error messages', () => {
+  test('createWorkspace preserves server JSON error detail', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: 'Workspace path does not exist: /missing' }), {
+            headers: { 'content-type': 'application/json' },
+            status: 400,
+          })
+      )
+    )
+
+    await expect(createWorkspace({ name: 'Missing', path: '/missing' })).rejects.toThrow(
+      'Workspace path does not exist: /missing'
+    )
+  })
+
   test('startAgentRun preserves server JSON error detail', async () => {
     vi.stubGlobal(
       'fetch',

@@ -7,7 +7,12 @@ import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import { createRuntimeStoreLifecycle, createRuntimeStoreServices } from './runtime-store-helpers.js'
 import type { SettingsStore } from './settings-store.js'
-import type { DispatchTaskInput, ReportTaskInput } from './team-operations.js'
+import type {
+  DispatchTaskInput,
+  ReportTaskInput,
+  ReportTaskResult,
+  StatusTaskInput,
+} from './team-operations.js'
 import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 
 interface RuntimeStore {
@@ -31,7 +36,8 @@ interface RuntimeStore {
     text: string,
     input?: DispatchTaskInput
   ) => Promise<DispatchRecord>
-  reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => DispatchRecord
+  reportTask: (workspaceId: string, workerId: string, input?: ReportTaskInput) => ReportTaskResult
+  statusTask: (workspaceId: string, workerId: string, input?: StatusTaskInput) => ReportTaskResult
   listDispatches: (workspaceId: string, options?: ListDispatchesOptions) => DispatchRecord[]
   listWorkers: (workspaceId: string) => TeamListItem[]
   getLastOutputLineForAgent: (workspaceId: string, agentId: string) => string | null
@@ -149,6 +155,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     dispatchTask: services.teamOps.dispatchTask,
     dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
     reportTask: services.teamOps.reportTask,
+    statusTask: services.teamOps.statusTask,
     listDispatches: services.dispatchLedgerStore.listWorkspaceDispatches,
     listWorkers: (workspaceId) => services.workspaceStore.listWorkers(workspaceId),
     getLastOutputLineForAgent: (workspaceId, agentId) =>

@@ -40,10 +40,14 @@ export const createTerminalClient = ({
   onRestore,
   runId,
 }: TerminalClientOptions): TerminalClient => {
-  const ioSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/io`, initialSize ?? {}))
+  const clientId = crypto.randomUUID()
+  const connectionParams = { ...initialSize, clientId }
+  const ioSocket = new WebSocket(toWebSocketUrl(`/ws/terminal/${runId}/io`, connectionParams))
   const controlSocket = new WebSocket(
-    toWebSocketUrl(`/ws/terminal/${runId}/control`, initialSize ?? {})
+    toWebSocketUrl(`/ws/terminal/${runId}/control`, connectionParams)
   )
+  let restored = false
+  const pendingOutput: Array<{ chunk: string; acknowledge: (bytes: number) => void }> = []
   let pendingResize: {
     cols: number
     rows: number
@@ -59,10 +63,15 @@ export const createTerminalClient = ({
 
   ioSocket.onmessage = (event) => {
     const chunk = typeof event.data === 'string' ? event.data : ''
-    onOutput(chunk, (bytes) => {
+    const acknowledge = (bytes: number) => {
       if (controlSocket.readyState !== controlSocket.OPEN) return
       controlSocket.send(JSON.stringify({ type: 'output_ack', bytes }))
-    })
+    }
+    if (!restored) {
+      pendingOutput.push({ chunk, acknowledge })
+      return
+    }
+    onOutput(chunk, acknowledge)
   }
   controlSocket.onopen = () => {
     sendResize()
@@ -73,8 +82,12 @@ export const createTerminalClient = ({
     if (message.type === 'error') onError(message.message)
     if (message.type === 'restore') {
       onRestore(message.snapshot)
+      restored = true
       if (controlSocket.readyState === controlSocket.OPEN) {
         controlSocket.send(JSON.stringify({ type: 'restore_complete' }))
+      }
+      for (const output of pendingOutput.splice(0)) {
+        onOutput(output.chunk, output.acknowledge)
       }
     }
   }

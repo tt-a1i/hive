@@ -58,9 +58,11 @@ export const buildAgentStartupInstructions = ({
     lines.push(
       '可用 team 命令：',
       '- team report "<完整汇报>"',
+      '- team status "<当前状态>"',
       '',
       '完成任务后必须执行 `team report "<结论>"`。',
       '失败、阻塞或部分完成也用 `team report "<当前状态与原因>"` 汇报。',
+      '没有进行中的任务时，用 `team status "<当前状态>"` 汇报接入、待命或阻塞状态。',
       '不要调用 team send；worker 之间不能直接派单。',
       '',
       'Hive worker 边界：',

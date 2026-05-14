@@ -75,6 +75,53 @@ describe('runtime rehydration', () => {
     ])
   })
 
+  test('restores pending task counts from dispatches instead of legacy message replay', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-dispatch-pending-'))
+    tempDirs.push(dataDir)
+
+    const firstStore = createRuntimeStore({ dataDir })
+    stores.push(firstStore)
+    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+
+    firstStore.dispatchTask(workspace.id, alice.id, 'First')
+    firstStore.dispatchTask(workspace.id, alice.id, 'Second')
+    firstStore.reportTask(workspace.id, alice.id)
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.prepare(
+      `INSERT INTO messages (
+         workspace_id,
+         worker_id,
+         type,
+         from_agent_id,
+         to_agent_id,
+         text,
+         status,
+         artifacts,
+         created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      workspace.id,
+      alice.id,
+      'report',
+      alice.id,
+      null,
+      'legacy orphan report',
+      null,
+      '[]',
+      Date.now()
+    )
+    db.close()
+
+    const secondStore = createRuntimeStore({ dataDir })
+    stores.push(secondStore)
+
+    expect(secondStore.listWorkers(workspace.id)).toContainEqual(
+      expect.objectContaining({ id: alice.id, pendingTaskCount: 1, status: 'stopped' })
+    )
+  })
+
   test('captures Claude session id into sqlite and reuses it on next start', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-session-'))
     const workspacePath = join(dataDir, 'workspace')

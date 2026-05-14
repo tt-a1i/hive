@@ -7,7 +7,7 @@ export interface MessageLogRecord {
   status?: string
   text: string
   toAgentId?: string
-  type: 'user_input' | 'send' | 'report' | 'system_env_sync' | 'system_recovery_summary'
+  type: 'user_input' | 'send' | 'report' | 'status' | 'system_env_sync' | 'system_recovery_summary'
   workerId: string
   workspaceId: string
 }
@@ -39,7 +39,17 @@ interface ReportRecoveryMessage extends RecoveryMessageBase {
   type: 'report'
 }
 
-export type RecoveryMessage = UserInputRecoveryMessage | SendRecoveryMessage | ReportRecoveryMessage
+interface StatusRecoveryMessage extends RecoveryMessageBase {
+  artifacts: string[]
+  from: string
+  type: 'status'
+}
+
+export type RecoveryMessage =
+  | UserInputRecoveryMessage
+  | SendRecoveryMessage
+  | ReportRecoveryMessage
+  | StatusRecoveryMessage
 
 interface MessageKindRow {
   type: 'send' | 'report'
@@ -54,7 +64,7 @@ interface MessageRow {
   status: string | null
   text: string | null
   to_agent_id: string | null
-  type: 'user_input' | 'send' | 'report' | 'system_env_sync' | 'system_recovery_summary'
+  type: 'user_input' | 'send' | 'report' | 'status' | 'system_env_sync' | 'system_recovery_summary'
   worker_id: string
 }
 
@@ -162,18 +172,20 @@ export const createMessageLogStore = (db: Database | undefined) => {
             return recoveryMessage
           }
 
-          if (message.type !== 'report') {
+          if (message.type !== 'report' && message.type !== 'status') {
             return null
           }
 
-          const recoveryMessage: ReportRecoveryMessage = {
+          const recoveryMessage: ReportRecoveryMessage | StatusRecoveryMessage = {
             artifacts: message.artifacts ?? [],
             createdAt: message.createdAt,
             from: message.fromAgentId ?? message.workerId,
             text: message.text,
-            type: 'report' as const,
+            type: message.type,
           }
-          if (message.status) recoveryMessage.status = message.status
+          if (message.type === 'report' && message.status) {
+            ;(recoveryMessage as ReportRecoveryMessage).status = message.status
+          }
           return recoveryMessage
         })
         .filter((message): message is RecoveryMessage => message !== null)
@@ -213,18 +225,20 @@ export const createMessageLogStore = (db: Database | undefined) => {
           return message
         }
 
-        if (typedRow.type !== 'report') {
+        if (typedRow.type !== 'report' && typedRow.type !== 'status') {
           return null
         }
 
-        const recoveryMessage: ReportRecoveryMessage = {
+        const recoveryMessage: ReportRecoveryMessage | StatusRecoveryMessage = {
           artifacts: parseArtifacts(typedRow.artifacts),
           createdAt: typedRow.created_at,
           from: typedRow.from_agent_id ?? typedRow.worker_id,
           text: typedRow.text ?? '',
-          type: 'report' as const,
+          type: typedRow.type,
         }
-        if (typedRow.status) recoveryMessage.status = typedRow.status
+        if (typedRow.type === 'report' && typedRow.status) {
+          ;(recoveryMessage as ReportRecoveryMessage).status = typedRow.status
+        }
         return recoveryMessage
       })
       .filter((message): message is RecoveryMessage => message !== null)

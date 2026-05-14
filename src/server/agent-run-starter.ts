@@ -137,7 +137,10 @@ export const createAgentRunStarter =
     }
 
     startAgentRunCapture({ agentId, sessionCaptureSnapshot, sessionStore, startConfig, workspace })
-    const postStartWriter = createPostStartInputWriter(agentManager, startConfig.command)
+    const postStartWriter = createPostStartInputWriter(
+      agentManager,
+      startConfig.interactiveCommand ?? startConfig.command
+    )
     queueMicrotask(() => {
       try {
         const injectedRestartMessage = restartPolicy.injectPostStartMessage({
@@ -151,7 +154,7 @@ export const createAgentRunStarter =
           !startConfig.resumedSessionId &&
           !injectedRestartMessage &&
           agent &&
-          isInteractiveAgentCommand(startConfig.command)
+          isInteractiveAgentCommand(startConfig.interactiveCommand ?? startConfig.command)
         ) {
           postStartWriter(run.runId, buildAgentStartupInstructions({ agent, workspace }))
         }

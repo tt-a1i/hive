@@ -3,6 +3,7 @@ import type { IncomingMessage, Server } from 'node:http'
 import type { WebSocket as WsSocket } from 'ws'
 import { WebSocketServer } from 'ws'
 
+import { getLocalRequestRejection } from './local-request-guard.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { readCookie } from './ui-auth-helpers.js'
 
@@ -44,6 +45,10 @@ export const createTasksWebSocketServer = (
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     const workspaceId = matchTasksPath(url.pathname)
     if (!workspaceId) return
+    if (getLocalRequestRejection(request)) {
+      rejectUpgrade(socket, '403 Forbidden')
+      return
+    }
     if (!validateUpgradeSession(request)) {
       rejectUpgrade(socket, '401 Unauthorized')
       return

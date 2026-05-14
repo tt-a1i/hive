@@ -1,6 +1,10 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { createTeamOperations } from '../../src/server/team-operations.js'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('team atomicity', () => {
   test('dispatchTask does not bump pending count when message insert fails before PTY write', async () => {
@@ -237,7 +241,7 @@ describe('team atomicity', () => {
     )
   })
 
-  test('reportTask leaves dispatch and pending state untouched when orchestrator stdin write fails', () => {
+  test('reportTask does not write orchestrator stdin when dispatch ledger update fails', () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
@@ -257,8 +261,67 @@ describe('team atomicity', () => {
       workspaceId: workspace.id,
     } as const
     const deleteMessage = vi.fn()
-    const markDispatchReportedByWorker = vi.fn()
     const markTaskReported = vi.fn()
+    const writeReportPrompt = vi.fn()
+
+    const ops = createTeamOperations({
+      agentRuntime: {
+        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
+        writeReportPrompt,
+        writeSendPrompt: vi.fn(),
+        writeUserInputPrompt: vi.fn(),
+      } as never,
+      createDispatch: vi.fn(),
+      deleteDispatch: vi.fn(),
+      deleteMessage,
+      findOpenDispatch: vi.fn(() => dispatch),
+      insertMessage: vi.fn(() => ({ kind: 'memory', sequence: 1 })),
+      markDispatchReportedByWorker: vi.fn(() => {
+        throw new Error('dispatch ledger failed')
+      }),
+      markDispatchSubmitted: vi.fn(),
+      workspaceStore: {
+        getWorker: store.getWorker,
+        markTaskReported,
+      } as never,
+    })
+
+    expect(() =>
+      ops.reportTask(workspace.id, worker.id, {
+        requireActiveRun: true,
+        status: 'success',
+        text: 'Done',
+      })
+    ).toThrow(/dispatch ledger failed/)
+
+    expect(writeReportPrompt).not.toHaveBeenCalled()
+    expect(markTaskReported).not.toHaveBeenCalled()
+    expect(deleteMessage).toHaveBeenCalledWith({ kind: 'memory', sequence: 1 })
+  })
+
+  test('reportTask keeps the recorded report when orchestrator stdin forwarding fails', () => {
+    const store = createRuntimeStore()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    const dispatch = {
+      artifacts: [],
+      createdAt: Date.now(),
+      deliveredAt: null,
+      fromAgentId: `${workspace.id}:orchestrator`,
+      id: 'dispatch-1',
+      reportedAt: null,
+      reportText: null,
+      sequence: 1,
+      status: 'queued',
+      submittedAt: null,
+      text: 'Implement login',
+      toAgentId: worker.id,
+      workspaceId: workspace.id,
+    } as const
+    const deleteMessage = vi.fn()
+    const markDispatchReportedByWorker = vi.fn(() => ({ ...dispatch, status: 'reported' }))
+    const markTaskReported = vi.fn()
+    const reportForwardError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const ops = createTeamOperations({
       agentRuntime: {
@@ -282,16 +345,28 @@ describe('team atomicity', () => {
       } as never,
     })
 
-    expect(() =>
-      ops.reportTask(workspace.id, worker.id, {
-        requireActiveRun: true,
-        status: 'success',
-        text: 'Done',
-      })
-    ).toThrow(/stdin write failed/)
+    const result = ops.reportTask(workspace.id, worker.id, {
+      requireActiveRun: true,
+      status: 'success',
+      text: 'Done',
+    })
 
-    expect(markDispatchReportedByWorker).not.toHaveBeenCalled()
-    expect(markTaskReported).not.toHaveBeenCalled()
-    expect(deleteMessage).toHaveBeenCalledWith({ kind: 'memory', sequence: 1 })
+    expect(markDispatchReportedByWorker).toHaveBeenCalledWith({
+      artifacts: [],
+      reportText: 'Done',
+      toAgentId: worker.id,
+      workspaceId: workspace.id,
+    })
+    expect(markTaskReported).toHaveBeenCalledWith(workspace.id, worker.id)
+    expect(deleteMessage).not.toHaveBeenCalled()
+    expect(reportForwardError).toHaveBeenCalledWith(
+      '[hive] swallowed:teamReport.forward',
+      expect.any(Error)
+    )
+    expect(result).toEqual({
+      dispatch: { ...dispatch, status: 'reported' },
+      forwardError: 'stdin write failed',
+      forwarded: false,
+    })
   })
 })

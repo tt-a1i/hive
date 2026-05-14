@@ -11,6 +11,7 @@ const PASTE_CHARS_PER_DELAY_MS = 4
 const PASTE_ACK_CHECK_INTERVAL_MS = 50
 const PASTE_ACK_SETTLE_DELAY_MS = 100
 const PASTE_ACK_TIMEOUT_MS = 3000
+const COMMANDS_WITH_BRACKETED_PASTE = new Set(['claude', 'codex', 'opencode'])
 
 export const toBracketedPasteSubmission = (text: string) => `\u001b[200~${text}\u001b[201~`
 
@@ -23,12 +24,25 @@ const getSubmitAfterPasteDelayMs = (text: string) =>
 export const isInteractiveAgentCommand = (command: string) =>
   INTERACTIVE_COMMANDS.has(basename(command).toLowerCase())
 
-export const hasInteractivePromptReady = (output: string) => /(?:^|[\r\n])\s*[❯›]\s*/u.test(output)
+const getCommandName = (command: string) => basename(command).toLowerCase()
+
+const hasGeminiPromptReady = (output: string) => /\bType your message\b/u.test(output)
+
+export const hasInteractivePromptReady = (output: string, command = '') => {
+  const commandName = getCommandName(command)
+  return (
+    /(?:^|[\r\n])\s*[❯›]\s*/u.test(output) ||
+    (commandName === 'gemini' && hasGeminiPromptReady(output))
+  )
+}
 
 export const hasBracketedPasteAcknowledgement = (output: string, baselineLength: number) =>
   /\[Pasted text #\d+/u.test(output.slice(baselineLength))
 
-const isClaudeCommand = (command: string) => basename(command).toLowerCase() === 'claude'
+const isClaudeCommand = (command: string) => getCommandName(command) === 'claude'
+const usesBracketedPaste = (command: string) =>
+  COMMANDS_WITH_BRACKETED_PASTE.has(getCommandName(command))
+const canTimeoutBeforePromptReady = (command: string) => getCommandName(command) !== 'gemini'
 const isWritableRunStatus = (status: string | undefined) =>
   status === undefined || status === 'starting' || status === 'running'
 
@@ -121,10 +135,14 @@ export const createPostStartInputWriter = (
         return
       }
       if (output === null) return
-      if (hasInteractivePromptReady(output) || Date.now() - startedAt >= READY_TIMEOUT_MS) {
+      if (
+        hasInteractivePromptReady(output, command) ||
+        (canTimeoutBeforePromptReady(command) && Date.now() - startedAt >= READY_TIMEOUT_MS)
+      ) {
         const baselineLength = output.length
+        const input = usesBracketedPaste(command) ? toBracketedPasteSubmission(text) : text
         try {
-          if (!writeIfRunWritable(agentManager, runId, toBracketedPasteSubmission(text))) return
+          if (!writeIfRunWritable(agentManager, runId, input)) return
         } catch (error) {
           if (isInitialAttempt) throw error
           return

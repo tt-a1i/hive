@@ -29,6 +29,20 @@ export class ForbiddenError extends HttpError {
   }
 }
 
+export class BadRequestError extends HttpError {
+  constructor(message: string) {
+    super(400, message)
+    this.name = 'BadRequestError'
+  }
+}
+
+export class PayloadTooLargeError extends HttpError {
+  constructor(message: string) {
+    super(413, message)
+    this.name = 'PayloadTooLargeError'
+  }
+}
+
 export class ConflictError extends HttpError {
   constructor(message: string) {
     super(409, message)

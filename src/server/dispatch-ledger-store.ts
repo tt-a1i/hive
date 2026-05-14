@@ -293,6 +293,28 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
     ).map(toRecord)
   }
 
+  const listOpenDispatchKinds = () => {
+    if (!db) {
+      return Array.from(memoryDispatches.values())
+        .filter((record) => record.status !== 'reported')
+        .sort((a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt))
+        .map((record) => ({
+          type: 'send' as const,
+          worker_id: record.toAgentId,
+          workspace_id: record.workspaceId,
+        }))
+    }
+
+    return db
+      .prepare(
+        `SELECT workspace_id, to_agent_id AS worker_id, 'send' AS type
+           FROM dispatches
+           WHERE status != 'reported'
+           ORDER BY sequence ASC`
+      )
+      .all() as Array<{ type: 'send'; worker_id: string; workspace_id: string }>
+  }
+
   const deleteWorkspaceDispatches = (workspaceId: string) => {
     if (!db) {
       for (const [id, record] of memoryDispatches) {
@@ -326,6 +348,7 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
     deleteWorkerDispatches,
     deleteWorkspaceDispatches,
     findOpenDispatch,
+    listOpenDispatchKinds,
     listWorkspaceDispatches,
     markReportedByWorker,
     markSubmitted,

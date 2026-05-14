@@ -65,7 +65,7 @@ describe('settings api', () => {
       expect.objectContaining({
         id: 'opencode',
         display_name: 'OpenCode',
-        yolo_args_template: ['--dangerously-skip-permissions'],
+        yolo_args_template: [],
       }),
       expect.objectContaining({
         id: 'gemini',
@@ -240,5 +240,37 @@ describe('settings api', () => {
     })
     const presets = (await listResponse.json()) as Array<{ id: string }>
     expect(presets.some((preset) => preset.id === created.id)).toBe(false)
+  })
+
+  test('command preset responses expose executable availability', async () => {
+    const server = await startTestServer()
+    servers.push(server)
+    const cookie = await getUiCookie(server.baseUrl)
+
+    const createResponse = await fetch(`${server.baseUrl}/api/settings/command-presets`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        display_name: 'Missing CLI',
+        command: '__hive_missing_cli__',
+        args: [],
+        env: {},
+        resume_args_template: null,
+        session_id_capture: null,
+        yolo_args_template: null,
+      }),
+    })
+    expect(createResponse.status).toBe(201)
+    await expect(createResponse.json()).resolves.toEqual(
+      expect.objectContaining({ available: false, command: '__hive_missing_cli__' })
+    )
+
+    const listResponse = await fetch(`${server.baseUrl}/api/settings/command-presets`, {
+      headers: { cookie },
+    })
+    const presets = (await listResponse.json()) as Array<{ available: boolean; command: string }>
+    expect(presets.find((preset) => preset.command === '__hive_missing_cli__')).toMatchObject({
+      available: false,
+    })
   })
 })

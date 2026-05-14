@@ -31,6 +31,8 @@ export interface CreateWorkspaceBody {
   autostart_orchestrator?: boolean
   /** Optional command preset to use for the initial orchestrator launch. */
   command_preset_id?: string | null
+  /** Optional full startup command. When set, this overrides command_preset_id. */
+  startup_command?: string | null
 }
 
 export interface CreateWorkerBody {

@@ -1,3 +1,4 @@
+import { resolveCommandPath } from './agent-command-resolver.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
 import type { SessionIdCaptureConfig } from './session-capture.js'
@@ -32,17 +33,30 @@ const serializeCommandPreset = (preset: {
   sessionIdCapture: SessionIdCaptureConfig | null
   yoloArgsTemplate: string[] | null
   isBuiltin: boolean
-}) => ({
-  id: preset.id,
-  display_name: preset.displayName,
-  command: preset.command,
-  args: preset.args,
-  env: preset.env,
-  resume_args_template: preset.resumeArgsTemplate,
-  session_id_capture: preset.sessionIdCapture,
-  yolo_args_template: preset.yoloArgsTemplate,
-  is_builtin: preset.isBuiltin,
-})
+}) => {
+  let available = false
+  try {
+    if (preset.command.trim()) {
+      resolveCommandPath(preset.command, process.cwd(), { ...process.env, ...preset.env })
+      available = true
+    }
+  } catch {
+    available = false
+  }
+
+  return {
+    id: preset.id,
+    display_name: preset.displayName,
+    command: preset.command,
+    args: preset.args,
+    env: preset.env,
+    resume_args_template: preset.resumeArgsTemplate,
+    session_id_capture: preset.sessionIdCapture,
+    yolo_args_template: preset.yoloArgsTemplate,
+    is_builtin: preset.isBuiltin,
+    available,
+  }
+}
 
 const serializeRoleTemplate = (template: {
   id: string

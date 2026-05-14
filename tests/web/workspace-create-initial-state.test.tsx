@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -72,7 +72,7 @@ describe('workspace create initial state', () => {
 
     // Sub-header and footer were removed in M6 polish. Workspace identity
     // lives in the sidebar row.
-    expect(screen.getByText(join(sandboxRoot, 'alpha-project'))).toBeInTheDocument()
+    expect(screen.getByText(realpathSync(join(sandboxRoot, 'alpha-project')))).toBeInTheDocument()
     expect(screen.queryByRole('contentinfo')).toBeNull()
 
     const drawer = screen.getByTestId('task-graph-drawer')

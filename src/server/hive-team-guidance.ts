@@ -11,7 +11,8 @@ const ORCHESTRATOR_RULES = [
 const WORKER_RULES = [
   '你是 Hive 右侧卡片里的真实 CLI worker，不是 Claude Code 内置 subagent。',
   '不要调用 team send，也不要再启动 Claude Code 内置的 Task / Explore / subagent 来替你完成派单。',
-  '完成或阻塞时必须用 `team report` 汇报给 Orchestrator。',
+  '完成或阻塞已派发任务时必须用 `team report` 汇报给 Orchestrator。',
+  '如果当前没有明确派发任务，只是汇报待命、环境或状态，使用 `team status "<当前状态>"`。',
 ]
 
 export const getHiveTeamRules = (agent: Pick<AgentSummary, 'role'>) =>

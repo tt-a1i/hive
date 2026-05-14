@@ -12,6 +12,7 @@ type OrchestratorPaneProps = {
   state: OrchestratorPaneState
   /** Kept for API stability; M6-B will surface stop via the ⌘K palette. */
   onStop: () => void
+  onRemoveWorkspace: () => void
   onStart: () => void
   onRestart: () => void
 }
@@ -19,7 +20,7 @@ type OrchestratorPaneProps = {
 const StartingBody = () => (
   <div data-testid="orchestrator-starting-body" className="flex flex-1">
     <EmptyState
-      icon={<LoaderCircle size={26} className="animate-spin" />}
+      icon={<LoaderCircle size={24} className="animate-spin" />}
       title="Starting Queen"
       description="Preparing the orchestrator terminal."
     />
@@ -29,7 +30,7 @@ const StartingBody = () => (
 const StoppedBody = ({ onStart }: { onStart: () => void }) => (
   <div data-testid="orchestrator-stopped-body" className="flex flex-1">
     <EmptyState
-      icon={<Crown size={26} />}
+      icon={<Crown size={24} />}
       title="Queen is stopped"
       description="Start the orchestrator when you are ready to dispatch work."
       action={
@@ -46,21 +47,39 @@ const StoppedBody = ({ onStart }: { onStart: () => void }) => (
   </div>
 )
 
-const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void }) => (
+const FailedBody = ({
+  error,
+  onRemoveWorkspace,
+  onRestart,
+}: {
+  error: string
+  onRemoveWorkspace: () => void
+  onRestart: () => void
+}) => (
   <div data-testid="orchestrator-failed-body" className="flex flex-1">
     <EmptyState
-      icon={<Crown size={26} />}
+      icon={<Crown size={24} />}
       title="Queen failed to start"
       description={error}
       action={
-        <button
-          type="button"
-          onClick={onRestart}
-          className="icon-btn icon-btn--primary"
-          data-testid="orchestrator-retry"
-        >
-          <RotateCcw size={12} aria-hidden /> Retry
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onRestart}
+            className="icon-btn icon-btn--primary"
+            data-testid="orchestrator-retry"
+          >
+            <RotateCcw size={12} aria-hidden /> Retry
+          </button>
+          <button
+            type="button"
+            onClick={onRemoveWorkspace}
+            className="icon-btn"
+            data-testid="orchestrator-remove-workspace"
+          >
+            Remove workspace
+          </button>
+        </div>
       }
     />
     {/* Header retry was a duplicate; alias kept for back-compat. */}
@@ -70,7 +89,12 @@ const FailedBody = ({ error, onRestart }: { error: string; onRestart: () => void
   </div>
 )
 
-export const OrchestratorPane = ({ state, onRestart, onStart }: OrchestratorPaneProps) => (
+export const OrchestratorPane = ({
+  state,
+  onRemoveWorkspace,
+  onRestart,
+  onStart,
+}: OrchestratorPaneProps) => (
   <div
     className="relative flex h-full w-full min-w-0 flex-col"
     style={{
@@ -86,7 +110,7 @@ export const OrchestratorPane = ({ state, onRestart, onStart }: OrchestratorPane
         data-pty-slot="orchestrator"
       />
     ) : state.kind === 'failed' ? (
-      <FailedBody error={state.error} onRestart={onRestart} />
+      <FailedBody error={state.error} onRemoveWorkspace={onRemoveWorkspace} onRestart={onRestart} />
     ) : state.kind === 'stopped' ? (
       <StoppedBody onStart={onStart} />
     ) : (

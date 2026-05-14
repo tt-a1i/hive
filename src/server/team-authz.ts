@@ -1,10 +1,10 @@
 import type { AgentSummary } from '../shared/types.js'
 import { ForbiddenError, UnauthorizedError } from './http-errors.js'
 
-export type TeamCommand = 'send' | 'list' | 'report' | 'help'
+export type TeamCommand = 'send' | 'list' | 'report' | 'status' | 'help'
 
 const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>(['send', 'list', 'help'])
-const WORKER_COMMANDS = new Set<TeamCommand>(['report', 'help'])
+const WORKER_COMMANDS = new Set<TeamCommand>(['report', 'status', 'help'])
 const WORKER_ROLES = new Set<AgentSummary['role']>(['coder', 'reviewer', 'tester', 'custom'])
 
 export const commandAllowedForRole = (role: AgentSummary['role'], command: TeamCommand) => {

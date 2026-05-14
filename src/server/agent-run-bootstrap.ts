@@ -37,6 +37,7 @@ const resolveLaunchPreset = (
   config: AgentLaunchConfigInput,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
 ): LaunchPreset | undefined => {
+  if (config.presetAugmentationDisabled) return undefined
   if (config.commandPresetId) return getCommandPreset(config.commandPresetId)
 
   const implicitPreset = getCommandPreset(config.command)

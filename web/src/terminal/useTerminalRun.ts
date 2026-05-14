@@ -43,6 +43,13 @@ export const useTerminalRun = (runId: string) => {
         nextFitAddon.fit()
         terminal = nextTerminal
         fitAddon = nextFitAddon
+        if (typeof nextTerminal.attachCustomKeyEventHandler === 'function') {
+          nextTerminal.attachCustomKeyEventHandler((event) => {
+            if (event.key !== 'Enter' || !event.shiftKey) return true
+            if (event.type === 'keypress') client?.sendInput('\u001b[13;2u')
+            return false
+          })
+        }
 
         const getContainerPixels = (): { pixelHeight?: number; pixelWidth?: number } => {
           if (!containerRef.current) return {}

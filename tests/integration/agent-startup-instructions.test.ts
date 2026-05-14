@@ -157,6 +157,7 @@ describe('agent startup instructions', () => {
         expect(output).toContain('[Hive 系统消息：启动说明]')
         expect(output).toContain('你是 Alpha 的 Alice（coder）')
         expect(output).toContain('完成任务后必须执行 `team report "<结论>"`')
+        expect(output).toContain('没有进行中的任务时，用 `team status "<当前状态>"`')
         expect(output).not.toContain('--success')
         expect(output).not.toContain('--failed')
         expect(output).not.toContain('team send <worker-name>')

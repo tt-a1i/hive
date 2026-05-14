@@ -7,6 +7,8 @@ export interface AgentLaunchConfigInput {
   command: string
   args?: string[]
   commandPresetId?: string | null
+  interactiveCommand?: string | null
+  presetAugmentationDisabled?: boolean
   resumedSessionId?: string | null
   resumeArgsTemplate?: string | null
   sessionIdCapture?: SessionIdCaptureConfig | null
@@ -43,6 +45,8 @@ interface LaunchConfigRow {
   command: string
   args_json: string
   command_preset_id: string | null
+  interactive_command: string | null
+  preset_augmentation_disabled: number | null
   resume_args_template: string | null
   session_id_capture_json: string | null
 }
@@ -80,7 +84,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
 
     return db
       .prepare(
-        `SELECT workspace_id, agent_id, command, args_json, command_preset_id, resume_args_template, session_id_capture_json
+        `SELECT workspace_id, agent_id, command, args_json, command_preset_id, interactive_command, preset_augmentation_disabled, resume_args_template, session_id_capture_json
          FROM agent_launch_configs ORDER BY updated_at ASC`
       )
       .all()
@@ -92,6 +96,8 @@ export const createAgentRunStore = (db: Database | undefined) => {
             command: typedRow.command,
             args: parseArgsJson(typedRow.args_json, typedRow.agent_id),
             commandPresetId: typedRow.command_preset_id,
+            interactiveCommand: typedRow.interactive_command,
+            presetAugmentationDisabled: typedRow.preset_augmentation_disabled === 1,
             resumeArgsTemplate: typedRow.resume_args_template,
             sessionIdCapture: parseSessionIdCaptureJson(typedRow.session_id_capture_json),
           },
@@ -116,16 +122,20 @@ export const createAgentRunStore = (db: Database | undefined) => {
          command,
          args_json,
          command_preset_id,
+         interactive_command,
+         preset_augmentation_disabled,
          resume_args_template,
          session_id_capture_json,
          created_at,
          updated_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(workspace_id, agent_id) DO UPDATE SET
           command = excluded.command,
           args_json = excluded.args_json,
           command_preset_id = excluded.command_preset_id,
+          interactive_command = excluded.interactive_command,
+          preset_augmentation_disabled = excluded.preset_augmentation_disabled,
           resume_args_template = excluded.resume_args_template,
           session_id_capture_json = excluded.session_id_capture_json,
           updated_at = excluded.updated_at`
@@ -135,6 +145,8 @@ export const createAgentRunStore = (db: Database | undefined) => {
       input.command,
       JSON.stringify(input.args ?? []),
       input.commandPresetId ?? null,
+      input.interactiveCommand ?? null,
+      input.presetAugmentationDisabled ? 1 : 0,
       input.resumeArgsTemplate ?? null,
       input.sessionIdCapture ? JSON.stringify(input.sessionIdCapture) : null,
       createdAt,

@@ -51,7 +51,7 @@ export const WorkspaceCommandPresetSelect = ({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-ter">
+      <span className="text-xs font-medium uppercase tracking-wider text-ter">
         Orchestrator CLI
       </span>
       <div ref={containerRef} className="cli-select group relative">
@@ -79,6 +79,7 @@ export const WorkspaceCommandPresetSelect = ({
           >
             {presets.map((preset) => {
               const isSelected = preset.id === value
+              const isUnavailable = preset.available === false
               return (
                 <button
                   key={preset.id}
@@ -86,8 +87,10 @@ export const WorkspaceCommandPresetSelect = ({
                   role="option"
                   aria-selected={isSelected}
                   data-testid={`workspace-command-preset-option-${preset.id}`}
+                  disabled={isUnavailable}
                   className="cli-select__option"
                   onClick={() => {
+                    if (isUnavailable) return
                     onChange(preset.id)
                     setOpen(false)
                   }}
@@ -98,7 +101,10 @@ export const WorkspaceCommandPresetSelect = ({
                     className="cli-select__check"
                     style={{ opacity: isSelected ? 1 : 0 }}
                   />
-                  <span>{preset.displayName}</span>
+                  <span>
+                    {preset.displayName}
+                    {isUnavailable ? ' (not found)' : ''}
+                  </span>
                 </button>
               )
             })}
@@ -106,14 +112,14 @@ export const WorkspaceCommandPresetSelect = ({
         ) : null}
       </div>
       <div
-        className="mono flex items-center gap-1.5 truncate text-[11px] text-ter"
+        className="mono flex items-center gap-1.5 truncate text-xs text-ter"
         title={commandPreview}
       >
         <span className="text-sec">$</span>
         <span className="truncate">{commandPreview}</span>
       </div>
       {error ? (
-        <span className="text-[11px]" style={{ color: 'var(--status-red)' }}>
+        <span className="text-xs" style={{ color: 'var(--status-red)' }}>
           {error}
         </span>
       ) : null}

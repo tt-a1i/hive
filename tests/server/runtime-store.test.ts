@@ -103,7 +103,7 @@ describe('runtime store', () => {
     expect(snapshot.agents[0]).toMatchObject({
       name: 'Orchestrator',
       role: 'orchestrator',
-      status: 'idle',
+      status: 'stopped',
       pendingTaskCount: 0,
     })
   })
@@ -277,6 +277,36 @@ describe('runtime store', () => {
         role: 'tester',
       })
     ).toThrow('Worker name already exists: Alice')
+  })
+
+  test('normalizes worker names on create before storing and matching duplicates', () => {
+    const store = createRuntimeStore()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+
+    const worker = store.addWorker(workspace.id, {
+      name: ' Alice ',
+      role: 'coder',
+    })
+
+    expect(worker.name).toBe('Alice')
+    expect(store.listWorkers(workspace.id)).toContainEqual(
+      expect.objectContaining({ id: worker.id, name: 'Alice' })
+    )
+    expect(() =>
+      store.addWorker(workspace.id, {
+        name: 'Alice',
+        role: 'tester',
+      })
+    ).toThrow('Worker name already exists: Alice')
+  })
+
+  test('rejects blank worker names on create', () => {
+    const store = createRuntimeStore()
+    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+
+    expect(() => store.addWorker(workspace.id, { name: '   ', role: 'coder' })).toThrow(
+      'Worker name must not be empty'
+    )
   })
 
   test('addWorker does not mutate memory when DB insert fails', () => {

@@ -48,10 +48,11 @@ Install and start Hive:
 
 ```bash
 npm install -g @tt-a1i/hive
-hive --port 4010
+hive
 ```
 
-Open the printed local URL, usually `http://127.0.0.1:4010/`.
+Open the printed local URL, usually `http://127.0.0.1:3000/`. Use
+`hive --port 4010` when you need a specific local port.
 
 First-run flow:
 
@@ -102,7 +103,7 @@ Three details matter:
 | --- | --- | --- | --- |
 | Claude Code | `claude` | `--dangerously-skip-permissions`, `--permission-mode=bypassPermissions` | `--resume <session_id>` |
 | Codex | `codex` | `--dangerously-bypass-approvals-and-sandbox` | `resume <session_id>` |
-| OpenCode | `opencode` | `--dangerously-skip-permissions` | `--session <session_id>` |
+| OpenCode | `opencode` | Config-driven in `~/.config/opencode/opencode.json` | `--session <session_id>` |
 | Gemini | `gemini` | `--yolo` | `--resume <session_id>` |
 | Custom | Any executable | User configured | User configured |
 
@@ -131,8 +132,9 @@ coding model. It coordinates tools you already run locally.
 | Linux | Tier 1 | CI verified. Native folder picking expects `zenity`; manual path entry works without it. |
 | Windows | Tier 2 | CI runs a Windows test subset and a packaged-install smoke. Folder picking uses Windows PowerShell and the package includes `team.cmd`. Treat as best-effort — full Windows verification before each release is manual. |
 
-All platforms require Node.js 22+. Hive depends on `node-pty`, so native install
-tooling may be required when prebuilt binaries are unavailable.
+All platforms require Node.js 22+. Hive depends on native packages
+(`node-pty` and `better-sqlite3`), so native install tooling may be required
+when prebuilt binaries are unavailable.
 
 ## Safety Model
 
@@ -149,6 +151,8 @@ Hive is a local development tool, not a hosted service.
   agent process environments, and not intended as internet-facing credentials.
 - Hive has no multi-user authentication boundary. Treat same-machine processes
   that can reach the local port as trusted local access.
+- The browser UI token is a local session guard, not protection against other
+  processes already running as your OS user.
 
 Read [SECURITY.md](SECURITY.md) before using Hive with sensitive repositories.
 
@@ -176,11 +180,11 @@ Start Hive with another local port:
 hive --port 4020
 ```
 
-**Native PTY install fails**
+**Native package install fails**
 
-Hive depends on `node-pty`, which uses native binaries. Use Node.js 22+, keep
-your package manager cache clean, and verify your platform build tools are
-available.
+Hive depends on `node-pty` and `better-sqlite3`, which use native binaries. Use
+Node.js 22+, keep your package manager cache clean, and verify your platform
+build tools are available.
 
 **Folder picker does not open on Linux**
 
@@ -237,6 +241,9 @@ Maintainer dry run:
 ```bash
 pnpm release:dry
 ```
+
+See [docs/release.md](docs/release.md) for the full tagged release checklist,
+including manual Windows smoke steps.
 
 Tag pushes matching `v*` run the GitHub Actions release workflow. The workflow
 verifies macOS, Ubuntu, and Windows, then publishes to npm with `NPM_TOKEN`.

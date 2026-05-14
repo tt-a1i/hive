@@ -41,11 +41,69 @@ const openSocket = async (url: string, cookie: string) => {
   })
 }
 
+const expectUpgradeStatus = async (
+  url: string,
+  cookie: string,
+  statusCode: number,
+  headers: Record<string, string> = {}
+) => {
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(url, { headers: { cookie, ...headers } })
+    socket.once('unexpected-response', (_request, response) => {
+      try {
+        expect(response.statusCode).toBe(statusCode)
+        response.resume()
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    })
+    socket.once('open', () => reject(new Error('Expected websocket upgrade to fail')))
+    socket.once('error', () => {})
+  })
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 describe('tasks watcher websocket', () => {
+  test('rejects task watcher upgrades from non-local origins', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(toWsUrl(server.baseUrl, '/ws/tasks/missing'), cookie, 403, {
+        Origin: 'https://attacker.example',
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('allows task watcher upgrades from a local origin before workspace lookup', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(toWsUrl(server.baseUrl, '/ws/tasks/missing'), cookie, 404, {
+        Origin: server.baseUrl,
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('rejects task watcher upgrades from non-local hosts', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      await expectUpgradeStatus(toWsUrl(server.baseUrl, '/ws/tasks/missing'), cookie, 403, {
+        Host: 'attacker.example',
+      })
+    } finally {
+      await server.close()
+    }
+  })
+
   test('external .hive/tasks.md change broadcasts tasks-updated over websocket', async () => {
     const workspacePath = mkdtempSync(join(tmpdir(), 'hive-tasks-watcher-ws-'))
     tempDirs.push(workspacePath)

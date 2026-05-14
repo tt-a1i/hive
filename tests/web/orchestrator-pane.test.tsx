@@ -16,8 +16,17 @@ const renderPane = (state: OrchestratorPaneState) => {
   const onStop = vi.fn()
   const onStart = vi.fn()
   const onRestart = vi.fn()
-  render(<OrchestratorPane state={state} onStop={onStop} onStart={onStart} onRestart={onRestart} />)
-  return { onStop, onStart, onRestart }
+  const onRemoveWorkspace = vi.fn()
+  render(
+    <OrchestratorPane
+      state={state}
+      onStop={onStop}
+      onStart={onStart}
+      onRestart={onRestart}
+      onRemoveWorkspace={onRemoveWorkspace}
+    />
+  )
+  return { onRemoveWorkspace, onStop, onStart, onRestart }
 }
 
 describe('OrchestratorPane three-state UI', () => {
@@ -74,7 +83,10 @@ describe('OrchestratorPane three-state UI', () => {
 
   test('failed: surfaces error string + Retry CTA, click dispatches onRestart', () => {
     const errorMessage = 'claude CLI not found in PATH'
-    const { onStop, onStart, onRestart } = renderPane({ kind: 'failed', error: errorMessage })
+    const { onRemoveWorkspace, onStop, onStart, onRestart } = renderPane({
+      kind: 'failed',
+      error: errorMessage,
+    })
 
     expect(screen.getByTestId('orchestrator-failed-body')).toBeInTheDocument()
     expect(screen.getByTestId('empty-state-description')).toHaveTextContent(errorMessage)
@@ -87,5 +99,10 @@ describe('OrchestratorPane three-state UI', () => {
     expect(onRestart).toHaveBeenCalledTimes(1)
     expect(onStart).not.toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
+
+    const remove = screen.getByTestId('orchestrator-remove-workspace')
+    expect(remove).toHaveTextContent('Remove workspace')
+    fireEvent.click(remove)
+    expect(onRemoveWorkspace).toHaveBeenCalledTimes(1)
   })
 })

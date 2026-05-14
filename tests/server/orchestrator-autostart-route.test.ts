@@ -102,6 +102,24 @@ beforeEach(() => {
 })
 
 describe('POST /api/workspaces autostart_orchestrator', () => {
+  test('rejects missing workspace paths before creating a workspace', async () => {
+    const { store, baseUrl } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
+    const missingPath = join(tmpdir(), `hive-missing-${Date.now()}`)
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ path: missingPath, name: 'Missing' }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      error: `Workspace path does not exist: ${missingPath}`,
+    })
+    expect(store.listWorkspaces()).toEqual([])
+  })
+
   test('autostart happy path returns ok=true + run_id, PTY visible in terminal runs', async () => {
     const { store, baseUrl } = await startServer()
     const cookie = await getUiCookie(baseUrl)
@@ -401,6 +419,190 @@ describe('POST /api/workspaces autostart_orchestrator', () => {
       .listTerminalRuns(body.id)
       .find((item) => item.agent_id === `${body.id}:orchestrator`)
     if (run) store.stopAgentRun(run.run_id)
+  })
+
+  test('OpenCode orchestrator preset autostarts without Claude yolo args', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-opencode-bin-'))
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-preset-opencode-'))
+    tempDirs.push(binDir)
+    tempDirs.push(dataDir)
+    const argsFile = join(dataDir, 'opencode-args.txt')
+    const fakeOpenCode = join(binDir, 'opencode')
+    writeFileSync(
+      fakeOpenCode,
+      [
+        '#!/bin/sh',
+        `printf '%s\\n' "$@" > "${argsFile}"`,
+        'echo opencode orchestrator up',
+        'sleep 60',
+      ].join('\n')
+    )
+    chmodSync(fakeOpenCode, 0o755)
+    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+    const opencodeHome = mkdtempSync(join(tmpdir(), 'hive-opencode-home-'))
+    tempDirs.push(opencodeHome)
+    setEnv('HIVE_OPENCODE_DB_PATH', join(opencodeHome, 'opencode.db'))
+
+    const { store, baseUrl } = await startServer({ dataDir })
+    const cookie = await getUiCookie(baseUrl)
+    const workspacePath = makeWorkspacePath('preset-opencode')
+    mkdirSync(workspacePath, { recursive: true })
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        command_preset_id: 'opencode',
+        name: 'PresetOpenCode',
+        path: workspacePath,
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
+    const config = store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)
+    expect(config?.command).toBe('opencode')
+    expect(config?.commandPresetId).toBe('opencode')
+
+    await waitFor(() => {
+      expect(readFileSync(argsFile, 'utf8')).toBe('\n')
+    })
+    expect(readFileSync(argsFile, 'utf8')).not.toContain('--dangerously-skip-permissions')
+    expect(readFileSync(argsFile, 'utf8')).not.toContain('bypass')
+
+    if (body.orchestrator_start.run_id) store.stopAgentRun(body.orchestrator_start.run_id)
+  })
+
+  test('startup_command runs through the user shell so aliases can expand', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-custom-start-bin-'))
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-custom-start-'))
+    tempDirs.push(binDir)
+    tempDirs.push(dataDir)
+    const shellArgsFile = join(dataDir, 'shell-args.txt')
+    const shellCommandFile = join(dataDir, 'shell-command.txt')
+    const fakeShell = join(binDir, 'fake-zsh')
+    writeFileSync(
+      fakeShell,
+      [
+        '#!/bin/sh',
+        `printf '%s\\n' "$@" > "${shellArgsFile}"`,
+        `printf '%s\\n' "$2" > "${shellCommandFile}"`,
+        'sleep 60',
+      ].join('\n')
+    )
+    chmodSync(fakeShell, 0o755)
+    setEnv('SHELL', fakeShell)
+    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+
+    const { store, baseUrl } = await startServer({ dataDir })
+    const cookie = await getUiCookie(baseUrl)
+    const workspacePath = makeWorkspacePath('custom-start')
+    mkdirSync(workspacePath, { recursive: true })
+
+    const response = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        command_preset_id: 'claude',
+        name: 'CustomStart',
+        path: workspacePath,
+        startup_command: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"',
+      }),
+    })
+
+    expect(response.status).toBe(201)
+    const body = (await response.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(body.orchestrator_start).toMatchObject({ error: null, ok: true })
+
+    const config = store.peekAgentLaunchConfig(body.id, `${body.id}:orchestrator`)
+    expect(config).toMatchObject({
+      args: ['-lic', 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"'],
+      command: fakeShell,
+      commandPresetId: null,
+      interactiveCommand: 'claude',
+      presetAugmentationDisabled: true,
+      sessionIdCapture: expect.objectContaining({ source: 'claude_project_jsonl_dir' }),
+    })
+    await waitFor(() => {
+      expect(readFileSync(shellCommandFile, 'utf8')).toBe(
+        'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19 --label "old session"\n'
+      )
+    })
+    expect(readFileSync(shellArgsFile, 'utf8')).not.toContain('bypass')
+
+    if (body.orchestrator_start.run_id) store.stopAgentRun(body.orchestrator_start.run_id)
+  })
+
+  test('startup_command is saved when workspace creation skips autostart', async () => {
+    const binDir = mkdtempSync(join(tmpdir(), 'hive-custom-start-manual-bin-'))
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-custom-start-manual-'))
+    tempDirs.push(binDir)
+    tempDirs.push(dataDir)
+    const shellCommandFile = join(dataDir, 'manual-shell-command.txt')
+    const fakeShell = join(binDir, 'fake-zsh')
+    writeFileSync(
+      fakeShell,
+      ['#!/bin/sh', `printf '%s\\n' "$2" > "${shellCommandFile}"`, 'sleep 60'].join('\n')
+    )
+    chmodSync(fakeShell, 0o755)
+    setEnv('SHELL', fakeShell)
+    setEnv('PATH', `${binDir}:${process.env.PATH ?? ''}`)
+
+    const { store, baseUrl } = await startServer({ dataDir })
+    const cookie = await getUiCookie(baseUrl)
+    const workspacePath = makeWorkspacePath('custom-start-manual')
+    mkdirSync(workspacePath, { recursive: true })
+
+    const createResponse = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        autostart_orchestrator: false,
+        name: 'ManualCustomStart',
+        path: workspacePath,
+        startup_command: 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19',
+      }),
+    })
+
+    expect(createResponse.status).toBe(201)
+    const workspace = (await createResponse.json()) as {
+      id: string
+      orchestrator_start: { ok: boolean; error: string | null; run_id: string | null }
+    }
+    expect(workspace.orchestrator_start).toEqual({ error: null, ok: false, run_id: null })
+    const orchestratorId = `${workspace.id}:orchestrator`
+    expect(store.peekAgentLaunchConfig(workspace.id, orchestratorId)).toMatchObject({
+      args: ['-lic', 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19'],
+      command: fakeShell,
+      commandPresetId: null,
+      interactiveCommand: 'claude',
+      presetAugmentationDisabled: true,
+      sessionIdCapture: expect.objectContaining({ source: 'claude_project_jsonl_dir' }),
+    })
+
+    const startResponse = await fetch(
+      `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ hive_port: baseUrl.split(':').at(-1) }),
+      }
+    )
+    expect(startResponse.status).toBe(201)
+    const startBody = (await startResponse.json()) as { run_id: string }
+    await waitFor(() => {
+      expect(readFileSync(shellCommandFile, 'utf8')).toBe(
+        'claude --resume f500de1d-df89-470f-a2ce-e385acffef19\n'
+      )
+    })
+    store.stopAgentRun(startBody.run_id)
   })
 
   test('spawn failure (async exit) does NOT block workspace creation, surfaces binary name', async () => {

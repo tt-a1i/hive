@@ -194,7 +194,7 @@ db.prepare('INSERT OR REPLACE INTO session (id, directory, time_archived) VALUES
 db.close()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 if (existsSync(process.cwd() + '/.expect-resume') && !(args.includes('--session') && args.includes(sessionId))) process.exit(2)
-if (existsSync(expectYoloMarker) && !args.includes('--dangerously-skip-permissions')) process.exit(4)
+if (existsSync(expectYoloMarker) && args.includes('--dangerously-skip-permissions')) process.exit(4)
 setInterval(() => {}, 1000)
 `
   )
@@ -590,7 +590,7 @@ describe('preset-driven Layer A', () => {
         process.env.HIVE_OPENCODE_DB_PATH = join(homeDir, 'opencode.db')
       },
       expectedArgs: (sessionId: string) =>
-        `ARGS:--dangerously-skip-permissions --session ${sessionId} --session-id-test ${sessionId}`,
+        `ARGS:--session ${sessionId} --session-id-test ${sessionId}`,
       presetId: 'opencode',
       sessionId: 'ses_25c8f572efferzSV4Mgjo99WqB',
       writeCli: writeFakeOpenCode,

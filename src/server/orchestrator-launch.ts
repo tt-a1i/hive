@@ -1,5 +1,9 @@
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { SettingsStore } from './settings-store.js'
+import {
+  createStartupCommandLaunch,
+  getStartupCommandExecutable,
+} from './startup-command-parser.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 
 interface ConfigurePort {
@@ -40,19 +44,45 @@ const resolveCommandPresetLaunchConfig = (
   }
 }
 
+const findPresetForStartupCommand = (
+  settings: SettingsStore,
+  startupCommand: string,
+  commandPresetId: string | null
+) => {
+  if (commandPresetId) return settings.getCommandPreset(commandPresetId)
+  const executable = getStartupCommandExecutable(startupCommand)
+  return executable ? settings.getCommandPreset(executable) : undefined
+}
+
 /**
  * Resolve the orchestrator's launch config in priority order:
- * 1. Explicit workspace-create command preset chosen by the user.
- * 2. `HIVE_ORCHESTRATOR_COMMAND` env var (with optional `HIVE_ORCHESTRATOR_ARGS_JSON`).
+ * 1. Explicit startup command pasted by the user. It runs through their shell
+ *    so aliases/functions like `ccs --resume ...` can expand.
+ * 2. Explicit workspace-create command preset chosen by the user.
+ * 3. `HIVE_ORCHESTRATOR_COMMAND` env var (with optional `HIVE_ORCHESTRATOR_ARGS_JSON`).
  *    Tests use this to inject a dummy CLI like `bash -c 'echo queen up; sleep 60'`
  *    so autostart can run end-to-end without depending on a real `claude` binary.
- * 3. The seeded `orchestrator` role template (defaults to `claude`).
+ * 4. The seeded `orchestrator` role template (defaults to `claude`).
  * Returns `undefined` when neither source has a usable command.
  */
 export const resolveOrchestratorLaunchConfig = (
   settings: SettingsStore,
-  commandPresetId: string | null = null
+  commandPresetId: string | null = null,
+  startupCommand: string | null = null
 ): AgentLaunchConfigInput | undefined => {
+  const trimmedStartupCommand = startupCommand?.trim()
+  if (trimmedStartupCommand) {
+    const parsed = createStartupCommandLaunch(trimmedStartupCommand)
+    const preset = findPresetForStartupCommand(settings, trimmedStartupCommand, commandPresetId)
+    return {
+      command: parsed.command,
+      args: parsed.args,
+      commandPresetId: null,
+      interactiveCommand: preset?.command ?? getStartupCommandExecutable(trimmedStartupCommand),
+      presetAugmentationDisabled: true,
+      sessionIdCapture: preset?.sessionIdCapture ?? null,
+    }
+  }
   if (commandPresetId) {
     return resolveCommandPresetLaunchConfig(settings, commandPresetId)
   }
@@ -85,11 +115,12 @@ export const seedOrchestratorLaunchConfig = (
   port: ConfigurePort,
   settings: SettingsStore,
   workspaceId: string,
-  commandPresetId: string | null = null
+  commandPresetId: string | null = null,
+  startupCommand: string | null = null
 ): void => {
   const orchestratorId = getOrchestratorId(workspaceId)
   if (port.peekAgentLaunchConfig(workspaceId, orchestratorId)) return
-  const config = resolveOrchestratorLaunchConfig(settings, commandPresetId)
+  const config = resolveOrchestratorLaunchConfig(settings, commandPresetId, startupCommand)
   if (!config) return
   port.configureAgentLaunch(workspaceId, orchestratorId, config)
 }

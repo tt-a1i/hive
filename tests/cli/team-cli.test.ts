@@ -174,6 +174,28 @@ describe('team cli with real server', () => {
     )
   })
 
+  test('team send joins unquoted task words instead of silently truncating', async () => {
+    if (!serverStore) {
+      throw new Error('Expected test server store')
+    }
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runTeamCommand(['send', 'Alice', 'Implement', 'multi', 'word', 'task'])
+    logSpy.mockRestore()
+
+    const workspaceId = process.env.HIVE_PROJECT_ID
+    if (!workspaceId) {
+      throw new Error('Expected workspace id')
+    }
+    expect(serverStore.listMessagesForRecovery(workspaceId, 0)).toContainEqual(
+      expect.objectContaining({
+        type: 'send',
+        to: workerId,
+        text: 'Implement multi word task',
+      })
+    )
+  })
+
   test('team report rejects an orchestrator token with the server error detail', async () => {
     if (!serverStore) {
       throw new Error('Expected test server store')

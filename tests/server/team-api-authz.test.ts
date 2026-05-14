@@ -343,7 +343,7 @@ describe('team API authz (R1.4)', () => {
           project_id: ctx.workspaceId,
           from_agent_id: ctx.worker.id,
           token: workerToken,
-          result: 'done without dispatch',
+          result: 'connected and waiting for work',
           artifacts: [],
         }),
       })
@@ -353,6 +353,119 @@ describe('team API authz (R1.4)', () => {
         error: 'No open dispatch for worker: Alice',
       })
       expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'report')
+      ).toEqual([])
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toEqual([])
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
+  test('worker status without an open dispatch forwards and records status without dispatch', async () => {
+    const ctx = await setupHive()
+    try {
+      const workerToken = ctx.hive.store.peekAgentToken(ctx.worker.id)
+      if (!workerToken) {
+        throw new Error('Expected worker token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.worker.id,
+          token: workerToken,
+          result: 'connected and waiting for work',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(202)
+      await expect(response.json()).resolves.toEqual({
+        dispatch_id: null,
+        forward_error: null,
+        forwarded: true,
+        ok: true,
+      })
+      expect(ctx.hive.store.getWorker(ctx.workspaceId, ctx.worker.id).pendingTaskCount).toBe(0)
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'status')
+      ).toEqual([
+        expect.objectContaining({
+          from: ctx.worker.id,
+          text: 'connected and waiting for work',
+          type: 'status',
+        }),
+      ])
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toEqual([])
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
+  test('worker status rejects an empty result and records no status message', async () => {
+    const ctx = await setupHive()
+    try {
+      const workerToken = ctx.hive.store.peekAgentToken(ctx.worker.id)
+      if (!workerToken) {
+        throw new Error('Expected worker token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.worker.id,
+          token: workerToken,
+          result: '   ',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({ error: 'Missing result' })
+      expect(
+        ctx.hive.store
+          .listMessagesForRecovery(ctx.workspaceId, 0)
+          .filter((item) => item.type === 'status')
+      ).toEqual([])
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
+  test('worker report with an explicit missing dispatch is rejected and records no report', async () => {
+    const ctx = await setupHive()
+    try {
+      const workerToken = ctx.hive.store.peekAgentToken(ctx.worker.id)
+      if (!workerToken) {
+        throw new Error('Expected worker token after start')
+      }
+
+      const response = await fetch(`${ctx.baseUrl}/api/team/report`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: ctx.workspaceId,
+          from_agent_id: ctx.worker.id,
+          token: workerToken,
+          dispatch_id: 'missing-dispatch',
+          result: 'done without dispatch',
+          artifacts: [],
+        }),
+      })
+
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toEqual({
+        error: 'No open dispatch for worker: Alice',
+      })
       expect(
         ctx.hive.store
           .listMessagesForRecovery(ctx.workspaceId, 0)

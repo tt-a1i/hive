@@ -10,8 +10,11 @@ import { applySchemaVersion12 } from './sqlite-schema-v12.js'
 import { applySchemaVersion13 } from './sqlite-schema-v13.js'
 import { applySchemaVersion14 } from './sqlite-schema-v14.js'
 import { applySchemaVersion15 } from './sqlite-schema-v15.js'
+import { applySchemaVersion16 } from './sqlite-schema-v16.js'
+import { applySchemaVersion17 } from './sqlite-schema-v17.js'
+import { applySchemaVersion18 } from './sqlite-schema-v18.js'
 
-export const CURRENT_SCHEMA_VERSION = 15
+export const CURRENT_SCHEMA_VERSION = 18
 
 export const initializeRuntimeDatabase = (db: Database) => {
   db.exec(`
@@ -56,6 +59,8 @@ export const initializeRuntimeDatabase = (db: Database) => {
       command TEXT NOT NULL,
       args_json TEXT NOT NULL,
       command_preset_id TEXT,
+      interactive_command TEXT,
+      preset_augmentation_disabled INTEGER NOT NULL DEFAULT 0,
       resume_args_template TEXT,
       session_id_capture_json TEXT,
       created_at INTEGER NOT NULL,
@@ -224,5 +229,20 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(15)) {
     applySchemaVersion15(db)
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(15, Date.now())
+  }
+
+  if (!appliedVersions.has(16)) {
+    applySchemaVersion16(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(16, Date.now())
+  }
+
+  if (!appliedVersions.has(17)) {
+    applySchemaVersion17(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(17, Date.now())
+  }
+
+  if (!appliedVersions.has(18)) {
+    applySchemaVersion18(db)
+    db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(18, Date.now())
   }
 }

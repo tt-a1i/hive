@@ -23,6 +23,7 @@ type WorkspaceDetailProps = {
     roleDescription: string
   ) => Promise<{ error: string | null; runId: string | null }>
   onDeleteWorker: (workerId: string) => Promise<void>
+  onDeleteWorkspace: (workspace: WorkspaceSummary) => Promise<void>
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   onRequestAddWorkspace: () => void
@@ -40,6 +41,7 @@ type WorkspaceDetailProps = {
 export const WorkspaceDetail = ({
   onCreateWorker,
   onDeleteWorker,
+  onDeleteWorkspace,
   onStartWorker,
   onOrchestratorResult,
   onRequestAddWorkspace,
@@ -166,6 +168,13 @@ export const WorkspaceDetail = ({
           <OrchestratorPane
             state={orchestrator.state}
             onStop={orchestrator.stop}
+            onRemoveWorkspace={() => {
+              if (!workspace) return
+              void onDeleteWorkspace(workspace).catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : String(error)
+                toast.show({ kind: 'error', message: `Delete failed: ${message}` })
+              })
+            }}
             onStart={orchestrator.start}
             onRestart={orchestrator.restart}
           />

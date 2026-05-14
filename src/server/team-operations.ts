@@ -5,6 +5,7 @@ import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
 import {
   createReportMessage,
   createSendMessage,
+  createStatusMessage,
   createUserInputMessage,
 } from './runtime-message-builders.js'
 import type { WorkspaceStore } from './workspace-store.js'
@@ -48,6 +49,21 @@ export interface ReportTaskInput {
   status?: string
   text?: string
 }
+
+export interface StatusTaskInput {
+  artifacts?: string[]
+  requireActiveRun?: boolean
+  text?: string
+}
+
+export interface ReportTaskResult {
+  dispatch: DispatchRecord | null
+  forwardError: string | null
+  forwarded: boolean
+}
+
+const reportForwardErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
 
 export const createTeamOperations = ({
   agentRuntime,
@@ -151,6 +167,33 @@ export const createTeamOperations = ({
       agentRuntime.writeUserInputPrompt(workspaceId, text)
       insertMessage(createUserInputMessage(workspaceId, orchestratorId, text))
     },
+    statusTask(workspaceId: string, workerId: string, input: StatusTaskInput = {}) {
+      const text = input.text ?? ''
+      const artifacts = input.artifacts ?? []
+      const worker = workspaceStore.getWorker(workspaceId, workerId)
+      const messageHandle = insertMessage(
+        createStatusMessage(workspaceId, workerId, text, artifacts)
+      )
+      try {
+        let forwardError: string | null = null
+        let forwarded = false
+        if (input.requireActiveRun === true) {
+          try {
+            agentRuntime.writeStatusPrompt(workspaceId, worker.name, workerId, text, artifacts, {
+              requireActiveRun: input.requireActiveRun,
+            })
+            forwarded = true
+          } catch (error) {
+            forwardError = reportForwardErrorMessage(error)
+            console.error('[hive] swallowed:teamStatus.forward', error)
+          }
+        }
+        return { dispatch: null, forwardError, forwarded }
+      } catch (error) {
+        deleteMessage(messageHandle)
+        throw error
+      }
+    },
     reportTask(workspaceId: string, workerId: string, input: ReportTaskInput = {}) {
       const text = input.text ?? ''
       const status = input.status
@@ -163,6 +206,9 @@ export const createTeamOperations = ({
         throw new PtyInactiveError(`No active run for agent: ${workspaceId}:orchestrator`)
       }
       const openDispatch = findOpenDispatch(workspaceId, workerId, input.dispatchId)
+      if (!openDispatch && input.dispatchId) {
+        throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
+      }
       if (!openDispatch) {
         throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
       }
@@ -170,11 +216,6 @@ export const createTeamOperations = ({
         createReportMessage(workspaceId, workerId, text, status, artifacts)
       )
       try {
-        if (input.requireActiveRun === true) {
-          agentRuntime.writeReportPrompt(workspaceId, worker.name, workerId, text, artifacts, {
-            requireActiveRun: input.requireActiveRun,
-          })
-        }
         const dispatch = markDispatchReportedByWorker({
           artifacts,
           ...(input.dispatchId ? { dispatchId: input.dispatchId } : {}),
@@ -186,7 +227,20 @@ export const createTeamOperations = ({
           throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
         }
         workspaceStore.markTaskReported(workspaceId, workerId)
-        return dispatch
+        let forwardError: string | null = null
+        let forwarded = false
+        if (input.requireActiveRun === true) {
+          try {
+            agentRuntime.writeReportPrompt(workspaceId, worker.name, workerId, text, artifacts, {
+              requireActiveRun: input.requireActiveRun,
+            })
+            forwarded = true
+          } catch (error) {
+            forwardError = reportForwardErrorMessage(error)
+            console.error('[hive] swallowed:teamReport.forward', error)
+          }
+        }
+        return { dispatch, forwardError, forwarded }
       } catch (error) {
         deleteMessage(messageHandle)
         throw error

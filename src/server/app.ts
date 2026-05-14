@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { type PickFolderResponse, pickFolder } from './fs-pick-folder.js'
 import { HttpError } from './http-errors.js'
+import { assertLocalRequest } from './local-request-guard.js'
 import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { createTasksFileService, type TasksFileService } from './tasks-file.js'
@@ -103,6 +104,8 @@ export const createApp = ({
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
 
     try {
+      assertLocalRequest(request)
+
       const match = matchRoute(method, url.pathname)
       if (match) {
         await match.handler({

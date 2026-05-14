@@ -14,6 +14,9 @@ describe('post-start input writer', () => {
   test('recognizes interactive TUI prompts', () => {
     expect(hasInteractivePromptReady('booting\n❯ ')).toBe(true)
     expect(hasInteractivePromptReady('booting\n› ')).toBe(true)
+    expect(
+      hasInteractivePromptReady('Gemini CLI\n* Type your message or @path/to/file', 'gemini')
+    ).toBe(true)
     expect(hasInteractivePromptReady('booting only')).toBe(false)
   })
 
@@ -91,6 +94,37 @@ describe('post-start input writer', () => {
     expect(manager.writeInput).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(1)
+    expect(manager.writeInput).toHaveBeenCalledTimes(2)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(2, 'run-1', '\r')
+  })
+
+  test('waits for Gemini prompt readiness and writes plain input without bracketed paste', () => {
+    vi.useFakeTimers()
+    let output = 'Gemini CLI v0.35.3\nAuthenticated with gemini-api-key'
+    const manager = {
+      getRun: vi.fn(() => ({ output, status: 'running' })),
+      writeInput: vi.fn(),
+    }
+
+    const write = createPostStartInputWriter(manager as never, 'gemini')
+    write('run-1', '[Hive 系统消息：启动说明]\n请基于此继续。')
+
+    vi.advanceTimersByTime(5000)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    output += '\n* Type your message or @path/to/file'
+    vi.advanceTimersByTime(50)
+
+    expect(manager.writeInput).toHaveBeenCalledTimes(1)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(
+      1,
+      'run-1',
+      '[Hive 系统消息：启动说明]\n请基于此继续。'
+    )
+    expect(manager.writeInput.mock.calls[0]?.[1]).not.toContain('\u001b[200~')
+    expect(manager.writeInput.mock.calls[0]?.[1]).not.toContain('\u001b[201~')
+
+    vi.advanceTimersByTime(600)
     expect(manager.writeInput).toHaveBeenCalledTimes(2)
     expect(manager.writeInput).toHaveBeenNthCalledWith(2, 'run-1', '\r')
   })

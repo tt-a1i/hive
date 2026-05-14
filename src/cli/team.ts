@@ -22,6 +22,7 @@ const TEAM_USAGE = [
   '  team list',
   '  team send <worker-name> "<task>"',
   '  team report "<result>" [--dispatch <dispatch-id>] [--artifact <path>]',
+  '  team status "<current status>" [--artifact <path>]',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -95,10 +96,21 @@ const postJson = async (baseUrl: string, path: string, body: unknown) => {
   return response
 }
 
-const parseReportArgs = (args: string[]) => {
+interface TeamReportResponse {
+  dispatch_id: string | null
+  forward_error?: string | null
+  forwarded?: boolean
+  ok: true
+}
+
+const parseReportArgs = (args: string[], command = 'report') => {
   const [result, ...rest] = args
   if (!result) {
-    throw new Error('Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]')
+    throw new Error(
+      command === 'status'
+        ? 'Usage: team status <current status> [--artifact <path>]'
+        : 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+    )
   }
 
   const artifacts: string[] = []
@@ -116,7 +128,9 @@ const parseReportArgs = (args: string[]) => {
       const artifactPath = rest[index + 1]
       if (!artifactPath) {
         throw new Error(
-          'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+          command === 'status'
+            ? 'Usage: team status <current status> [--artifact <path>]'
+            : 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
         )
       }
 
@@ -126,6 +140,9 @@ const parseReportArgs = (args: string[]) => {
     }
 
     if (arg === '--dispatch') {
+      if (command === 'status') {
+        throw new Error('team status does not accept --dispatch; use team report for assigned work')
+      }
       const nextDispatchId = rest[index + 1]
       if (!nextDispatchId) {
         throw new Error(
@@ -172,7 +189,8 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'send') {
-    const [workerName, task] = args
+    const [workerName, ...taskParts] = args
+    const task = taskParts.join(' ').trim()
     if (!workerName || !task || uuidPattern.test(workerName)) {
       throw new Error('Usage: team send <worker-name> <task>')
     }
@@ -191,12 +209,33 @@ export const runTeamCommand = async (argv: string[]) => {
     return
   }
 
+  if (command === 'status') {
+    const report = parseReportArgs(args, 'status')
+
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
+    const response = await postJson(baseUrl, '/api/team/status', {
+      project_id: env.HIVE_PROJECT_ID,
+      from_agent_id: env.HIVE_AGENT_ID,
+      token: env.HIVE_AGENT_TOKEN,
+      result: report.result,
+      artifacts: report.artifacts,
+    })
+    const payload = (await response.json()) as TeamReportResponse
+    if (payload.forwarded === false && payload.forward_error) {
+      console.error(
+        `Hive recorded the status update, but could not deliver it to Orchestrator in real time: ${payload.forward_error}`
+      )
+    }
+    return
+  }
+
   if (command === 'report') {
     const report = parseReportArgs(args)
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
-    await postJson(baseUrl, '/api/team/report', {
+    const response = await postJson(baseUrl, '/api/team/report', {
       ...(report.dispatchId ? { dispatch_id: report.dispatchId } : {}),
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
@@ -204,6 +243,12 @@ export const runTeamCommand = async (argv: string[]) => {
       result: report.result,
       artifacts: report.artifacts,
     })
+    const payload = (await response.json()) as TeamReportResponse
+    if (payload.forwarded === false && payload.forward_error) {
+      console.error(
+        `Hive recorded the report, but could not deliver it to Orchestrator in real time: ${payload.forward_error}`
+      )
+    }
     return
   }
 

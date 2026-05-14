@@ -44,7 +44,10 @@ export const createAgentStdinDispatcher = ({
     try {
       const config = getLaunchConfig(workspaceId, agentId)
       if (agentManager && config) {
-        createPostStartInputWriter(agentManager, config.command)(run.runId, text)
+        createPostStartInputWriter(agentManager, config.interactiveCommand ?? config.command)(
+          run.runId,
+          text
+        )
       } else {
         agentManager?.writeInput(run.runId, text)
       }
@@ -62,6 +65,18 @@ export const createAgentStdinDispatcher = ({
       input: { requireActiveRun?: boolean } = {}
     ) {
       const lines = [`[Hive 系统消息：来自 @${workerName} 的汇报]`, text]
+      for (const artifact of artifacts) lines.push(`artifact: ${artifact}`)
+      lines.push('')
+      writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, lines.join('\n'), input)
+    },
+    writeStatusPrompt(
+      workspaceId: string,
+      workerName: string,
+      text: string,
+      artifacts: string[],
+      input: { requireActiveRun?: boolean } = {}
+    ) {
+      const lines = [`[Hive 系统消息：来自 @${workerName} 的状态更新]`, text]
       for (const artifact of artifacts) lines.push(`artifact: ${artifact}`)
       lines.push('')
       writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, lines.join('\n'), input)

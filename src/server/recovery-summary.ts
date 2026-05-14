@@ -16,18 +16,19 @@ const formatUserInputs = (messages: RecoveryMessage[]) => {
 
 const formatTaskEvents = (messages: RecoveryMessage[], agent: AgentSummary) => {
   const taskEvents = messages.filter(
-    (message): message is Extract<RecoveryMessage, { type: 'send' | 'report' }> => {
+    (message): message is Extract<RecoveryMessage, { type: 'send' | 'report' | 'status' }> => {
       if (agent.role === 'orchestrator') {
         if (message.type === 'send') return message.from === agent.id
-        return message.type === 'report'
+        return message.type === 'report' || message.type === 'status'
       }
       if (message.type === 'send') return message.to === agent.id || message.from === agent.id
-      return message.type === 'report' && message.from === agent.id
+      return (message.type === 'report' || message.type === 'status') && message.from === agent.id
     }
   )
   return taskEvents.length > 0
     ? taskEvents.slice(-8).map((message) => {
         if (message.type === 'send') return `- send -> ${message.to}: ${message.text}`
+        if (message.type === 'status') return `- status <- ${message.from}: ${message.text}`
         const status = message.status ? ` [${message.status}]` : ''
         return `- report <- ${message.from}${status}: ${message.text}`
       })

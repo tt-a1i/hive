@@ -17,7 +17,7 @@ export const useFirstRunWizard = (
   workspaces: WorkspaceSummary[] | null
 ): {
   wizardOpen: boolean
-  closeWizard: () => void
+  closeWizard: (shouldMarkSeen?: boolean) => void
 } => {
   const { seen, markSeen } = useFirstRunFlag()
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -28,10 +28,13 @@ export const useFirstRunWizard = (
     }
   }, [seen, workspaces])
 
-  const closeWizard = useCallback(() => {
-    markSeen()
-    setWizardOpen(false)
-  }, [markSeen])
+  const closeWizard = useCallback(
+    (shouldMarkSeen = true) => {
+      if (shouldMarkSeen) markSeen()
+      setWizardOpen(false)
+    },
+    [markSeen]
+  )
 
   return { wizardOpen, closeWizard }
 }
