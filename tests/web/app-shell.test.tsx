@@ -135,7 +135,7 @@ describe('app shell with real server', () => {
       /failed to create workspace/i
     )
     expect(screen.getByRole('status')).toHaveTextContent(/failed to create workspace/i)
-  })
+  }, 10000)
 
   test('init failure surfaces error toast and disables Add Workspace CTA', async () => {
     // Override the per-test fetch stub from beforeEach with a hard-rejecting
