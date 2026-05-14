@@ -153,7 +153,7 @@ export const ServerBrowseDialog = ({
                 aria-label="Go to parent directory"
                 className="flex items-center gap-1 rounded px-2 py-0.5 text-sec hover:bg-3 hover:text-pri disabled:opacity-40"
               >
-                <ArrowUp size={11} aria-hidden /> up
+                <ArrowUp size={12} aria-hidden /> up
               </button>
               <div className="mx-2 h-4 w-px" style={{ background: 'var(--border)' }} />
               {breadcrumbs.map((segment, index) => {
@@ -209,9 +209,9 @@ export const ServerBrowseDialog = ({
                   className="flex items-center gap-1.5 text-left text-xs uppercase tracking-wider text-ter hover:text-sec"
                 >
                   {startupExpanded ? (
-                    <ChevronDown size={11} aria-hidden />
+                    <ChevronDown size={12} aria-hidden />
                   ) : (
-                    <ChevronRight size={11} aria-hidden />
+                    <ChevronRight size={12} aria-hidden />
                   )}
                   Advanced: startup command
                 </button>
@@ -238,9 +238,9 @@ export const ServerBrowseDialog = ({
                   className="flex items-center gap-1.5 text-left text-xs uppercase tracking-wider text-ter hover:text-sec"
                 >
                   {advanced ? (
-                    <ChevronDown size={11} aria-hidden />
+                    <ChevronDown size={12} aria-hidden />
                   ) : (
-                    <ChevronRight size={11} aria-hidden />
+                    <ChevronRight size={12} aria-hidden />
                   )}
                   Advanced: paste path
                 </button>

@@ -60,9 +60,9 @@ const RoleCard = ({
     data-testid={`role-card-${spec.value}`}
     className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-2.5 px-3 py-2.5`}
   >
-    <RoleAvatar role={spec.value} size={22} />
+    <RoleAvatar role={spec.value} size={20} />
     <span className="flex-1 text-left text-base font-medium text-pri">{spec.label}</span>
-    {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
+    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
 )
 
@@ -86,7 +86,7 @@ const AgentChip = ({
       <span className="truncate text-base font-medium text-pri">{preset.displayName}</span>
       <span className="mono truncate text-xs text-ter">{preset.command}</span>
     </span>
-    {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
+    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
 )
 
@@ -237,7 +237,7 @@ export const AddWorkerDialog = ({
                           onRoleDescriptionReset()
                         }}
                       >
-                        <RotateCcw size={11} aria-hidden />
+                        <RotateCcw size={12} aria-hidden />
                         Reset
                       </button>
                     ) : null}

@@ -48,7 +48,7 @@ export const Toaster = () => {
             className="-mt-0.5 -mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-ter transition-colors hover:bg-3 hover:text-pri"
             aria-label="Dismiss"
           >
-            <X size={13} aria-hidden />
+            <X size={14} aria-hidden />
           </button>
         </div>
       ))}

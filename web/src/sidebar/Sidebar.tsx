@@ -124,7 +124,7 @@ export const Sidebar = ({
                 title={createDisabledReason ?? 'New workspace'}
                 className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Plus size={13} aria-hidden />
+                <Plus size={14} aria-hidden />
                 New workspace
               </button>
             }
@@ -146,7 +146,7 @@ export const Sidebar = ({
                   aria-label={workspace.name}
                   aria-current={isActive ? 'true' : undefined}
                   onClick={() => onSelectWorkspace(workspace.id)}
-                  className={`ws-row block w-full py-2.5 pr-9 pl-3 text-left${
+                  className={`ws-row block w-full py-2.5 pr-7 pl-1.5 text-left${
                     isActive ? ' active' : ''
                   }`}
                 >
@@ -208,7 +208,7 @@ export const Sidebar = ({
                   onClick={() => requestDelete(workspace)}
                   className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
                 >
-                  <Trash2 size={13} aria-hidden />
+                  <Trash2 size={14} aria-hidden />
                 </button>
               </li>
             )
@@ -226,7 +226,7 @@ export const Sidebar = ({
               className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               style={{ borderColor: 'var(--border-bright)' }}
             >
-              <Plus size={13} aria-hidden />
+              <Plus size={14} aria-hidden />
               <span className="ws-add__label">New workspace</span>
             </button>
           </li>

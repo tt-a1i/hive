@@ -48,14 +48,14 @@ export const TaskGraphRawEditor = ({
           className="flex items-start gap-2 rounded-md border p-3 text-xs"
           style={{ borderColor: 'var(--status-orange)', color: 'var(--status-orange)' }}
         >
-          <AlertTriangle className="mt-0.5 shrink-0" size={15} />
+          <AlertTriangle className="mt-0.5 shrink-0" size={16} />
           <div className="min-w-0 flex-1">
             <p className="font-medium">文件已在外部变化</p>
             <p className="mt-1 text-ter">重新载入会丢弃当前草稿；保留本地会继续编辑当前内容。</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={onReload} className="icon-btn">
-              <RefreshCw size={13} />
+              <RefreshCw size={14} />
               Reload
             </button>
             <button type="button" onClick={onKeepLocal} className="icon-btn">

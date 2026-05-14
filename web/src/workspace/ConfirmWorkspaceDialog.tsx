@@ -138,7 +138,7 @@ export const ConfirmWorkspaceDialog = ({
                       border: '1px solid color-mix(in oklab, var(--status-blue) 30%, transparent)',
                     }}
                   >
-                    <GitBranch size={11} aria-hidden />
+                    <GitBranch size={12} aria-hidden />
                     {probe.current_branch ?? 'detached'}
                   </span>
                   <span className="text-ter">git repository detected</span>
@@ -172,9 +172,9 @@ export const ConfirmWorkspaceDialog = ({
                 data-testid="confirm-workspace-startup-toggle"
               >
                 {startupExpanded ? (
-                  <ChevronDown size={11} aria-hidden />
+                  <ChevronDown size={12} aria-hidden />
                 ) : (
-                  <ChevronRight size={11} aria-hidden />
+                  <ChevronRight size={12} aria-hidden />
                 )}
                 Advanced: custom startup command
               </button>
@@ -203,9 +203,9 @@ export const ConfirmWorkspaceDialog = ({
                 data-testid="confirm-workspace-paste-toggle"
               >
                 {pasteExpanded ? (
-                  <ChevronDown size={11} aria-hidden />
+                  <ChevronDown size={12} aria-hidden />
                 ) : (
-                  <ChevronRight size={11} aria-hidden />
+                  <ChevronRight size={12} aria-hidden />
                 )}
                 Advanced: paste path
               </button>
@@ -229,7 +229,7 @@ export const ConfirmWorkspaceDialog = ({
                 className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
                 data-testid="confirm-workspace-browse-toggle"
               >
-                <ChevronRight size={11} aria-hidden />
+                <ChevronRight size={12} aria-hidden />
                 Advanced: browse server filesystem
               </button>
             </div>

@@ -55,12 +55,12 @@ const TaskItem = ({
           }`}
           aria-hidden
         >
-          <StatusIcon size={14} strokeWidth={2.2} />
+          <StatusIcon size={14} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-start gap-2">
             <span
-              className={`min-w-0 flex-1 text-[13px] leading-5 ${
+              className={`min-w-0 flex-1 text-base leading-5 ${
                 task.checked ? 'text-ter line-through' : 'text-pri'
               }`}
             >
@@ -68,7 +68,7 @@ const TaskItem = ({
             </span>
             {task.children.length > 0 ? (
               <span className="task-child-count mono">
-                <ChevronRight size={12} strokeWidth={2.2} />
+                <ChevronRight size={12} />
                 {task.children.length}
               </span>
             ) : null}
@@ -136,20 +136,20 @@ export const TaskGraphDrawer = ({
         style={{ borderColor: 'var(--border)' }}
       >
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-2 text-sec"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-2 text-sec"
           aria-hidden
         >
-          <ListChecks size={17} strokeWidth={2.1} />
+          <ListChecks size={14} />
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-pri">Task Graph</span>
-            <span className="rounded bg-2 px-1.5 py-0.5 text-[10px] uppercase text-ter">
+            <span className="rounded bg-2 px-1.5 py-0.5 text-xs uppercase text-ter">
               .hive/tasks.md
             </span>
           </div>
           {workspacePath ? (
-            <div className="mono mt-0.5 truncate text-[11px] text-ter">
+            <div className="mono mt-0.5 truncate text-xs text-ter">
               {workspacePath}/.hive/tasks.md
             </div>
           ) : null}
@@ -160,11 +160,11 @@ export const TaskGraphDrawer = ({
           onClick={() => setRawMode((v) => !v)}
           className={`icon-btn ${rawMode ? 'icon-btn--primary' : ''}`}
         >
-          {rawMode ? <ListChecks size={15} /> : <Code2 size={15} />}
+          {rawMode ? <ListChecks size={14} /> : <Code2 size={14} />}
           <span>{rawMode ? 'done' : 'edit raw'}</span>
         </button>
         <button type="button" onClick={onClose} aria-label="Close task graph" className="icon-btn">
-          <PanelRightClose size={15} />
+          <PanelRightClose size={14} />
         </button>
       </div>
       <div className="flex-1 scroll-y px-4 py-3 text-sm">
@@ -179,7 +179,7 @@ export const TaskGraphDrawer = ({
           />
         ) : tasks.length === 0 ? (
           <div className="task-empty">
-            <FileText size={18} strokeWidth={2} />
+            <FileText size={16} />
             <div>
               <div className="font-medium text-sec">没有任务条目</div>
               <div className="mt-1 text-xs text-ter">
@@ -192,14 +192,14 @@ export const TaskGraphDrawer = ({
             <div className="task-summary" data-testid="task-graph-summary">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-[11px] uppercase text-ter">Progress</div>
+                  <div className="text-xs uppercase text-ter">Progress</div>
                   <div className="mono mt-1 text-xl text-pri">
                     {completedTasks}/{totalTasks}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="mono text-lg text-sec">{completionPercent}%</div>
-                  <div className="mt-1 text-[11px] text-ter">{openTasks} open</div>
+                  <div className="mt-1 text-xs text-ter">{openTasks} open</div>
                 </div>
               </div>
               <div

@@ -179,7 +179,7 @@ export const NotificationSettingsButton = () => {
                       style={{ borderColor: 'var(--border-bright)' }}
                       onClick={() => previewSound(item.value)}
                     >
-                      <Play size={11} aria-hidden />
+                      <Play size={12} aria-hidden />
                     </button>
                   ) : null}
                 </div>

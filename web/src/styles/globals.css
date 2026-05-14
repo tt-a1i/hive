@@ -130,15 +130,20 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  /* M6 — motion (six-curve easing system) */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);          /* Linear-style entrance */
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);              /* fast exit */
-  --ease-modal: cubic-bezier(0.32, 0.72, 0, 1);       /* iOS slide-over */
-  --ease-spring: cubic-bezier(0.5, 1.5, 0.5, 1);      /* completion bounce */
-  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1); /* Toast / success */
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);      /* toggles */
-  --dur-fast: 120ms;
-  --dur-base: 180ms;
+  /* Motion. Twenty's recipe is bare `ease` for hovers and a single cubic
+     curve only on character-bearing entrances (dialog/toast). The six-curve
+     system we used to ship (entrance/spring/overshoot/modal/in/in-out) was
+     the loudest non-Twenty tell in this file — Linear/Plane wear it, Twenty
+     doesn't. We keep `--ease-out` defined for the three places it still
+     earns its keep (dialog/drawer/toast keyframes) and standardize everything
+     else on `ease`. Durations dropped 120→100 / 180→150 to land on Twenty's
+     `instant 75 / fast 150 / normal 300` ladder. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);          /* dialog/drawer enter only */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);              /* dialog/drawer exit only */
+  --ease-modal: cubic-bezier(0.32, 0.72, 0, 1);       /* drawer slide */
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1); /* toast spring */
+  --dur-fast: 100ms;
+  --dur-base: 150ms;
   --dur-slow: 280ms;
 
   /* M6 — focus ring & elevation */
@@ -226,16 +231,18 @@ html, body {
 .scroll-y,
 .input { scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
 
-/* Workspace row */
+/* Workspace row — Twenty's NavigationDrawerItem pattern. The interactive
+   surface is an inset rounded chip (margin + radius 4) rather than an
+   edge-to-edge bar; the active/hover wash sits inside the chip so it reads
+   "selected pill" rather than "highlighted row". No left-accent rail. */
 .ws-row {
-  transition: background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  margin: 0 6px;
+  border-radius: 4px;
+  transition: background var(--dur-fast) ease;
   cursor: pointer;
   position: relative;
 }
 .ws-row:hover { background: color-mix(in oklab, #ffffff 5%, transparent); }
-/* Active workspace — Twenty's NavigationDrawerItem pattern. No left-accent
-   rail, no inner top highlight; the active state is just a subtler bg shift
-   + bumped font weight (handled on the React side: `font-medium text-pri`). */
 .ws-row.active {
   background: color-mix(in oklab, #ffffff 7%, transparent);
 }
@@ -249,9 +256,9 @@ html, body {
 .ws-add {
   background: transparent;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
 .ws-add:hover {
   background: color-mix(in oklab, var(--accent) 6%, transparent);
@@ -315,8 +322,8 @@ html, body {
   width: 1px;
   background: transparent;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
 }
 .workspace-sidebar-resizer:hover::before,
 .workspace-sidebar-resizer:focus-visible::before,
@@ -350,11 +357,11 @@ html, body {
   border-radius: 50%;
   vertical-align: middle;
   flex-shrink: 0;
-  transition: background var(--dur-base) var(--ease-out);
+  transition: background var(--dur-base) ease;
 }
 .status-dot--working {
   background: var(--status-green);
-  animation: hive-ripple-green 1.8s var(--ease-in-out) infinite;
+  animation: hive-ripple-green 1.8s ease-in-out infinite;
 }
 .status-dot--idle {
   background: var(--text-tertiary);
@@ -362,7 +369,7 @@ html, body {
 }
 .status-dot--queued {
   background: var(--status-orange);
-  animation: hive-ripple-orange 1.8s var(--ease-in-out) infinite;
+  animation: hive-ripple-orange 1.8s ease-in-out infinite;
 }
 .status-dot--stopped {
   background: var(--status-red);
@@ -541,24 +548,25 @@ html, body {
   text-underline-offset: 3px;
 }
 
-/* Card — Twenty's recipe. Flat surface, 1px border-medium, no shadow.
-   The previous version layered a 3-piece shadow + 0.5px border + inset
-   highlight; Twenty cards are matter-of-fact sheets that get separation
-   from their border alone. The hover state flips the border to accent
-   and lightly tints the bg; no lift, no ambient shadow change. */
+/* Card — Twenty's recipe. Flat surface, 1px border at rest, no shadow.
+   Two notes vs the previous pass: (1) corner radius lands at 4px (Twenty's
+   `radius.sm`) instead of 8px — the soft 8px reads "SaaS app", 4px reads
+   "data-dense CRM" which is the family we want. (2) Rest border is the
+   quiet `--border` step; only hover firms it up to `--border-bright`. The
+   accent-tint hover bg from the previous pass was a Hive-original beat
+   Twenty never wears — hover is just a gray-step. */
 .card {
   position: relative;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-bright);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   transition:
     border-color 100ms ease,
     background 100ms ease;
 }
 .card--interactive { cursor: pointer; }
 .card--interactive:hover {
-  border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
-  background: color-mix(in oklab, var(--accent) 4%, var(--bg-elevated));
+  border-color: var(--border-bright);
 }
 
 /* Selectable card — used by RoleCard and AgentChip in the Add Worker dialog
@@ -571,13 +579,13 @@ html, body {
   position: relative;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   text-align: left;
   cursor: pointer;
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
 }
 .selectable-card--dashed { border-style: dashed; border-color: var(--border-bright); }
 .selectable-card:hover:not([aria-pressed="true"]) {
@@ -638,11 +646,9 @@ html, body {
 
 .task-summary {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 12px;
-  background:
-    linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 58%),
-    var(--bg-2);
+  background: var(--bg-2);
 }
 
 .task-progress {
@@ -684,7 +690,7 @@ html, body {
   bottom: 6px;
   left: 10px;
   width: 1px;
-  background: var(--border-bright);
+  background: var(--border);
 }
 
 .task-status-open {
@@ -767,12 +773,15 @@ html, body {
   font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-1);
-  border: 1px solid var(--border-bright);
+  /* Quiet rest border (Twenty's `border.color.medium`); only firms up on
+     hover and gets the accent ring on focus. Previously sat at
+     `--border-bright` at rest, which made every input look "active". */
+  border: 1px solid var(--border);
   outline: none;
   transition: border-color 100ms ease, box-shadow 100ms ease;
 }
 .input::placeholder { color: var(--text-tertiary); }
-.input:hover:not(:focus) { border-color: var(--text-tertiary); }
+.input:hover:not(:focus) { border-color: var(--border-bright); }
 .input:focus-visible {
   border-color: var(--accent);
   /* Single 3px solid halo at 30% accent — Twenty's focus pattern. No more
@@ -863,10 +872,10 @@ html, body {
   backdrop-filter: blur(10px) saturate(140%);
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    transform 80ms var(--ease-out);
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform 80ms ease;
   box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.30);
 }
 .float-action:hover {
@@ -874,7 +883,12 @@ html, body {
   border-color: var(--border-bright);
   color: var(--text-primary);
 }
-.float-action:active { transform: scale(0.95); }
+/* Press affordance — Twenty uses background-darken alone, no transform.
+   The scale(0.95) we used to ship reads as "mobile / playful" and fights
+   the rest of the desktop chrome. */
+.float-action:active {
+  background: color-mix(in oklab, var(--bg-3) 90%, transparent);
+}
 .float-action:focus-visible {
   outline: none;
   border-color: var(--accent);
@@ -882,7 +896,7 @@ html, body {
     0 2px 6px rgba(var(--shadow-tint), 0.30),
     0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
-.float-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.float-action:disabled { opacity: 0.5; cursor: not-allowed; }
 .float-action[data-variant="primary"] {
   background: var(--accent);
   color: #ffffff;
@@ -981,7 +995,7 @@ html, body {
   border: 1px solid color-mix(in oklab, var(--status-orange) 32%, transparent);
   pointer-events: none;
   white-space: nowrap;
-  transition: opacity var(--dur-fast) var(--ease-out);
+  transition: opacity var(--dur-fast) ease;
 }
 /* When hover action cluster is showing, fade the queue badge out so it
    doesn't visually clash with the floating buttons. */
@@ -1006,8 +1020,8 @@ html, body {
   opacity: 0;
   transform: translateY(-2px);
   transition:
-    opacity var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    opacity var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
   pointer-events: none;
   z-index: 2;
 }
@@ -1023,18 +1037,18 @@ html, body {
   color: var(--text-secondary);
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    transform 80ms var(--ease-out);
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
 .worker-card__action:hover {
   background: var(--bg-3);
   border-color: var(--text-tertiary);
   color: var(--text-primary);
 }
-.worker-card__action:active { transform: scale(0.94); }
-.worker-card__action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+/* Press affordance — background-darken alone (no scale transform). */
+.worker-card__action:active { background: var(--charcoal-700); }
+.worker-card__action:disabled { opacity: 0.5; cursor: not-allowed; }
 .worker-card__action[data-variant="primary"] {
   background: var(--accent);
   border-color: var(--accent);
@@ -1074,8 +1088,8 @@ html, body {
   width: 1px;
   background: transparent;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
 }
 .modal-resize-handle--left::before  { left: 4px; }
 .modal-resize-handle--right::before { right: 4px; }
@@ -1110,8 +1124,8 @@ html, body {
   width: 1px;
   background: transparent;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
 }
 .pane-splitter:hover::before,
 .pane-splitter:focus-visible::before,
@@ -1129,12 +1143,12 @@ html, body {
   align-items: center;
   border-radius: 4px;
   background: var(--bg-1);
-  border: 1px solid var(--border-bright);
+  border: 1px solid var(--border);
   transition:
     border-color 100ms ease,
     box-shadow 100ms ease;
 }
-.cli-select:hover { border-color: var(--text-tertiary); }
+.cli-select:hover { border-color: var(--border-bright); }
 .cli-select:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
@@ -1150,7 +1164,7 @@ html, body {
   right: 10px;
   color: var(--text-secondary);
   pointer-events: none;
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-fast) ease;
 }
 .cli-select:focus-within .cli-select__trailing { transform: translateY(1px); }
 .cli-select__field {
@@ -1215,7 +1229,7 @@ html, body {
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) ease;
 }
 .cli-select__option:hover,
 .cli-select__option:focus-visible {

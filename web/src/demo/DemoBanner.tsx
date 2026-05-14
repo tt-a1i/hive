@@ -8,7 +8,7 @@ export const DemoBanner = ({ onExit }: { onExit: () => void }) => (
     style={{ background: 'var(--status-yellow-bg, #3a2c1c)', borderColor: 'var(--border)' }}
   >
     <div className="flex items-center gap-2 text-pri">
-      <Sparkles size={13} aria-hidden />
+      <Sparkles size={14} aria-hidden />
       <span>
         <strong>DEMO MODE</strong> — agents are pre-recorded, not running.
       </span>
