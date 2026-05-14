@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 
+import { Tooltip } from '../ui/Tooltip.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
 
@@ -163,9 +164,16 @@ export const TaskGraphDrawer = ({
           {rawMode ? <ListChecks size={14} /> : <Code2 size={14} />}
           <span>{rawMode ? 'done' : 'edit raw'}</span>
         </button>
-        <button type="button" onClick={onClose} aria-label="Close task graph" className="icon-btn">
-          <PanelRightClose size={14} />
-        </button>
+        <Tooltip label="Close blueprint">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close task graph"
+            className="icon-btn"
+          >
+            <PanelRightClose size={14} />
+          </button>
+        </Tooltip>
       </div>
       <div className="flex-1 scroll-y px-4 py-3 text-sm">
         {rawMode ? (

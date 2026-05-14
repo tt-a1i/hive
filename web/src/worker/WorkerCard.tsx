@@ -2,6 +2,7 @@ import { Pencil, Play, Trash2 } from 'lucide-react'
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { Tooltip } from '../ui/Tooltip.js'
 import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
@@ -146,16 +147,17 @@ const CardActionBtn = ({
   title,
   variant = 'default',
 }: CardActionBtnProps) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    aria-label={ariaLabel}
-    data-testid={testId}
-    data-variant={variant}
-    className="worker-card__action"
-  >
-    {children}
-  </button>
+  <Tooltip label={title}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      data-testid={testId}
+      data-variant={variant}
+      className="worker-card__action"
+    >
+      {children}
+    </button>
+  </Tooltip>
 )

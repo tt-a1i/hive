@@ -296,7 +296,7 @@ html, body {
     width: 32px;
     height: 32px;
     padding: 0;
-    border-radius: 8px;
+    border-radius: 4px;
   }
 }
 
@@ -750,7 +750,7 @@ html, body {
   gap: 10px;
   align-items: flex-start;
   border: 1px dashed var(--border-bright);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 14px;
   color: var(--text-tertiary);
   background: var(--bg-2);
@@ -863,6 +863,24 @@ html, body {
   .drawer-pop[data-state="closed"] { animation: none; }
 }
 
+/* Tooltip — Twenty's recipe. Dark elevated surface, hairline border, 11px
+   font, single-line content. The `dialog-overlay-in` keyframe is borrowed
+   for the opacity-only fade-in; 100ms is fast enough to feel native. */
+.tooltip {
+  z-index: 70;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-elev-2);
+  animation: dialog-overlay-in 100ms ease;
+  max-width: 260px;
+}
+
 /* Toast spring entrance — overshoot once on open, fast slide on close. */
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(16px) scale(0.95); }
@@ -881,7 +899,7 @@ html, body {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid color-mix(in oklab, var(--border-bright) 80%, transparent);
   background: color-mix(in oklab, var(--bg-1) 70%, transparent);
   color: var(--text-secondary);

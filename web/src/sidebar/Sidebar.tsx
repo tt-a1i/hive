@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
+import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
 import { WorkspaceAvatar } from './WorkspaceAvatar.js'
 
@@ -201,15 +202,16 @@ export const Sidebar = ({
                     workingCount={workingCount}
                   />
                 </button>
-                <button
-                  type="button"
-                  aria-label={`Delete workspace ${workspace.name}`}
-                  title={`Delete workspace ${workspace.name}`}
-                  onClick={() => requestDelete(workspace)}
-                  className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
-                >
-                  <Trash2 size={14} aria-hidden />
-                </button>
+                <Tooltip label={`Delete workspace ${workspace.name}`}>
+                  <button
+                    type="button"
+                    aria-label={`Delete workspace ${workspace.name}`}
+                    onClick={() => requestDelete(workspace)}
+                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
+                  >
+                    <Trash2 size={14} aria-hidden />
+                  </button>
+                </Tooltip>
               </li>
             )
           })}
@@ -217,18 +219,23 @@ export const Sidebar = ({
               so it appears next to existing workspaces in both wide and compact
               modes, instead of pinned to the sidebar footer. */}
           <li>
-            <button
-              type="button"
-              onClick={createDisabled ? undefined : onCreateClick}
-              disabled={createDisabled}
-              aria-label="New workspace"
-              title={createDisabledReason ?? 'New workspace'}
-              className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: 'var(--border-bright)' }}
-            >
-              <Plus size={14} aria-hidden />
-              <span className="ws-add__label">New workspace</span>
-            </button>
+            <Tooltip label={createDisabledReason ?? 'New workspace'}>
+              <button
+                type="button"
+                onClick={createDisabled ? undefined : onCreateClick}
+                disabled={createDisabled}
+                aria-label="New workspace"
+                /* Keep native `title` as a fallback: Radix Tooltip doesn't
+                   reliably surface on a disabled <button> across browsers,
+                   so screen-readers and Safari users still get the reason. */
+                title={createDisabledReason ?? undefined}
+                className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ borderColor: 'var(--border-bright)' }}
+              >
+                <Plus size={14} aria-hidden />
+                <span className="ws-add__label">New workspace</span>
+              </button>
+            </Tooltip>
           </li>
         </ul>
       )}

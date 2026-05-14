@@ -41,7 +41,7 @@ export const Confirm = ({
           <div className="flex items-start gap-3">
             <div
               aria-hidden
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded"
               style={{
                 background: `color-mix(in oklab, ${iconColor(confirmKind)} 14%, transparent)`,
                 color: iconColor(confirmKind),

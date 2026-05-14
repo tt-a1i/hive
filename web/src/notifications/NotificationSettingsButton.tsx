@@ -104,7 +104,7 @@ export const NotificationSettingsButton = () => {
           data-testid="notification-settings"
         >
           <div className="mb-3 flex items-start gap-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-3 text-sec">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-3 text-sec">
               <Bell size={16} aria-hidden />
             </div>
             <div className="min-w-0">

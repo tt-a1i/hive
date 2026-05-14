@@ -201,7 +201,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
             >
               <div className="flex items-start gap-3">
                 <div
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded"
                   style={{
                     background: 'color-mix(in oklab, var(--status-red) 14%, transparent)',
                     color: 'var(--status-red)',

@@ -96,7 +96,7 @@ export const ConfirmWorkspaceDialog = ({
               style={{ borderColor: 'var(--border)' }}
             >
               <div
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded"
                 style={{
                   background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
                   color: 'var(--accent)',
