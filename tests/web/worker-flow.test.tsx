@@ -234,9 +234,8 @@ describe('worker flow with real server', () => {
         value: '你是审查型 worker。先找高风险问题，再给出最小修复建议。',
       },
     })
-    expect(within(dialog).getByText('Modified from Reviewer default')).toBeInTheDocument()
-    fireEvent.click(within(dialog).getByText('Preview injected prompt'))
-    expect(within(dialog).getByTestId('role-instructions-preview')).toHaveTextContent(
+    expect(within(dialog).getByText(/Modified from Reviewer default/)).toBeInTheDocument()
+    expect((instructions as HTMLTextAreaElement).value).toContain(
       '你是审查型 worker。先找高风险问题，再给出最小修复建议。'
     )
     await waitFor(() => {

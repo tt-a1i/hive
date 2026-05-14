@@ -459,6 +459,39 @@ html, body {
   box-shadow: var(--shadow-card-hover);
 }
 
+/* Selectable card — used by RoleCard and AgentChip in the Add Worker dialog
+   (and the Confirm Workspace command preset row). One class handles all four
+   interactive states (idle / hover / focus-visible / aria-pressed) so picker
+   grids don't drift apart visually across the app. Active state lives on
+   aria-pressed="true" so the same markup works for radio-like single-select
+   groups without flipping a separate `active` className. */
+.selectable-card {
+  position: relative;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.selectable-card--dashed { border-style: dashed; border-color: var(--border-bright); }
+.selectable-card:hover:not([aria-pressed="true"]) {
+  border-color: var(--border-bright);
+  background: color-mix(in oklab, var(--accent) 3%, var(--bg-2));
+}
+.selectable-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring-focus);
+}
+.selectable-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, var(--bg-2));
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 /* Role badges — flex-shrink:0 + nowrap so they never clip in narrow rows. */
 .role-badge {
   display: inline-block;

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Check, Dices, RotateCcw, UserPlus } from 'lucide-react'
-import type { FormEvent, ReactNode } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
@@ -63,22 +63,14 @@ const RoleCard = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`role-card-${spec.value}`}
-    className="group flex flex-col items-start gap-2 rounded-lg p-3 text-left transition-colors"
-    style={{
-      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
-      border: active
-        ? '1px solid var(--accent)'
-        : spec.dashed
-          ? '1px dashed var(--border-bright)'
-          : '1px solid var(--border)',
-    }}
+    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex flex-col items-start gap-2 p-3`}
   >
     <div className="flex w-full items-center justify-between">
       <RoleAvatar role={spec.value} size={28} />
       {active ? <Check size={14} className="text-accent" aria-hidden /> : null}
     </div>
     <div className="text-sm font-medium text-pri">{spec.label}</div>
-    <div className="text-[11px] leading-snug text-ter">{spec.hint}</div>
+    <div className="text-[12px] leading-snug text-ter">{spec.hint}</div>
   </button>
 )
 
@@ -96,13 +88,9 @@ const AgentChip = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`agent-radio-${preset.id}`}
-    className="flex w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors"
-    style={{
-      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
-      borderColor: active ? 'var(--accent)' : 'var(--border)',
-    }}
+    className="selectable-card flex flex-col items-start gap-0.5 px-3 py-2"
   >
-    <span className="truncate text-[12px] font-medium text-pri">{preset.displayName}</span>
+    <span className="truncate text-[13px] font-medium text-pri">{preset.displayName}</span>
     <span className="mono truncate text-[10px] text-ter">{preset.command}</span>
   </button>
 )
@@ -129,6 +117,15 @@ export const AddWorkerDialog = ({
   }
   const roleDescriptionModified = roleDescription !== roleDescriptionDefault
   const roleLabel = ROLE_LABELS[workerRole]
+  // Instructions textarea hides behind a disclosure so the dialog stops feeling
+  // like a prompt editor on first open. It auto-expands when the user picks
+  // Custom (no default prompt to seed) or when they have already started
+  // editing — but we only force it *open*, never closed, so users keep control.
+  const [instructionsOpen, setInstructionsOpen] = useState(false)
+  const shouldAutoExpandInstructions = workerRole === 'custom' || roleDescriptionModified
+  useEffect(() => {
+    if (shouldAutoExpandInstructions) setInstructionsOpen(true)
+  }, [shouldAutoExpandInstructions])
 
   return (
     <Dialog.Root open onOpenChange={handleClose}>
@@ -161,10 +158,10 @@ export const AddWorkerDialog = ({
                   <UserPlus size={18} aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <Dialog.Title className="text-md font-medium text-pri">
+                  <Dialog.Title className="text-[14px] font-medium text-pri">
                     Add team member
                   </Dialog.Title>
-                  <Dialog.Description className="text-[11px] text-ter">
+                  <Dialog.Description className="text-[12px] text-ter">
                     Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
                     <span className="mono">team send</span>.
                   </Dialog.Description>
@@ -179,7 +176,7 @@ export const AddWorkerDialog = ({
                       type="button"
                       aria-label="Generate random member name"
                       title="Generate random member name"
-                      className="icon-btn h-7 px-2 text-[11px]"
+                      className="icon-btn h-7 px-2 text-[12px]"
                       onClick={onRandomName}
                       data-testid="random-worker-name"
                     >
@@ -188,14 +185,12 @@ export const AddWorkerDialog = ({
                     </button>
                   </div>
                   <input
+                    // biome-ignore lint/a11y/noAutofocus: dialog is opt-in; without this Radix parks focus on the first toolbar button (Random) rather than the name field
+                    autoFocus
                     value={workerName}
                     onChange={(event) => onNameChange(event.target.value)}
                     placeholder="e.g. Alice"
-                    className="rounded-md border px-3 py-2 text-sm text-pri outline-none transition-colors"
-                    style={{
-                      background: 'var(--bg-1)',
-                      borderColor: 'var(--border-bright)',
-                    }}
+                    className="input"
                   />
                 </label>
 
@@ -213,28 +208,39 @@ export const AddWorkerDialog = ({
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor="add-worker-role-instructions">
+                <details
+                  open={instructionsOpen}
+                  onToggle={(event) =>
+                    setInstructionsOpen((event.currentTarget as HTMLDetailsElement).open)
+                  }
+                  className="group flex flex-col gap-2"
+                >
+                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
+                    <span className="flex items-center gap-2 text-ter group-open:text-sec">
                       <FieldLabel>Role instructions</FieldLabel>
-                    </label>
-                    <div className="flex shrink-0 items-center gap-2">
                       {roleDescriptionModified ? (
-                        <span className="text-[11px] text-ter">
-                          Modified from {roleLabel} default
+                        <span className="text-[12px] text-ter">
+                          · Modified from {roleLabel} default
                         </span>
                       ) : null}
-                      <button
-                        type="button"
-                        className="icon-btn h-7 px-2 text-[11px]"
-                        disabled={!roleDescriptionModified}
-                        onClick={onRoleDescriptionReset}
-                      >
-                        <RotateCcw size={12} aria-hidden />
-                        Reset
-                      </button>
-                    </div>
-                  </div>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {roleDescriptionModified ? (
+                        <button
+                          type="button"
+                          className="icon-btn h-7 px-2 text-[12px]"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            onRoleDescriptionReset()
+                          }}
+                        >
+                          <RotateCcw size={12} aria-hidden />
+                          Reset
+                        </button>
+                      ) : null}
+                      <span className="text-[12px] text-ter group-open:hidden">Customize</span>
+                    </span>
+                  </summary>
                   <textarea
                     aria-label="Role instructions"
                     id="add-worker-role-instructions"
@@ -242,38 +248,16 @@ export const AddWorkerDialog = ({
                     rows={5}
                     onChange={(event) => onRoleDescriptionChange(event.currentTarget.value)}
                     title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
-                    className="mono min-h-[118px] resize-y rounded-md border px-3 py-2 text-[12px] leading-relaxed text-pri outline-none transition-colors focus:border-[var(--accent)]"
-                    style={{
-                      background: 'var(--bg-1)',
-                      borderColor: 'var(--border-bright)',
-                    }}
+                    className="input mono resize-y leading-relaxed"
+                    style={{ minHeight: 118, fontSize: 12 }}
+                    data-testid="role-instructions-textarea"
                   />
-                  <details className="group rounded-md border px-3 py-2 text-[11px]">
-                    <summary className="cursor-pointer select-none text-ter transition-colors group-open:text-sec">
-                      Preview injected prompt
-                    </summary>
-                    <pre
-                      data-testid="role-instructions-preview"
-                      className="mono mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded border px-3 py-2 text-[11px] leading-relaxed text-sec"
-                      style={{
-                        background: 'var(--bg-0)',
-                        borderColor: 'var(--border)',
-                      }}
-                    >
-                      {`[Hive prompt excerpt]
-你的角色：
-${roleDescription}
-
-任务内容：
-<orchestrator task>`}
-                    </pre>
-                  </details>
-                </div>
+                </details>
 
                 <div className="flex flex-col gap-2">
                   <FieldLabel>Agent CLI</FieldLabel>
                   {commandPresets.length === 0 ? (
-                    <div className="text-[11px] text-ter">Loading presets…</div>
+                    <div className="text-[12px] text-ter">Loading presets…</div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {commandPresets.map((preset) => (
@@ -291,7 +275,7 @@ ${roleDescription}
 
               <div
                 className="flex items-center justify-end gap-2 border-t px-5 py-3"
-                style={{ borderColor: 'var(--border)' }}
+                style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
                 <button
                   type="button"
