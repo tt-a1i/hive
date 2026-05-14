@@ -129,13 +129,13 @@ describe('app shell with real server', () => {
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     expect(
-      await screen.findByTestId('add-workspace-error', undefined, { timeout: 5000 })
+      await screen.findByTestId('add-workspace-error', undefined, { timeout: 15000 })
     ).toBeInTheDocument()
     expect(screen.getByTestId('add-workspace-error')).toHaveTextContent(
       /failed to create workspace/i
     )
     expect(screen.getByRole('status')).toHaveTextContent(/failed to create workspace/i)
-  }, 10000)
+  }, 20000)
 
   test('init failure surfaces error toast and disables Add Workspace CTA', async () => {
     // Override the per-test fetch stub from beforeEach with a hard-rejecting

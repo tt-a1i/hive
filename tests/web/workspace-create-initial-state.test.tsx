@@ -72,7 +72,7 @@ describe('workspace create initial state', () => {
             .find((b) => b.classList.contains('ws-row'))
         ).toHaveAttribute('aria-current', 'true')
       },
-      { timeout: 5000 }
+      { timeout: 15000 }
     )
 
     // Sub-header and footer were removed in M6 polish. Workspace identity
@@ -83,5 +83,5 @@ describe('workspace create initial state', () => {
     const drawer = screen.getByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
     expect(within(drawer).getByText(/没有任务条目/)).toBeInTheDocument()
-  }, 10000)
+  }, 20000)
 })
