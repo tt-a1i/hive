@@ -106,7 +106,7 @@ export const ServerBrowseDialog = ({
             }}
           >
             <div
-              className="flex shrink-0 items-center gap-3 border-b px-5 py-3"
+              className="flex shrink-0 items-center gap-3 border-b px-5 py-4"
               style={{ borderColor: 'var(--border)' }}
             >
               <div

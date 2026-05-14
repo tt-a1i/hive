@@ -46,7 +46,6 @@ export const Confirm = ({
                 background: `color-mix(in oklab, ${iconColor(confirmKind)} 14%, transparent)`,
                 color: iconColor(confirmKind),
                 border: `1px solid color-mix(in oklab, ${iconColor(confirmKind)} 30%, transparent)`,
-                boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
               }}
             >
               {confirmKind === 'danger' ? <AlertTriangle size={18} /> : <HelpCircle size={18} />}
@@ -57,7 +56,7 @@ export const Confirm = ({
               </Dialog.Title>
               <Dialog.Description
                 data-testid="confirm-description"
-                className="mt-1.5 text-sm leading-relaxed text-sec"
+                className="mt-1.5 text-sm text-sec"
               >
                 {description}
               </Dialog.Description>
@@ -81,7 +80,7 @@ export const Confirm = ({
               }}
               className={
                 confirmKind === 'danger'
-                  ? 'icon-btn icon-btn--danger'
+                  ? 'icon-btn icon-btn--danger-solid'
                   : 'icon-btn icon-btn--primary'
               }
             >

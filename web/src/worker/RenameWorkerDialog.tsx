@@ -66,7 +66,6 @@ export const RenameWorkerDialog = ({
                     background: 'color-mix(in oklab, var(--accent) 14%, transparent)',
                     color: 'var(--accent)',
                     border: '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
-                    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                   }}
                 >
                   <Pencil size={18} />
@@ -75,7 +74,7 @@ export const RenameWorkerDialog = ({
                   <Dialog.Title className="text-lg font-medium text-pri">
                     Rename team member
                   </Dialog.Title>
-                  <Dialog.Description className="mt-1 text-sm leading-relaxed text-ter">
+                  <Dialog.Description className="mt-1 text-sm text-ter">
                     Pick a new display name. The agent's id and PTY are unchanged.
                   </Dialog.Description>
                 </div>

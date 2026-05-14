@@ -38,7 +38,7 @@ export const DemoWorkspaceView = ({ onExit }: DemoWorkspaceViewProps) => (
           </span>
         </div>
         <pre
-          className="mono flex-1 overflow-auto p-3 text-xs leading-relaxed text-sec"
+          className="mono flex-1 overflow-auto p-3 text-xs text-sec"
           data-testid="demo-scrollback-demo-orch"
           style={{ background: 'var(--bg-crust)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
         >

@@ -154,7 +154,7 @@ export const AddWorkerDialog = ({
           >
             <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
               <div
-                className="flex shrink-0 flex-col gap-0.5 border-b px-6 pt-5 pb-4"
+                className="flex shrink-0 flex-col gap-0.5 border-b px-5 py-4"
                 style={{ borderColor: 'var(--border)' }}
               >
                 <Dialog.Title className="text-lg font-medium text-pri">
@@ -166,7 +166,7 @@ export const AddWorkerDialog = ({
                 </Dialog.Description>
               </div>
 
-              <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
+              <div className="flex flex-col gap-5 overflow-y-auto px-5 py-4">
                 <label className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <SectionLabel>Name</SectionLabel>
@@ -254,7 +254,7 @@ export const AddWorkerDialog = ({
                         : undefined
                     }
                     title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
-                    className="input mono resize-y leading-relaxed"
+                    className="input mono resize-y"
                     style={{ minHeight: 150, fontSize: 12 }}
                     data-testid="role-instructions-textarea"
                   />
@@ -280,7 +280,7 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex shrink-0 items-center gap-3 border-t px-6 py-3.5"
+                className="flex shrink-0 items-center gap-3 border-t px-5 py-3"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
                 <span

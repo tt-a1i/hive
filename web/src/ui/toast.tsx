@@ -38,9 +38,7 @@ export const Toaster = () => {
           }}
         >
           <span className={`mt-1 ${dotClassByKind[toast.kind]}`} aria-hidden />
-          <div className="min-w-0 flex-1 break-words text-sm leading-relaxed text-pri">
-            {toast.message}
-          </div>
+          <div className="min-w-0 flex-1 break-words text-sm text-pri">{toast.message}</div>
           <button
             type="button"
             data-testid="toast-close"

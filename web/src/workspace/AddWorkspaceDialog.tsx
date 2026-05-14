@@ -213,7 +213,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
                   <Dialog.Title className="text-lg font-medium text-pri">
                     {stage.title ?? 'Folder picker failed'}
                   </Dialog.Title>
-                  <Dialog.Description className="mt-1.5 break-words text-sm leading-snug text-ter">
+                  <Dialog.Description className="mt-1.5 break-words text-sm text-ter">
                     {stage.message}
                   </Dialog.Description>
                 </div>

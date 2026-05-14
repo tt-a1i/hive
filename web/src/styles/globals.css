@@ -500,6 +500,23 @@ html, body {
   color: var(--status-red);
 }
 
+/* Solid-danger primary — the destructive equivalent of icon-btn--primary.
+   Twenty's destructive CTAs are filled red, not outlined. The outlined
+   .icon-btn--danger is still appropriate for inline / icon-only actions
+   (sidebar row delete, worker card remove); this variant is for the
+   confirm-modal "Delete" button where the action is heavy and needs to
+   read as a real CTA. */
+.icon-btn--danger-solid {
+  background: var(--status-red);
+  color: #ffffff;
+  border-color: var(--status-red);
+}
+.icon-btn--danger-solid:hover {
+  background: color-mix(in oklab, var(--status-red) 88%, #000);
+  border-color: color-mix(in oklab, var(--status-red) 88%, #000);
+  color: #ffffff;
+}
+
 /* Plane/Trigger-inspired role variants. The default `.icon-btn` is `secondary`
    in their parlance (bg + 1px border + subtle shadow); these add the rest of
    the matrix. Each modifier only overrides what differs from the base. */

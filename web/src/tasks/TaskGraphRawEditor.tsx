@@ -39,7 +39,7 @@ export const TaskGraphRawEditor = ({
           aria-label="Tasks Markdown"
           value={content}
           onChange={(event) => onContentChange(event.target.value)}
-          className="mono min-h-[360px] flex-1 resize-none rounded-md border p-3 text-sm leading-6 text-pri outline-none focus:border-[var(--accent)]"
+          className="mono min-h-[360px] flex-1 resize-none rounded-md border p-3 text-sm text-pri outline-none focus:border-[var(--accent)]"
           style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
         />
       </label>

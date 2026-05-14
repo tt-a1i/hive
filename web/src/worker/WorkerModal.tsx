@@ -129,7 +129,7 @@ export const WorkerModal = ({
                   <div className="m-auto flex max-w-[400px] flex-col items-center gap-3 px-6 text-center">
                     <RoleAvatar role={worker.role} size={48} />
                     <div className="text-sm text-pri">{worker.name}</div>
-                    <div className="text-xs leading-snug text-ter">
+                    <div className="text-xs text-ter">
                       {worker.status === 'stopped' ? 'PTY stopped — ' : 'PTY not started yet — '}
                       {worker.pendingTaskCount > 0
                         ? `${worker.pendingTaskCount} pending task(s) will resume after restart.`

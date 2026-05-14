@@ -60,7 +60,7 @@ const TaskItem = ({
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-start gap-2">
             <span
-              className={`min-w-0 flex-1 text-base leading-5 ${
+              className={`min-w-0 flex-1 text-base ${
                 task.checked ? 'text-ter line-through' : 'text-pri'
               }`}
             >
