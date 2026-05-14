@@ -8,6 +8,16 @@
   --color-bg-3: #232326;
   --color-bg-crust: #050506;
 
+  /* Charcoal scale — Trigger.dev-inspired neutrals that fill the gap between
+     bg-2 (#18181b) and border-bright (#2b2b30). Used by interactive containers
+     that need a "hover one step lighter" affordance without jumping all the
+     way to bg-3 (which now reads as "grid" / table chrome). */
+  --color-charcoal-775: #1c1e21;
+  --color-charcoal-750: #212327;
+  --color-charcoal-700: #272a2e;
+  --color-charcoal-650: #2c3034;
+  --color-charcoal-600: #3b3e45;
+
   /* Borders */
   --color-border: #222226;
   --color-border-bright: #2b2b30;
@@ -45,6 +55,22 @@
   /* M6 — overlay & elevated */
   --bg-overlay: rgba(8, 9, 10, 0.72);
   --bg-elevated: #1c1c20;
+
+  /* Charcoal scale — see @theme block above. Available as raw vars for any
+     CSS rule that needs the in-between greys (e.g. hover ladder on chips). */
+  --charcoal-775: #1c1e21;
+  --charcoal-750: #212327;
+  --charcoal-700: #272a2e;
+  --charcoal-650: #2c3034;
+  --charcoal-600: #3b3e45;
+
+  /* Semantic surface aliases — `dimmed` is the resting state, `bright` is the
+     interactive "I'm clickable / focused" step. Adopt these in new code and
+     leave existing `bg-1/2/3` usages alone; cascade will keep them aligned. */
+  --background-dimmed: var(--bg-1);
+  --background-bright: var(--bg-2);
+  --grid-dimmed: var(--border);
+  --grid-bright: var(--border-bright);
 
   /* Borders */
   --border: #222226;
@@ -99,18 +125,26 @@
 
   /* M6 — focus ring & elevation */
   --ring-focus: rgba(94, 106, 210, 0.45);
-  --shadow-elev-2: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* Cool-tinted shadow base — `#292f3d` (rgb 41 47 61) at low alpha.
+     Drop-in upgrade over pure-black shadows: same darkening effect, but the
+     micro-purple tint reads as "lit by an ambient screen" instead of a hole
+     punched in the page. Plane uses this; we ported the channel values. */
+  --shadow-tint: 41 47 61;
+
+  --shadow-elev-2:
+    0 4px 12px rgba(var(--shadow-tint), 0.4),
+    0 1px 2px rgba(var(--shadow-tint), 0.3);
 
   /* M6 — three-piece card shadow (contact + key + ambient + rim highlight). */
   --shadow-card:
-    0 0 0 1px rgba(0, 0, 0, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.20),
-    0 8px 24px -8px rgba(0, 0, 0, 0.40),
+    0 0 0 1px rgba(var(--shadow-tint), 0.10),
+    0 1px 2px rgba(var(--shadow-tint), 0.22),
+    0 8px 24px -8px rgba(var(--shadow-tint), 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --shadow-card-hover:
     0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent),
-    0 2px 4px rgba(0, 0, 0, 0.20),
-    0 16px 40px -12px rgba(0, 0, 0, 0.50),
+    0 2px 4px rgba(var(--shadow-tint), 0.22),
+    0 16px 40px -12px rgba(var(--shadow-tint), 0.52),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 
   color-scheme: dark;
@@ -467,13 +501,67 @@ html, body {
   color: var(--status-red);
 }
 
+/* Plane/Trigger-inspired role variants. The default `.icon-btn` is `secondary`
+   in their parlance (bg + 1px border + subtle shadow); these add the rest of
+   the matrix. Each modifier only overrides what differs from the base. */
+
+/* Tertiary — lighter than secondary, no border, lives on a tinted container. */
+.icon-btn--tertiary {
+  background: var(--charcoal-700);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.icon-btn--tertiary:hover {
+  background: var(--charcoal-600);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Ghost — transparent until interacted with. The most-quiet variant; used
+   for inline icon-only affordances (close, dismiss, kebab) where chrome is
+   noise. No box-shadow at rest so it disappears into its container. */
+.icon-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-tertiary);
+}
+.icon-btn--ghost:hover {
+  background: var(--charcoal-700);
+  border-color: transparent;
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+/* Link — text-only, underlined on hover. Pairs with `.icon-btn--ghost` for
+   "Skip", "Cancel", and similar tertiary text actions. */
+.icon-btn--link {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  padding-left: 2px;
+  padding-right: 2px;
+  color: var(--text-secondary);
+}
+.icon-btn--link:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Worker card — three-piece shadow + 1px lift on hover.
    The lift is what separates "designed" from "drawn"; pair with the bigger
    ambient shadow so the card feels genuinely elevated, not just outlined. */
 .card {
   position: relative;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-bright);
+  /* Subpixel border — Plane's signature on quiet containers. 0.5px reads as
+     a hairline on retina displays and pairs better with the shadow's 1px
+     contact line, which now does the "edge" work; the border is reduced
+     to "presence". Border-bright stays so it's still visible on non-retina. */
+  border: 0.5px solid var(--border-bright);
   border-radius: 8px;
   box-shadow: var(--shadow-card);
   transition:
@@ -685,13 +773,13 @@ html, body {
 .elev-1 {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+    0 2px 6px rgba(var(--shadow-tint), 0.36);
 }
 .elev-2 {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 12px 28px rgba(0, 0, 0, 0.45),
-    0 4px 10px rgba(0, 0, 0, 0.35);
+    0 12px 28px rgba(var(--shadow-tint), 0.46),
+    0 4px 10px rgba(var(--shadow-tint), 0.36);
 }
 
 /* Canonical text input — replaces inline rounded-md/border/px-3/py-2 across
@@ -893,9 +981,15 @@ html, body {
   background: color-mix(in oklab, var(--status-orange) 10%, transparent);
   border-color: color-mix(in oklab, var(--status-orange) 24%, transparent);
 }
+/* Idle is the resting state — no pill background, no border. Glyph-driven
+   (Trigger.dev pattern) so a card grid with many idle workers reads calm
+   instead of busy. working/queued/stopped keep their tinted pills so the
+   eye can spot them in peripheral vision. */
 .worker-card__status--idle {
-  color: var(--text-secondary);
-  background: var(--bg-3);
+  color: var(--text-tertiary);
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
 }
 .worker-card__status--stopped {
   color: var(--status-red);
@@ -1144,7 +1238,9 @@ html, body {
   margin: 0;
   padding: 4px;
   background: var(--bg-elevated);
-  border: 1px solid var(--border-bright);
+  /* Hairline border — matches `.card`. Shadow does the actual edge; border
+     is the visual confirmation that something is floating above. */
+  border: 0.5px solid var(--border-bright);
   border-radius: 6px;
   box-shadow: var(--shadow-elev-2);
   max-height: 240px;
