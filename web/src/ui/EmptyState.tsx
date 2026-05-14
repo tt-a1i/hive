@@ -24,7 +24,7 @@ export const EmptyState = ({ title, description, icon, action }: EmptyStateProps
       <div
         data-testid="empty-state-icon"
         aria-hidden
-        className="flex h-12 w-12 items-center justify-center rounded-lg text-sec"
+        className="flex h-12 w-12 items-center justify-center rounded text-sec"
         style={{
           background: 'var(--bg-2)',
           border: '1px solid var(--border-bright)',

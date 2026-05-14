@@ -254,8 +254,8 @@ export const AddWorkerDialog = ({
                         : undefined
                     }
                     title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
-                    className="input mono resize-y"
-                    style={{ minHeight: 150, fontSize: 12 }}
+                    className="input mono resize-y text-sm"
+                    style={{ minHeight: 150 }}
                     data-testid="role-instructions-textarea"
                   />
                 </details>

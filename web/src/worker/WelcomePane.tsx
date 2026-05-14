@@ -14,17 +14,17 @@ type WelcomePaneProps = {
 
 const STEPS: Array<{ icon: ReactNode; title: string; description: string }> = [
   {
-    icon: <FolderPlus size={18} />,
+    icon: <FolderPlus size={16} />,
     title: 'Add a workspace',
     description: 'Pick a project folder.',
   },
   {
-    icon: <Users size={18} />,
+    icon: <Users size={16} />,
     title: 'Choose an Orchestrator',
     description: 'Claude / Codex / Gemini / OpenCode.',
   },
   {
-    icon: <Send size={18} />,
+    icon: <Send size={16} />,
     title: 'Dispatch tasks',
     description: 'The Orchestrator routes work via team send.',
   },
@@ -54,7 +54,7 @@ export const WelcomePane = ({
         {STEPS.map((step, idx) => (
           <li
             key={step.title}
-            className="rounded-md border bg-1 p-3"
+            className="rounded border bg-1 p-3"
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="mb-1 flex items-center gap-2 text-pri">

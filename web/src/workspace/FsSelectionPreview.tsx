@@ -21,11 +21,7 @@ export const FsSelectionPreview = ({
       <div className="flex items-center justify-between">
         <span className="text-ter uppercase tracking-wider text-xs">Selected</span>
         {probe?.is_git_repository ? (
-          <span
-            className="role-badge role-badge--coder"
-            data-testid="fs-preview-git-badge"
-            style={{ fontSize: '9px' }}
-          >
+          <span className="role-badge role-badge--coder" data-testid="fs-preview-git-badge">
             git · {probe.current_branch ?? 'detached'}
           </span>
         ) : hasProbe ? (
