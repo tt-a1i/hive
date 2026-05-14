@@ -1,4 +1,5 @@
 import {
+  AtSign,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -13,6 +14,7 @@ import { Tooltip } from '../ui/Tooltip.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
+import { parseTaskMetadata, type TaskMetaItem } from './task-meta.js'
 
 type TaskGraphDrawerProps = {
   content: string
@@ -27,6 +29,41 @@ type TaskGraphDrawerProps = {
   workspacePath: string | null
 }
 
+const TaskMetaChip = ({ item }: { item: TaskMetaItem }) => {
+  if (item.kind === 'status') {
+    return (
+      <span className={`pill pill--${item.tone}`} data-testid="task-meta-status">
+        {item.value}
+      </span>
+    )
+  }
+  if (item.kind === 'owner') {
+    return (
+      <span className="task-mention inline-flex items-center gap-1" data-testid="task-meta-owner">
+        <AtSign size={10} aria-hidden />
+        {item.value}
+      </span>
+    )
+  }
+  if (item.kind === 'path') {
+    return (
+      <span
+        className="pill pill--neutral mono inline-flex items-center gap-1"
+        data-testid="task-meta-path"
+        title={`${item.label}: ${item.value}`}
+      >
+        <FileText size={10} aria-hidden />
+        {item.value}
+      </span>
+    )
+  }
+  return (
+    <span className="text-xs text-ter" data-testid="task-meta-note">
+      {item.value}
+    </span>
+  )
+}
+
 const TaskItem = ({
   depth = 0,
   onToggle,
@@ -37,6 +74,7 @@ const TaskItem = ({
   task: ParsedTask
 }) => {
   const StatusIcon = task.checked ? CheckCircle2 : Circle
+  const { title, meta } = parseTaskMetadata(task.text)
   return (
     <li className="task-node" data-testid={`task-line-${task.line}`}>
       <label
@@ -66,7 +104,7 @@ const TaskItem = ({
                 task.checked ? 'text-ter line-through' : 'text-pri'
               }`}
             >
-              {renderInlineMarkdown(task.text)}
+              {renderInlineMarkdown(title)}
             </span>
             {task.children.length > 0 ? (
               <span className="task-child-count mono">
@@ -75,10 +113,14 @@ const TaskItem = ({
               </span>
             ) : null}
           </span>
-          {task.mentions.length > 0 ? (
-            <span className="mt-1 flex flex-wrap gap-1.5">
+          {meta.length > 0 || task.mentions.length > 0 ? (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {meta.map((item, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: meta order is deterministic from immutable task.text — items never re-sort within a task
+                <TaskMetaChip key={`${task.line}-meta-${idx}`} item={item} />
+              ))}
               {task.mentions.map((mention) => (
-                <span className="task-mention" key={`${task.line}-${mention}`}>
+                <span className="task-mention" key={`${task.line}-mention-${mention}`}>
                   {mention}
                 </span>
               ))}
