@@ -161,9 +161,17 @@ html, body {
 
 /* Scrollbar */
 .scroll-y { overflow-y: auto; }
-.scroll-y::-webkit-scrollbar { width: 8px; height: 8px; }
-.scroll-y::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
-.scroll-y::-webkit-scrollbar-track { background: transparent; }
+.scroll-y::-webkit-scrollbar,
+.input::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-y::-webkit-scrollbar-thumb,
+.input::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+.scroll-y::-webkit-scrollbar-thumb:hover,
+.input::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+.scroll-y::-webkit-scrollbar-track,
+.input::-webkit-scrollbar-track { background: transparent; }
+/* Firefox fallback — applies to anything that scrolls inside the app. */
+.scroll-y,
+.input { scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
 
 /* Workspace row */
 .ws-row {
