@@ -221,7 +221,6 @@ describe('worker flow with real server', () => {
     const instructions = await within(dialog).findByLabelText('Role instructions')
     expect((instructions as HTMLTextAreaElement).value).toContain('实现型 Coder')
     expect((instructions as HTMLTextAreaElement).value).toContain('交付说明要包含')
-    expect(within(dialog).getByText('Injected into startup and task context')).toBeInTheDocument()
 
     fireEvent.click(within(dialog).getByTestId('role-card-reviewer'))
     expect((instructions as HTMLTextAreaElement).value).toContain('监工型 Reviewer')

@@ -25,15 +25,17 @@ type AddWorkerDialogProps = {
 }
 
 interface RoleCardSpec {
-  value: Exclude<WorkerRole, 'custom'>
+  value: WorkerRole
   label: string
   hint: string
+  dashed?: boolean
 }
 
-const PRIMARY_ROLES: RoleCardSpec[] = [
-  { value: 'coder', label: 'Coder', hint: 'Implements features, writes code.' },
-  { value: 'reviewer', label: 'Reviewer', hint: 'Reviews code or proposals.' },
+const ROLE_CARDS: RoleCardSpec[] = [
+  { value: 'coder', label: 'Coder', hint: 'Implements features.' },
+  { value: 'reviewer', label: 'Reviewer', hint: 'Reviews code.' },
   { value: 'tester', label: 'Tester', hint: 'Writes / runs tests.' },
+  { value: 'custom', label: 'Custom', hint: 'Describe behavior freely.', dashed: true },
 ]
 
 const ROLE_LABELS: Record<WorkerRole, string> = {
@@ -61,14 +63,18 @@ const RoleCard = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`role-card-${spec.value}`}
-    className="group flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors"
+    className="group flex flex-col items-start gap-2 rounded-lg p-3 text-left transition-colors"
     style={{
       background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
-      borderColor: active ? 'var(--accent)' : 'var(--border)',
+      border: active
+        ? '1px solid var(--accent)'
+        : spec.dashed
+          ? '1px dashed var(--border-bright)'
+          : '1px solid var(--border)',
     }}
   >
     <div className="flex w-full items-center justify-between">
-      <RoleAvatar role={spec.value} size={32} />
+      <RoleAvatar role={spec.value} size={28} />
       {active ? <Check size={14} className="text-accent" aria-hidden /> : null}
     </div>
     <div className="text-sm font-medium text-pri">{spec.label}</div>
@@ -76,7 +82,7 @@ const RoleCard = ({
   </button>
 )
 
-const AgentRadio = ({
+const AgentChip = ({
   active,
   preset,
   onSelect,
@@ -90,55 +96,14 @@ const AgentRadio = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`agent-radio-${preset.id}`}
-    className="flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors"
+    className="flex w-full flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left transition-colors"
     style={{
       background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'var(--bg-2)',
       borderColor: active ? 'var(--accent)' : 'var(--border)',
     }}
   >
-    <span
-      aria-hidden
-      className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border"
-      style={{
-        borderColor: active ? 'var(--accent)' : 'var(--border-bright)',
-        background: active ? 'var(--accent)' : 'transparent',
-      }}
-    >
-      {active ? (
-        <span className="block h-1 w-1 rounded-full" style={{ background: 'var(--bg-elevated)' }} />
-      ) : null}
-    </span>
-    <div className="min-w-0 flex-1">
-      <div className="truncate text-sm text-pri">{preset.displayName}</div>
-      <div className="mono truncate text-[11px] text-ter">{preset.command}</div>
-    </div>
-  </button>
-)
-
-const CustomRoleCard = ({ active, onSelect }: { active: boolean; onSelect: () => void }) => (
-  <button
-    type="button"
-    onClick={onSelect}
-    aria-pressed={active}
-    data-testid="role-card-custom"
-    className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
-    style={{
-      background: active ? 'color-mix(in oklab, var(--accent) 10%, var(--bg-2))' : 'transparent',
-      border: active ? '1px solid var(--accent)' : '1px dashed var(--border-bright)',
-    }}
-  >
-    {/* biome-ignore lint/a11y/useValidAriaRole: domain prop, not an ARIA role */}
-    <RoleAvatar role="custom" size={32} />
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-pri">Custom</span>
-        <span className="text-[10px] uppercase tracking-wider text-ter">advanced</span>
-      </div>
-      <div className="text-[11px] leading-snug text-ter">
-        Same starter framework as the built-ins; describe behavior freely in the agent's own prompt.
-      </div>
-    </div>
-    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
+    <span className="truncate text-[12px] font-medium text-pri">{preset.displayName}</span>
+    <span className="mono truncate text-[10px] text-ter">{preset.command}</span>
   </button>
 )
 
@@ -175,7 +140,7 @@ export const AddWorkerDialog = ({
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
           <Dialog.Content
             data-testid="add-worker-content"
-            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[560px] max-w-full flex-col rounded-lg border"
+            className="dialog-scale-pop elev-2 pointer-events-auto flex max-h-[calc(100vh-32px)] w-[720px] max-w-full flex-col rounded-lg border"
             style={{
               background: 'var(--bg-elevated)',
               borderColor: 'var(--border-bright)',
@@ -236,8 +201,8 @@ export const AddWorkerDialog = ({
 
                 <div className="flex flex-col gap-2">
                   <FieldLabel>Role</FieldLabel>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PRIMARY_ROLES.map((spec) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {ROLE_CARDS.map((spec) => (
                       <RoleCard
                         key={spec.value}
                         active={workerRole === spec.value}
@@ -246,23 +211,16 @@ export const AddWorkerDialog = ({
                       />
                     ))}
                   </div>
-                  <CustomRoleCard
-                    active={workerRole === 'custom'}
-                    onSelect={() => onRoleChange('custom')}
-                  />
                 </div>
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2">
-                    <label htmlFor="add-worker-role-instructions" className="flex flex-col gap-0.5">
+                    <label htmlFor="add-worker-role-instructions">
                       <FieldLabel>Role instructions</FieldLabel>
-                      <span className="text-[11px] text-ter">
-                        Injected into startup and task context
-                      </span>
                     </label>
                     <div className="flex shrink-0 items-center gap-2">
                       {roleDescriptionModified ? (
-                        <span className="rounded-md border px-2 py-1 text-[11px] text-ter">
+                        <span className="text-[11px] text-ter">
                           Modified from {roleLabel} default
                         </span>
                       ) : null}
@@ -283,16 +241,13 @@ export const AddWorkerDialog = ({
                     value={roleDescription}
                     rows={5}
                     onChange={(event) => onRoleDescriptionChange(event.currentTarget.value)}
+                    title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
                     className="mono min-h-[118px] resize-y rounded-md border px-3 py-2 text-[12px] leading-relaxed text-pri outline-none transition-colors focus:border-[var(--accent)]"
                     style={{
                       background: 'var(--bg-1)',
                       borderColor: 'var(--border-bright)',
                     }}
                   />
-                  <div className="text-[11px] leading-relaxed text-ter">
-                    Hive keeps the team protocol fixed; this text only changes this member's role
-                    behavior.
-                  </div>
                   <details className="group rounded-md border px-3 py-2 text-[11px]">
                     <summary className="cursor-pointer select-none text-ter transition-colors group-open:text-sec">
                       Preview injected prompt
@@ -320,9 +275,9 @@ ${roleDescription}
                   {commandPresets.length === 0 ? (
                     <div className="text-[11px] text-ter">Loading presets…</div>
                   ) : (
-                    <div className="flex flex-col gap-1.5">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {commandPresets.map((preset) => (
-                        <AgentRadio
+                        <AgentChip
                           key={preset.id}
                           active={commandPresetId === preset.id}
                           preset={preset}
