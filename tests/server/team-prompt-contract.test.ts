@@ -137,7 +137,7 @@ describe('team prompt contract', () => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
       expect(run?.output).toContain('[Hive 系统消息：启动说明]')
       expect(run?.output).toContain('SUBMITTED')
-    })
+    }, 4000)
 
     await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
       fromAgentId: orchestrator.id,

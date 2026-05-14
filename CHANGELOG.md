@@ -2,6 +2,28 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.3 - 2026-05-14
+
+Runtime and team-protocol hardening after public-preview dogfooding.
+
+- Added `team status` for worker check-ins when there is no open dispatch.
+  `team report` now requires an open dispatch and returns 409 otherwise, so
+  standby/status updates no longer accidentally close or pollute task history.
+- Custom workspace startup commands can still run through the user's shell
+  while retaining the selected preset's interactive behavior and session-id
+  capture metadata. This supports alias-based resume commands without losing
+  Hive's CLI-specific terminal handling.
+- Worker and orchestrator startup instructions now distinguish assigned work
+  (`team report`) from no-dispatch status updates (`team status`).
+- OpenCode no longer receives Claude's `--dangerously-skip-permissions` flag;
+  its permissions are documented as config-driven through `opencode.json`.
+- Add Worker now avoids unavailable CLI presets by default and surfaces
+  backend creation errors instead of collapsing them into generic UI failure.
+- Local runtime endpoints now reject non-local Host/Origin requests and cap
+  JSON request bodies at 1 MiB.
+- Workspace creation validates local paths more defensively, and README /
+  SECURITY / release notes were updated for the current npm release path.
+
 ## 0.6.0-alpha.2 - 2026-05-14
 
 Follow-up to alpha.1 — corrects a handful of inconsistencies and tightens the

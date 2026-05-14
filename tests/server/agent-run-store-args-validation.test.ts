@@ -25,6 +25,7 @@ describe('agent run store args validation', () => {
       command TEXT NOT NULL,
       args_json TEXT NOT NULL,
       command_preset_id TEXT,
+      interactive_command TEXT,
       preset_augmentation_disabled INTEGER NOT NULL DEFAULT 0,
       resume_args_template TEXT,
       session_id_capture_json TEXT,
@@ -39,13 +40,26 @@ describe('agent run store args validation', () => {
          command,
          args_json,
          command_preset_id,
+         interactive_command,
          preset_augmentation_disabled,
          resume_args_template,
          session_id_capture_json,
          created_at,
          updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run('ws-1', 'agent-1', '/bin/bash', '[1,2]', null, 0, null, null, Date.now(), Date.now())
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'ws-1',
+      'agent-1',
+      '/bin/bash',
+      '[1,2]',
+      null,
+      null,
+      0,
+      null,
+      null,
+      Date.now(),
+      Date.now()
+    )
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const configs = createAgentRunStore(db).listLaunchConfigs()
