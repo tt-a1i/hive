@@ -20,6 +20,9 @@ type SidebarProps = {
 const hasWorkingMember = (workers: TeamListItem[] | undefined): boolean =>
   !!workers?.some((worker) => worker.status === 'working')
 
+const countWorkingMembers = (workers: TeamListItem[] | undefined): number =>
+  workers?.filter((worker) => worker.status === 'working').length ?? 0
+
 const workerSummary = (workers: TeamListItem[] | undefined): string => {
   if (!workers || workers.length === 0) return 'no team members yet'
   const working = workers.filter((worker) => worker.status === 'working').length
@@ -133,6 +136,7 @@ export const Sidebar = ({
             const workers = workersByWorkspaceId[workspace.id]
             const isActive = workspace.id === activeWorkspaceId
             const hasWorking = hasWorkingMember(workers)
+            const workingCount = countWorkingMembers(workers)
             return (
               <li key={workspace.id} className="group relative">
                 {/* Wide layout — name + path + inline status dot. Hidden by */}
@@ -156,11 +160,22 @@ export const Sidebar = ({
                     </span>
                     {hasWorking ? (
                       <span
-                        className="status-dot status-dot--working"
+                        className="inline-flex items-center gap-1.5 text-[11px] text-ter tabular-nums"
                         role="img"
-                        aria-label="At least one team member is working"
-                        title="At least one team member is working"
-                      />
+                        aria-label={
+                          workingCount > 1
+                            ? `${workingCount} team members working`
+                            : 'One team member working'
+                        }
+                        title={
+                          workingCount > 1
+                            ? `${workingCount} team members working`
+                            : 'One team member working'
+                        }
+                      >
+                        <span className="status-dot status-dot--working" aria-hidden />
+                        {workingCount > 1 ? workingCount : null}
+                      </span>
                     ) : null}
                   </div>
                   <div className="ws-row__path mt-0.5 truncate text-[11px] text-ter">
@@ -183,6 +198,7 @@ export const Sidebar = ({
                     name={workspace.name}
                     isActive={isActive}
                     working={hasWorking}
+                    workingCount={workingCount}
                   />
                 </button>
                 <button

@@ -52,7 +52,10 @@ export const Confirm = ({
               {confirmKind === 'danger' ? <AlertTriangle size={18} /> : <HelpCircle size={18} />}
             </div>
             <div className="min-w-0 flex-1">
-              <Dialog.Title data-testid="confirm-title" className="text-md font-medium text-pri">
+              <Dialog.Title
+                data-testid="confirm-title"
+                className="text-[15px] font-medium text-pri"
+              >
                 {title}
               </Dialog.Title>
               <Dialog.Description

@@ -6,6 +6,9 @@ type WorkspaceAvatarProps = {
   isActive: boolean
   /** Surfaces a green pulsing dot when at least one worker is `working`. */
   working?: boolean
+  /** When set, replaces the working dot with a numeric badge — useful when
+   *  multiple workers are running and the user wants to glance the load. */
+  workingCount?: number
   size?: number
 }
 
@@ -21,10 +24,12 @@ export const WorkspaceAvatar = ({
   name,
   isActive,
   working,
+  workingCount,
   size = 32,
 }: WorkspaceAvatarProps) => {
   const { token: color, label } = pickWorkspaceColor(workspaceId)
   const initial = deriveInitial(name)
+  const badgeCount = workingCount && workingCount > 1 ? workingCount : null
   return (
     <span
       data-testid="workspace-avatar"
@@ -44,7 +49,22 @@ export const WorkspaceAvatar = ({
       aria-hidden
     >
       {initial}
-      {working ? (
+      {badgeCount !== null ? (
+        <span
+          className="absolute flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-1 font-medium text-[10px] tabular-nums leading-none"
+          style={{
+            right: '-4px',
+            bottom: '-4px',
+            background: 'var(--status-green)',
+            color: '#0a1f0a',
+            boxShadow: '0 0 0 2px var(--bg-1)',
+          }}
+          data-testid="workspace-avatar-working-count"
+          aria-hidden
+        >
+          {badgeCount > 9 ? '9+' : badgeCount}
+        </span>
+      ) : working ? (
         <span
           className="status-dot status-dot--working absolute"
           style={{

@@ -42,6 +42,8 @@ export const ConfirmWorkspaceDialog = ({
   const [name, setName] = useState(initialName)
   const [pastePath, setPastePath] = useState('')
   const [pasteExpanded, setPasteExpanded] = useState(pasteFallbackDefault)
+  const [startupExpanded, setStartupExpanded] = useState(false)
+  const [startupCommand, setStartupCommand] = useState('')
 
   // Re-sync when the probe changes (user re-picks a folder without closing).
   useEffect(() => {
@@ -54,7 +56,12 @@ export const ConfirmWorkspaceDialog = ({
 
   const handleCreate = () => {
     if (!canCreate) return
-    onCreate({ commandPresetId: commandPresetId || null, name: name.trim(), path: resolvedPath })
+    onCreate({
+      commandPresetId: commandPresetId || null,
+      name: name.trim(),
+      path: resolvedPath,
+      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
+    })
   }
 
   return (
@@ -87,7 +94,9 @@ export const ConfirmWorkspaceDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-md font-medium text-pri">Add workspace</Dialog.Title>
+                <Dialog.Title className="text-[15px] font-medium text-pri">
+                  Add workspace
+                </Dialog.Title>
                 <Dialog.Description className="text-[11px] text-ter">
                   Hive will load <span className="mono">.hive/tasks.md</span> and start the
                   Orchestrator here.
@@ -102,11 +111,7 @@ export const ConfirmWorkspaceDialog = ({
                   readOnly
                   value={probe?.path ?? ''}
                   placeholder="(no folder picked — use paste path below)"
-                  className="mono rounded-md border px-3 py-2 text-sm text-pri outline-none"
-                  style={{
-                    background: 'var(--bg-1)',
-                    borderColor: 'var(--border-bright)',
-                  }}
+                  className="input input--readonly mono"
                   data-testid="confirm-workspace-path"
                 />
               </label>
@@ -139,11 +144,7 @@ export const ConfirmWorkspaceDialog = ({
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder={basenameOf(probe?.path ?? '') || 'my-project'}
-                  className="rounded-md border px-3 py-2 text-sm text-pri outline-none"
-                  style={{
-                    background: 'var(--bg-1)',
-                    borderColor: 'var(--border-bright)',
-                  }}
+                  className="input"
                   data-testid="confirm-workspace-name"
                 />
               </label>
@@ -154,6 +155,36 @@ export const ConfirmWorkspaceDialog = ({
                 presets={commandPresets}
                 value={commandPresetId}
               />
+
+              <button
+                type="button"
+                onClick={() => setStartupExpanded((v) => !v)}
+                className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                data-testid="confirm-workspace-startup-toggle"
+              >
+                {startupExpanded ? (
+                  <ChevronDown size={11} aria-hidden />
+                ) : (
+                  <ChevronRight size={11} aria-hidden />
+                )}
+                Advanced: custom startup command
+              </button>
+              {startupExpanded ? (
+                <label className="flex flex-col gap-1.5">
+                  <FieldLabel>Startup command</FieldLabel>
+                  <input
+                    type="text"
+                    value={startupCommand}
+                    onChange={(event) => setStartupCommand(event.target.value)}
+                    placeholder="claude --resume <session-id>"
+                    className="input mono"
+                    data-testid="confirm-workspace-startup-command"
+                  />
+                  <span className="text-[11px] text-ter">
+                    Overrides the preset for this Orchestrator. Runs in the workspace directory.
+                  </span>
+                </label>
+              ) : null}
 
               <button
                 type="button"
@@ -176,11 +207,7 @@ export const ConfirmWorkspaceDialog = ({
                     value={pastePath}
                     onChange={(event) => setPastePath(event.target.value)}
                     placeholder="/absolute/path"
-                    className="mono rounded-md border px-3 py-2 text-sm text-pri outline-none"
-                    style={{
-                      background: 'var(--bg-1)',
-                      borderColor: 'var(--border-bright)',
-                    }}
+                    className="input mono"
                     data-testid="confirm-workspace-paste-path"
                   />
                 </label>

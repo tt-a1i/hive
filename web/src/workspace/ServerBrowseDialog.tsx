@@ -40,12 +40,16 @@ export const ServerBrowseDialog = ({
   const [name, setName] = useState('')
   const [advanced, setAdvanced] = useState(false)
   const [manualPath, setManualPath] = useState('')
+  const [startupExpanded, setStartupExpanded] = useState(false)
+  const [startupCommand, setStartupCommand] = useState('')
 
   useEffect(() => {
     if (!open) {
       setName('')
       setAdvanced(false)
       setManualPath('')
+      setStartupExpanded(false)
+      setStartupCommand('')
     }
   }, [open])
 
@@ -62,7 +66,12 @@ export const ServerBrowseDialog = ({
   const handleCreate = () => {
     const path = advanced && manualPath.trim().length > 0 ? manualPath.trim() : (probe?.path ?? '')
     if (!path) return
-    onCreate({ commandPresetId: commandPresetId || null, name: name.trim(), path })
+    onCreate({
+      commandPresetId: commandPresetId || null,
+      name: name.trim(),
+      path,
+      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
+    })
   }
 
   return (
@@ -100,7 +109,7 @@ export const ServerBrowseDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-md font-medium text-pri">
+                <Dialog.Title className="text-[15px] font-medium text-pri">
                   Browse server filesystem
                 </Dialog.Title>
                 <Dialog.Description
@@ -186,6 +195,31 @@ export const ServerBrowseDialog = ({
                 />
                 <button
                   type="button"
+                  onClick={() => setStartupExpanded((v) => !v)}
+                  className="flex items-center gap-1.5 text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                >
+                  {startupExpanded ? (
+                    <ChevronDown size={11} aria-hidden />
+                  ) : (
+                    <ChevronRight size={11} aria-hidden />
+                  )}
+                  Advanced: startup command
+                </button>
+                {startupExpanded ? (
+                  <label className="flex flex-col gap-1.5 text-[10px] uppercase tracking-wider text-ter">
+                    Startup command
+                    <input
+                      type="text"
+                      value={startupCommand}
+                      onChange={(event) => setStartupCommand(event.target.value)}
+                      placeholder="claude --resume <session-id>"
+                      className="input mono"
+                      data-testid="fs-startup-command"
+                    />
+                  </label>
+                ) : null}
+                <button
+                  type="button"
                   onClick={() => setAdvanced((v) => !v)}
                   className="flex items-center gap-1.5 text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
                 >
@@ -204,11 +238,7 @@ export const ServerBrowseDialog = ({
                       value={manualPath}
                       onChange={(event) => setManualPath(event.target.value)}
                       placeholder="/absolute/path"
-                      className="mono rounded-md border px-3 py-2 text-sm text-pri outline-none"
-                      style={{
-                        background: 'var(--bg-1)',
-                        borderColor: 'var(--border-bright)',
-                      }}
+                      className="input mono"
                       data-testid="fs-manual-path"
                     />
                   </label>

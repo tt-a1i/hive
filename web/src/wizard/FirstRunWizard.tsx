@@ -71,6 +71,11 @@ export const FirstRunWizard = ({
                     <p className="text-sm text-sec">
                       Coordinate multiple CLI coding agents — locally.
                     </p>
+                    <p className="text-xs text-ter">
+                      Each workspace runs a <span className="font-medium text-sec">Queen</span>{' '}
+                      (orchestrator) that dispatches tasks to{' '}
+                      <span className="font-medium text-sec">Workers</span>.
+                    </p>
                   </div>
                 </div>
               )}
@@ -95,7 +100,7 @@ export const FirstRunWizard = ({
                       {
                         n: 3,
                         title: 'Dispatch tasks',
-                        desc: 'The Orchestrator routes work to Workers via team send.',
+                        desc: 'The Queen runs `team send <worker> <task>` for you in the terminal.',
                       },
                     ].map(({ n, title, desc }) => (
                       <li key={n} className="flex items-start gap-3">
