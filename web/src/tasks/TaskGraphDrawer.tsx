@@ -10,6 +10,7 @@ import {
 import { useState } from 'react'
 
 import { Tooltip } from '../ui/Tooltip.js'
+import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
 
@@ -65,7 +66,7 @@ const TaskItem = ({
                 task.checked ? 'text-ter line-through' : 'text-pri'
               }`}
             >
-              {task.text}
+              {renderInlineMarkdown(task.text)}
             </span>
             {task.children.length > 0 ? (
               <span className="task-child-count mono">
