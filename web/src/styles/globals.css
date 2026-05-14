@@ -1,12 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  /* Linear dark — surfaces */
-  --color-bg-0: #08090a;
-  --color-bg-1: #0f0f11;
-  --color-bg-2: #18181b;
-  --color-bg-3: #232326;
-  --color-bg-crust: #050506;
+  /* Twenty-style dark surfaces. The old palette pushed bg-0 down to #08090a
+     (near-black); Twenty sits at #171717 (charcoal). Charcoal reads as
+     "considered" — near-black reads as "Tailwind default dark". Same idea
+     for text: Twenty uses #ebebeb (~92% white) rather than off-white. */
+  --color-bg-0: #171717;
+  --color-bg-1: #1b1b1b;
+  --color-bg-2: #1d1d1d;
+  --color-bg-3: #222222;
+  --color-bg-crust: #0e0e0e;
 
   /* Charcoal scale — Trigger.dev-inspired neutrals that fill the gap between
      bg-2 (#18181b) and border-bright (#2b2b30). Used by interactive containers
@@ -19,42 +22,49 @@
   --color-charcoal-600: #3b3e45;
 
   /* Borders */
-  --color-border: #222226;
-  --color-border-bright: #2b2b30;
+  --color-border: #1d1d1d;
+  --color-border-bright: #484848;
 
-  /* Text */
-  --color-text-primary: #f7f8f8;
-  --color-text-secondary: #8a8f98;
-  --color-text-tertiary: #62656c;
+  /* Text — Twenty steps. primary is ~92% white (not screaming),
+     secondary is ~70%, tertiary ~50%. Three steps is enough for a CRM-style
+     density app; Hive doesn't need more. */
+  --color-text-primary: #ebebeb;
+  --color-text-secondary: #b3b3b3;
+  --color-text-tertiary: #818181;
 
-  /* Accent (Linear indigo) */
-  --color-accent: #5e6ad2;
-  --color-accent-hover: #7078e3;
+  /* Accent — Twenty's deep blue. Replaces the Linear indigo we'd been using.
+     Same family but more saturated and "true blue" — less violet, more weight.
+     The hover step matches Twenty's accent10. */
+  --color-accent: #3358d4;
+  --color-accent-hover: #5072dd;
 
-  /* Status */
-  --color-status-green: #3FB950;
-  --color-status-orange: #D29922;
-  --color-status-red: #F85149;
-  --color-status-blue: #4C9AFF;
-  --color-status-purple: #A371F7;
-  --color-status-gold: #D4A72C;
+  /* Status — Twenty's status palette. More muted than GitHub status colors
+     we had before; sits next to text without clashing. */
+  --color-status-green: #54a271;
+  --color-status-orange: #e67333;
+  --color-status-red: #d4544f;
+  --color-status-blue: #3358d4;
+  --color-status-purple: #8551c0;
+  --color-status-gold: #ffeb38;
 
   /* M6 — overlay & elevated */
-  --color-bg-overlay: rgba(8, 9, 10, 0.72);
-  --color-bg-elevated: #1c1c20;
+  --color-bg-overlay: rgba(0, 0, 0, 0.72);
+  --color-bg-elevated: #222222;
 }
 
 :root {
-  /* Linear dark — surfaces */
-  --bg-0: #08090a;
-  --bg-1: #0f0f11;
-  --bg-2: #18181b;
-  --bg-3: #232326;
-  --bg-crust: #050506;
+  /* Twenty-style dark surfaces (mirror of @theme above). Hive's design used
+     to follow Linear's near-black; the move to charcoal #171717 is the
+     single biggest "this isn't Tailwind defaults" signal in this commit. */
+  --bg-0: #171717;
+  --bg-1: #1b1b1b;
+  --bg-2: #1d1d1d;
+  --bg-3: #222222;
+  --bg-crust: #0e0e0e;
 
   /* M6 — overlay & elevated */
-  --bg-overlay: rgba(8, 9, 10, 0.72);
-  --bg-elevated: #1c1c20;
+  --bg-overlay: rgba(0, 0, 0, 0.72);
+  --bg-elevated: #222222;
 
   /* Charcoal scale — see @theme block above. Available as raw vars for any
      CSS rule that needs the in-between greys (e.g. hover ladder on chips). */
@@ -73,25 +83,25 @@
   --grid-bright: var(--border-bright);
 
   /* Borders */
-  --border: #222226;
-  --border-bright: #2b2b30;
+  --border: #1d1d1d;
+  --border-bright: #484848;
 
-  /* Text */
-  --text-primary: #f7f8f8;
-  --text-secondary: #8a8f98;
-  --text-tertiary: #62656c;
+  /* Text — Twenty steps. */
+  --text-primary: #ebebeb;
+  --text-secondary: #b3b3b3;
+  --text-tertiary: #818181;
 
-  /* Accent */
-  --accent: #5e6ad2;
-  --accent-hover: #7078e3;
+  /* Accent — Twenty deep blue. */
+  --accent: #3358d4;
+  --accent-hover: #5072dd;
 
-  /* Status */
-  --status-green: #3FB950;
-  --status-orange: #D29922;
-  --status-red: #F85149;
-  --status-blue: #4C9AFF;
-  --status-purple: #A371F7;
-  --status-gold: #D4A72C;
+  /* Status — Twenty muted palette. */
+  --status-green: #54a271;
+  --status-orange: #e67333;
+  --status-red: #d4544f;
+  --status-blue: #3358d4;
+  --status-purple: #8551c0;
+  --status-gold: #ffeb38;
 
   /* M6 — typography scale */
   --text-xs: 10px;
@@ -172,26 +182,26 @@ html, body {
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 13px;
-  line-height: 1.45;
-  /* Tiny negative tracking — Inter is designed with positive metrics; UI text
-     in dark themes reads tighter and more "designed" with -0.011em (Linear,
-     Vercel, Stripe all sit in this -0.008 to -0.014em range). Headings get
-     a steeper pull (-0.02em) via the .display utility below. */
-  letter-spacing: -0.011em;
+  line-height: 1.5;
+  /* Inter at native kerning. The previous tracking tweaks (-0.011em body,
+     -0.02em display) were the kind of polish that paradoxically reads as
+     "AI-tuned" — Twenty, the reference we're aligning to, runs Inter with
+     no tracking adjustment at all. Trust the typeface's own metrics. */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 #root { height: 100%; }
 
+/* DM Mono — Twenty's monospace. Slightly more open than JetBrains Mono;
+   reads as "designed" rather than "engineer default" in dense table cells. */
 .mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* Monospace ignores the global negative tracking — it's metric-correct. */
-  letter-spacing: 0;
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-/* Display-class headings — applied to Dialog.Title / hero copy / WelcomePane
-   to pull metrics tighter at larger sizes where Inter starts to feel airy. */
-.display { letter-spacing: -0.02em; }
+/* The .display utility used to add -0.02em tracking; Twenty doesn't, so we
+   don't either. Keeping the class as a no-op so existing markup still
+   compiles without dragging through every <Dialog.Title>. */
+.display { letter-spacing: 0; }
 
 /* Linear dark palette helpers (class sugar) */
 .bg-0 { background: var(--bg-0); }
@@ -436,64 +446,59 @@ html, body {
   background: color-mix(in oklab, var(--status-orange) 10%, transparent);
 }
 
-/* Primary action button — used in dialog footers, EmptyState CTAs,
-   and worker pane actions. Has both icon+label and icon-only variants. */
+/* Button — Twenty-style. Two key shifts from the old `.icon-btn`:
+   1. Larger touch target (height 28px, was ~22px) with proportional padding.
+      Twenty runs 24px small / 32px medium; we sit at 28px, the lightest
+      density that still feels deliberate.
+   2. No inset-highlight, no ambient shadow at rest. Twenty buttons are
+      flat — the `background var(--dur-fast)` transition does all the work.
+      The inner-highlight trick we had was the loudest "designed" tell in
+      the previous palette; removing it is the single biggest "this isn't
+      AI-generated polish" signal in the file. */
 .icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 11px;
+  gap: 6px;
+  padding: 0 10px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-bright);
   background: var(--bg-2);
-  /* Inner top highlight: 1px of light to fake screen-light ambience.
-     Combined with the tiny outer shadow this gives buttons depth instead
-     of looking like flat color rectangles. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 1px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    transform 80ms var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
 }
 .icon-btn:hover {
   background: var(--bg-3);
   color: var(--text-primary);
-  border-color: var(--border-bright);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.3);
 }
-.icon-btn:active { transform: scale(0.97); }
+.icon-btn:active { background: var(--bg-3); }
 .icon-btn:focus-visible {
   outline: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 1px rgba(0, 0, 0, 0.2),
-    0 0 0 2px var(--ring-focus),
-    0 0 0 5px color-mix(in oklab, var(--accent) 14%, transparent);
+  /* Single 3px solid halo at low alpha — Twenty's focus pattern. The
+     previous 2-band ring (2px tight + 6px halo) was technically nicer but
+     read as fussy; one band is enough on a flat button. */
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
-.icon-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Primary — the blue-CTA variant. Saturated brand color, white text. */
 .icon-btn--primary {
   background: var(--accent);
-  color: var(--text-primary);
-  border-color: color-mix(in oklab, #fff 12%, var(--accent));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 1px 2px rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  border-color: var(--accent);
 }
 .icon-btn--primary:hover {
   background: var(--accent-hover);
-  border-color: color-mix(in oklab, #fff 18%, var(--accent-hover));
+  border-color: var(--accent-hover);
+  color: #ffffff;
 }
+
 .icon-btn--danger {
   color: var(--status-red);
+  border-color: color-mix(in oklab, var(--status-red) 30%, var(--border-bright));
 }
 .icon-btn--danger:hover {
   background: color-mix(in oklab, var(--status-red) 14%, transparent);
@@ -602,11 +607,8 @@ html, body {
 }
 .selectable-card:focus-visible {
   outline: none;
-  /* Two-layer focus ring — matches `.input`. The 2px band sits against the
-     border, the 6px halo softens the edge so focus reads as a glow. */
-  box-shadow:
-    0 0 0 2px var(--ring-focus),
-    0 0 0 6px color-mix(in oklab, var(--accent) 14%, transparent);
+  /* Single 3px solid halo — matches `.input`. */
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 .selectable-card[aria-pressed="true"] {
   border-color: var(--accent);
@@ -788,29 +790,21 @@ html, body {
   display: block;
   width: 100%;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 13px;
   color: var(--text-primary);
   background: var(--bg-1);
   border: 1px solid var(--border-bright);
   outline: none;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: border-color 100ms ease, box-shadow 100ms ease;
 }
 .input::placeholder { color: var(--text-tertiary); }
 .input:hover:not(:focus) { border-color: var(--text-tertiary); }
 .input:focus-visible {
   border-color: var(--accent);
-  /* Two-layer focus ring — tight 2px confidence band + soft 6px halo so focus
-     reads as a glow, not a hard outline. Matches `.selectable-card`. */
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.25),
-    0 0 0 2px var(--ring-focus),
-    0 0 0 6px color-mix(in oklab, var(--accent) 14%, transparent);
+  /* Single 3px solid halo at 30% accent — Twenty's focus pattern. No more
+     two-layer ring; no more inset shadow on focus. Just a confident edge. */
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 .input--readonly { background: var(--bg-0); color: var(--text-secondary); cursor: default; }
 
