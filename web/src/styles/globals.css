@@ -26,11 +26,16 @@
   --color-border-bright: #484848;
 
   /* Text — Twenty steps. primary is ~92% white (not screaming),
-     secondary is ~70%, tertiary ~50%. Three steps is enough for a CRM-style
-     density app; Hive doesn't need more. */
+     secondary is ~70%, tertiary ~50%. Three is enough for daily density;
+     light/extra-light/inverted/danger exist as token stops for the rare
+     callsite that needs a 4th shade — defined once, used sparingly. */
   --color-text-primary: #ebebeb;
   --color-text-secondary: #b3b3b3;
   --color-text-tertiary: #818181;
+  --color-text-light: #9c9c9c;
+  --color-text-extra-light: #555555;
+  --color-text-inverted: #1b1b1b;
+  --color-text-danger: #d4544f;
 
   /* Accent — Twenty's deep blue. Replaces the Linear indigo we'd been using.
      Same family but more saturated and "true blue" — less violet, more weight.
@@ -101,10 +106,19 @@
   --border: #1d1d1d;
   --border-bright: #484848;
 
-  /* Text — Twenty steps. */
+  /* Text — Twenty steps. primary/secondary/tertiary cover the three
+     density levels we actually use; light/extra-light/inverted/danger
+     are token stops for occasional callsites that need a 4th body shade
+     (light), a near-disabled tone (extra-light), light-on-dark text on a
+     filled CTA (inverted), or a destructive cue (danger) — all defined
+     once so future code doesn't reach for inline hex values. */
   --text-primary: #ebebeb;
   --text-secondary: #b3b3b3;
   --text-tertiary: #818181;
+  --text-light: #9c9c9c;
+  --text-extra-light: #555555;
+  --text-inverted: #1b1b1b;
+  --text-danger: var(--status-red);
 
   /* Accent — Twenty deep blue. */
   --accent: #3358d4;
@@ -801,6 +815,20 @@ html, body {
 }
 .input--readonly { background: var(--bg-0); color: var(--text-secondary); cursor: default; }
 
+/* Error state — used by inputs flagged with an active validation error.
+   Border firms up to a red mix at rest; focus replaces the accent ring
+   with a red ring so the user knows their fix attempt is being read. */
+.input--error {
+  border-color: color-mix(in oklab, var(--status-red) 50%, var(--border-bright));
+}
+.input--error:hover:not(:focus) {
+  border-color: color-mix(in oklab, var(--status-red) 65%, var(--border-bright));
+}
+.input--error:focus-visible {
+  border-color: var(--status-red);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-red) 30%, transparent);
+}
+
 /* Dialog open/close choreography — radix sets [data-state] on Overlay and
    Content. Three flavors so animations don't fight each layout family:
      • .dialog-pop  — centered dialogs (top-1/2 left-1/2 -translate-x/y-1/2),
@@ -873,6 +901,32 @@ html, body {
   box-shadow: var(--shadow-elev-2);
   animation: dialog-overlay-in 100ms ease;
   max-width: 260px;
+}
+
+/* Toast progress bar — countdown sliver along the bottom edge, scaled from
+   left so it visibly drains as the dismiss timer ticks down. Pauses when
+   the user is hovering the toast (the dismiss timer is paused in JS at
+   the same moment, so the bar and the actual timeout stay in sync). */
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  opacity: 0.5;
+  transform-origin: left;
+  animation: toast-progress linear forwards;
+  pointer-events: none;
+}
+.toast:hover .toast-progress-bar {
+  animation-play-state: paused;
+}
+@keyframes toast-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-progress-bar { animation: none; opacity: 0; }
 }
 
 /* Toast spring entrance — overshoot once on open, fast slide on close. */

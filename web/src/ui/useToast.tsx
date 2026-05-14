@@ -28,6 +28,21 @@ interface ShowOptions {
 interface ToastApi {
   show: (opts: ShowOptions) => string
   dismiss: (id: string) => void
+  /** Pause the auto-dismiss timer for a toast (e.g., while the user is
+   *  hovering it). Safe to call on a toast with no timer — a no-op. */
+  pauseDismiss: (id: string) => void
+  /** Resume a previously-paused timer using the remaining duration. */
+  resumeDismiss: (id: string) => void
+  /** Read the total configured duration for a toast (used by the UI to
+   *  size the progress bar). Returns 0 for sticky toasts. */
+  getDuration: (id: string) => number
+}
+
+interface ToastTimer {
+  timer: ReturnType<typeof setTimeout> | null
+  dueAt: number
+  durationMs: number
+  remainingMs: number
 }
 
 const ToastApiContext = createContext<ToastApi | null>(null)
@@ -55,16 +70,21 @@ const generateId = (): string => {
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastEntry[]>([])
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const timers = useRef(new Map<string, ToastTimer>())
 
-  const dismiss = useCallback((id: string) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id))
-    const timer = timers.current.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      timers.current.delete(id)
-    }
+  const clearTimer = useCallback((id: string) => {
+    const entry = timers.current.get(id)
+    if (entry?.timer) clearTimeout(entry.timer)
+    timers.current.delete(id)
   }, [])
+
+  const dismiss = useCallback(
+    (id: string) => {
+      setToasts((current) => current.filter((toast) => toast.id !== id))
+      clearTimer(id)
+    },
+    [clearTimer]
+  )
 
   const show = useCallback(
     ({ kind, message, durationMs }: ShowOptions): string => {
@@ -75,36 +95,65 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
         // Over cap: drop oldest entries AND clear their pending dismiss timers
         // so they don't leak in timers.current until natural expiry.
         const evicted = next.slice(0, next.length - MAX_TOASTS)
-        for (const entry of evicted) {
-          const timer = timers.current.get(entry.id)
-          if (timer) {
-            clearTimeout(timer)
-            timers.current.delete(entry.id)
-          }
-        }
+        for (const entry of evicted) clearTimer(entry.id)
         return next.slice(next.length - MAX_TOASTS)
       })
       const ms = durationMs ?? defaultDuration(kind)
       if (ms > 0) {
         const timer = setTimeout(() => dismiss(id), ms)
-        timers.current.set(id, timer)
+        timers.current.set(id, {
+          timer,
+          dueAt: Date.now() + ms,
+          durationMs: ms,
+          remainingMs: ms,
+        })
       }
       return id
+    },
+    [dismiss, clearTimer]
+  )
+
+  const pauseDismiss = useCallback((id: string) => {
+    const entry = timers.current.get(id)
+    if (!entry?.timer) return
+    clearTimeout(entry.timer)
+    timers.current.set(id, {
+      ...entry,
+      timer: null,
+      remainingMs: Math.max(0, entry.dueAt - Date.now()),
+    })
+  }, [])
+
+  const resumeDismiss = useCallback(
+    (id: string) => {
+      const entry = timers.current.get(id)
+      if (!entry || entry.timer || entry.remainingMs <= 0) return
+      const timer = setTimeout(() => dismiss(id), entry.remainingMs)
+      timers.current.set(id, {
+        ...entry,
+        timer,
+        dueAt: Date.now() + entry.remainingMs,
+      })
     },
     [dismiss]
   )
 
+  const getDuration = useCallback((id: string) => timers.current.get(id)?.durationMs ?? 0, [])
+
   useEffect(() => {
     const timersAtMount = timers.current
     return () => {
-      for (const timer of timersAtMount.values()) clearTimeout(timer)
+      for (const entry of timersAtMount.values()) {
+        if (entry.timer) clearTimeout(entry.timer)
+      }
       timersAtMount.clear()
     }
   }, [])
 
-  // Stable api ref — show/dismiss are useCallback-bound, so the memo only
-  // changes when those identities change (i.e. never, after first mount).
-  const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss])
+  const api = useMemo<ToastApi>(
+    () => ({ show, dismiss, pauseDismiss, resumeDismiss, getDuration }),
+    [show, dismiss, pauseDismiss, resumeDismiss, getDuration]
+  )
 
   return (
     <ToastApiContext.Provider value={api}>
