@@ -207,7 +207,7 @@ export const Sidebar = ({
                     type="button"
                     aria-label={`Delete workspace ${workspace.name}`}
                     onClick={() => requestDelete(workspace)}
-                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
+                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2 size={14} aria-hidden />
                   </button>
@@ -229,7 +229,7 @@ export const Sidebar = ({
                    reliably surface on a disabled <button> across browsers,
                    so screen-readers and Safari users still get the reason. */
                 title={createDisabledReason ?? undefined}
-                className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ borderColor: 'var(--border-bright)' }}
               >
                 <Plus size={14} aria-hidden />

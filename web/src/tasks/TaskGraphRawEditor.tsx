@@ -39,13 +39,13 @@ export const TaskGraphRawEditor = ({
           aria-label="Tasks Markdown"
           value={content}
           onChange={(event) => onContentChange(event.target.value)}
-          className="mono min-h-[360px] flex-1 resize-none rounded-md border p-3 text-sm text-pri outline-none focus:border-[var(--accent)]"
+          className="mono min-h-[360px] flex-1 resize-none rounded border p-3 text-sm text-pri outline-none focus:border-[var(--accent)]"
           style={{ background: 'var(--bg-0)', borderColor: 'var(--border)' }}
         />
       </label>
       {hasConflict ? (
         <div
-          className="flex items-start gap-2 rounded-md border p-3 text-xs"
+          className="flex items-start gap-2 rounded border p-3 text-xs"
           style={{ borderColor: 'var(--status-orange)', color: 'var(--status-orange)' }}
         >
           <AlertTriangle className="mt-0.5 shrink-0" size={16} />

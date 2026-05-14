@@ -1242,10 +1242,10 @@ html, body {
   margin: 0;
   padding: 4px;
   background: var(--bg-elevated);
-  /* Hairline border — matches `.card`. Shadow does the actual edge; border
-     is the visual confirmation that something is floating above. */
-  border: 0.5px solid var(--border-bright);
-  border-radius: 6px;
+  /* 1px hairline (was 0.5px — too fragile on subpixel displays). Border
+     gives the floating menu its edge; the shadow gives ambient depth. */
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
   box-shadow: var(--shadow-elev-2);
   max-height: 240px;
   overflow-y: auto;

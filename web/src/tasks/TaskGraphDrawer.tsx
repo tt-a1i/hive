@@ -39,7 +39,7 @@ const TaskItem = ({
   return (
     <li className="task-node" data-testid={`task-line-${task.line}`}>
       <label
-        className="group flex min-w-0 cursor-pointer items-start gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-2"
+        className="group flex min-w-0 cursor-pointer items-start gap-3 rounded px-2.5 py-2 transition-colors hover:bg-2"
         style={{ marginLeft: depth ? 14 : 0 }}
       >
         <input

@@ -131,7 +131,7 @@ export const ConfirmWorkspaceDialog = ({
                   data-testid="confirm-workspace-git-badge"
                 >
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-medium"
+                    className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium"
                     style={{
                       background: 'color-mix(in oklab, var(--status-blue) 12%, transparent)',
                       color: 'var(--status-blue)',

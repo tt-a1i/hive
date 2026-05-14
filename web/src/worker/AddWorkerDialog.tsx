@@ -174,7 +174,7 @@ export const AddWorkerDialog = ({
                       type="button"
                       aria-label="Generate random member name"
                       title="Generate random member name"
-                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
+                      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                       onClick={onRandomName}
                       data-testid="random-worker-name"
                     >
@@ -230,7 +230,7 @@ export const AddWorkerDialog = ({
                     {roleDescriptionModified ? (
                       <button
                         type="button"
-                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
+                        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()

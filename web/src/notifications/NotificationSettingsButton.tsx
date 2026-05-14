@@ -147,7 +147,7 @@ export const NotificationSettingsButton = () => {
                     />
                     <span className="mb-1 flex items-center gap-2">
                       <span
-                        className="flex h-5 w-5 items-center justify-center rounded-md"
+                        className="flex h-5 w-5 items-center justify-center rounded"
                         style={{
                           background: `color-mix(in oklab, ${item.accent} 16%, transparent)`,
                           color: item.accent,
@@ -175,7 +175,7 @@ export const NotificationSettingsButton = () => {
                     <button
                       type="button"
                       aria-label={`Preview ${item.label} sound`}
-                      className="absolute right-2 bottom-2 flex h-6 w-6 items-center justify-center rounded-md border text-sec transition-colors hover:bg-3 hover:text-pri"
+                      className="absolute right-2 bottom-2 flex h-6 w-6 items-center justify-center rounded border text-sec transition-colors hover:bg-3 hover:text-pri"
                       style={{ borderColor: 'var(--border-bright)' }}
                       onClick={() => previewSound(item.value)}
                     >
@@ -201,7 +201,7 @@ export const NotificationSettingsButton = () => {
               {detailOptions.map((item) => (
                 <label
                   key={item.value}
-                  className="cursor-pointer rounded-md px-3 py-2 text-left transition-colors hover:bg-3 focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--ring-focus)]"
+                  className="cursor-pointer rounded px-3 py-2 text-left transition-colors hover:bg-3 focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--ring-focus)]"
                   style={{
                     background: settings.detail === item.value ? 'var(--bg-3)' : 'transparent',
                     color:
@@ -225,7 +225,7 @@ export const NotificationSettingsButton = () => {
             </div>
           </section>
 
-          <label className="mb-3 flex items-start gap-2 rounded-md border p-2 text-sec text-xs">
+          <label className="mb-3 flex items-start gap-2 rounded border p-2 text-sec text-xs">
             <input
               type="checkbox"
               aria-label="Browser notifications"
