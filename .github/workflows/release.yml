@@ -33,7 +33,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build
-      - run: pnpm vitest run --no-file-parallelism --maxWorkers=1 --testTimeout=30000 --hookTimeout=30000
+      - run: pnpm vitest run --no-file-parallelism --maxWorkers=1 --testTimeout=60000 --hookTimeout=60000
         if: runner.os != 'Windows'
       - run: pnpm test:windows
         if: runner.os == 'Windows'

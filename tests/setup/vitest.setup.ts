@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 
+import { afterEach } from 'vitest'
+
 // Node 25 ships an experimental localStorage that overrides jsdom's implementation
 // but lacks standard methods (setItem, getItem, clear, removeItem). Polyfill when needed.
 if (typeof window !== 'undefined' && typeof window.localStorage?.setItem !== 'function') {
@@ -61,3 +63,13 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     },
   })
 }
+
+afterEach(() => {
+  if (typeof document === 'undefined') return
+
+  document.body.removeAttribute('data-scroll-locked')
+  document.body.style.pointerEvents = ''
+  document.querySelectorAll('[data-radix-focus-guard]').forEach((node) => {
+    node.parentNode?.removeChild(node)
+  })
+})

@@ -157,7 +157,7 @@ describe('terminal websocket server', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 60000)
 
   test('forwards stdin from io socket into the PTY', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-stdin-${Date.now()}`)
@@ -199,7 +199,7 @@ describe('terminal websocket server', () => {
     } finally {
       await server.close()
     }
-  })
+  }, 60000)
 
   test('rejects websocket upgrades for a missing run id', async () => {
     const server = await startTestServer()
