@@ -20,7 +20,7 @@ export const Topbar = ({
     className="flex h-11 shrink-0 items-center px-4"
     style={{
       background: 'var(--bg-0)',
-      boxShadow: 'inset 0 -1px 0 var(--border), inset 0 1px 0 rgba(255, 255, 255, 0.025)',
+      borderBottom: '1px solid var(--border-bright)',
     }}
   >
     <div className="flex items-center gap-2">

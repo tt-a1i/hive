@@ -153,17 +153,15 @@
     0 4px 12px rgba(var(--shadow-tint), 0.4),
     0 1px 2px rgba(var(--shadow-tint), 0.3);
 
-  /* M6 — three-piece card shadow (contact + key + ambient + rim highlight). */
+  /* Card shadows — Twenty's `.card` ships with `border: 1px solid border-medium`
+     and no box-shadow at all. We kept a single contact line as a hairline edge
+     so the card still separates from its container, and dropped the inset
+     rim highlight (Twenty has zero inset shadows anywhere). The hover step
+     gets the accent-tinted ring but no ambient elevation. */
   --shadow-card:
-    0 0 0 1px rgba(var(--shadow-tint), 0.10),
-    0 1px 2px rgba(var(--shadow-tint), 0.22),
-    0 8px 24px -8px rgba(var(--shadow-tint), 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 0 0 1px rgba(var(--shadow-tint), 0.12);
   --shadow-card-hover:
-    0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent),
-    0 2px 4px rgba(var(--shadow-tint), 0.22),
-    0 16px 40px -12px rgba(var(--shadow-tint), 0.52),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
 
   color-scheme: dark;
 }
@@ -234,19 +232,12 @@ html, body {
   cursor: pointer;
   position: relative;
 }
-.ws-row:hover { background: color-mix(in oklab, var(--accent) 4%, var(--bg-1)); }
+.ws-row:hover { background: color-mix(in oklab, #ffffff 5%, transparent); }
+/* Active workspace — Twenty's NavigationDrawerItem pattern. No left-accent
+   rail, no inner top highlight; the active state is just a subtler bg shift
+   + bumped font weight (handled on the React side: `font-medium text-pri`). */
 .ws-row.active {
-  background: color-mix(in oklab, var(--accent) 8%, var(--bg-1));
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.ws-row.active::after {
-  /* Subtle inner top highlight to lift the active row off the sidebar plane. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 0;
-  pointer-events: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: color-mix(in oklab, #ffffff 7%, transparent);
 }
 
 /* Sidebar inline delete (per-row) — hover tints with status-red wash. */
@@ -257,7 +248,6 @@ html, body {
 /* Sidebar add-workspace dashed CTA — gets accent on hover. */
 .ws-add {
   background: transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
@@ -511,12 +501,10 @@ html, body {
 .icon-btn--tertiary {
   background: var(--charcoal-700);
   border-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 .icon-btn--tertiary:hover {
   background: var(--charcoal-600);
   border-color: transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Ghost — transparent until interacted with. The most-quiet variant; used
@@ -553,30 +541,24 @@ html, body {
   text-underline-offset: 3px;
 }
 
-/* Worker card — three-piece shadow + 1px lift on hover.
-   The lift is what separates "designed" from "drawn"; pair with the bigger
-   ambient shadow so the card feels genuinely elevated, not just outlined. */
+/* Card — Twenty's recipe. Flat surface, 1px border-medium, no shadow.
+   The previous version layered a 3-piece shadow + 0.5px border + inset
+   highlight; Twenty cards are matter-of-fact sheets that get separation
+   from their border alone. The hover state flips the border to accent
+   and lightly tints the bg; no lift, no ambient shadow change. */
 .card {
   position: relative;
   background: var(--bg-elevated);
-  /* Subpixel border — Plane's signature on quiet containers. 0.5px reads as
-     a hairline on retina displays and pairs better with the shadow's 1px
-     contact line, which now does the "edge" work; the border is reduced
-     to "presence". Border-bright stays so it's still visible on non-retina. */
-  border: 0.5px solid var(--border-bright);
+  border: 1px solid var(--border-bright);
   border-radius: 8px;
-  box-shadow: var(--shadow-card);
   transition:
-    border-color var(--dur-base) var(--ease-out),
-    background var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
-    transform var(--dur-base) var(--ease-out);
+    border-color 100ms ease,
+    background 100ms ease;
 }
 .card--interactive { cursor: pointer; }
 .card--interactive:hover {
   border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
   background: color-mix(in oklab, var(--accent) 4%, var(--bg-elevated));
-  box-shadow: var(--shadow-card-hover);
 }
 
 /* Selectable card — used by RoleCard and AgentChip in the Add Worker dialog
@@ -758,25 +740,19 @@ html, body {
   background: var(--bg-overlay);
 }
 
-/* Canonical Dialog.Overlay surface — frosted-glass effect for hero dialogs.
-   backdrop-filter is unsupported in jsdom (test env) but shipped in every
-   modern desktop browser; degrades gracefully to a solid translucent fill. */
+/* Dialog.Overlay surface — Twenty uses a flat 72% black backdrop, no blur.
+   Hive previously layered blur(10px) + saturate(140%); dropped to match. */
 .app-overlay {
   background: var(--bg-overlay);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
 }
 
 /* Inner top highlight — utility for elevated surfaces (drops a 1px line of
    light at the top edge to fake ambient screen-light reflection). */
 .elev-1 {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 2px 6px rgba(var(--shadow-tint), 0.36);
+  box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.36);
 }
 .elev-2 {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 12px 28px rgba(var(--shadow-tint), 0.46),
     0 4px 10px rgba(var(--shadow-tint), 0.36);
 }
@@ -811,23 +787,28 @@ html, body {
                       scale + opacity around their existing translate.
      • .dialog-scale-pop — dialogs centered by an outer grid layer; scale only.
      • .drawer-pop  — side panels (inset-y-0 right-0), slide in from right. */
+/* Dialog enter/exit — Twenty fades opacity-only over its 300ms `normal`
+   animation token. Previously Hive scaled from 0.94 → 1; the scale was a
+   "designed" tell. Translate keyframes keep `dialog-pop` (centered via
+   transform) anchored; `dialog-scale-pop` (centered by an outer grid)
+   doesn't need transforms at all. */
 @keyframes dialog-overlay-in  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dialog-overlay-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes dialog-pop-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translate(-50%, -50%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 @keyframes dialog-pop-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to   { opacity: 0; transform: translate(-50%, -50%) scale(0.97); }
+  from { opacity: 1; transform: translate(-50%, -50%); }
+  to   { opacity: 0; transform: translate(-50%, -50%); }
 }
 @keyframes dialog-scale-pop-in {
-  from { opacity: 0; transform: scale(0.94); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes dialog-scale-pop-out {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.97); }
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 @keyframes drawer-pop-in {
   from { opacity: 0; transform: translateX(24px); }
@@ -839,9 +820,9 @@ html, body {
 }
 .app-overlay[data-state="open"]  { animation: dialog-overlay-in 180ms var(--ease-out); }
 .app-overlay[data-state="closed"] { animation: dialog-overlay-out 140ms var(--ease-in); }
-.dialog-pop[data-state="open"]   { animation: dialog-pop-in 200ms var(--ease-out) both; }
+.dialog-pop[data-state="open"]   { animation: dialog-pop-in 300ms var(--ease-out) both; }
 .dialog-pop[data-state="closed"] { animation: dialog-pop-out 140ms var(--ease-in) both; }
-.dialog-scale-pop[data-state="open"]   { animation: dialog-scale-pop-in 200ms var(--ease-out) both; }
+.dialog-scale-pop[data-state="open"]   { animation: dialog-scale-pop-in 300ms var(--ease-out) both; }
 .dialog-scale-pop[data-state="closed"] { animation: dialog-scale-pop-out 140ms var(--ease-in) both; }
 .drawer-pop[data-state="open"]   { animation: drawer-pop-in 220ms var(--ease-modal) both; }
 .drawer-pop[data-state="closed"] { animation: drawer-pop-out 160ms var(--ease-in) both; }
@@ -886,9 +867,7 @@ html, body {
     color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
     transform 80ms var(--ease-out);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 2px 6px rgba(0, 0, 0, 0.30);
+  box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.30);
 }
 .float-action:hover {
   background: color-mix(in oklab, var(--bg-2) 85%, transparent);
@@ -900,18 +879,15 @@ html, body {
   outline: none;
   border-color: var(--accent);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 2px 6px rgba(0, 0, 0, 0.30),
-    0 0 0 3px var(--ring-focus);
+    0 2px 6px rgba(var(--shadow-tint), 0.30),
+    0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 .float-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .float-action[data-variant="primary"] {
-  background: color-mix(in oklab, var(--accent) 88%, transparent);
-  color: var(--text-primary);
-  border-color: color-mix(in oklab, #fff 20%, var(--accent));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.35);
 }
 .float-action[data-variant="primary"]:hover {
   background: var(--accent-hover);
@@ -1003,7 +979,6 @@ html, body {
   color: var(--status-orange);
   background: color-mix(in oklab, var(--status-orange) 12%, transparent);
   border: 1px solid color-mix(in oklab, var(--status-orange) 32%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   pointer-events: none;
   white-space: nowrap;
   transition: opacity var(--dur-fast) var(--ease-out);
@@ -1042,16 +1017,11 @@ html, body {
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid var(--border-bright);
-  background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+  background: var(--bg-2);
   color: var(--text-secondary);
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.25);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
@@ -1066,16 +1036,13 @@ html, body {
 .worker-card__action:active { transform: scale(0.94); }
 .worker-card__action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .worker-card__action[data-variant="primary"] {
-  background: color-mix(in oklab, var(--accent) 88%, transparent);
-  border-color: color-mix(in oklab, #fff 18%, var(--accent));
-  color: var(--text-primary);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 1px 2px rgba(0, 0, 0, 0.30);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
 }
 .worker-card__action[data-variant="primary"]:hover {
   background: var(--accent-hover);
-  border-color: color-mix(in oklab, #fff 24%, var(--accent-hover));
+  border-color: var(--accent-hover);
 }
 .worker-card__action[data-variant="danger"]:hover {
   background: color-mix(in oklab, var(--status-red) 14%, transparent);
@@ -1160,20 +1127,17 @@ html, body {
   position: relative;
   display: flex;
   align-items: center;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--bg-1);
   border: 1px solid var(--border-bright);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    border-color 100ms ease,
+    box-shadow 100ms ease;
 }
 .cli-select:hover { border-color: var(--text-tertiary); }
 .cli-select:focus-within {
   border-color: var(--accent);
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.25),
-    0 0 0 3px var(--ring-focus);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 .cli-select__leading {
   position: absolute;
