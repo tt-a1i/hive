@@ -8,6 +8,8 @@ import { useDemoMode } from './demo/useDemoMode.js'
 import { useEffectiveWorkspaceState } from './demo/useEffectiveWorkspaceState.js'
 import { MainLayout } from './layout/MainLayout.js'
 import { Sidebar } from './sidebar/Sidebar.js'
+import { parseTaskMarkdown } from './tasks/task-markdown.js'
+import { useTasksFile } from './tasks/useTasksFile.js'
 import { WorkspaceTaskDrawer } from './tasks/WorkspaceTaskDrawer.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
@@ -28,8 +30,8 @@ const AppInner = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const { activeWorkspaceId, selectWorkspace, setActiveWorkspaceId } = useWorkspaceSelection()
   const { demoMode, enableDemo, exitDemo } = useDemoMode()
-  const localPollId = demoMode ? null : activeWorkspaceId
-  const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(localPollId)
+  const localPollIds = demoMode || !workspaces ? [] : workspaces.map(({ id }) => id)
+  const [workersByWorkspaceId, setWorkersByWorkspaceId] = useWorkspaceWorkers(localPollIds)
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
   const toast = useToast()
@@ -57,6 +59,16 @@ const AppInner = () => {
   const activeId = eff.effectiveActiveWorkspace?.id
   const activeWorkers = activeId ? (eff.effectiveWorkersByWorkspaceId[activeId] ?? []) : []
   const terms = useOptimisticTerminalRuns(eff.pollWorkspaceId, useTerminalRuns(eff.pollWorkspaceId))
+  // Tasks lifted to the app root so Topbar (Blueprint icon) and the
+  // drawer share one fetch + WS subscription. Demo mode uses static
+  // fixture content so the icon still lights up in the showcase.
+  const tasksFile = useTasksFile(
+    demoMode ? null : (activeWorkspaceId ?? null),
+    demoMode ? DEMO_TASKS_MD : undefined
+  )
+  const openTaskCount = eff.effectiveActiveWorkspace
+    ? parseTaskMarkdown(tasksFile.content).filter((task) => !task.checked).length
+    : 0
   const workerActions = useWorkerActions({
     activeWorkspaceId,
     onWorkerDeleted: terms.forgetOptimisticAgent,
@@ -75,6 +87,7 @@ const AppInner = () => {
     <MainLayout
       hideTopbarActions={!eff.effectiveActiveWorkspace}
       onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
+      openTaskCount={openTaskCount}
       sidebar={
         <Sidebar
           activeWorkspaceId={eff.effectiveActiveWorkspaceId}
@@ -101,6 +114,7 @@ const AppInner = () => {
         <WorkspaceDetail
           onCreateWorker={workerActions.createWorker}
           onDeleteWorker={workerActions.deleteWorker}
+          onDeleteWorkspace={deleteWorkspace}
           onStartWorker={workerActions.startWorker}
           onOrchestratorResult={wsCreate.recordOrchestratorResult}
           onRequestAddWorkspace={triggerAddDialog}
@@ -119,9 +133,7 @@ const AppInner = () => {
       )}
       {eff.effectiveActiveWorkspace ? (
         <WorkspaceTaskDrawer
-          demoMode={demoMode}
-          demoContent={DEMO_TASKS_MD}
-          workspaceId={activeWorkspaceId}
+          tasksFile={tasksFile}
           workspacePath={eff.effectiveActiveWorkspace.path}
           open={taskGraphOpen}
           onClose={() => setTaskGraphOpen(false)}
