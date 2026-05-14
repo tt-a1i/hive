@@ -68,7 +68,8 @@ export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: Pty
   }
   const killPty = (signal: NodeJS.Signals) => {
     try {
-      pty.kill(signal)
+      if (process.platform === 'win32') pty.kill()
+      else pty.kill(signal)
     } catch (error) {
       ignoreMissingProcess(error)
     }
@@ -88,7 +89,8 @@ export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: Pty
     forceKillTimer = setTimeout(() => {
       forceKillTimer = undefined
       try {
-        pty.kill('SIGKILL')
+        if (process.platform === 'win32') pty.kill()
+        else pty.kill('SIGKILL')
       } catch (error) {
         ignoreMissingProcess(error)
       }
