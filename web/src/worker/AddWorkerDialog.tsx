@@ -1,9 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, Dices, Info, RotateCcw } from 'lucide-react'
+import { Check, ChevronDown, Dices, RotateCcw } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
+import { useToast } from '../ui/useToast.js'
 import { RoleAvatar } from './RoleAvatar.js'
 
 type AddWorkerDialogProps = {
@@ -79,12 +80,16 @@ const AgentChip = ({
     type="button"
     onClick={onSelect}
     aria-pressed={active}
+    disabled={preset.available === false}
     data-testid={`agent-radio-${preset.id}`}
-    className="selectable-card flex items-center justify-between gap-2 px-3 py-2.5"
+    className="selectable-card flex items-center justify-between gap-2 px-3 py-2.5 disabled:cursor-not-allowed disabled:opacity-45"
   >
     <span className="flex min-w-0 flex-col items-start gap-0.5">
       <span className="truncate text-base font-medium text-pri">{preset.displayName}</span>
-      <span className="mono truncate text-xs text-ter">{preset.command}</span>
+      <span className="mono truncate text-xs text-ter">
+        {preset.command}
+        {preset.available === false ? ' · not found' : ''}
+      </span>
     </span>
     {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
@@ -111,11 +116,13 @@ export const AddWorkerDialog = ({
   workerName,
   workerRole,
 }: AddWorkerDialogProps) => {
+  const toast = useToast()
   const handleClose = (open: boolean) => {
     if (!open) onClose()
   }
   const roleDescriptionModified = roleDescription !== roleDescriptionDefault
   const roleLabel = ROLE_LABELS[workerRole]
+  const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
   // Instructions textarea hides behind a disclosure so the dialog stops feeling
   // like a prompt editor on first open. It auto-expands when the user picks
   // Custom (no default prompt to seed) or when they have already started
@@ -126,15 +133,28 @@ export const AddWorkerDialog = ({
     if (shouldAutoExpandInstructions) setInstructionsOpen(true)
   }, [shouldAutoExpandInstructions])
 
-  // Surface why Submit is disabled — silent grey-out is the worst kind of
-  // form friction, especially after we hide the textarea behind a disclosure.
-  const submitBlockedReason: string | null = !workerName.trim()
-    ? 'Enter a name'
-    : !commandPresetId
-      ? 'Pick a CLI agent'
-      : !roleDescription.trim()
-        ? 'Add role instructions'
-        : null
+  // Validation runs only on submit; we don't pre-disable the Add button so
+  // the user always gets actionable feedback (a warning toast) instead of
+  // a silently-greyed CTA. Returns the first blocking reason or null.
+  const validateBeforeSubmit = (): string | null => {
+    if (!workerName.trim()) return 'Enter a name'
+    if (!commandPresetId) return 'Pick a CLI agent'
+    if (selectedPreset?.available === false) {
+      return `${selectedPreset.displayName} is not installed`
+    }
+    if (!roleDescription.trim()) return 'Add role instructions'
+    return null
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const reason = validateBeforeSubmit()
+    if (reason) {
+      event.preventDefault()
+      toast.show({ kind: 'warning', message: reason })
+      return
+    }
+    onSubmit(event)
+  }
 
   return (
     <Dialog.Root open onOpenChange={handleClose}>
@@ -152,7 +172,7 @@ export const AddWorkerDialog = ({
               borderColor: 'var(--border-bright)',
             }}
           >
-            <form onSubmit={onSubmit} aria-label="Add team member" className="flex flex-col">
+            <form onSubmit={handleSubmit} aria-label="Add team member" className="flex flex-col">
               <div
                 className="flex shrink-0 flex-col gap-0.5 border-b px-5 py-4"
                 style={{ borderColor: 'var(--border)' }}
@@ -174,7 +194,7 @@ export const AddWorkerDialog = ({
                       type="button"
                       aria-label="Generate random member name"
                       title="Generate random member name"
-                      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
+                      className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                       onClick={onRandomName}
                       data-testid="random-worker-name"
                     >
@@ -280,21 +300,9 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex shrink-0 items-center gap-3 border-t px-5 py-3"
+                className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-3"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
-                <span
-                  className="flex items-center gap-1.5 text-sm text-ter"
-                  data-testid="add-worker-submit-hint"
-                >
-                  {submitBlockedReason && !creating ? (
-                    <>
-                      <Info size={12} aria-hidden />
-                      {submitBlockedReason}
-                    </>
-                  ) : null}
-                </span>
-                <div className="flex-1" />
                 <button
                   type="button"
                   onClick={onClose}
@@ -305,7 +313,7 @@ export const AddWorkerDialog = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={creating || submitBlockedReason !== null}
+                  disabled={creating}
                   className="icon-btn icon-btn--primary"
                   data-testid="add-worker-submit"
                 >
