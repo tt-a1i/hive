@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, Dices, RotateCcw } from 'lucide-react'
+import { Check, ChevronDown, Dices, Info, RotateCcw } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
@@ -280,14 +280,21 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex shrink-0 items-center justify-end gap-3 border-t px-6 py-3.5"
+                className="flex shrink-0 items-center gap-3 border-t px-6 py-3.5"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
-                {submitBlockedReason && !creating ? (
-                  <span className="text-[12px] text-ter" data-testid="add-worker-submit-hint">
-                    {submitBlockedReason}
-                  </span>
-                ) : null}
+                <span
+                  className="flex items-center gap-1.5 text-[12px] text-ter"
+                  data-testid="add-worker-submit-hint"
+                >
+                  {submitBlockedReason && !creating ? (
+                    <>
+                      <Info size={12} aria-hidden />
+                      {submitBlockedReason}
+                    </>
+                  ) : null}
+                </span>
+                <div className="flex-1" />
                 <button
                   type="button"
                   onClick={onClose}
