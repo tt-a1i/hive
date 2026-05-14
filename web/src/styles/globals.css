@@ -442,8 +442,8 @@ html, body {
    ambient shadow so the card feels genuinely elevated, not just outlined. */
 .card {
   position: relative;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-bright);
   border-radius: 8px;
   box-shadow: var(--shadow-card);
   transition:
@@ -455,7 +455,7 @@ html, body {
 .card--interactive { cursor: pointer; }
 .card--interactive:hover {
   border-color: color-mix(in oklab, var(--accent) 50%, var(--border-bright));
-  background: color-mix(in oklab, var(--accent) 4%, var(--bg-2));
+  background: color-mix(in oklab, var(--accent) 4%, var(--bg-elevated));
   box-shadow: var(--shadow-card-hover);
 }
 
