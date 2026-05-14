@@ -1,0 +1,60 @@
+import { deriveInitial, pickWorkspaceColor } from './derive-workspace-color.js'
+
+type WorkspaceAvatarProps = {
+  workspaceId: string
+  name: string
+  isActive: boolean
+  /** Surfaces a green pulsing dot when at least one worker is `working`. */
+  working?: boolean
+  size?: number
+}
+
+/**
+ * Discord/Slack-style workspace avatar used by the sidebar in compact mode.
+ * Pairs `pickWorkspaceColor` (deterministic from `workspace.id`) with a single
+ * uppercased initial derived from `name`. Active state is expressed as a 2-px
+ * accent ring; the working flag pins a `.status-dot--working` indicator at
+ * the bottom-right corner.
+ */
+export const WorkspaceAvatar = ({
+  workspaceId,
+  name,
+  isActive,
+  working,
+  size = 32,
+}: WorkspaceAvatarProps) => {
+  const { token: color, label } = pickWorkspaceColor(workspaceId)
+  const initial = deriveInitial(name)
+  return (
+    <span
+      data-testid="workspace-avatar"
+      data-workspace-id={workspaceId}
+      data-active={isActive ? 'true' : undefined}
+      data-color-label={label}
+      className="relative inline-flex shrink-0 items-center justify-center rounded-lg font-semibold"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        fontSize: `${Math.round(size * 0.45)}px`,
+        color,
+        background: `color-mix(in oklab, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
+        boxShadow: isActive ? `0 0 0 2px var(--bg-1), 0 0 0 4px ${color}` : undefined,
+      }}
+      aria-hidden
+    >
+      {initial}
+      {working ? (
+        <span
+          className="status-dot status-dot--working absolute"
+          style={{
+            right: '-2px',
+            bottom: '-2px',
+            boxShadow: '0 0 0 2px var(--bg-1)',
+          }}
+          aria-hidden
+        />
+      ) : null}
+    </span>
+  )
+}

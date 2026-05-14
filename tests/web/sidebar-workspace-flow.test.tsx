@@ -164,10 +164,34 @@ describe('Sidebar EmptyState CTA', () => {
     expect(emptyProps.onCreateClick).toHaveBeenCalledOnce()
   })
 
-  test('non-empty workspaces keeps the dashed bottom New workspace button', () => {
+  test('non-empty workspaces renders the inline ws-add CTA at the end of the list', () => {
     renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
-    const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
-    expect(bottomBtn).toHaveClass('ws-add')
+    const btn = screen.getByRole('button', { name: 'New workspace' })
+    expect(btn).toHaveClass('ws-add')
+    expect(btn).toHaveClass('ws-add--inline')
+    // Must be a child of the workspaces <ul>, not a sibling pinned to the
+    // sidebar footer — that's the "moved into the list" requirement.
+    expect(btn.closest('ul')).not.toBeNull()
+  })
+
+  test('renders both row and compact avatar cell for each workspace', () => {
+    renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
+    // Compact-mode avatar cell is in the DOM (CSS @container hides it at >96px
+    // but jsdom does not evaluate container queries, so we assert DOM presence
+    // + correct content rather than visibility).
+    const avatarCell = screen.getByTestId('ws-avatar-cell')
+    expect(avatarCell).toBeInTheDocument()
+    expect(screen.getByTestId('workspace-avatar')).toHaveTextContent('M')
+    // The same workspace also has the wide-mode row button (different element).
+    const rowButton = avatarCell.parentElement?.querySelector('.ws-row')
+    expect(rowButton).not.toBeNull()
+  })
+
+  test('clicking the compact avatar cell selects the workspace', () => {
+    const onSelectWorkspace = vi.fn()
+    renderSidebar({ ...emptyProps, onSelectWorkspace, workspaces: [fakeWorkspace] })
+    fireEvent.click(screen.getByTestId('ws-avatar-cell'))
+    expect(onSelectWorkspace).toHaveBeenCalledWith(fakeWorkspace.id)
   })
 
   test('runtime-down state disables every New workspace entry point', () => {
@@ -211,15 +235,23 @@ describe('workspace sidebar flow', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
+      expect(
+        screen.getAllByRole('button', { name: 'Alpha' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
     expect(screen.queryByLabelText(/Terminal Alice/)).toBeNull()
     expect(openTerminalSockets()).toHaveLength(0)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
+    const betaRow = screen
+      .getAllByRole('button', { name: 'Beta' })
+      .find((b) => b.classList.contains('ws-row'))
+    if (!betaRow) throw new Error('Expected Beta row button')
+    fireEvent.click(betaRow)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true')
+      expect(
+        screen.getAllByRole('button', { name: 'Beta' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
     await waitFor(async () => {
       const appStateResponse = await nativeFetch(
@@ -250,7 +282,9 @@ describe('workspace sidebar flow', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
+      expect(
+        screen.getAllByRole('button', { name: 'Alpha' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
 
     // Click trash icon → Confirm dialog opens (no native window.confirm).
@@ -263,8 +297,10 @@ describe('workspace sidebar flow', () => {
     fireEvent.click(screen.getByTestId('confirm-action'))
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull()
-      expect(screen.getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-current', 'true')
+      expect(screen.queryAllByRole('button', { name: 'Alpha' })).toHaveLength(0)
+      expect(
+        screen.getAllByRole('button', { name: 'Beta' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
 
     await waitFor(async () => {

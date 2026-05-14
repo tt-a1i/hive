@@ -80,13 +80,14 @@ describe('workspace flow with real server', () => {
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
       target: { value: 'Alpha' },
     })
-    fireEvent.change(within(confirm).getByTestId('workspace-command-preset'), {
-      target: { value: dummyPresetId },
-    })
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset'))
+    fireEvent.click(within(confirm).getByTestId(`workspace-command-preset-option-${dummyPresetId}`))
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
+      expect(
+        screen.getAllByRole('button', { name: 'Alpha' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
 
     // Workspace name + path live in the sidebar (workspace row); the canvas
@@ -139,10 +140,11 @@ describe('workspace flow with real server', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Existing' })).toHaveAttribute(
-        'aria-current',
-        'true'
-      )
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Existing' })
+          .find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
 
     expect(screen.getByTestId('orchestrator-start')).toHaveTextContent('Start Queen')

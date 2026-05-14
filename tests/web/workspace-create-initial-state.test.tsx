@@ -65,7 +65,9 @@ describe('workspace create initial state', () => {
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Alpha' })).toHaveAttribute('aria-current', 'true')
+      expect(
+        screen.getAllByRole('button', { name: 'Alpha' }).find((b) => b.classList.contains('ws-row'))
+      ).toHaveAttribute('aria-current', 'true')
     })
 
     // Sub-header and footer were removed in M6 polish. Workspace identity

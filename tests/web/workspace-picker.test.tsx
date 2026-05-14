@@ -240,9 +240,8 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
 
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
-    fireEvent.change(within(confirm).getByTestId('workspace-command-preset'), {
-      target: { value: 'codex' },
-    })
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset'))
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset-option-codex'))
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     expect(onCreate).toHaveBeenCalledWith({

@@ -5,6 +5,7 @@ import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.j
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { useToast } from '../ui/useToast.js'
+import { WorkspaceAvatar } from './WorkspaceAvatar.js'
 
 type SidebarProps = {
   activeWorkspaceId: string | null
@@ -88,13 +89,13 @@ export const Sidebar = ({
       <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className="text-[10px] font-medium uppercase tracking-wider text-ter"
+            className="ws-sidebar-title__text text-[10px] font-medium uppercase tracking-wider text-ter"
             data-testid="workspace-sidebar-title"
           >
             Workspaces
           </span>
           {workspaces && workspaces.length > 0 ? (
-            <span className="mono rounded bg-2 px-1.5 py-0.5 text-[10px] text-ter">
+            <span className="ws-sidebar-count mono rounded bg-2 px-1.5 py-0.5 text-[10px] text-ter">
               {workspaces.length}
             </span>
           ) : null}
@@ -124,13 +125,15 @@ export const Sidebar = ({
           />
         </div>
       ) : (
-        <ul className="flex-1 scroll-y">
+        <ul className="flex-1 scroll-y pb-2">
           {workspaces.map((workspace) => {
             const workers = workersByWorkspaceId[workspace.id]
             const isActive = workspace.id === activeWorkspaceId
             const hasWorking = hasWorkingMember(workers)
             return (
               <li key={workspace.id} className="group relative">
+                {/* Wide layout — name + path + inline status dot. Hidden by */}
+                {/* `@container ws-sidebar (max-width: 96px)` in globals.css. */}
                 <button
                   type="button"
                   aria-label={workspace.name}
@@ -161,6 +164,24 @@ export const Sidebar = ({
                     {workspace.path}
                   </div>
                 </button>
+                {/* Compact layout — Discord-style square avatar. Shown by the */}
+                {/* same container query when sidebar width is ≤96px. */}
+                <button
+                  type="button"
+                  aria-label={workspace.name}
+                  aria-current={isActive ? 'true' : undefined}
+                  title={`${workspace.name}\n${workspace.path}`}
+                  onClick={() => onSelectWorkspace(workspace.id)}
+                  className="ws-avatar-cell hidden w-full justify-center py-2"
+                  data-testid="ws-avatar-cell"
+                >
+                  <WorkspaceAvatar
+                    workspaceId={workspace.id}
+                    name={workspace.name}
+                    isActive={isActive}
+                    working={hasWorking}
+                  />
+                </button>
                 <button
                   type="button"
                   aria-label={`Delete workspace ${workspace.name}`}
@@ -173,22 +194,25 @@ export const Sidebar = ({
               </li>
             )
           })}
+          {/* New-workspace CTA lives at the bottom of the list (Discord-style)
+              so it appears next to existing workspaces in both wide and compact
+              modes, instead of pinned to the sidebar footer. */}
+          <li>
+            <button
+              type="button"
+              onClick={createDisabled ? undefined : onCreateClick}
+              disabled={createDisabled}
+              aria-label="New workspace"
+              title={createDisabledReason ?? 'New workspace'}
+              className="ws-add ws-add--inline mx-3 mt-1 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: 'var(--border-bright)' }}
+            >
+              <Plus size={13} aria-hidden />
+              <span className="ws-add__label">New workspace</span>
+            </button>
+          </li>
         </ul>
       )}
-      {workspaces && workspaces.length > 0 ? (
-        <button
-          type="button"
-          onClick={createDisabled ? undefined : onCreateClick}
-          disabled={createDisabled}
-          aria-label="New workspace"
-          title={createDisabledReason ?? 'New workspace'}
-          className="ws-add m-2 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs font-medium text-sec transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ borderColor: 'var(--border-bright)' }}
-        >
-          <Plus size={13} aria-hidden />
-          <span className="ws-add__label">New workspace</span>
-        </button>
-      ) : null}
 
       {confirm}
     </nav>
