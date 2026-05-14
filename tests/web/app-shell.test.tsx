@@ -126,7 +126,9 @@ describe('app shell with real server', () => {
     await screen.findByTestId('welcome-pane')
     fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
-    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+    const createButton = within(confirm).getByTestId('confirm-workspace-create')
+    await waitFor(() => expect(createButton).toBeEnabled(), { timeout: 15000 })
+    fireEvent.click(createButton)
 
     expect(
       await screen.findByTestId('add-workspace-error', undefined, { timeout: 15000 })

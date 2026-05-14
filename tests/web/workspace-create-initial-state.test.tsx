@@ -62,7 +62,9 @@ describe('workspace create initial state', () => {
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {
       target: { value: 'Alpha' },
     })
-    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+    const createButton = within(confirm).getByTestId('confirm-workspace-create')
+    await waitFor(() => expect(createButton).toBeEnabled(), { timeout: 15000 })
+    fireEvent.click(createButton)
 
     await waitFor(
       () => {
