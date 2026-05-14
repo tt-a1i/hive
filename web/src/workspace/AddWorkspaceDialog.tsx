@@ -27,15 +27,22 @@ type Stage =
 const DEFAULT_COMMAND_PRESET_ID = 'claude'
 
 const chooseDefaultCommandPresetId = (presets: CommandPreset[]) =>
-  presets.some((preset) => preset.id === DEFAULT_COMMAND_PRESET_ID)
+  presets.some((preset) => preset.id === DEFAULT_COMMAND_PRESET_ID && preset.available)
     ? DEFAULT_COMMAND_PRESET_ID
-    : (presets[0]?.id ?? DEFAULT_COMMAND_PRESET_ID)
+    : (presets.find((preset) => preset.available)?.id ??
+      presets[0]?.id ??
+      DEFAULT_COMMAND_PRESET_ID)
 
 export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceDialogProps) => {
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState(DEFAULT_COMMAND_PRESET_ID)
   const [commandPresetError, setCommandPresetError] = useState<string | null>(null)
+  const commandPresetSnapshotRef = useRef<{
+    error: string | null
+    id: string
+    presets: CommandPreset[]
+  }>({ error: null, id: DEFAULT_COMMAND_PRESET_ID, presets: [] })
   // Keep the latest onClose in a ref so the pick effect can depend only on
   // `trigger`. If we listed onClose in the deps array, a fresh inline lambda
   // from the parent (which is the normal React pattern) would re-fire the
@@ -49,25 +56,34 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     if (trigger === 0) return
     let cancelled = false
     setCommandPresetError(null)
-    void listCommandPresets()
+    const presetsReady = listCommandPresets()
       .then((presets) => {
         if (cancelled) return
-        setCommandPresets(presets)
-        setCommandPresetId((current) =>
-          presets.some((preset) => preset.id === current)
-            ? current
-            : chooseDefaultCommandPresetId(presets)
+        const nextId = presets.some(
+          (preset) => preset.id === commandPresetSnapshotRef.current.id && preset.available
         )
+          ? commandPresetSnapshotRef.current.id
+          : chooseDefaultCommandPresetId(presets)
+        commandPresetSnapshotRef.current = { error: null, id: nextId, presets }
+        setCommandPresets(presets)
+        setCommandPresetId(nextId)
       })
       .catch(() => {
         if (cancelled) return
+        const errorMessage = 'Failed to load CLI presets; using server default.'
+        commandPresetSnapshotRef.current = {
+          error: errorMessage,
+          id: DEFAULT_COMMAND_PRESET_ID,
+          presets: [],
+        }
         setCommandPresets([])
         setCommandPresetId(DEFAULT_COMMAND_PRESET_ID)
-        setCommandPresetError('Failed to load CLI presets; using server default.')
+        setCommandPresetError(errorMessage)
       })
     setStage({ kind: 'picking' })
     pickFolder()
-      .then((result) => {
+      .then(async (result) => {
+        await presetsReady
         if (cancelled) return
         // User canceled the native dialog — dismiss silently without showing
         // any additional UI. This mirrors how macOS Finder handles cancel.
@@ -119,6 +135,22 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
         setStage({ kind: 'error', title: 'Could not create workspace', message })
       })
   }
+
+  const handleCommandPresetChange = (value: string) => {
+    commandPresetSnapshotRef.current = { ...commandPresetSnapshotRef.current, id: value }
+    setCommandPresetId(value)
+  }
+
+  const renderedCommandPresets =
+    commandPresets.length > 0 || commandPresetError
+      ? commandPresets
+      : commandPresetSnapshotRef.current.presets
+  const renderedCommandPresetId =
+    renderedCommandPresets.length > 0 &&
+    !renderedCommandPresets.some((preset) => preset.id === commandPresetId && preset.available)
+      ? commandPresetSnapshotRef.current.id
+      : commandPresetId
+  const renderedCommandPresetError = commandPresetError ?? commandPresetSnapshotRef.current.error
 
   if (stage.kind === 'idle') return null
   if (stage.kind === 'picking') {
@@ -178,10 +210,10 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
                   <AlertTriangle size={18} aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <Dialog.Title className="display text-[15px] font-medium text-pri">
+                  <Dialog.Title className="text-lg font-medium text-pri">
                     {stage.title ?? 'Folder picker failed'}
                   </Dialog.Title>
-                  <Dialog.Description className="mt-1.5 break-words text-[12px] leading-snug text-ter">
+                  <Dialog.Description className="mt-1.5 break-words text-sm leading-snug text-ter">
                     {stage.message}
                   </Dialog.Description>
                 </div>
@@ -207,11 +239,11 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
   if (stage.kind === 'browse') {
     return (
       <ServerBrowseDialog
-        commandPresetError={commandPresetError}
-        commandPresetId={commandPresetId}
-        commandPresets={commandPresets}
+        commandPresetError={renderedCommandPresetError}
+        commandPresetId={renderedCommandPresetId}
+        commandPresets={renderedCommandPresets}
         onClose={handleCancel}
-        onCommandPresetChange={setCommandPresetId}
+        onCommandPresetChange={handleCommandPresetChange}
         onCreate={handleCreate}
         open
       />
@@ -219,13 +251,13 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
   }
   return (
     <ConfirmWorkspaceDialog
-      commandPresetError={commandPresetError}
-      commandPresetId={commandPresetId}
-      commandPresets={commandPresets}
+      commandPresetError={renderedCommandPresetError}
+      commandPresetId={renderedCommandPresetId}
+      commandPresets={renderedCommandPresets}
       pasteFallbackDefault={stage.pasteDefault}
       probe={stage.probe}
       onCancel={handleCancel}
-      onCommandPresetChange={setCommandPresetId}
+      onCommandPresetChange={handleCommandPresetChange}
       onCreate={handleCreate}
       onOpenServerBrowse={() => setStage({ kind: 'browse' })}
     />

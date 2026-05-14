@@ -61,7 +61,7 @@ const RoleCard = ({
     className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-2.5 px-3 py-2.5`}
   >
     <RoleAvatar role={spec.value} size={22} />
-    <span className="flex-1 text-left text-[13px] font-medium text-pri">{spec.label}</span>
+    <span className="flex-1 text-left text-base font-medium text-pri">{spec.label}</span>
     {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
 )
@@ -83,15 +83,15 @@ const AgentChip = ({
     className="selectable-card flex items-center justify-between gap-2 px-3 py-2.5"
   >
     <span className="flex min-w-0 flex-col items-start gap-0.5">
-      <span className="truncate text-[13px] font-medium text-pri">{preset.displayName}</span>
-      <span className="mono truncate text-[10px] text-ter">{preset.command}</span>
+      <span className="truncate text-base font-medium text-pri">{preset.displayName}</span>
+      <span className="mono truncate text-xs text-ter">{preset.command}</span>
     </span>
     {active ? <Check size={13} className="shrink-0 text-accent" aria-hidden /> : null}
   </button>
 )
 
 const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-  <span className="text-[12px] font-medium text-sec">{children}</span>
+  <span className="text-sm font-medium text-sec">{children}</span>
 )
 
 export const AddWorkerDialog = ({
@@ -157,10 +157,10 @@ export const AddWorkerDialog = ({
                 className="flex shrink-0 flex-col gap-0.5 border-b px-6 pt-5 pb-4"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <Dialog.Title className="display text-[15px] font-medium text-pri">
+                <Dialog.Title className="text-lg font-medium text-pri">
                   Add team member
                 </Dialog.Title>
-                <Dialog.Description className="text-[12px] text-ter">
+                <Dialog.Description className="text-sm text-ter">
                   Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
                   <span className="mono">team send</span>.
                 </Dialog.Description>
@@ -174,7 +174,7 @@ export const AddWorkerDialog = ({
                       type="button"
                       aria-label="Generate random member name"
                       title="Generate random member name"
-                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ter transition-colors hover:bg-3 hover:text-sec"
+                      className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                       onClick={onRandomName}
                       data-testid="random-worker-name"
                     >
@@ -222,7 +222,7 @@ export const AddWorkerDialog = ({
                       />
                       <SectionLabel>Role instructions</SectionLabel>
                       {roleDescriptionModified ? (
-                        <span className="text-[12px] text-ter">
+                        <span className="text-sm text-ter">
                           · Modified from {roleLabel} default
                         </span>
                       ) : null}
@@ -230,7 +230,7 @@ export const AddWorkerDialog = ({
                     {roleDescriptionModified ? (
                       <button
                         type="button"
-                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ter transition-colors hover:bg-3 hover:text-sec"
+                        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
@@ -263,7 +263,7 @@ export const AddWorkerDialog = ({
                 <div className="flex flex-col gap-2">
                   <SectionLabel>Agent CLI</SectionLabel>
                   {commandPresets.length === 0 ? (
-                    <div className="text-[12px] text-ter">Loading presets…</div>
+                    <div className="text-sm text-ter">Loading presets…</div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       {commandPresets.map((preset) => (
@@ -284,7 +284,7 @@ export const AddWorkerDialog = ({
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
                 <span
-                  className="flex items-center gap-1.5 text-[12px] text-ter"
+                  className="flex items-center gap-1.5 text-sm text-ter"
                   data-testid="add-worker-submit-hint"
                 >
                   {submitBlockedReason && !creating ? (

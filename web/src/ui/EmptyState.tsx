@@ -24,20 +24,19 @@ export const EmptyState = ({ title, description, icon, action }: EmptyStateProps
       <div
         data-testid="empty-state-icon"
         aria-hidden
-        className="flex h-12 w-12 items-center justify-center rounded-xl text-sec"
+        className="flex h-12 w-12 items-center justify-center rounded-lg text-sec"
         style={{
           background: 'var(--bg-2)',
           border: '1px solid var(--border-bright)',
-          boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 12px rgba(0, 0, 0, 0.3)',
         }}
       >
         {icon}
       </div>
     ) : null}
-    <div className="text-md font-medium text-pri" data-testid="empty-state-title">
+    <div className="text-lg font-semibold text-pri" data-testid="empty-state-title">
       {title}
     </div>
-    <div className="text-sm leading-relaxed text-ter" data-testid="empty-state-description">
+    <div className="text-sm text-ter" data-testid="empty-state-description">
       {description}
     </div>
     {action}

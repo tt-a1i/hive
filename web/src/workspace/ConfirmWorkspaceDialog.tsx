@@ -23,7 +23,7 @@ type ConfirmWorkspaceDialogProps = {
 const basenameOf = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? ''
 
 const FieldLabel = ({ children }: { children: React.ReactNode }) => (
-  <span className="text-[10px] font-medium uppercase tracking-wider text-ter">{children}</span>
+  <span className="text-xs font-medium uppercase tracking-wider text-ter">{children}</span>
 )
 
 export const ConfirmWorkspaceDialog = ({
@@ -52,7 +52,18 @@ export const ConfirmWorkspaceDialog = ({
 
   const pastedClean = pastePath.trim()
   const resolvedPath = pasteExpanded && pastedClean.length > 0 ? pastedClean : (probe?.path ?? '')
-  const canCreate = name.trim().length > 0 && resolvedPath.length > 0
+  const startupClean = startupCommand.trim()
+  const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
+  const presetsLoading = commandPresets.length === 0 && !commandPresetError
+  const selectedPresetUnavailable = selectedPreset?.available === false && startupClean.length === 0
+  const presetAvailabilityError = selectedPresetUnavailable
+    ? `${selectedPreset.displayName} is not installed. Choose another CLI or add a custom startup command.`
+    : null
+  const canCreate =
+    name.trim().length > 0 &&
+    resolvedPath.length > 0 &&
+    !presetsLoading &&
+    !selectedPresetUnavailable
 
   const handleCreate = () => {
     if (!canCreate) return
@@ -60,7 +71,7 @@ export const ConfirmWorkspaceDialog = ({
       commandPresetId: commandPresetId || null,
       name: name.trim(),
       path: resolvedPath,
-      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
+      ...(startupClean ? { startupCommand: startupClean } : {}),
     })
   }
 
@@ -94,10 +105,8 @@ export const ConfirmWorkspaceDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="display text-[15px] font-medium text-pri">
-                  Add workspace
-                </Dialog.Title>
-                <Dialog.Description className="text-[11px] text-ter">
+                <Dialog.Title className="text-lg font-medium text-pri">Add workspace</Dialog.Title>
+                <Dialog.Description className="text-xs text-ter">
                   Hive will load <span className="mono">.hive/tasks.md</span> and start the
                   Orchestrator here.
                 </Dialog.Description>
@@ -118,7 +127,7 @@ export const ConfirmWorkspaceDialog = ({
 
               {probe?.is_git_repository ? (
                 <div
-                  className="flex items-center gap-2 text-[11px]"
+                  className="flex items-center gap-2 text-xs"
                   data-testid="confirm-workspace-git-badge"
                 >
                   <span
@@ -135,7 +144,7 @@ export const ConfirmWorkspaceDialog = ({
                   <span className="text-ter">git repository detected</span>
                 </div>
               ) : probe?.ok ? (
-                <span className="text-[11px] text-ter">No git repository at this path.</span>
+                <span className="text-xs text-ter">No git repository at this path.</span>
               ) : null}
 
               <label className="flex flex-col gap-1.5">
@@ -150,7 +159,7 @@ export const ConfirmWorkspaceDialog = ({
               </label>
 
               <WorkspaceCommandPresetSelect
-                error={commandPresetError}
+                error={commandPresetError ?? presetAvailabilityError}
                 onChange={onCommandPresetChange}
                 presets={commandPresets}
                 value={commandPresetId}
@@ -159,7 +168,7 @@ export const ConfirmWorkspaceDialog = ({
               <button
                 type="button"
                 onClick={() => setStartupExpanded((v) => !v)}
-                className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
                 data-testid="confirm-workspace-startup-toggle"
               >
                 {startupExpanded ? (
@@ -180,8 +189,9 @@ export const ConfirmWorkspaceDialog = ({
                     className="input mono"
                     data-testid="confirm-workspace-startup-command"
                   />
-                  <span className="text-[11px] text-ter">
-                    Overrides the preset for this Orchestrator. Runs in the workspace directory.
+                  <span className="text-xs text-ter">
+                    Overrides the preset for this Orchestrator. Runs in the workspace directory
+                    through your login shell, so only paste commands you trust.
                   </span>
                 </label>
               ) : null}
@@ -189,7 +199,7 @@ export const ConfirmWorkspaceDialog = ({
               <button
                 type="button"
                 onClick={() => setPasteExpanded((v) => !v)}
-                className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
                 data-testid="confirm-workspace-paste-toggle"
               >
                 {pasteExpanded ? (
@@ -216,7 +226,7 @@ export const ConfirmWorkspaceDialog = ({
               <button
                 type="button"
                 onClick={onOpenServerBrowse}
-                className="flex items-center gap-1.5 self-start text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                className="flex items-center gap-1.5 self-start text-xs uppercase tracking-wider text-ter hover:text-sec"
                 data-testid="confirm-workspace-browse-toggle"
               >
                 <ChevronRight size={11} aria-hidden />

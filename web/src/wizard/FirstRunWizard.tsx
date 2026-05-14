@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 type FirstRunWizardProps = {
   open: boolean
-  onClose: () => void
+  onClose: (shouldMarkSeen?: boolean) => void
   onAddWorkspace: () => void
   onTryDemo: () => void
 }
@@ -24,9 +24,9 @@ export const FirstRunWizard = ({
     }
   }
 
-  const handleClose = () => {
+  const handleClose = (shouldMarkSeen = true) => {
     setSlideIdx(0)
-    onClose()
+    onClose(shouldMarkSeen)
   }
 
   const isLastSlide = slideIdx === 2
@@ -65,7 +65,7 @@ export const FirstRunWizard = ({
                   </div>
                   <div className="space-y-2">
                     {/* Dialog.Title IS the visible welcome heading on slide 0 */}
-                    <Dialog.Title className="display text-xl font-semibold text-pri">
+                    <Dialog.Title className="text-xl font-semibold text-pri">
                       Welcome to Hive
                     </Dialog.Title>
                     <p className="text-sm text-sec">
@@ -84,7 +84,7 @@ export const FirstRunWizard = ({
 
               {slideIdx === 1 && (
                 <div className="flex flex-col gap-4 py-2">
-                  <h2 className="display text-lg font-semibold text-pri">How it works</h2>
+                  <h2 className="text-lg font-semibold text-pri">How it works</h2>
                   <ol className="flex flex-col gap-3">
                     {[
                       {
@@ -126,14 +126,14 @@ export const FirstRunWizard = ({
 
               {slideIdx === 2 && (
                 <div className="flex flex-col gap-3 py-2">
-                  <h2 className="display text-lg font-semibold text-pri">Get started</h2>
+                  <h2 className="text-lg font-semibold text-pri">Get started</h2>
                   <p className="text-sm text-sec">Choose how you want to begin.</p>
                   <div className="mt-2 flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         onAddWorkspace()
-                        handleClose()
+                        handleClose(false)
                       }}
                       className="icon-btn icon-btn--primary w-full justify-center"
                     >
@@ -143,7 +143,7 @@ export const FirstRunWizard = ({
                       type="button"
                       onClick={() => {
                         onTryDemo()
-                        handleClose()
+                        handleClose(true)
                       }}
                       className="icon-btn w-full justify-center"
                     >
@@ -151,7 +151,7 @@ export const FirstRunWizard = ({
                     </button>
                     <button
                       type="button"
-                      onClick={handleClose}
+                      onClick={() => handleClose()}
                       className="text-xs text-sec underline hover:text-pri mt-1"
                     >
                       Skip for now
@@ -185,7 +185,7 @@ export const FirstRunWizard = ({
                 )}
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={() => handleClose()}
                   className="text-xs text-ter underline hover:text-sec"
                 >
                   Skip

@@ -72,7 +72,7 @@ export const RenameWorkerDialog = ({
                   <Pencil size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <Dialog.Title className="display text-lg font-medium text-pri">
+                  <Dialog.Title className="text-lg font-medium text-pri">
                     Rename team member
                   </Dialog.Title>
                   <Dialog.Description className="mt-1 text-sm leading-relaxed text-ter">

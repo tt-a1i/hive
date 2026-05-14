@@ -61,7 +61,8 @@
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
-  --text-lg: 15px;
+  --text-md: 13px;
+  --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 24px;
 }
@@ -167,14 +168,7 @@
   color-scheme: dark;
 }
 
-/* Universal text rendering — UI app: tabular numerics + Inter cv11 (single-storey 1). */
-html, body {
-  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1, "ss03" 1;
-  -moz-osx-font-smoothing: grayscale;
-  caret-color: var(--accent);
-}
-/* Subtle accent-tinted selection — Linear-style. 22% reads as confidently
-   highlighted without screaming, vs. the 32% it used to be. */
+/* Accent-tinted selection. 22% reads as highlighted without shouting. */
 ::selection {
   background: color-mix(in oklab, var(--accent) 22%, transparent);
   color: var(--text-primary);
@@ -187,28 +181,24 @@ html, body {
   overflow: hidden;
   background: var(--bg-0);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   line-height: 1.5;
-  /* Inter at native kerning. The previous tracking tweaks (-0.011em body,
-     -0.02em display) were the kind of polish that paradoxically reads as
-     "AI-tuned" — Twenty, the reference we're aligning to, runs Inter with
-     no tracking adjustment at all. Trust the typeface's own metrics. */
+  -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  caret-color: var(--accent);
+  /* No font-feature-settings, no text-rendering, no letter-spacing.
+     Twenty doesn't set any of these and trusts Inter's native metrics —
+     the previous tweaks (tnum + cv11 + ss01 + ss03 + optimizeLegibility +
+     -0.011em tracking) were the loudest "AI-polished" tell in the file. */
 }
 
 #root { height: 100%; }
 
-/* DM Mono — Twenty's monospace. Slightly more open than JetBrains Mono;
-   reads as "designed" rather than "engineer default" in dense table cells. */
+/* DM Mono — Twenty's monospace. */
 .mono {
   font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-/* The .display utility used to add -0.02em tracking; Twenty doesn't, so we
-   don't either. Keeping the class as a no-op so existing markup still
-   compiles without dragging through every <Dialog.Title>. */
-.display { letter-spacing: 0; }
 
 /* Linear dark palette helpers (class sugar) */
 .bg-0 { background: var(--bg-0); }
@@ -734,7 +724,7 @@ html, body {
   padding: 0 7px;
   color: var(--status-blue);
   background: color-mix(in oklab, var(--status-blue) 10%, transparent);
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
 

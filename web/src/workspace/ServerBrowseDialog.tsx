@@ -60,8 +60,18 @@ export const ServerBrowseDialog = ({
   if (!open) return null
 
   const breadcrumbs = buildBreadcrumbs(browse.current_path, browse.root_path)
+  const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
+  const startupClean = startupCommand.trim()
+  const presetsLoading = commandPresets.length === 0 && !commandPresetError
+  const selectedPresetUnavailable = selectedPreset?.available === false && startupClean.length === 0
+  const presetAvailabilityError = selectedPresetUnavailable
+    ? `${selectedPreset.displayName} is not installed. Choose another CLI or add a custom startup command.`
+    : null
   const canCreate =
-    name.trim().length > 0 && (probe?.is_dir === true || (advanced && manualPath.trim().length > 0))
+    name.trim().length > 0 &&
+    (probe?.is_dir === true || (advanced && manualPath.trim().length > 0)) &&
+    !presetsLoading &&
+    !selectedPresetUnavailable
 
   const handleCreate = () => {
     const path = advanced && manualPath.trim().length > 0 ? manualPath.trim() : (probe?.path ?? '')
@@ -70,7 +80,7 @@ export const ServerBrowseDialog = ({
       commandPresetId: commandPresetId || null,
       name: name.trim(),
       path,
-      ...(startupCommand.trim() ? { startupCommand: startupCommand.trim() } : {}),
+      ...(startupClean ? { startupCommand: startupClean } : {}),
     })
   }
 
@@ -109,11 +119,11 @@ export const ServerBrowseDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="display text-[15px] font-medium text-pri">
+                <Dialog.Title className="text-lg font-medium text-pri">
                   Browse server filesystem
                 </Dialog.Title>
                 <Dialog.Description
-                  className="mono truncate text-[11px] text-ter"
+                  className="mono truncate text-xs text-ter"
                   data-testid="fs-root-path"
                 >
                   root: {browse.root_path || '(loading)'}
@@ -188,7 +198,7 @@ export const ServerBrowseDialog = ({
                   suggestedName={name}
                 />
                 <WorkspaceCommandPresetSelect
-                  error={commandPresetError}
+                  error={commandPresetError ?? presetAvailabilityError}
                   onChange={onCommandPresetChange}
                   presets={commandPresets}
                   value={commandPresetId}
@@ -196,7 +206,7 @@ export const ServerBrowseDialog = ({
                 <button
                   type="button"
                   onClick={() => setStartupExpanded((v) => !v)}
-                  className="flex items-center gap-1.5 text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                  className="flex items-center gap-1.5 text-left text-xs uppercase tracking-wider text-ter hover:text-sec"
                 >
                   {startupExpanded ? (
                     <ChevronDown size={11} aria-hidden />
@@ -206,7 +216,7 @@ export const ServerBrowseDialog = ({
                   Advanced: startup command
                 </button>
                 {startupExpanded ? (
-                  <label className="flex flex-col gap-1.5 text-[10px] uppercase tracking-wider text-ter">
+                  <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-ter">
                     Startup command
                     <input
                       type="text"
@@ -216,12 +226,16 @@ export const ServerBrowseDialog = ({
                       className="input mono"
                       data-testid="fs-startup-command"
                     />
+                    <span className="text-xs normal-case tracking-normal text-ter">
+                      Runs through your login shell in the workspace directory. Only paste commands
+                      you trust.
+                    </span>
                   </label>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => setAdvanced((v) => !v)}
-                  className="flex items-center gap-1.5 text-left text-[10px] uppercase tracking-wider text-ter hover:text-sec"
+                  className="flex items-center gap-1.5 text-left text-xs uppercase tracking-wider text-ter hover:text-sec"
                 >
                   {advanced ? (
                     <ChevronDown size={11} aria-hidden />
@@ -231,7 +245,7 @@ export const ServerBrowseDialog = ({
                   Advanced: paste path
                 </button>
                 {advanced ? (
-                  <label className="flex flex-col gap-1.5 text-[10px] uppercase tracking-wider text-ter">
+                  <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-ter">
                     Absolute path
                     <input
                       type="text"
