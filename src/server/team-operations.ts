@@ -19,10 +19,15 @@ export interface TeamOperationsInput {
   }) => DispatchRecord
   deleteDispatch: (dispatchId: string) => void
   deleteMessage: (handle: MessageLogHandle) => void
-  findOpenDispatch: (workspaceId: string, toAgentId: string) => DispatchRecord | undefined
+  findOpenDispatch: (
+    workspaceId: string,
+    toAgentId: string,
+    dispatchId?: string
+  ) => DispatchRecord | undefined
   insertMessage: (record: MessageLogRecord) => MessageLogHandle
   markDispatchReportedByWorker: (input: {
     artifacts: string[]
+    dispatchId?: string
     reportText: string
     toAgentId: string
     workspaceId: string
@@ -38,6 +43,7 @@ export interface DispatchTaskInput {
 
 export interface ReportTaskInput {
   artifacts?: string[]
+  dispatchId?: string
   requireActiveRun?: boolean
   status?: string
   text?: string
@@ -110,7 +116,14 @@ export const createTeamOperations = ({
         await ensureWorkerRun(workspaceId, workerId, input.hivePort ?? '')
         const worker = workspaceStore.getWorker(workspaceId, workerId)
         markDispatchSubmitted(dispatch.id)
-        agentRuntime.writeSendPrompt(workspaceId, workerId, sender.name, worker.description, text)
+        agentRuntime.writeSendPrompt(
+          workspaceId,
+          workerId,
+          dispatch.id,
+          sender.name,
+          worker.description,
+          text
+        )
       }
 
       workspaceStore.markTaskDispatched(workspaceId, workerId)
@@ -149,7 +162,7 @@ export const createTeamOperations = ({
       ) {
         throw new PtyInactiveError(`No active run for agent: ${workspaceId}:orchestrator`)
       }
-      const openDispatch = findOpenDispatch(workspaceId, workerId)
+      const openDispatch = findOpenDispatch(workspaceId, workerId, input.dispatchId)
       if (!openDispatch) {
         throw new ConflictError(`No open dispatch for worker: ${worker.name}`)
       }
@@ -164,6 +177,7 @@ export const createTeamOperations = ({
         }
         const dispatch = markDispatchReportedByWorker({
           artifacts,
+          ...(input.dispatchId ? { dispatchId: input.dispatchId } : {}),
           reportText: text,
           toAgentId: workerId,
           workspaceId,

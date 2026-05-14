@@ -193,6 +193,54 @@ describe('team cli with real server', () => {
     ).toEqual([])
   })
 
+  test('team report --dispatch reports the selected open dispatch', async () => {
+    if (!serverStore) {
+      throw new Error('Expected test server store')
+    }
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runTeamCommand(['send', 'Alice', 'First task'])
+    await runTeamCommand(['send', 'Alice', 'Second task'])
+    const firstDispatch = JSON.parse(logSpy.mock.calls[0]?.[0] ?? '{}') as {
+      dispatch_id: string
+    }
+    const secondDispatch = JSON.parse(logSpy.mock.calls[1]?.[0] ?? '{}') as {
+      dispatch_id: string
+    }
+    logSpy.mockRestore()
+
+    const workerToken = serverStore.peekAgentToken(workerId)
+    if (!workerToken) {
+      throw new Error('Expected worker token after start')
+    }
+    process.env.HIVE_AGENT_ID = workerId
+    process.env.HIVE_AGENT_TOKEN = workerToken
+
+    await runTeamCommand(['report', 'Second done', '--dispatch', secondDispatch.dispatch_id])
+
+    const workspaceId = process.env.HIVE_PROJECT_ID
+    if (!workspaceId) {
+      throw new Error('Expected workspace id')
+    }
+
+    expect(serverStore.listDispatches(workspaceId)).toEqual([
+      expect.objectContaining({
+        id: firstDispatch.dispatch_id,
+        reportText: null,
+        status: 'submitted',
+      }),
+      expect.objectContaining({
+        id: secondDispatch.dispatch_id,
+        reportText: 'Second done',
+        status: 'reported',
+      }),
+    ])
+    expect(serverStore.getWorker(workspaceId, workerId)).toMatchObject({
+      pendingTaskCount: 1,
+      status: 'working',
+    })
+  })
+
   test('team list surfaces 403 when a worker token is used', async () => {
     if (!serverStore) {
       throw new Error('Expected test server store')

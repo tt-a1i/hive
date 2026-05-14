@@ -69,6 +69,7 @@ export const createAgentStdinDispatcher = ({
     writeSendPrompt(
       workspaceId: string,
       workerId: string,
+      dispatchId: string,
       fromAgentName: string,
       workerDescription: string,
       text: string
@@ -82,8 +83,10 @@ export const createAgentStdinDispatcher = ({
           `你的角色：${workerDescription}`,
           '',
           '你必须遵守：',
-          '- 完成、失败、阻塞或部分完成后，执行 `team report "<完整汇报>"`',
+          `- 完成、失败、阻塞或部分完成后，执行 \`team report "<完整汇报>" --dispatch ${dispatchId}\``,
           '- 不要做无关的事，做完就 report',
+          '',
+          `dispatch_id: ${dispatchId}`,
           '',
           '任务内容：',
           text,

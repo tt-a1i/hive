@@ -45,6 +45,7 @@ interface CreateDispatchInput {
 
 interface ReportDispatchInput {
   artifacts: string[]
+  dispatchId?: string
   reportText: string
   toAgentId: string
   workspaceId: string
@@ -170,16 +171,36 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
     ).run('submitted', submittedAt, dispatchId)
   }
 
-  const findOpenDispatch = (workspaceId: string, toAgentId: string) => {
+  const findOpenDispatch = (workspaceId: string, toAgentId: string, dispatchId?: string) => {
     if (!db) {
-      return Array.from(memoryDispatches.values())
-        .filter(
-          (record) =>
-            record.workspaceId === workspaceId &&
-            record.toAgentId === toAgentId &&
-            record.status !== 'reported'
+      const openDispatches = Array.from(memoryDispatches.values()).filter(
+        (record) =>
+          record.workspaceId === workspaceId &&
+          record.toAgentId === toAgentId &&
+          record.status !== 'reported'
+      )
+      if (dispatchId) {
+        return openDispatches.find((record) => record.id === dispatchId)
+      }
+      return openDispatches.sort(
+        (a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt)
+      )[0]
+    }
+
+    if (dispatchId) {
+      const row = db
+        .prepare(
+          `SELECT *
+           FROM dispatches
+           WHERE id = ?
+             AND workspace_id = ?
+             AND to_agent_id = ?
+             AND status != 'reported'
+           LIMIT 1`
         )
-        .sort((a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt))[0]
+        .get(dispatchId, workspaceId, toAgentId) as DispatchRow | undefined
+
+      return row ? toRecord(row) : undefined
     }
 
     const row = db
@@ -198,7 +219,7 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   }
 
   const markReportedByWorker = (input: ReportDispatchInput) => {
-    const dispatch = findOpenDispatch(input.workspaceId, input.toAgentId)
+    const dispatch = findOpenDispatch(input.workspaceId, input.toAgentId, input.dispatchId)
     if (!dispatch) {
       return undefined
     }

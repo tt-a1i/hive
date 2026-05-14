@@ -47,6 +47,7 @@ export interface AgentRuntime {
   writeSendPrompt: (
     workspaceId: string,
     workerId: string,
+    dispatchId: string,
     fromAgentName: string,
     workerDescription: string,
     text: string

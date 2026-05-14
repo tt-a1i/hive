@@ -67,7 +67,7 @@ describe('team prompt contract', () => {
     })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
-    await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
+    const dispatch = await store.dispatchTaskByWorkerName(workspace.id, 'Alice', '实现登录', {
       fromAgentId: orchestrator.id,
     })
 
@@ -76,7 +76,8 @@ describe('team prompt contract', () => {
       const output = run?.output.replace(/\r\n/g, '\n')
       expect(output).toContain('@Orchestrator')
       expect(output).toContain(`你的角色：${worker.description}`)
-      expect(output).toContain('执行 `team report "<完整汇报>"`')
+      expect(output).toContain(`执行 \`team report "<完整汇报>" --dispatch ${dispatch.id}\``)
+      expect(output).toContain(`dispatch_id: ${dispatch.id}`)
       expect(output).not.toContain('--success')
       expect(output).not.toContain('--failed')
       expect(output?.trimEnd()).toMatch(/实现登录$/)

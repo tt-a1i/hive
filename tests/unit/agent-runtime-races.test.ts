@@ -174,7 +174,14 @@ describe('agent runtime races (unit)', () => {
     })
 
     expect(() =>
-      runtime.writeSendPrompt('ws-1', 'agent-1', 'Orchestrator', 'Coder role', 'Implement login')
+      runtime.writeSendPrompt(
+        'ws-1',
+        'agent-1',
+        'dispatch-1',
+        'Orchestrator',
+        'Coder role',
+        'Implement login'
+      )
     ).toThrow(/EPIPE/)
 
     expect(writes).toHaveLength(1)

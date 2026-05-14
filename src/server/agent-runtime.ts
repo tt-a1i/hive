@@ -139,8 +139,15 @@ export const createAgentRuntime = (
     writeReportPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
       stdinDispatcher.writeReportPrompt(workspaceId, workerName, text, artifacts, input)
     },
-    writeSendPrompt(workspaceId, workerId, fromAgentName, workerDescription, text) {
-      stdinDispatcher.writeSendPrompt(workspaceId, workerId, fromAgentName, workerDescription, text)
+    writeSendPrompt(workspaceId, workerId, dispatchId, fromAgentName, workerDescription, text) {
+      stdinDispatcher.writeSendPrompt(
+        workspaceId,
+        workerId,
+        dispatchId,
+        fromAgentName,
+        workerDescription,
+        text
+      )
     },
     writeUserInputPrompt(workspaceId, text) {
       stdinDispatcher.writeUserInputPrompt(workspaceId, text)

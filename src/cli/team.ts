@@ -21,7 +21,7 @@ const TEAM_USAGE = [
   'Usage:',
   '  team list',
   '  team send <worker-name> "<task>"',
-  '  team report "<result>" [--artifact <path>]',
+  '  team report "<result>" [--dispatch <dispatch-id>] [--artifact <path>]',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -98,10 +98,11 @@ const postJson = async (baseUrl: string, path: string, body: unknown) => {
 const parseReportArgs = (args: string[]) => {
   const [result, ...rest] = args
   if (!result) {
-    throw new Error('Usage: team report <result> [--artifact <path>]')
+    throw new Error('Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]')
   }
 
   const artifacts: string[] = []
+  let dispatchId: string | undefined
 
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index]
@@ -114,7 +115,9 @@ const parseReportArgs = (args: string[]) => {
     if (arg === '--artifact') {
       const artifactPath = rest[index + 1]
       if (!artifactPath) {
-        throw new Error('Usage: team report <result> [--artifact <path>]')
+        throw new Error(
+          'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+        )
       }
 
       artifacts.push(artifactPath)
@@ -122,10 +125,23 @@ const parseReportArgs = (args: string[]) => {
       continue
     }
 
+    if (arg === '--dispatch') {
+      const nextDispatchId = rest[index + 1]
+      if (!nextDispatchId) {
+        throw new Error(
+          'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+        )
+      }
+
+      dispatchId = nextDispatchId
+      index += 1
+      continue
+    }
+
     throw new Error(`Unknown argument: ${arg}`)
   }
 
-  return { result, artifacts }
+  return { result, artifacts, dispatchId }
 }
 
 export const runTeamCommand = async (argv: string[]) => {
@@ -181,6 +197,7 @@ export const runTeamCommand = async (argv: string[]) => {
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     await postJson(baseUrl, '/api/team/report', {
+      ...(report.dispatchId ? { dispatch_id: report.dispatchId } : {}),
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,

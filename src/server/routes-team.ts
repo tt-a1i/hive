@@ -32,6 +32,7 @@ export const teamRoutes: RouteDefinition[] = [
     requireCommandForRole(agent, 'report')
     const reportInput = {
       artifacts: (body.artifacts ?? []).filter((item): item is string => typeof item === 'string'),
+      ...(typeof body.dispatch_id === 'string' ? { dispatchId: body.dispatch_id } : {}),
       requireActiveRun: true,
       text: body.result,
     }

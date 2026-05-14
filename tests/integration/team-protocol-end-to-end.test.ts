@@ -137,6 +137,7 @@ describe('team protocol end to end', () => {
         }
       )
       expect(workerStart.status).toBe(201)
+      const workerStartBody = (await workerStart.json()) as { run_id: string }
 
       const sendResponse = await fetch(`${baseUrl}/api/team/send`, {
         method: 'POST',
@@ -154,6 +155,16 @@ describe('team protocol end to end', () => {
       expect(sendBody.dispatch_id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
       )
+
+      await waitFor(async () => {
+        const workerRunResponse = await fetch(
+          `${baseUrl}/api/runtime/runs/${workerStartBody.run_id}`,
+          { headers: { cookie } }
+        )
+        const body = (await workerRunResponse.json()) as { output: string }
+        expect(body.output).toContain(`dispatch_id: ${sendBody.dispatch_id}`)
+        expect(body.output).toContain(`team report "<完整汇报>" --dispatch ${sendBody.dispatch_id}`)
+      })
 
       const activeDispatchesResponse = await fetch(
         `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches`,
@@ -211,13 +222,14 @@ describe('team protocol end to end', () => {
           project_id: workspace.id,
           from_agent_id: worker.id,
           token: hive.store.peekAgentToken(worker.id),
-          result: '已完成登录接口',
-          artifacts: ['src/auth.ts'],
+          result: '补充测试已完成',
+          dispatch_id: secondSendBody.dispatch_id,
+          artifacts: ['tests/auth.test.ts'],
         }),
       })
       expect(reportResponse.status).toBe(202)
       const reportBody = (await reportResponse.json()) as { dispatch_id: string; ok: true }
-      expect(reportBody.dispatch_id).toBe(sendBody.dispatch_id)
+      expect(reportBody.dispatch_id).toBe(secondSendBody.dispatch_id)
 
       const reportedDispatchesResponse = await fetch(
         `${baseUrl}/api/ui/workspaces/${workspace.id}/dispatches`,
@@ -233,15 +245,15 @@ describe('team protocol end to end', () => {
       expect(reportedDispatches).toEqual([
         expect.objectContaining({
           id: sendBody.dispatch_id,
-          state: 'reported',
-          report_text: '已完成登录接口',
-          artifacts: ['src/auth.ts'],
-        }),
-        expect.objectContaining({
-          id: secondSendBody.dispatch_id,
           state: 'submitted',
           report_text: null,
           artifacts: [],
+        }),
+        expect.objectContaining({
+          id: secondSendBody.dispatch_id,
+          state: 'reported',
+          report_text: '补充测试已完成',
+          artifacts: ['tests/auth.test.ts'],
         }),
       ])
 
@@ -263,7 +275,7 @@ describe('team protocol end to end', () => {
         state: string
       }>
       expect(submittedDispatches).toEqual([
-        expect.objectContaining({ id: secondSendBody.dispatch_id, state: 'submitted' }),
+        expect.objectContaining({ id: sendBody.dispatch_id, state: 'submitted' }),
       ])
 
       const invalidStateResponse = await fetch(
@@ -297,8 +309,9 @@ describe('team protocol end to end', () => {
           project_id: workspace.id,
           from_agent_id: worker.id,
           token: hive.store.peekAgentToken(worker.id),
-          result: '补充测试已完成',
-          artifacts: ['tests/auth.test.ts'],
+          result: '已完成登录接口',
+          dispatch_id: sendBody.dispatch_id,
+          artifacts: ['src/auth.ts'],
         }),
       })
       expect(secondReportResponse.status).toBe(202)
@@ -306,7 +319,7 @@ describe('team protocol end to end', () => {
         dispatch_id: string
         ok: true
       }
-      expect(secondReportBody.dispatch_id).toBe(secondSendBody.dispatch_id)
+      expect(secondReportBody.dispatch_id).toBe(sendBody.dispatch_id)
 
       await waitFor(async () => {
         const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {

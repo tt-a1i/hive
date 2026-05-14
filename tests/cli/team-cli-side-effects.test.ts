@@ -126,16 +126,24 @@ describe('team send CLI side effects (R1.3)', () => {
         expect(aliceRow?.status).toBe('working')
       })
 
-      const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+      const dispatch = hive.store.listDispatches(workspace.id)[0]
+      expect(dispatch?.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      )
       await waitFor(async () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         expect(run?.output).toContain('WRK:')
         expect(run?.output).toContain('@Orchestrator')
         expect(run?.output).toContain('你的角色：')
         expect(run?.output).toContain('实现登录')
-        // The injected prompt must not leak any UUID (worker id or workspace id).
+        expect(run?.output).toContain(`dispatch_id: ${dispatch?.id}`)
+        expect(run?.output).toContain(`team report "<完整汇报>" --dispatch ${dispatch?.id}`)
+        // The injected prompt may include the dispatch id so workers can report
+        // the exact task, but it must not leak workspace or agent ids.
         const injected = (run?.output ?? '').replace(/^WRK:/gm, '')
-        expect(injected).not.toMatch(uuidPattern)
+        expect(injected).not.toContain(workspace.id)
+        expect(injected).not.toContain(worker.id)
+        expect(injected).not.toContain(orchestratorId)
       })
 
       const messages = hive.store.listMessagesForRecovery(workspace.id, 0)

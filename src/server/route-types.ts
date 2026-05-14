@@ -15,6 +15,7 @@ export interface SendTaskBody {
 }
 
 export interface ReportTaskBody {
+  dispatch_id?: string
   project_id: string
   from_agent_id: string
   token?: string
