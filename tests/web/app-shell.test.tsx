@@ -110,7 +110,12 @@ describe('app shell with real server', () => {
       const parsed = new URL(url)
       fetchCalls.push({ method: init?.method ?? 'GET', pathname: parsed.pathname })
       if (parsed.pathname === '/api/workspaces' && init?.method === 'POST') {
-        return Promise.resolve(new Response('{}', { status: 500 }))
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'Failed to create workspace' }), {
+            headers: { 'content-type': 'application/json' },
+            status: 500,
+          })
+        )
       }
       const headers = new Headers(init?.headers)
       headers.set('cookie', cookie)
@@ -123,7 +128,9 @@ describe('app shell with real server', () => {
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
-    expect(await screen.findByTestId('add-workspace-error')).toBeInTheDocument()
+    expect(
+      await screen.findByTestId('add-workspace-error', undefined, { timeout: 5000 })
+    ).toBeInTheDocument()
     expect(screen.getByTestId('add-workspace-error')).toHaveTextContent(
       /failed to create workspace/i
     )

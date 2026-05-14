@@ -257,14 +257,17 @@ describe('team API authz (R1.4)', () => {
       }
       // Forged request: orchestrator id from workspace A, projectId of a different workspace
       // that exists alongside. Create a second workspace via the same runtime.
+      const secondWorkspacePath = mkdtempSync(join(tmpdir(), 'hive-authz-beta-'))
+      tempDirs.push(secondWorkspacePath)
       const secondResponse = await fetch(`${ctxA.baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           cookie: await getUiCookie(ctxA.baseUrl),
         },
-        body: JSON.stringify({ name: 'Beta', path: '/tmp/hive-authz-beta' }),
+        body: JSON.stringify({ name: 'Beta', path: secondWorkspacePath }),
       })
+      expect(secondResponse.status).toBe(201)
       const secondWorkspace = (await secondResponse.json()) as { id: string }
 
       const response = await fetch(`${ctxA.baseUrl}/api/team/send`, {
