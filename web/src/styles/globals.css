@@ -389,12 +389,16 @@ html, body {
   .status-dot--queued { animation: none; }
 }
 
-/* Status pill — used inline in cards / headers next to a label */
-.status-pill {
+/* Pill — unified inline-status surface. Used by worker card status,
+   queue counters, and any future inline-tone chip. Tone variants set
+   color + tinted bg + tinted border; the base handles shape, size,
+   spacing, and typography so callsites don't drift. .pill--ghost
+   strips the bg/border for an "idle" pill that's text-only. */
+.pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 1px 8px 1px 6px;
+  padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 500;
@@ -402,42 +406,32 @@ html, body {
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.status-pill--working {
+.pill--green {
   color: var(--status-green);
-  border-color: color-mix(in oklab, var(--status-green) 35%, transparent);
-  background: color-mix(in oklab, var(--status-green) 12%, transparent);
+  background: color-mix(in oklab, var(--status-green) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-green) 24%, transparent);
 }
-.status-pill--idle {
-  color: var(--text-secondary);
-  border-color: var(--border);
-  background: var(--bg-3);
-}
-.status-pill--queued {
+.pill--orange {
   color: var(--status-orange);
-  border-color: color-mix(in oklab, var(--status-orange) 35%, transparent);
-  background: color-mix(in oklab, var(--status-orange) 12%, transparent);
-}
-.status-pill--stopped {
-  color: var(--status-red);
-  border-color: color-mix(in oklab, var(--status-red) 32%, transparent);
-  background: color-mix(in oklab, var(--status-red) 10%, transparent);
-}
-
-/* Queue badge — orthogonal to status pill (spec §3.6.4: pending_task_count is
-   a separate axis, must never replace the status). */
-.queue-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 6px 0 4px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1px;
-  white-space: nowrap;
-  color: var(--status-orange);
-  border: 1px solid color-mix(in oklab, var(--status-orange) 35%, transparent);
   background: color-mix(in oklab, var(--status-orange) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-orange) 24%, transparent);
+}
+.pill--red {
+  color: var(--status-red);
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 24%, transparent);
+}
+.pill--neutral {
+  color: var(--text-secondary);
+  background: var(--bg-3);
+  border-color: var(--border);
+}
+.pill--ghost {
+  color: var(--text-tertiary);
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* Button — Twenty-style. Two key shifts from the old `.icon-btn`:
@@ -971,69 +965,23 @@ html, body {
   position: relative;
 }
 
-/* Status indicator — dot + label, color-coded text. Sits at the bottom of
-   the card with a subtle pill background tinted to the status color so the
-   eye scans cards' moods at a glance without heavy chrome. */
+/* Worker-card status pill — `.pill` does the chrome; this only adds the
+   layout hook so the pill aligns at the start of the flex column. The
+   tone modifier (.pill--green / --orange / --red / --ghost) is set by
+   the React side based on the status kind. */
 .worker-card__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   align-self: flex-start;
-  padding: 3px 8px 3px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1px;
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-.worker-card__status--working {
-  color: var(--status-green);
-  background: color-mix(in oklab, var(--status-green) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-green) 24%, transparent);
-}
-.worker-card__status--queued {
-  color: var(--status-orange);
-  background: color-mix(in oklab, var(--status-orange) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-orange) 24%, transparent);
-}
-/* Idle is the resting state — no pill background, no border. Glyph-driven
-   (Trigger.dev pattern) so a card grid with many idle workers reads calm
-   instead of busy. working/queued/stopped keep their tinted pills so the
-   eye can spot them in peripheral vision. */
-.worker-card__status--idle {
-  color: var(--text-tertiary);
-  background: transparent;
-  padding-left: 0;
-  padding-right: 0;
-}
-.worker-card__status--stopped {
-  color: var(--status-red);
-  background: color-mix(in oklab, var(--status-red) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-red) 24%, transparent);
 }
 
-/* Queue marker — small pill at top-right (under the hover action cluster
-   slot, but only visible when not hovering). Tnum digit, orange tint. */
+/* Queue marker — small orange counter at top-right of a worker card.
+   .pill does the chrome (orange tint); this adds the worker-card-specific
+   behavior: pointer-events off + hover-fade so the action cluster owns
+   that slot when the user mouses in. */
 .worker-card__queue {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-  font-feature-settings: "tnum" 1;
-  color: var(--status-orange);
-  background: color-mix(in oklab, var(--status-orange) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--status-orange) 32%, transparent);
   pointer-events: none;
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   transition: opacity var(--dur-fast) ease;
 }
-/* When hover action cluster is showing, fade the queue badge out so it
-   doesn't visually clash with the floating buttons. */
 .worker-card-shell:hover .worker-card__queue,
 .worker-card-shell:focus-within .worker-card__queue {
   opacity: 0;

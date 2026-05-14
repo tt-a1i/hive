@@ -5,7 +5,13 @@ import type { TeamListItem } from '../../../src/shared/types.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
-import { presentWorkerQueue, presentWorkerStatus } from './worker-status.js'
+import { presentWorkerQueue, presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
+
+const pillToneByStatus: Record<WorkerStatusKind, string> = {
+  working: 'pill--green',
+  idle: 'pill--ghost',
+  stopped: 'pill--red',
+}
 
 export type WorkerCardActionKind = 'start' | 'rename' | 'delete'
 
@@ -55,7 +61,7 @@ export const WorkerCard = ({
           <RoleAvatar role={worker.role} size={40} statusRing={status.kind} />
           {queue ? (
             <span
-              className="worker-card__queue"
+              className="pill pill--orange worker-card__queue"
               title={`${queue.count} pending dispatch(es) — independent of PTY state`}
             >
               {queue.label}
@@ -72,7 +78,7 @@ export const WorkerCard = ({
           <span className="truncate text-xs leading-tight text-ter">{role.label}</span>
         </div>
         <span
-          className={`worker-card__status worker-card__status--${status.kind}`}
+          className={`pill ${pillToneByStatus[status.kind]} worker-card__status`}
           role="status"
           title={status.label}
         >
