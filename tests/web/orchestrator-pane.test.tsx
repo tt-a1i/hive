@@ -89,7 +89,7 @@ describe('OrchestratorPane three-state UI', () => {
     })
 
     expect(screen.getByTestId('orchestrator-failed-body')).toBeInTheDocument()
-    expect(screen.getByTestId('empty-state-description')).toHaveTextContent(errorMessage)
+    expect(screen.getByTestId('orchestrator-error-message')).toHaveTextContent(errorMessage)
     const retryBody = screen.getByTestId('orchestrator-retry')
     expect(retryBody).toHaveTextContent('Retry')
 

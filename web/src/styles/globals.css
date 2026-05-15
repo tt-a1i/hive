@@ -953,6 +953,9 @@ html, body {
 
 /* Floating action button — used in WorkerModal's top-right cluster, sits
    over the PTY with a frosted backdrop so it's readable on any content. */
+/* Floating action — flat surface, no backdrop blur, no ambient shadow.
+   The previous incarnation wore glass + drop shadow which was the last
+   "designed" surface in the app; everything else dropped that recipe. */
 .float-action {
   display: inline-flex;
   align-items: center;
@@ -960,18 +963,14 @@ html, body {
   width: 30px;
   height: 30px;
   border-radius: 4px;
-  border: 1px solid color-mix(in oklab, var(--border-bright) 80%, transparent);
-  background: color-mix(in oklab, var(--bg-1) 70%, transparent);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-1);
   color: var(--text-secondary);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
   cursor: pointer;
   transition:
     background var(--dur-fast) ease,
     color var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
-    transform 80ms ease;
-  box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.30);
+    border-color var(--dur-fast) ease;
 }
 .float-action:hover {
   background: color-mix(in oklab, var(--bg-2) 85%, transparent);
@@ -987,16 +986,13 @@ html, body {
 .float-action:focus-visible {
   outline: none;
   border-color: var(--accent);
-  box-shadow:
-    0 2px 6px rgba(var(--shadow-tint), 0.30),
-    0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
 }
 .float-action:disabled { opacity: 0.5; cursor: not-allowed; }
 .float-action[data-variant="primary"] {
   background: var(--accent);
   color: #ffffff;
   border-color: var(--accent);
-  box-shadow: 0 2px 6px rgba(var(--shadow-tint), 0.35);
 }
 .float-action[data-variant="primary"]:hover {
   background: var(--accent-hover);
