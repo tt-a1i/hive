@@ -20,6 +20,10 @@ export const useTerminalRun = (runId: string) => {
     let fitAddon: XtermFitAddon | undefined
     let resizeObserver: ResizeObserver | undefined
     let resizeTimer: number | undefined
+    let helperTextarea: HTMLTextAreaElement | null = null
+    let onCompositionStart: ((event: Event) => void) | undefined
+    let onCompositionEnd: ((event: Event) => void) | undefined
+    const isComposingRef = { current: false }
 
     void Promise.all([
       import('@xterm/xterm'),
@@ -70,6 +74,34 @@ export const useTerminalRun = (runId: string) => {
           nextTerminal.loadAddon(webglAddon)
         } catch {
           // Fall back to the default renderer when WebGL is unavailable.
+        }
+
+        // Take over IME composition so xterm's built-in CompositionHelper does
+        // not emit spurious DEL (0x7f) bytes after each commit. Without this,
+        // typing CJK in Claude Code's TUI prompt would commit the CJK chars
+        // and then send a growing run of DELs that erased surrounding text.
+        helperTextarea =
+          containerRef.current.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+        if (helperTextarea) {
+          const localTextarea = helperTextarea
+          onCompositionStart = () => {
+            isComposingRef.current = true
+          }
+          onCompositionEnd = (event: Event) => {
+            const composed = (event as CompositionEvent).data
+            if (composed) client?.sendInput(composed)
+            // Clear the textarea so xterm's built-in helper has nothing to
+            // commit on its deferred setTimeout(0) read, and so its tracked
+            // value never accumulates across compositions.
+            localTextarea.value = ''
+            // Release the flag in a later macrotask so the built-in helper's
+            // own setTimeout(0) work fires while we are still filtering.
+            setTimeout(() => {
+              isComposingRef.current = false
+            }, 0)
+          }
+          helperTextarea.addEventListener('compositionstart', onCompositionStart, { capture: true })
+          helperTextarea.addEventListener('compositionend', onCompositionEnd, { capture: true })
         }
 
         if (typeof nextTerminal.attachCustomKeyEventHandler === 'function') {
@@ -123,7 +155,10 @@ export const useTerminalRun = (runId: string) => {
           },
           runId,
         })
-        inputSubscription = nextTerminal.onData((chunk) => client?.sendInput(chunk))
+        inputSubscription = nextTerminal.onData((chunk) => {
+          if (isComposingRef.current) return
+          client?.sendInput(chunk)
+        })
         setStatus('running')
         resize()
         if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
@@ -140,6 +175,16 @@ export const useTerminalRun = (runId: string) => {
       if (onWindowResize) window.removeEventListener('resize', onWindowResize)
       resizeObserver?.disconnect()
       if (resizeTimer) window.clearTimeout(resizeTimer)
+      if (helperTextarea && onCompositionStart) {
+        helperTextarea.removeEventListener('compositionstart', onCompositionStart, {
+          capture: true,
+        } as EventListenerOptions)
+      }
+      if (helperTextarea && onCompositionEnd) {
+        helperTextarea.removeEventListener('compositionend', onCompositionEnd, {
+          capture: true,
+        } as EventListenerOptions)
+      }
       inputSubscription?.dispose()
       client?.dispose()
       terminal?.dispose()
