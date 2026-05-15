@@ -31,7 +31,7 @@ const normalizeWorkerName = (name: string) => {
 }
 
 export const createWorkspaceStore = (
-  db: Database | undefined,
+  db: Database,
   messageKinds: MessageKindRecord[]
 ): WorkspaceStore => {
   const workspaces = new Map<string, WorkspaceRecord>()
@@ -60,7 +60,7 @@ export const createWorkspaceStore = (
         status: 'stopped',
         pendingTaskCount: 0,
       }
-      db?.prepare(
+      db.prepare(
         'INSERT INTO workers (id, workspace_id, name, description, role, created_at) VALUES (?, ?, ?, ?, ?, ?)'
       ).run(worker.id, workspaceId, worker.name, worker.description, worker.role, Date.now())
       workspace.agents.push(worker)
@@ -68,7 +68,7 @@ export const createWorkspaceStore = (
     },
     createWorkspace(path, name) {
       const summary = { id: randomUUID(), name, path }
-      db?.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
+      db.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
         summary.id,
         name,
         path,
@@ -80,7 +80,7 @@ export const createWorkspaceStore = (
     deleteWorkspace(workspaceId) {
       const workspace = getWorkspace(workspaceId)
       const agentIds = workspace.agents.map((agent) => agent.id)
-      db?.transaction(() => {
+      db.transaction(() => {
         db.prepare('DELETE FROM messages WHERE workspace_id = ?').run(workspaceId)
         db.prepare('DELETE FROM agent_launch_configs WHERE workspace_id = ?').run(workspaceId)
         db.prepare('DELETE FROM agent_sessions WHERE workspace_id = ?').run(workspaceId)
@@ -103,7 +103,7 @@ export const createWorkspaceStore = (
       ) {
         throw new ConflictError(`Worker name already exists: ${trimmed}`)
       }
-      db?.prepare('UPDATE workers SET name = ? WHERE workspace_id = ? AND id = ?').run(
+      db.prepare('UPDATE workers SET name = ? WHERE workspace_id = ? AND id = ?').run(
         trimmed,
         workspaceId,
         workerId
@@ -114,7 +114,7 @@ export const createWorkspaceStore = (
     deleteWorker(workspaceId, workerId) {
       const workspace = getWorkspace(workspaceId)
       getWorkerRecord(workspaces, workspaceId, workerId)
-      db?.transaction(() => {
+      db.transaction(() => {
         db.prepare('DELETE FROM messages WHERE workspace_id = ? AND worker_id = ?').run(
           workspaceId,
           workerId

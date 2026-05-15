@@ -47,12 +47,12 @@ const applyMessageKinds = (
 }
 
 export const hydrateWorkspaceFromDb = (
-  db: Database | undefined,
+  db: Database,
   workspaces: Map<string, WorkspaceRecord>,
   messageKinds: MessageKindRecord[],
   workspaceId: string
 ) => {
-  if (!db || workspaces.has(workspaceId)) {
+  if (workspaces.has(workspaceId)) {
     return
   }
 
@@ -80,14 +80,10 @@ export const hydrateWorkspaceFromDb = (
 }
 
 export const seedWorkspacesFromDb = (
-  db: Database | undefined,
+  db: Database,
   workspaces: Map<string, WorkspaceRecord>,
   messageKinds: MessageKindRecord[]
 ) => {
-  if (!db) {
-    return
-  }
-
   for (const row of db
     .prepare('SELECT id, name, path FROM workspaces ORDER BY created_at ASC')
     .all() as WorkspaceRow[]) {

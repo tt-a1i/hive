@@ -78,9 +78,8 @@ const toRecord = (row: {
   isBuiltin: row.is_builtin === 1,
 })
 
-export const createCommandPresetStore = (db: Database | undefined) => {
+export const createCommandPresetStore = (db: Database) => {
   const get = (id: string) => {
-    if (!db) return undefined
     const row = db
       .prepare(
         `SELECT id, display_name, command, args, env, resume_args_template, session_id_capture, yolo_args_template, is_builtin
@@ -91,7 +90,6 @@ export const createCommandPresetStore = (db: Database | undefined) => {
   }
 
   const list = () => {
-    if (!db) return []
     return db
       .prepare(
         `SELECT id, display_name, command, args, env, resume_args_template, session_id_capture, yolo_args_template, is_builtin
@@ -103,7 +101,6 @@ export const createCommandPresetStore = (db: Database | undefined) => {
 
   const create = (input: CommandPresetInput) => {
     const record = { id: randomUUID(), ...input, isBuiltin: false }
-    if (!db) return record
     const now = Date.now()
     db.prepare(
       `INSERT INTO command_presets (
@@ -129,7 +126,7 @@ export const createCommandPresetStore = (db: Database | undefined) => {
     const current = list().find((preset) => preset.id === id)
     if (!current) throw new Error(`Command preset not found: ${id}`)
     if (current.isBuiltin) throw new ConflictError(`Builtin command preset is read-only: ${id}`)
-    db?.prepare(
+    db.prepare(
       `UPDATE command_presets
        SET display_name = ?, command = ?, args = ?, env = ?, resume_args_template = ?,
            session_id_capture = ?, yolo_args_template = ?, updated_at = ?
@@ -152,7 +149,7 @@ export const createCommandPresetStore = (db: Database | undefined) => {
     const current = list().find((preset) => preset.id === id)
     if (!current) throw new Error(`Command preset not found: ${id}`)
     if (current.isBuiltin) throw new ConflictError(`Builtin command preset is read-only: ${id}`)
-    db?.prepare('DELETE FROM command_presets WHERE id = ?').run(id)
+    db.prepare('DELETE FROM command_presets WHERE id = ?').run(id)
   }
 
   return { create, get, list, remove, update }

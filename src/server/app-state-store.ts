@@ -7,9 +7,8 @@ export interface AppStateRecord {
   value: AppStateValue
 }
 
-export const createAppStateStore = (db: Database | undefined) => {
+export const createAppStateStore = (db: Database) => {
   const get = (key: string): AppStateRecord | undefined => {
-    if (!db) return undefined
     const row = db.prepare('SELECT key, value FROM app_state WHERE key = ?').get(key) as
       | { key: string; value: string | null }
       | undefined
@@ -17,7 +16,7 @@ export const createAppStateStore = (db: Database | undefined) => {
   }
 
   const set = (key: string, value: AppStateValue) => {
-    db?.prepare(
+    db.prepare(
       `INSERT INTO app_state (key, value, updated_at)
        VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`

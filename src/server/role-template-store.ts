@@ -67,9 +67,8 @@ const toRecord = (row: {
   isBuiltin: row.is_builtin === 1,
 })
 
-export const createRoleTemplateStore = (db: Database | undefined) => {
+export const createRoleTemplateStore = (db: Database) => {
   const list = () => {
-    if (!db) return []
     return db
       .prepare(
         `SELECT id, name, role_type, description, default_command, default_args, default_env, is_builtin
@@ -81,7 +80,6 @@ export const createRoleTemplateStore = (db: Database | undefined) => {
 
   const create = (input: RoleTemplateInput) => {
     const record = { id: randomUUID(), ...input, isBuiltin: false }
-    if (!db) return record
     const now = Date.now()
     db.prepare(
       `INSERT INTO role_templates (
@@ -106,7 +104,7 @@ export const createRoleTemplateStore = (db: Database | undefined) => {
     const current = list().find((template) => template.id === id)
     if (!current) throw new Error(`Role template not found: ${id}`)
     if (current.isBuiltin) throw new ConflictError(`Builtin role template is read-only: ${id}`)
-    db?.prepare(
+    db.prepare(
       `UPDATE role_templates
        SET name = ?, role_type = ?, description = ?, default_command = ?, default_args = ?, default_env = ?, updated_at = ?
        WHERE id = ?`
@@ -127,7 +125,7 @@ export const createRoleTemplateStore = (db: Database | undefined) => {
     const current = list().find((template) => template.id === id)
     if (!current) throw new Error(`Role template not found: ${id}`)
     if (current.isBuiltin) throw new ConflictError(`Builtin role template is read-only: ${id}`)
-    db?.prepare('DELETE FROM role_templates WHERE id = ?').run(id)
+    db.prepare('DELETE FROM role_templates WHERE id = ?').run(id)
   }
 
   return { create, list, remove, update }

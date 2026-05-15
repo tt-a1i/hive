@@ -13,7 +13,6 @@ export interface MessageLogRecord {
 }
 
 export interface MessageLogHandle {
-  kind: 'db' | 'memory'
   sequence: number
 }
 
@@ -68,17 +67,10 @@ interface MessageRow {
   worker_id: string
 }
 
-export const createMessageLogStore = (db: Database | undefined) => {
-  let memorySequence = 0
-  const memoryMessages = new Map<number, MessageLogRecord>()
-
+export const createMessageLogStore = (db: Database) => {
   const initialize = () => {}
 
   const listMessageKinds = () => {
-    if (!db) {
-      return []
-    }
-
     return db
       .prepare(
         `SELECT workspace_id, worker_id, type
@@ -90,12 +82,6 @@ export const createMessageLogStore = (db: Database | undefined) => {
   }
 
   const insertMessage = (input: MessageLogRecord): MessageLogHandle => {
-    if (!db) {
-      memorySequence += 1
-      memoryMessages.set(memorySequence, input)
-      return { kind: 'memory', sequence: memorySequence }
-    }
-
     const result = db
       .prepare(
         `INSERT INTO messages (
@@ -121,16 +107,11 @@ export const createMessageLogStore = (db: Database | undefined) => {
         input.artifacts ? JSON.stringify(input.artifacts) : null,
         input.createdAt
       )
-    return { kind: 'db', sequence: Number(result.lastInsertRowid) }
+    return { sequence: Number(result.lastInsertRowid) }
   }
 
   const deleteMessage = (handle: MessageLogHandle) => {
-    if (handle.kind === 'memory') {
-      memoryMessages.delete(handle.sequence)
-      return
-    }
-
-    db?.prepare('DELETE FROM messages WHERE sequence = ?').run(handle.sequence)
+    db.prepare('DELETE FROM messages WHERE sequence = ?').run(handle.sequence)
   }
 
   const parseArtifacts = (value: string | null) => {
@@ -145,52 +126,6 @@ export const createMessageLogStore = (db: Database | undefined) => {
   }
 
   const listMessagesForRecovery = (workspaceId: string, sinceMs: number) => {
-    if (!db) {
-      return Array.from(memoryMessages.values())
-        .filter((message) => message.workspaceId === workspaceId && message.createdAt >= sinceMs)
-        .map((message) => {
-          if (message.type === 'user_input') {
-            return {
-              createdAt: message.createdAt,
-              text: message.text,
-              type: 'user_input' as const,
-            } satisfies RecoveryMessage
-          }
-
-          if (message.type === 'send') {
-            const recoveryMessage: RecoveryMessage = {
-              createdAt: message.createdAt,
-              text: message.text,
-              to: message.toAgentId ?? message.workerId,
-              type: 'send',
-            }
-
-            if (message.fromAgentId) {
-              recoveryMessage.from = message.fromAgentId
-            }
-
-            return recoveryMessage
-          }
-
-          if (message.type !== 'report' && message.type !== 'status') {
-            return null
-          }
-
-          const recoveryMessage: ReportRecoveryMessage | StatusRecoveryMessage = {
-            artifacts: message.artifacts ?? [],
-            createdAt: message.createdAt,
-            from: message.fromAgentId ?? message.workerId,
-            text: message.text,
-            type: message.type,
-          }
-          if (message.type === 'report' && message.status) {
-            ;(recoveryMessage as ReportRecoveryMessage).status = message.status
-          }
-          return recoveryMessage
-        })
-        .filter((message): message is RecoveryMessage => message !== null)
-    }
-
     return db
       .prepare(
         `SELECT worker_id, type, from_agent_id, to_agent_id, text, status, artifacts, created_at

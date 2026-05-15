@@ -35,7 +35,7 @@ export type {
   RoleTemplateRecord,
 }
 
-export const createSettingsStore = (db: Database | undefined): SettingsStore => {
+export const createSettingsStore = (db: Database): SettingsStore => {
   const appStateStore = createAppStateStore(db)
   const commandPresetStore = createCommandPresetStore(db)
   const roleTemplateStore = createRoleTemplateStore(db)

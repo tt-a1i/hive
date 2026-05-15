@@ -203,7 +203,7 @@ export const createRuntimeStoreLifecycle = ({
       await services.tasksFileWatcher.close()
       services.workerOutputTracker?.closeAll()
       services.agentRunStore.close?.()
-      services.db?.close()
+      services.db.close()
     },
     configureAgentLaunch: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => {
       services.workspaceStore.getAgent(workspaceId, agentId)

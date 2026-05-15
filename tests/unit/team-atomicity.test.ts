@@ -110,7 +110,7 @@ describe('team atomicity', () => {
       deleteDispatch,
       deleteMessage,
       findOpenDispatch: vi.fn(),
-      insertMessage: vi.fn(() => ({ kind: 'memory', sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchReportedByWorker: vi.fn(),
       markDispatchSubmitted: vi.fn(),
       workspaceStore: {
@@ -125,7 +125,7 @@ describe('team atomicity', () => {
     ).rejects.toThrow(/No worker launch config available/)
 
     expect(deleteDispatch).toHaveBeenCalledWith(dispatch.id)
-    expect(deleteMessage).toHaveBeenCalledWith({ kind: 'memory', sequence: 1 })
+    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
     expect(store.listWorkers(workspace.id)).toContainEqual(
       expect.objectContaining({
         id: worker.id,
@@ -178,7 +178,7 @@ describe('team atomicity', () => {
       deleteDispatch,
       deleteMessage,
       findOpenDispatch: vi.fn(),
-      insertMessage: vi.fn(() => ({ kind: 'memory', sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchReportedByWorker: vi.fn(),
       markDispatchSubmitted,
       workspaceStore: {
@@ -195,7 +195,7 @@ describe('team atomicity', () => {
     expect(writeSendPrompt).not.toHaveBeenCalled()
     expect(markDispatchSubmitted).not.toHaveBeenCalled()
     expect(deleteDispatch).toHaveBeenCalledWith(dispatch.id)
-    expect(deleteMessage).toHaveBeenCalledWith({ kind: 'memory', sequence: 1 })
+    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
   })
 
   test('reportTask with requireActiveRun throws and leaves pending count + messages untouched when orch run is absent', () => {
@@ -275,7 +275,7 @@ describe('team atomicity', () => {
       deleteDispatch: vi.fn(),
       deleteMessage,
       findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ kind: 'memory', sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchReportedByWorker: vi.fn(() => {
         throw new Error('dispatch ledger failed')
       }),
@@ -296,7 +296,7 @@ describe('team atomicity', () => {
 
     expect(writeReportPrompt).not.toHaveBeenCalled()
     expect(markTaskReported).not.toHaveBeenCalled()
-    expect(deleteMessage).toHaveBeenCalledWith({ kind: 'memory', sequence: 1 })
+    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
   })
 
   test('reportTask keeps the recorded report when orchestrator stdin forwarding fails', () => {
@@ -336,7 +336,7 @@ describe('team atomicity', () => {
       deleteDispatch: vi.fn(),
       deleteMessage,
       findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ kind: 'memory', sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchReportedByWorker,
       markDispatchSubmitted: vi.fn(),
       workspaceStore: {

@@ -5,10 +5,14 @@ import BetterSqlite3 from 'better-sqlite3'
 
 import { initializeRuntimeDatabase } from './sqlite-schema.js'
 
-export const openRuntimeDatabase = (dataDir?: string): Database | undefined => {
-  if (!dataDir) return undefined
-  mkdirSync(dataDir, { recursive: true })
-  const database = new BetterSqlite3(join(dataDir, 'runtime.sqlite'))
+export const openRuntimeDatabase = (dataDir?: string): Database => {
+  let database: Database
+  if (dataDir) {
+    mkdirSync(dataDir, { recursive: true })
+    database = new BetterSqlite3(join(dataDir, 'runtime.sqlite'))
+  } else {
+    database = new BetterSqlite3(':memory:')
+  }
   initializeRuntimeDatabase(database)
   return database
 }

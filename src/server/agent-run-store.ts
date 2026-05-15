@@ -66,7 +66,7 @@ interface AgentRunRow {
   ended_at: number | null
 }
 
-export const createAgentRunStore = (db: Database | undefined) => {
+export const createAgentRunStore = (db: Database) => {
   let closed = false
   const initialize = () => {}
 
@@ -76,9 +76,6 @@ export const createAgentRunStore = (db: Database | undefined) => {
 
   const listLaunchConfigs = () => {
     if (closed) {
-      return []
-    }
-    if (!db) {
       return []
     }
 
@@ -115,7 +112,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
       return
     }
     const createdAt = Date.now()
-    db?.prepare(
+    db.prepare(
       `INSERT INTO agent_launch_configs (
          workspace_id,
          agent_id,
@@ -158,7 +155,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
     if (closed) {
       return
     }
-    db?.prepare('DELETE FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?').run(
+    db.prepare('DELETE FROM agent_launch_configs WHERE workspace_id = ? AND agent_id = ?').run(
       workspaceId,
       agentId
     )
@@ -176,7 +173,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
     if (closed) {
       return
     }
-    db?.prepare(
+    db.prepare(
       `INSERT INTO agent_runs (run_id, agent_id, pid, status, exit_code, started_at, ended_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(runId, agentId, pid, status, exitCode, startedAt, endedAt, startedAt, startedAt)
@@ -191,16 +188,13 @@ export const createAgentRunStore = (db: Database | undefined) => {
     if (closed) {
       return
     }
-    db?.prepare(
+    db.prepare(
       'UPDATE agent_runs SET status = ?, exit_code = ?, ended_at = ?, updated_at = ? WHERE run_id = ?'
     ).run(status, exitCode, endedAt, Date.now(), runId)
   }
 
   const listAgentRuns = (agentId: string) => {
     if (closed) {
-      return []
-    }
-    if (!db) {
       return []
     }
 
@@ -227,7 +221,7 @@ export const createAgentRunStore = (db: Database | undefined) => {
     if (closed) {
       return
     }
-    db?.prepare(
+    db.prepare(
       `UPDATE agent_runs
        SET status = 'error', exit_code = NULL, ended_at = ?, updated_at = ?
        WHERE status IN ('starting', 'running')`

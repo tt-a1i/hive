@@ -85,9 +85,7 @@ const toRecord = (row: DispatchRow): DispatchRecord => ({
   workspaceId: row.workspace_id,
 })
 
-export const createDispatchLedgerStore = (db: Database | undefined) => {
-  const memoryDispatches = new Map<string, DispatchRecord>()
-
+export const createDispatchLedgerStore = (db: Database) => {
   const createDispatch = (input: CreateDispatchInput) => {
     const record: DispatchRecord = {
       artifacts: [],
@@ -103,12 +101,6 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
       text: input.text,
       toAgentId: input.toAgentId,
       workspaceId: input.workspaceId,
-    }
-
-    if (!db) {
-      record.sequence = memoryDispatches.size + 1
-      memoryDispatches.set(record.id, record)
-      return record
     }
 
     db.prepare(
@@ -145,25 +137,11 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   }
 
   const deleteDispatch = (dispatchId: string) => {
-    if (!db) {
-      memoryDispatches.delete(dispatchId)
-      return
-    }
-
     db.prepare('DELETE FROM dispatches WHERE id = ?').run(dispatchId)
   }
 
   const markSubmitted = (dispatchId: string) => {
     const submittedAt = Date.now()
-    if (!db) {
-      const record = memoryDispatches.get(dispatchId)
-      if (record) {
-        record.status = 'submitted'
-        record.submittedAt = submittedAt
-      }
-      return
-    }
-
     db.prepare(
       `UPDATE dispatches
        SET status = ?, submitted_at = ?
@@ -172,21 +150,6 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   }
 
   const findOpenDispatch = (workspaceId: string, toAgentId: string, dispatchId?: string) => {
-    if (!db) {
-      const openDispatches = Array.from(memoryDispatches.values()).filter(
-        (record) =>
-          record.workspaceId === workspaceId &&
-          record.toAgentId === toAgentId &&
-          record.status !== 'reported'
-      )
-      if (dispatchId) {
-        return openDispatches.find((record) => record.id === dispatchId)
-      }
-      return openDispatches.sort(
-        (a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt)
-      )[0]
-    }
-
     if (dispatchId) {
       const row = db
         .prepare(
@@ -225,14 +188,6 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
     }
 
     const reportedAt = Date.now()
-    if (!db) {
-      dispatch.status = 'reported'
-      dispatch.reportedAt = reportedAt
-      dispatch.reportText = input.reportText
-      dispatch.artifacts = input.artifacts
-      return dispatch
-    }
-
     db.prepare(
       `UPDATE dispatches
        SET status = ?,
@@ -254,16 +209,6 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   const listWorkspaceDispatches = (workspaceId: string, options: ListDispatchesOptions = {}) => {
     const offset = options.offset ?? 0
     const limit = options.limit ?? 100
-    if (!db) {
-      return Array.from(memoryDispatches.values())
-        .filter(
-          (record) =>
-            record.workspaceId === workspaceId &&
-            (options.status === undefined || record.status === options.status)
-        )
-        .sort((a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt))
-        .slice(offset, offset + limit)
-    }
 
     if (options.status) {
       return (
@@ -294,17 +239,6 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   }
 
   const listOpenDispatchKinds = () => {
-    if (!db) {
-      return Array.from(memoryDispatches.values())
-        .filter((record) => record.status !== 'reported')
-        .sort((a, b) => (a.sequence ?? a.createdAt) - (b.sequence ?? b.createdAt))
-        .map((record) => ({
-          type: 'send' as const,
-          worker_id: record.toAgentId,
-          workspace_id: record.workspaceId,
-        }))
-    }
-
     return db
       .prepare(
         `SELECT workspace_id, to_agent_id AS worker_id, 'send' AS type
@@ -316,26 +250,10 @@ export const createDispatchLedgerStore = (db: Database | undefined) => {
   }
 
   const deleteWorkspaceDispatches = (workspaceId: string) => {
-    if (!db) {
-      for (const [id, record] of memoryDispatches) {
-        if (record.workspaceId === workspaceId) memoryDispatches.delete(id)
-      }
-      return
-    }
-
     db.prepare('DELETE FROM dispatches WHERE workspace_id = ?').run(workspaceId)
   }
 
   const deleteWorkerDispatches = (workspaceId: string, workerId: string) => {
-    if (!db) {
-      for (const [id, record] of memoryDispatches) {
-        if (record.workspaceId === workspaceId && record.toAgentId === workerId) {
-          memoryDispatches.delete(id)
-        }
-      }
-      return
-    }
-
     db.prepare('DELETE FROM dispatches WHERE workspace_id = ? AND to_agent_id = ?').run(
       workspaceId,
       workerId

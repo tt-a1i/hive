@@ -118,10 +118,104 @@ in (3) for the long-term moat, and use (2) as the Quick Start framing.
 - **Do** lean on the two postures that cannot be cheaply copied:
   orchestrator-as-real-CLI-agent and the `team` protocol surface.
 
+## Round 2 audit (2026-05-15)
+
+Second sweep ran four sub-agent evaluations — internal health (architecture
+/ code / tests / security), competitive feature deep-dive, GTM calendar,
+brand identity — on top of the original three-angle round above.
+
+### Cross-cutting findings
+
+- **HN launch window is closing.** Anthropic's native Agent Teams (Claude
+  Code v2.1.139, `/goal`) hit the HN front page at 396 points two months
+  ago. Show HN posts that lead with "multi-agent orchestrator" now get
+  "why not Agent Teams?" as the top reply. Lead the HN title with **the
+  CLIs by name + zero-install constraints** instead.
+- **claude-flow renamed to ruflo, stars ~51k** (the 31k figure in the
+  Round 1 snapshot above is stale). Avoid feature-for-feature comparison —
+  they ship 314 MCP tools and 26 CLI commands; Hive's surface is
+  deliberately thin.
+- **Internal substance is OSS-ready.** Architecture B+ / code A- / tests
+  B+ / security A-. No launch blockers in the code itself.
+- **Brand inconsistency is the hidden debt.** Product UI runs on Twenty's
+  blue (`#3358d4`) + charcoal `#171717`; favicon still uses an old indigo
+  gradient (`#5e6ad2`); hero is an off-brand green-wireframe desk photo.
+  Three visual universes — none reinforces "hive-mind / queen / worker".
+
+### Per-angle verdicts
+
+**Internal health (B+ / A-).** No god module; largest single file is
+`web/src/tasks/TaskGraphDrawer.tsx` at 506 LOC. `src/server/` is zero `any`
+/ zero `@ts-ignore`. Integration tests really don't mock `node-pty` (grep
+zero hits). Security boundary is layered: `local-request-guard.ts` rejects
+non-local Host / Origin / remoteAddress (closes DNS rebinding), WebSocket
+auth via cookie, SQL fully parameterised, PTY `spawn` not via shell. Three
+concrete cleanups land in the priorities table.
+
+**Competitive deep-dive.** Hive's three independents: bidirectional `team`
+protocol (claude-squad and Cline Kanban both lack agent-to-agent
+communication), multi-workspace daemon model, relational SQLite message
+log. Hive's five gaps vs Cline Kanban / claude-squad (sorted by pain ×
+effort): no diff/checkpoint review, no worktree isolation, static three-
+state card with no live summary, no auto-commit/open-PR, no
+task-dependency auto-trigger. Top-three "should steal": hook-driven worker
+card summary (doesn't break the 3-state machine), diff drawer wired into
+`team report`, optional worktree mode (spec §12 already considers it).
+
+**GTM (30-day calendar).** Build ammunition Day 1-7 (no HN). Day 10 (Wed)
+08:30 ET, post `Show HN: Hive – browser hive-mind for Claude Code, Codex,
+Gemini, OpenCode`. Day 8-21 push (blog, r/LocalLLaMA, r/ClaudeAI,
+newsletter pitch to Latent Space / TLDR-AI / AINews / Bytes). Day 22-30
+consolidate. Estimated first-100 source split: HN front page 40-50,
+Reddit 20-25, X 10-15, newsletter pickup 8-12, Discord drops 5-10, GitHub
+trending tail 5.
+
+**Brand / visual.** Replace the 1.4 MB stock-photo hero with an on-brand
+SVG (4-6h). Build one geometric hex-cluster mark and reuse it across
+favicon / topbar / hero / GitHub social-preview / npm avatar (3-5h). Add
+favicon.png + apple-touch-icon + og:image + twitter:card + meta description
++ GitHub social-preview (1h, biggest cheap win). Animated terminal demo
+(asciinema cast, ≤500 KB SVG) for the README (3-4h). Rebrand `RoleAvatar`
+from two-letter mono initials to hex + role glyph (2-3h) so every worker
+card becomes a tiny brand moment.
+
+### Updated priorities (cross-cuts the original Week 1 / 2 / Month 1)
+
+| Rank | Action | Effort | Source | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Record demo GIF / asciinema cast (subsumes Round 1 #1) | 3-4h | D + R1 | open |
+| 2 | favicon.png + apple-touch + og:image + meta tags + GitHub social-preview | 1h | D | open |
+| 3 | Replace `assets/hive-hero.png` with on-brand SVG | 4-6h | D | open |
+| 4 | Build logomark + roll out across favicon / topbar / hero / social | 3-5h | D | open |
+| 5 | Drop `!db` fallback across all `*-store.ts` (AGENTS.md §1) | 2-3h | A | done (10 stores) |
+| 6 | Split `web/src/tasks/TaskGraphDrawer.tsx` (506 LOC, 5 inner components) | 1-2h | A | open |
+| 7 | Standardise `team` CLI token transport on `x-hive-agent-token` header | 30min | A | open |
+| 8 | Draft `docs/team-protocol.md` + Substack post for Day-10 HN launch | 4-6h | C + R1 | open |
+| 9 | Hook-driven worker card summary (port from Cline Kanban) | 6-10h | B | open |
+| 10 | `RoleAvatar` hex + role-glyph rebrand | 2-3h | D | open |
+| 11 | Diff drawer + auto `git diff` on `team report` | 12-20h | B | open |
+| 12 | Open GitHub Discussions (single click; pin "Roadmap & feedback") | 10min | C | open |
+
+Rows 1-4 = launch assets (≤ 1-2 days). Rows 5-7 = internal hygiene (≤ half
+a day). Row 8+ = medium-term content / feature investment.
+
+### Strategic update
+
+- HN title must avoid "multi-agent orchestrator" — that phrase belongs to
+  Anthropic's native Agent Teams product now.
+- Don't try to out-feature ruflo (51k); their surface area is the trap.
+- Don't post to HN or r/programming until the demo GIF is in the README — a
+  bare README gets "looks like another wrapper" as the top comment.
+
 ## Source notes
 
-The three sub-agent evaluations were run inline on 2026-05-15 and are not
-archived as standalone reports — the conclusions live here. If a fresh audit
-is needed, the prompts are reproducible from the lead positioning agent
-brief, the codebase-highlight agent brief, and the onboarding audit agent
-brief (search the session log).
+Two rounds of sub-agent evaluations ran inline on 2026-05-15 and are not
+archived as standalone reports — the conclusions live here.
+
+- Round 1 (3 agents): lead positioning, codebase highlights, onboarding
+  audit.
+- Round 2 (4 agents): internal health (architecture / code / tests /
+  security), competitive deep-dive, GTM 30-day calendar, brand identity.
+
+If a fresh audit is needed, the agent prompts are reproducible from the
+session log.
