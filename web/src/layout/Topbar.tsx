@@ -43,7 +43,7 @@ export const Topbar = ({
       <div className="flex items-center gap-2">
         <Hexagon size={16} className="text-pri" aria-hidden />
         <span className="font-semibold text-pri">Hive</span>
-        <span className="text-ter text-xs">v{version}</span>
+        <span className="text-ter text-xs tabular-nums">v{version}</span>
         {updateInfo ? (
           <div className="flex items-center gap-2 text-xs" data-testid="topbar-update-badge">
             <span
@@ -57,7 +57,7 @@ export const Topbar = ({
               Update available
             </span>
             <span className="text-ter">
-              v{version} -&gt; v{updateInfo.latestVersion}
+              v{version} → v{updateInfo.latestVersion}
             </span>
             <code className="mono text-ter">{updateInfo.installHint}</code>
           </div>

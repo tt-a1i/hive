@@ -126,7 +126,7 @@ export const NotificationSettingsButton = () => {
         <div
           role="dialog"
           aria-label="Notification settings"
-          className="elev-2 absolute top-8 right-0 z-50 w-[380px] rounded-lg border p-3"
+          className="elev-2 absolute top-8 right-0 z-50 w-[380px] rounded border p-3"
           style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-bright)' }}
           data-testid="notification-settings"
         >
@@ -151,7 +151,7 @@ export const NotificationSettingsButton = () => {
               {soundOptions.map((item) => (
                 <div
                   key={item.value}
-                  className="relative min-h-[78px] rounded-lg border transition-colors"
+                  className="relative min-h-[78px] rounded border transition-colors"
                   style={{
                     background:
                       settings.sound === item.value
@@ -163,7 +163,7 @@ export const NotificationSettingsButton = () => {
                         : 'var(--border)',
                   }}
                 >
-                  <label className="block h-full w-full cursor-pointer rounded-lg px-3 py-2 pr-10 text-left transition-colors hover:bg-3 focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--ring-focus)]">
+                  <label className="block h-full w-full cursor-pointer rounded px-3 py-2 pr-10 text-left transition-colors hover:bg-3 focus-within:outline-none focus-within:ring-2 focus-within:ring-[var(--ring-focus)]">
                     <input
                       type="radio"
                       name="notification-sound"
@@ -222,7 +222,7 @@ export const NotificationSettingsButton = () => {
             <div
               role="radiogroup"
               aria-label="Information"
-              className="grid grid-cols-2 rounded-lg border p-1"
+              className="grid grid-cols-2 rounded border p-1"
               style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
             >
               {detailOptions.map((item) => (
