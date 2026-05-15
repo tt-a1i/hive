@@ -134,6 +134,7 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
+    if (arg === undefined) continue
 
     // Backward-compatible no-op: reports are interpreted from their text.
     if (arg === '--success' || arg === '--failed') continue
@@ -203,7 +204,7 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
     )
   }
 
-  return { result: useStdin ? null : positionals[0], artifacts, dispatchId, useStdin }
+  return { result: useStdin ? null : (positionals[0] ?? null), artifacts, dispatchId, useStdin }
 }
 
 export const readStdinToString = async (command = 'report'): Promise<string> => {

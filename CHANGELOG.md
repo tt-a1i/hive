@@ -2,6 +2,50 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.5 - 2026-05-15
+
+Public-preview surface polish + internal hygiene pass.
+
+- README now leads with the actual differentiator: the orchestrator is a
+  real CLI agent (claude / codex / opencode / gemini), not a human PM and
+  not a script. Both English and Simplified Chinese versions updated.
+- README gained a CI build-status badge and a "Try the demo first"
+  section that surfaces the fully-client-side demo flow (shipped in
+  alpha.1 but previously invisible to anyone who had not booted Hive).
+- Bug-report and feature-request issue templates plus `CONTRIBUTING.md`
+  landed; GitHub Community Standards checklist is now green. A
+  `docs/growth-roadmap.md` working doc was added to track the
+  positioning, brand, and protocol roadmap.
+- Todo drawer rebuilt around the actual task it does: owner-colour
+  pills, hover-revealed actions (edit / add subtask / delete), inline
+  editing with `\n` sanitisation, optimistic UI with rollback, and a
+  compact progress header.
+- WorkerModal now opens at 50% of viewport width on first launch. Worker
+  cards dropped the queued-count pill and the stale `useWorkspaceStats`
+  hook was removed as dead code.
+- IME composition for CJK terminal input no longer swallows characters.
+  xterm.js gained `Unicode11Addon`, `WebglAddon`, `ClipboardAddon`, and
+  `WebLinksAddon` alongside `FitAddon`.
+- `team report` parser rewritten: any-order flags, errors embed the full
+  usage block. Added `--stdin` for piping bodies past shell argument
+  limits; `team status --stdin` covered the same way.
+- `last_output_line` renamed to `last_pty_line` on the `team list`
+  payload. Orchestrator system instructions now treat the field as PTY
+  noise (never a worker reply) and are CLI-agnostic instead of
+  Claude-Code-specific.
+- All ten runtime store factories now require a real `Database`. The
+  `if (!db)` in-memory fallback branches and their Map / Set / counter
+  scaffolding were dead code carried only for tests that omitted
+  `dataDir`; they are gone (~ 260 LOC removed). `openRuntimeDatabase`
+  falls back to a `:memory:` SQLite engine when no `dataDir` is supplied
+  so tests still exercise real schema.
+- `MessageLogHandle.kind: 'db' | 'memory'` removed — the handle is now
+  just `{ sequence: number }`. The empty `initialize` no-ops on the
+  agent-run and message-log stores, their port slots, and the
+  `markUnfinishedRunsStale?.` optional chaining are also gone. Six
+  previously-failing `terminal-view.test.tsx` cases now pass with a
+  one-line `unicode` stub addition on the four web-test Terminal mocks.
+
 ## 0.6.0-alpha.4 - 2026-05-15
 
 Update-awareness pass for public-preview installs.
