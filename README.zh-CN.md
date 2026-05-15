@@ -4,9 +4,10 @@
   <img src="./assets/hive-hero.png" alt="Hive 本机多 agent 协作工作台" />
 </p>
 
-Hive 是一个本机多 agent 协作工作台。它让 Claude Code、Codex、OpenCode、Gemini 或任意自定义 CLI Agent 组成一个可见的团队：一个 Orchestrator 负责协调计划，多个 Worker 在各自的 PTY 里执行任务，Web UI 把任务、终端和汇报集中在一处。
+**Hive 是面向 CLI Coding Agent 的浏览器版蜂巢（hive-mind）。** Orchestrator 本身就是一个真实的 `claude` / `codex` / `opencode` / `gemini` 进程——不是你、也不是脚本——它派单的 Worker 同样是真 CLI agent。所有 agent 都是你电脑上真实的 PTY 进程，通过 Hive 注入到 shell 里的小型 `team` 协议互相通信，共享 `<workspace>/.hive/tasks.md` 这份 markdown 任务图。
 
 [![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
+[![ci](https://img.shields.io/github/actions/workflow/status/tt-a1i/hive/release.yml?branch=main&label=ci)](https://github.com/tt-a1i/hive/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#平台支持)
@@ -25,6 +26,10 @@ CLI Coding Agent 各自都很强，但同时管几个就有点别扭：
 - 想重启接着干，全看每个 CLI 自己的 session 恢复行为，散乱不可控。
 
 Hive 加上这一层调度，**不替换**任何 CLI。Agent 还是真实跑在你电脑上的终端进程，Hive 只是它们外面的"团队 shell"。
+
+## 先看看 demo
+
+还没装任何 agent CLI？运行 `hive`、打开它打印出的本地地址、在 first-run 向导里点 **Try Demo**。你会看到一个完全跑在客户端的预览——假 orchestrator + 两个 worker、预录的终端 scrollback、一份预填的任务清单——既不会连服务器，也不需要任何真实 CLI agent。适合决定要不要继续装真 CLI。
 
 ## 快速开始
 

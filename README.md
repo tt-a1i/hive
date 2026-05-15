@@ -4,12 +4,15 @@
   <img src="./assets/hive-hero.png" alt="Hive local-first multi-agent coding workspace hero image" />
 </p>
 
-Hive is a local multi-agent workspace for CLI coding agents. It lets you run
-Claude Code, Codex, OpenCode, Gemini, or any custom CLI agent as a visible team:
-one Orchestrator coordinates the plan, worker agents run in their own PTYs, and
-the web UI keeps tasks, terminals, and reports in one place.
+**Hive is a browser-native hive-mind for CLI coding agents.** The orchestrator
+is a real `claude` / `codex` / `opencode` / `gemini` process — not you, and
+not a script — and so are the workers it dispatches to. Every agent runs as
+a real PTY on your machine, talks through a small `team` protocol that Hive
+injects into each agent's shell, and shares a markdown task graph at
+`<workspace>/.hive/tasks.md`.
 
 [![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
+[![ci](https://img.shields.io/github/actions/workflow/status/tt-a1i/hive/release.yml?branch=main&label=ci)](https://github.com/tt-a1i/hive/actions/workflows/release.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#platform-support)
@@ -35,6 +38,14 @@ awkward:
 Hive adds that coordination layer without replacing the CLIs. The agents remain
 real terminal processes running on your machine; Hive manages the team shell
 around them.
+
+## Try the demo first
+
+Don't have an agent CLI installed yet? Run `hive`, open the printed URL, and
+click **Try Demo** in the first-run wizard. You get a fully client-side
+preview — fake orchestrator + two workers, prerecorded scrollback, a
+prefilled task list — without touching the server or any real CLI agent.
+Useful for deciding whether to install a real CLI.
 
 ## Quick Start
 
