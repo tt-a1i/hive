@@ -63,6 +63,11 @@ export const toggleTaskLine = (content: string, lineIndex: number): string => {
   return lines.join('\n')
 }
 
+/** Collapse embedded newlines into spaces so a single task line stays a
+ *  single physical line (defensive against paste-from-clipboard etc). */
+const sanitizeTaskText = (text: string): string =>
+  text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim()
+
 export const updateTaskTextAtLine = (
   content: string,
   lineIndex: number,
@@ -73,10 +78,10 @@ export const updateTaskTextAtLine = (
   if (target === undefined) return content
   const match = target.match(TASK_LINE)
   if (!match) return content
-  const trimmed = nextText.trim()
-  if (!trimmed) return content
+  const sanitized = sanitizeTaskText(nextText)
+  if (!sanitized) return content
   const next = target.replace(TASK_LINE, (_, indent, mark) => {
-    return `${indent}- [${mark}] ${trimmed}`
+    return `${indent}- [${mark}] ${sanitized}`
   })
   lines[lineIndex] = next
   return lines.join('\n')
@@ -85,8 +90,11 @@ export const updateTaskTextAtLine = (
 /**
  * Drop the task at `lineIndex` and every nested-deeper sibling line beneath
  * it (until we encounter a peer or shallower line). Non-task neighbour lines
- * (blank, headings, prose) remain intact so user-authored context isn't
- * collateral.
+ * (blank, headings, prose) act as cascade terminators — keeping user-authored
+ * context outside the deletion window. NOTE: prose lines interleaved BETWEEN
+ * a parent task and its first child will currently orphan the child on
+ * reparse; `.hive/tasks.md` is in practice a pure GFM checklist, so we defer
+ * the look-ahead fix until a real workspace bumps into it.
  */
 export const deleteTaskLine = (content: string, lineIndex: number): string => {
   const lines = content.split(/\r?\n/)
@@ -116,8 +124,8 @@ export const deleteTaskLine = (content: string, lineIndex: number): string => {
  * at a task line.
  */
 export const appendChildTaskAtLine = (content: string, lineIndex: number, text: string): string => {
-  const trimmed = text.trim()
-  if (!trimmed) return content
+  const sanitized = sanitizeTaskText(text)
+  if (!sanitized) return content
   const lines = content.split(/\r?\n/)
   const target = lines[lineIndex]
   if (target === undefined) return content
@@ -136,6 +144,6 @@ export const appendChildTaskAtLine = (content: string, lineIndex: number, text: 
     insertAt += 1
   }
   const childIndent = `${parentIndentRaw}  `
-  lines.splice(insertAt, 0, `${childIndent}- [ ] ${trimmed}`)
+  lines.splice(insertAt, 0, `${childIndent}- [ ] ${sanitized}`)
   return lines.join('\n')
 }

@@ -746,7 +746,6 @@ html, body {
   gap: 12px;
   border-radius: 6px;
   padding: 8px 10px 8px 12px;
-  cursor: pointer;
   position: relative;
   transition: background-color var(--dur-fast) ease;
 }

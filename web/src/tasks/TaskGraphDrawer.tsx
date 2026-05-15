@@ -130,15 +130,7 @@ const TaskInlineEditor = ({
   )
 }
 
-const TaskItem = ({
-  depth = 0,
-  task,
-  handlers,
-}: {
-  depth?: number
-  task: ParsedTask
-  handlers: TaskItemHandlers
-}) => {
+const TaskItem = ({ task, handlers }: { task: ParsedTask; handlers: TaskItemHandlers }) => {
   const StatusIcon = task.checked ? CheckCircle2 : Circle
   const { title, meta } = parseTaskMetadata(task.text)
   const [editing, setEditing] = useState(false)
@@ -263,7 +255,7 @@ const TaskItem = ({
       {task.children.length > 0 || adding ? (
         <ul className="task-children">
           {task.children.map((child) => (
-            <TaskItem depth={depth + 1} key={child.line} handlers={handlers} task={child} />
+            <TaskItem key={child.line} handlers={handlers} task={child} />
           ))}
           {adding ? (
             <li className="task-node">

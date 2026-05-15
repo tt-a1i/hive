@@ -28,6 +28,13 @@ describe('updateTaskTextAtLine', () => {
     const content = 'free prose\n- [ ] alpha\n'
     expect(updateTaskTextAtLine(content, 0, 'nope')).toBe(content)
   })
+
+  test('collapses embedded newlines so a pasted multi-line value stays on one row', () => {
+    const content = '- [ ] alpha\n'
+    expect(updateTaskTextAtLine(content, 0, 'first line\nsecond line')).toBe(
+      '- [ ] first line second line\n'
+    )
+  })
 })
 
 describe('deleteTaskLine', () => {
@@ -83,5 +90,12 @@ describe('appendChildTaskAtLine', () => {
   test('returns content unchanged when text is empty', () => {
     const content = '- [ ] parent\n'
     expect(appendChildTaskAtLine(content, 0, '   ')).toBe(content)
+  })
+
+  test('collapses embedded newlines in the new child text', () => {
+    const content = '- [ ] parent\n'
+    expect(appendChildTaskAtLine(content, 0, 'line one\nline two')).toBe(
+      '- [ ] parent\n  - [ ] line one line two\n'
+    )
   })
 })
