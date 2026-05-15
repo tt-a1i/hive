@@ -693,27 +693,21 @@ html, body {
 }
 .drawer.open { transform: translateX(0); }
 
-.task-summary {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 12px;
-  background: var(--bg-2);
-}
-
-.task-progress {
-  margin-top: 10px;
-  height: 6px;
+/* Slim 2px progress bar — replaces the full progress card. Solid accent
+   (no gradient), 999px ends so the leading edge of the fill looks
+   intentional rather than chopped. */
+.task-progress-thin {
+  height: 2px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--bg-3);
 }
-
-.task-progress > span {
+.task-progress-thin > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--status-green));
-  transition: width 0.18s ease-out;
+  background: var(--accent);
+  transition: width 0.15s ease;
 }
 
 .task-list {

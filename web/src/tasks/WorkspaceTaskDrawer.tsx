@@ -29,6 +29,9 @@ export const WorkspaceTaskDrawer = ({ tasksFile, workspacePath, open, onClose }:
     onToggleTaskLine={(line) => {
       void tasksFile.toggleTaskAtLine(line).catch(logSwallowed('tasks.toggleTaskAtLine'))
     }}
+    onAppendTask={(text) => {
+      void tasksFile.appendTask(text).catch(logSwallowed('tasks.appendTask'))
+    }}
     open={open}
     workspacePath={workspacePath}
   />

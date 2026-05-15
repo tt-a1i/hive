@@ -109,7 +109,7 @@ const enterRawEditor = async (expectedInitialValue: string) => {
   await openTaskGraph()
   // Wait until tasks content is loaded (checkbox rendered means parseTaskMarkdown ran)
   await screen.findByTestId('task-checkbox-0')
-  fireEvent.click(screen.getByRole('button', { name: 'edit raw' }))
+  fireEvent.click(screen.getByRole('button', { name: 'View source' }))
   await waitFor(() => {
     expect(screen.getByLabelText('Tasks Markdown')).toHaveValue(expectedInitialValue)
   })
@@ -137,12 +137,15 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     })
 
     const summary = await within(drawer).findByTestId('task-graph-summary')
-    expect(summary).toHaveTextContent('2/3')
+    expect(summary).toHaveTextContent('2 of 3 done')
     expect(summary).toHaveTextContent('67%')
     expect(within(drawer).getByTestId('task-progress-bar')).toHaveAttribute('aria-valuenow', '67')
     expect(within(drawer).getByText('@Alice')).toBeInTheDocument()
-    expect(within(drawer).getByText('@Bob')).toBeInTheDocument()
     expect(within(drawer).getByTestId('task-line-1')).toHaveTextContent('wire submit')
+    // Completed tasks are folded into a disclosure by default; expand it to
+    // verify the done-task content (incl. its @mention) is still rendered.
+    fireEvent.click(within(drawer).getByTestId('task-completed-toggle'))
+    expect(within(drawer).getByText('@Bob')).toBeInTheDocument()
   })
 
   test('toggling a checkbox persists to .hive/tasks.md', async () => {
@@ -161,6 +164,12 @@ describe('tasks flow driven from the Task Graph drawer', () => {
       await expect(saved.json()).resolves.toEqual({ content: '- [x] implement login\n' })
     })
 
+    // After toggle, the task moves into the collapsed "completed" section.
+    // Expand it to verify the checkbox is now checked.
+    await waitFor(() => {
+      expect(screen.getByTestId('task-completed-toggle')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('task-completed-toggle'))
     await waitFor(() => {
       expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
     })

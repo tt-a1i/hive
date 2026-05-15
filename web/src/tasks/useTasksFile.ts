@@ -122,6 +122,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       onReload: () => {},
       onSave: async () => {},
       toggleTaskAtLine: async (_lineIndex: number) => {},
+      appendTask: async (_text: string) => {},
     }
   }
 
@@ -162,6 +163,28 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       const previous = contentRef.current
       const next = toggleTaskLine(previous, lineIndex)
       if (next === previous) return
+      savedContentRef.current = next
+      contentRef.current = next
+      dirtyRef.current = false
+      setContent(next)
+      try {
+        const response = await saveWorkspaceTasks(workspaceId, { content: next })
+        savedContentRef.current = response.content
+        contentRef.current = response.content
+        setContent(response.content)
+      } catch (error) {
+        savedContentRef.current = previous
+        contentRef.current = previous
+        setContent(previous)
+        throw error
+      }
+    },
+    appendTask: async (text: string) => {
+      const trimmed = text.trim()
+      if (!workspaceId || !trimmed) return
+      const previous = contentRef.current
+      const needsLeadingNewline = previous.length > 0 && !previous.endsWith('\n')
+      const next = `${previous}${needsLeadingNewline ? '\n' : ''}- [ ] ${trimmed}\n`
       savedContentRef.current = next
       contentRef.current = next
       dirtyRef.current = false
