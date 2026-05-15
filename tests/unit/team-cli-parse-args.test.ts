@@ -78,6 +78,24 @@ describe('parseReportArgs', () => {
     throw new Error('expected parseReportArgs to throw')
   })
 
+  test('--stdin works on the status command and reports against the status usage line', () => {
+    expect(parseReportArgs(['--stdin'], 'status')).toEqual({
+      result: null,
+      dispatchId: undefined,
+      artifacts: [],
+      useStdin: true,
+    })
+    try {
+      parseReportArgs(['working', '--stdin'], 'status')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toContain('--stdin is mutually exclusive with a positional argument')
+      expect(message).toContain('Usage: team status')
+      return
+    }
+    throw new Error('expected parseReportArgs to throw')
+  })
+
   describe('error messages embed the usage line', () => {
     test('--dispatch without a value', () => {
       try {

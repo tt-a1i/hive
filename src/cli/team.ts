@@ -205,10 +205,13 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
   return { result: useStdin ? null : positionals[0], artifacts, dispatchId, useStdin }
 }
 
-export const readStdinToString = async (): Promise<string> => {
+export const readStdinToString = async (command = 'report'): Promise<string> => {
   if (process.stdin.isTTY) {
     throw new Error(
-      '--stdin requires piped input, but stdin is a TTY. Did you forget to pipe content in?'
+      withUsage(
+        '--stdin requires piped input, but stdin is a TTY. Did you forget to pipe content in?',
+        command
+      )
     )
   }
   const chunks: Buffer[] = []
@@ -217,7 +220,7 @@ export const readStdinToString = async (): Promise<string> => {
   }
   const content = Buffer.concat(chunks).toString('utf8')
   if (!content.trim()) {
-    throw new Error('--stdin received empty input')
+    throw new Error(withUsage('--stdin received empty input', command))
   }
   return content
 }
@@ -272,7 +275,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'status') {
     const report = parseReportArgs(args, 'status')
-    const body = report.useStdin ? await readStdinToString() : (report.result ?? '')
+    const body = report.useStdin ? await readStdinToString('status') : (report.result ?? '')
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
@@ -294,7 +297,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'report') {
     const report = parseReportArgs(args)
-    const body = report.useStdin ? await readStdinToString() : (report.result ?? '')
+    const body = report.useStdin ? await readStdinToString('report') : (report.result ?? '')
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
