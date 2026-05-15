@@ -4,6 +4,7 @@ import type { WorkerRole } from '../shared/types.js'
 import type { PickFolderResponse } from './fs-pick-folder.js'
 import type { RuntimeStore } from './runtime-store.js'
 import type { TasksFileService } from './tasks-file.js'
+import type { VersionService } from './version-service.js'
 
 export interface SendTaskBody {
   hive_port?: string
@@ -59,6 +60,7 @@ export interface RouteContext {
   store: RuntimeStore
   tasksFileService: TasksFileService
   pickFolderService: () => Promise<PickFolderResponse>
+  versionService: VersionService
   params: Record<string, string>
 }
 

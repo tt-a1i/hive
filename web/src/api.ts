@@ -61,6 +61,42 @@ export const listWorkspaces = async (): Promise<WorkspaceSummary[]> => {
   return (await response.json()) as WorkspaceSummary[]
 }
 
+export interface VersionInfo {
+  currentVersion: string
+  installHint: string
+  latestVersion: string
+  packageName: string
+  releaseUrl: string
+  updateAvailable: boolean
+}
+
+interface VersionInfoPayload {
+  current_version: string
+  install_hint: string
+  latest_version: string
+  package_name: string
+  release_url: string
+  update_available: boolean
+}
+
+export const getVersionInfo = async (): Promise<VersionInfo> => {
+  const response = await apiFetch('/api/version')
+
+  if (!response.ok) {
+    throw new Error('Failed to load version info')
+  }
+
+  const payload = (await response.json()) as VersionInfoPayload
+  return {
+    currentVersion: payload.current_version,
+    installHint: payload.install_hint,
+    latestVersion: payload.latest_version,
+    packageName: payload.package_name,
+    releaseUrl: payload.release_url,
+    updateAvailable: payload.update_available,
+  }
+}
+
 export interface OrchestratorStartResult {
   ok: boolean
   error: string | null

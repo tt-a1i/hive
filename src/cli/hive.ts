@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 
 import { once } from 'node:events'
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { createAgentManager } from '../server/agent-manager.js'
 import { createApp } from '../server/app.js'
+import { readPackageVersion } from '../server/package-version.js'
 import { createRuntimeStore, type RuntimeStore } from '../server/runtime-store.js'
+import { createVersionService, type VersionService } from '../server/version-service.js'
 
 interface RunHiveCommandResult {
   port: number
   close: () => Promise<void>
   store: RuntimeStore
+}
+
+type RunHiveCommandOptions = {
+  versionService?: VersionService
 }
 
 export const HIVE_USAGE = [
@@ -25,19 +31,6 @@ export const HIVE_USAGE = [
   '  -h, --help      Print this help.',
   '  -v, --version   Print the installed Hive version.',
 ].join('\n')
-
-const readPackageVersion = () => {
-  let dir = dirname(fileURLToPath(import.meta.url))
-  for (let depth = 0; depth < 8; depth += 1) {
-    const candidate = join(dir, 'package.json')
-    if (existsSync(candidate)) {
-      const parsed = JSON.parse(readFileSync(candidate, 'utf8')) as { version?: unknown }
-      if (typeof parsed.version === 'string') return parsed.version
-    }
-    dir = dirname(dir)
-  }
-  return 'unknown'
-}
 
 export const handleHiveInfoCommand = (argv: string[]) => {
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -81,14 +74,27 @@ const parsePort = (argv: string[]) => {
 
 const resolveDataDir = () => process.env.HIVE_DATA_DIR || join(homedir(), '.config', 'hive')
 
-export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResult> => {
+const maybePrintUpdateHint = async (versionService: VersionService) => {
+  const info = await versionService.getVersionInfo()
+  if (!info.update_available) return
+  console.log(
+    `Hive update available: ${info.current_version} -> ${info.latest_version}. Run: ${info.install_hint}`
+  )
+}
+
+export const runHiveCommand = async (
+  argv: string[],
+  options: RunHiveCommandOptions = {}
+): Promise<RunHiveCommandResult> => {
   const port = parsePort(argv)
   const dataDir = resolveDataDir()
+  const versionService = options.versionService ?? createVersionService()
   const app = createApp({
     store: createRuntimeStore({
       agentManager: createAgentManager(),
       dataDir,
     }),
+    versionService,
   })
 
   app.server.listen(port, '127.0.0.1')
@@ -144,6 +150,7 @@ export const runHiveCommand = async (argv: string[]): Promise<RunHiveCommandResu
   process.once('SIGINT', gracefulShutdown)
 
   console.log(`Hive running at http://127.0.0.1:${address.port}`)
+  void maybePrintUpdateHint(versionService).catch(() => {})
 
   return {
     port: address.port,

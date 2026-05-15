@@ -11,11 +11,13 @@ import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { createTasksFileService, type TasksFileService } from './tasks-file.js'
 import { createTerminalWebSocketServer } from './terminal-ws-server.js'
+import { createVersionService, type VersionService } from './version-service.js'
 
 interface CreateAppOptions {
   store: RuntimeStore
   pickFolderService?: () => Promise<PickFolderResponse>
   tasksFileService?: TasksFileService
+  versionService?: VersionService
 }
 
 const getDefaultStaticDir = () => {
@@ -96,6 +98,7 @@ export const createApp = ({
   store,
   pickFolderService = pickFolder,
   tasksFileService = createTasksFileService(),
+  versionService = createVersionService(),
 }: CreateAppOptions) => {
   const staticDir = process.env.HIVE_STATIC_DIR ?? getDefaultStaticDir()
   const staticAvailablePromise = canServeStatic(staticDir)
@@ -114,6 +117,7 @@ export const createApp = ({
           store,
           tasksFileService,
           pickFolderService,
+          versionService,
           params: match.params,
         })
         return

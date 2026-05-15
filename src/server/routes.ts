@@ -15,11 +15,13 @@ import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
 import { teamRoutes } from './routes-team.js'
 import { uiRoutes } from './routes-ui.js'
+import { versionRoutes } from './routes-version.js'
 import { workspaceRoutes } from './routes-workspaces.js'
 
 const routes: RouteDefinition[] = [
   ...workspaceRoutes,
   ...dispatchRoutes,
+  ...versionRoutes,
   ...uiRoutes,
   ...settingsRoutes,
   ...taskRoutes,

@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { AppOverlays } from './AppOverlays.js'
 import { AppProviders } from './AppProviders.js'
-import { DemoWorkspaceView } from './demo/DemoWorkspaceView.js'
+import { AppWorkspaceContent } from './AppWorkspaceContent.js'
 import { DEMO_TASKS_MD } from './demo/demo-fixture.js'
 import { useDemoMode } from './demo/useDemoMode.js'
 import { useEffectiveWorkspaceState } from './demo/useEffectiveWorkspaceState.js'
@@ -14,14 +14,12 @@ import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
-import { useGlobalShortcuts } from './useGlobalShortcuts.js'
+import { useAppShortcuts } from './useAppShortcuts.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
 import { useWorkspaceSelection } from './useWorkspaceSelection.js'
 import { useWorkspaceWorkers } from './useWorkspaceWorkers.js'
-import { WorkspaceDetail } from './WorkspaceDetail.js'
-import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 import { useFirstRunWizard } from './wizard/useFirstRunWizard.js'
 import { useWorkerActions } from './worker/useWorkerActions.js'
 
@@ -79,41 +77,14 @@ const AppInner = () => {
     setWorkspaces,
     workspaces,
   })
-  const shortcuts = useMemo(() => {
-    const workspaceList = eff.effectiveWorkspaces ?? []
-    const indexShortcuts = workspaceList.slice(0, 9).map((ws, idx) => ({
-      key: String(idx + 1),
-      mod: true,
-      handler: () => {
-        selectWorkspace(ws.id)
-      },
-    }))
-    return [
-      {
-        key: 'b',
-        mod: true,
-        handler: () => {
-          if (eff.effectiveActiveWorkspace) setTaskGraphOpen((open) => !open)
-        },
-      },
-      {
-        key: 'n',
-        mod: true,
-        shift: true,
-        handler: () => {
-          if (!bootstrapError) triggerAddDialog()
-        },
-      },
-      ...indexShortcuts,
-    ]
-  }, [
-    eff.effectiveWorkspaces,
-    eff.effectiveActiveWorkspace,
-    selectWorkspace,
+  useAppShortcuts({
+    activeWorkspace: eff.effectiveActiveWorkspace,
     bootstrapError,
-    triggerAddDialog,
-  ])
-  useGlobalShortcuts(shortcuts)
+    onSelectWorkspace: selectWorkspace,
+    onToggleTaskGraph: () => setTaskGraphOpen((open) => !open),
+    onTriggerAddDialog: triggerAddDialog,
+    workspaces: eff.effectiveWorkspaces,
+  })
   return (
     <MainLayout
       hideTopbarActions={!eff.effectiveActiveWorkspace}
@@ -132,36 +103,23 @@ const AppInner = () => {
       }
       taskGraphOpen={taskGraphOpen}
     >
-      {activeId && !demoMode ? (
-        <WorkspaceTerminalPanels
-          key={`terminal-${activeId}`}
-          optimisticRuns={terms.optimisticRunsByWorkspaceId[activeId] ?? []}
-          workspaceId={activeId}
-        />
-      ) : null}
-      {demoMode ? (
-        <DemoWorkspaceView onExit={exitDemo} />
-      ) : (
-        <WorkspaceDetail
-          onCreateWorker={workerActions.createWorker}
-          onDeleteWorker={workerActions.deleteWorker}
-          onDeleteWorkspace={deleteWorkspace}
-          onStartWorker={workerActions.startWorker}
-          onOrchestratorResult={wsCreate.recordOrchestratorResult}
-          onRequestAddWorkspace={triggerAddDialog}
-          onTryDemo={enableDemo}
-          welcomeDisabledReason={bootstrapError ?? undefined}
-          orchestratorAutostartError={
-            activeId ? (wsCreate.orchestratorAutostartErrors[activeId] ?? null) : null
-          }
-          orchestratorAutostartRunId={
-            activeId ? (wsCreate.orchestratorAutostartRunIds[activeId] ?? null) : null
-          }
-          terminalRuns={terms.terminalRuns}
-          workers={activeWorkers}
-          workspace={eff.effectiveActiveWorkspace}
-        />
-      )}
+      <AppWorkspaceContent
+        activeId={activeId}
+        activeWorkspace={eff.effectiveActiveWorkspace}
+        bootstrapError={bootstrapError}
+        demoMode={demoMode}
+        onDeleteWorkspace={deleteWorkspace}
+        onExitDemo={exitDemo}
+        onRequestAddWorkspace={triggerAddDialog}
+        onTryDemo={enableDemo}
+        optimisticRunsByWorkspaceId={terms.optimisticRunsByWorkspaceId}
+        orchestratorAutostartErrors={wsCreate.orchestratorAutostartErrors}
+        orchestratorAutostartRunIds={wsCreate.orchestratorAutostartRunIds}
+        recordOrchestratorResult={wsCreate.recordOrchestratorResult}
+        terminalRuns={terms.terminalRuns}
+        workerActions={workerActions}
+        workers={activeWorkers}
+      />
       <AppOverlays
         addDialogTrigger={addDialogTrigger}
         wizardOpen={wizardOpen}

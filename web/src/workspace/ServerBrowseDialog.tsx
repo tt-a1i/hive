@@ -216,7 +216,7 @@ export const ServerBrowseDialog = ({
                   Advanced: startup command
                 </button>
                 {startupExpanded ? (
-                  <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-ter">
+                  <label className="flex flex-col gap-2 text-xs uppercase tracking-wider text-ter">
                     Startup command
                     <input
                       type="text"
@@ -245,7 +245,7 @@ export const ServerBrowseDialog = ({
                   Advanced: paste path
                 </button>
                 {advanced ? (
-                  <label className="flex flex-col gap-1.5 text-xs uppercase tracking-wider text-ter">
+                  <label className="flex flex-col gap-2 text-xs uppercase tracking-wider text-ter">
                     Absolute path
                     <input
                       type="text"

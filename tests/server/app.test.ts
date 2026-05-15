@@ -41,6 +41,38 @@ const startServer = async () => {
   }
 }
 
+const startServerWithVersionInfo = async () => {
+  const store = createRuntimeStore({ agentManager: createAgentManager() })
+  const app = createApp({
+    store,
+    versionService: {
+      getVersionInfo: async () => ({
+        current_version: '0.6.0-alpha.3',
+        install_hint: 'npm update -g @tt-a1i/hive',
+        latest_version: '0.6.0-alpha.4',
+        package_name: '@tt-a1i/hive',
+        release_url: 'https://www.npmjs.com/package/@tt-a1i/hive/v/0.6.0-alpha.4',
+        update_available: true,
+      }),
+    },
+  })
+
+  await new Promise<void>((resolve) => {
+    app.server.listen(0, '127.0.0.1', () => resolve())
+  })
+
+  servers.push(app.server)
+
+  const address = app.server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Server did not bind to an inet port')
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+  }
+}
+
 const requestWithHeaders = async (
   baseUrl: string,
   path: string,
@@ -73,6 +105,22 @@ const requestWithHeaders = async (
 }
 
 describe('runtime http app', () => {
+  test('GET /api/version returns cached update metadata for the UI', async () => {
+    const { baseUrl } = await startServerWithVersionInfo()
+
+    const response = await fetch(`${baseUrl}/api/version`)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      current_version: '0.6.0-alpha.3',
+      install_hint: 'npm update -g @tt-a1i/hive',
+      latest_version: '0.6.0-alpha.4',
+      package_name: '@tt-a1i/hive',
+      release_url: 'https://www.npmjs.com/package/@tt-a1i/hive/v/0.6.0-alpha.4',
+      update_available: true,
+    })
+  })
+
   test('GET /api/workspaces returns current workspace list', async () => {
     const { store, baseUrl } = await startServer()
     store.createWorkspace('/tmp/hive-alpha', 'Alpha')
