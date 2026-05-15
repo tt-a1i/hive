@@ -365,6 +365,8 @@ describe('Layer B fallback integration', () => {
         expect(state.status).toBe('running')
         expect(state.output).toContain('STDIN:[Hive 系统消息：你是 Alpha 的')
         expect(state.output).toContain('无法通过原生 session resume 恢复')
+        // §3.5.1 场景 C（正常 exit）也走 Layer B，文案不应自称"崩溃"
+        expect(state.output).not.toContain('崩溃')
         expect(state.output).toContain('请继续修复 restart bug')
         expect(state.output).toContain('layer b fallback')
         expect(state.output).toContain('Bob')

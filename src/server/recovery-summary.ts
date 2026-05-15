@@ -107,7 +107,7 @@ export const buildRecoverySummary = ({
   wrapSystemMessage(
     [
       `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
-      '你刚刚因为崩溃重启，且无法通过原生 session resume 恢复。下面是接力上下文。',
+      '你刚被 Hive 重启了，且无法通过原生 session resume 恢复。下面是接力上下文。',
       '',
       '## 最近 1 小时与 user 的对话',
       ...formatUserInputs(messages),
