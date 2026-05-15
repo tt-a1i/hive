@@ -22,7 +22,14 @@ const TEAM_USAGE = [
   '  team list',
   '  team send <worker-name> "<task>"',
   '  team report "<result>" [--dispatch <dispatch-id>] [--artifact <path>]',
+  '  team report --stdin [--dispatch <dispatch-id>] [--artifact <path>]',
   '  team status "<current status>" [--artifact <path>]',
+  '  team status --stdin [--artifact <path>]',
+  '',
+  'Flags can appear in any order. Use --stdin to pipe long bodies and avoid shell-escaping issues:',
+  '  cat <<EOF | team report --stdin --dispatch <id>',
+  '  ... long report ...',
+  '  EOF',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -103,23 +110,37 @@ interface TeamReportResponse {
   ok: true
 }
 
-const REPORT_USAGE = 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
-const STATUS_USAGE = 'Usage: team status <current status> [--artifact <path>]'
+const REPORT_USAGE =
+  'Usage: team report (<result> | --stdin) [--dispatch <dispatch-id>] [--artifact <path>]'
+const STATUS_USAGE = 'Usage: team status (<current status> | --stdin) [--artifact <path>]'
 
 const usageFor = (command: string) => (command === 'status' ? STATUS_USAGE : REPORT_USAGE)
 
 const withUsage = (message: string, command: string) => `${message}\n\n${usageFor(command)}`
 
-export const parseReportArgs = (args: string[], command = 'report') => {
+export interface ParsedReportArgs {
+  artifacts: string[]
+  dispatchId: string | undefined
+  result: string | null
+  useStdin: boolean
+}
+
+export const parseReportArgs = (args: string[], command = 'report'): ParsedReportArgs => {
   const positionals: string[] = []
   const artifacts: string[] = []
   let dispatchId: string | undefined
+  let useStdin = false
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
 
     // Backward-compatible no-op: reports are interpreted from their text.
     if (arg === '--success' || arg === '--failed') continue
+
+    if (arg === '--stdin') {
+      useStdin = true
+      continue
+    }
 
     if (arg === '--artifact') {
       const next = args[index + 1]
@@ -156,9 +177,18 @@ export const parseReportArgs = (args: string[], command = 'report') => {
     positionals.push(arg)
   }
 
-  if (positionals.length === 0) {
+  if (useStdin && positionals.length > 0) {
+    throw new Error(
+      withUsage(
+        '--stdin is mutually exclusive with a positional argument; pass the body on stdin or as an argument, not both',
+        command
+      )
+    )
+  }
+
+  if (!useStdin && positionals.length === 0) {
     const label = command === 'status' ? '<current status>' : '<result>'
-    throw new Error(withUsage(`Missing ${label}`, command))
+    throw new Error(withUsage(`Missing ${label} (or pass --stdin to read it from stdin)`, command))
   }
   if (positionals.length > 1) {
     const label = command === 'status' ? 'status' : 'result'
@@ -172,7 +202,24 @@ export const parseReportArgs = (args: string[], command = 'report') => {
     )
   }
 
-  return { result: positionals[0], artifacts, dispatchId }
+  return { result: useStdin ? null : positionals[0], artifacts, dispatchId, useStdin }
+}
+
+export const readStdinToString = async (): Promise<string> => {
+  if (process.stdin.isTTY) {
+    throw new Error(
+      '--stdin requires piped input, but stdin is a TTY. Did you forget to pipe content in?'
+    )
+  }
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+  }
+  const content = Buffer.concat(chunks).toString('utf8')
+  if (!content.trim()) {
+    throw new Error('--stdin received empty input')
+  }
+  return content
 }
 
 export const runTeamCommand = async (argv: string[]) => {
@@ -225,6 +272,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'status') {
     const report = parseReportArgs(args, 'status')
+    const body = report.useStdin ? await readStdinToString() : (report.result ?? '')
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
@@ -232,7 +280,7 @@ export const runTeamCommand = async (argv: string[]) => {
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
-      result: report.result,
+      result: body,
       artifacts: report.artifacts,
     })
     const payload = (await response.json()) as TeamReportResponse
@@ -246,6 +294,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'report') {
     const report = parseReportArgs(args)
+    const body = report.useStdin ? await readStdinToString() : (report.result ?? '')
 
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
@@ -254,7 +303,7 @@ export const runTeamCommand = async (argv: string[]) => {
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
-      result: report.result,
+      result: body,
       artifacts: report.artifacts,
     })
     const payload = (await response.json()) as TeamReportResponse
