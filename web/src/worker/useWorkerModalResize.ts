@@ -2,21 +2,28 @@ import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useStat
 
 const STORAGE_KEY = 'hive.worker-modal.width'
 export const WORKER_MODAL_MIN = 480
-const WORKER_MODAL_DEFAULT = 1080
+const WORKER_MODAL_DEFAULT_RATIO = 0.5
 
 const clampToViewport = (value: number): number => {
   const viewportMax = typeof window !== 'undefined' ? window.innerWidth - 24 : 1200
   return Math.min(Math.max(value, WORKER_MODAL_MIN), Math.max(WORKER_MODAL_MIN, viewportMax))
 }
 
+// First-open default: half the viewport. Once the user resizes, the stored
+// value wins on subsequent opens so we don't second-guess their preference.
+const computeViewportDefault = (): number => {
+  if (typeof window === 'undefined') return WORKER_MODAL_MIN
+  return clampToViewport(Math.round(window.innerWidth * WORKER_MODAL_DEFAULT_RATIO))
+}
+
 const readStored = (): number => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return WORKER_MODAL_DEFAULT
+    if (!raw) return computeViewportDefault()
     const parsed = Number.parseInt(raw, 10)
-    return Number.isFinite(parsed) ? clampToViewport(parsed) : WORKER_MODAL_DEFAULT
+    return Number.isFinite(parsed) ? clampToViewport(parsed) : computeViewportDefault()
   } catch {
-    return WORKER_MODAL_DEFAULT
+    return computeViewportDefault()
   }
 }
 
