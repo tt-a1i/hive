@@ -150,9 +150,11 @@ Hive 给每个 agent PTY 提供一个 `team` CLI，agent 直接在自己的 shel
 team send <worker-name> "<task>"      # 派单给指定 worker（异步，立即返回；worker 完成时通过 stdin 回灌）
 team list                             # 列当前所有 worker 和状态（JSON 输出）
 
-# Worker 可用
-team report "<result>" [--artifact <path>]
-team status "<current status>" [--artifact <path>]  # 无 open dispatch 时汇报接入/待命/阻塞状态，不消耗 pending_task_count
+# Worker 可用（flag 顺序任意；长正文用 --stdin 走 quoted heredoc 避免 shell 解析）
+team report "<result>" [--dispatch <id>] [--artifact <path>]
+team report --stdin    [--dispatch <id>] [--artifact <path>]  # 从 stdin 读正文，配合 <<'EOF' ... EOF
+team status "<current status>" [--artifact <path>]            # 无 open dispatch 时汇报接入/待命/阻塞状态，不消耗 pending_task_count
+team status --stdin            [--artifact <path>]
 
 # 所有 agent 可用
 team help

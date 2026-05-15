@@ -26,8 +26,9 @@ const TEAM_USAGE = [
   '  team status "<current status>" [--artifact <path>]',
   '  team status --stdin [--artifact <path>]',
   '',
-  'Flags can appear in any order. Use --stdin to pipe long bodies and avoid shell-escaping issues:',
-  '  cat <<EOF | team report --stdin --dispatch <id>',
+  'Flags can appear in any order. Use --stdin to pipe long bodies and avoid shell-escaping issues.',
+  "Use a quoted heredoc (<<'EOF') so $vars, backticks, and command substitutions stay literal:",
+  "  team report --stdin --dispatch <id> <<'EOF'",
   '  ... long report ...',
   '  EOF',
 ].join('\n')
