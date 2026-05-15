@@ -28,10 +28,10 @@ export const Topbar = ({
     versionInfo?.updateAvailable && versionInfo.latestVersion !== version ? versionInfo : null
   const hasOpenTasks = openTaskCount > 0
   const tooltipLabel = taskGraphOpen
-    ? 'Hide blueprint'
+    ? 'Hide to-do list'
     : hasOpenTasks
-      ? `Blueprint — ${openTaskCount} open task${openTaskCount === 1 ? '' : 's'}`
-      : 'Show blueprint (.hive/tasks.md)'
+      ? `To Do — ${openTaskCount} open task${openTaskCount === 1 ? '' : 's'}`
+      : 'Show to-do list (.hive/tasks.md)'
   return (
     <header
       className="flex h-11 shrink-0 items-center px-4"
@@ -71,7 +71,7 @@ export const Topbar = ({
               type="button"
               onClick={onToggleTaskGraph}
               aria-pressed={taskGraphOpen}
-              aria-label="Toggle blueprint"
+              aria-label="Toggle to-do list"
               data-has-tasks={hasOpenTasks ? 'true' : undefined}
               className="flex cursor-pointer items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
               data-testid="topbar-blueprint"
@@ -85,7 +85,7 @@ export const Topbar = ({
                    the surrounding text would be too loud. */
                 className={hasOpenTasks ? 'text-accent' : undefined}
               />
-              <span>Blueprint</span>
+              <span>To Do</span>
             </button>
           </Tooltip>
           <NotificationSettingsButton />

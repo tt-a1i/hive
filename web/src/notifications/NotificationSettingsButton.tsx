@@ -1,6 +1,7 @@
 import { Bell, Check, Info, Play, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { Tooltip } from '../ui/Tooltip.js'
 import type { NotificationDetail, NotificationSound } from './NotificationProvider.js'
 import { useNotifications } from './NotificationProvider.js'
 
@@ -109,19 +110,20 @@ export const NotificationSettingsButton = () => {
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label="Notification settings"
-        className="flex cursor-pointer items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
-        data-testid="topbar-settings"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Bell size={14} aria-hidden />
-        <span>Notifications</span>
-      </button>
+      <Tooltip label="Notifications">
+        <button
+          ref={triggerRef}
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label="Notification settings"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded text-sec hover:bg-3 hover:text-pri"
+          data-testid="topbar-settings"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Bell size={14} aria-hidden />
+        </button>
+      </Tooltip>
       {open ? (
         <div
           role="dialog"
