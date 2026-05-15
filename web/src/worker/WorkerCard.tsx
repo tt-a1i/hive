@@ -5,7 +5,7 @@ import type { TeamListItem } from '../../../src/shared/types.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { RoleAvatar } from './RoleAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
-import { presentWorkerQueue, presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
+import { presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
 
 const pillToneByStatus: Record<WorkerStatusKind, string> = {
   working: 'pill--green',
@@ -38,7 +38,6 @@ export const WorkerCard = ({
 }: WorkerCardProps) => {
   const role = getRolePresentation(worker.role)
   const status = presentWorkerStatus(worker)
-  const queue = presentWorkerQueue(worker)
 
   const handleAction =
     (kind: WorkerCardActionKind): ((event: ReactMouseEvent<HTMLButtonElement>) => void) =>
@@ -57,16 +56,8 @@ export const WorkerCard = ({
         data-testid={`worker-card-${worker.id}`}
         data-status={status.kind}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
           <RoleAvatar role={worker.role} size={40} statusRing={status.kind} />
-          {queue ? (
-            <span
-              className="pill pill--orange worker-card__queue"
-              title={`${queue.count} pending dispatch(es) — independent of PTY state`}
-            >
-              {queue.label}
-            </span>
-          ) : null}
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span

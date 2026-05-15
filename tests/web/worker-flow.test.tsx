@@ -325,48 +325,4 @@ describe('worker flow with real server', () => {
       expect(workerRun?.run_id).toEqual(expect.any(String))
     })
   })
-
-  test('worker cards refresh when backend pending count changes', async () => {
-    const response = await nativeFetch(
-      `${serverContext?.baseUrl}/api/workspaces/${workspaceId}/workers`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({
-          autostart: false,
-          command_preset_id: sleeperPresetId,
-          hive_port: '4010',
-          name: 'Carol',
-          role: 'coder',
-        }),
-      }
-    )
-    expect(response.status).toBe(201)
-    const worker = (await response.json()) as { id: string }
-
-    render(<App />)
-
-    await waitFor(() => {
-      const card = screen.getByRole('button', { name: /^Open Carol$/ })
-      // Initial card: stopped + queue=0 — only the status pill is asserted.
-      // (M6-A removed the redundant "queue: N" footer; pending count surfaces
-      // only when > 0 via the queue-badge.)
-      expect(within(card).getByText('stopped')).toBeInTheDocument()
-      expect(within(card).queryByText('1 queued')).toBeNull()
-    })
-
-    serverContext?.store.dispatchTask(workspaceId, worker.id, 'Implement refresh')
-
-    await waitFor(
-      () => {
-        const card = screen.getByRole('button', { name: /^Open Carol$/ })
-        // spec §3.6.4: pending_task_count is orthogonal to status. The status
-        // pill stays `stopped` (PTY isn't running); the queue length surfaces
-        // as a separate orange queue-badge.
-        expect(within(card).getByText('stopped')).toBeInTheDocument()
-        expect(within(card).getByText('1 queued')).toBeInTheDocument()
-      },
-      { timeout: 2000 }
-    )
-  })
 })

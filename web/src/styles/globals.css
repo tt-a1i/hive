@@ -1052,20 +1052,6 @@ html, body {
   align-self: flex-start;
 }
 
-/* Queue marker — small orange counter at top-right of a worker card.
-   .pill does the chrome (orange tint); this adds the worker-card-specific
-   behavior: pointer-events off + hover-fade so the action cluster owns
-   that slot when the user mouses in. */
-.worker-card__queue {
-  pointer-events: none;
-  font-variant-numeric: tabular-nums;
-  transition: opacity var(--dur-fast) ease;
-}
-.worker-card-shell:hover .worker-card__queue,
-.worker-card-shell:focus-within .worker-card__queue {
-  opacity: 0;
-}
-
 .worker-card-shell:hover .worker-card__actions,
 .worker-card-shell:focus-within .worker-card__actions {
   opacity: 1;

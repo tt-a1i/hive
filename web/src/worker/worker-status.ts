@@ -34,20 +34,3 @@ export const presentWorkerStatus = (worker: TeamListItem): WorkerStatusPresentat
     tone: 'var(--text-tertiary)',
   }
 }
-
-/**
- * Queue length is a separate axis from status (spec §3.6.4). Surface it as
- * an independent badge — never as a status replacement.
- */
-export interface WorkerQueueIndicator {
-  count: number
-  label: string
-}
-
-export const presentWorkerQueue = (worker: TeamListItem): WorkerQueueIndicator | null => {
-  if (worker.pendingTaskCount <= 0) return null
-  return {
-    count: worker.pendingTaskCount,
-    label: `${worker.pendingTaskCount} queued`,
-  }
-}
