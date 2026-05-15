@@ -2,6 +2,19 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.4 - 2026-05-15
+
+Update-awareness pass for public-preview installs.
+
+- Hive now checks npm for the latest published version through a cached
+  `/api/version` endpoint.
+- The CLI prints a non-blocking update hint after startup when a newer npm
+  version is available.
+- The app topbar surfaces the same update availability and install command in
+  the UI.
+- The workspace shell was split into smaller app-level components so future
+  UI changes do not push `web/src/app.tsx` past its size budget.
+
 ## 0.6.0-alpha.3 - 2026-05-14
 
 Runtime and team-protocol hardening after public-preview dogfooding.
