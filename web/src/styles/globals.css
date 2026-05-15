@@ -264,11 +264,15 @@ html, body {
 /* Workspace row — Twenty's NavigationDrawerItem pattern. The interactive
    surface is an inset rounded chip (margin + radius 4) rather than an
    edge-to-edge bar; the active/hover wash sits inside the chip so it reads
-   "selected pill" rather than "highlighted row". No left-accent rail. */
+   "selected pill" rather than "highlighted row".
+   Active state ALSO brightens text (Twenty pattern): selected items go
+   from text-secondary to text-primary, so the row persists visually even
+   when the mouse moves away. The React side adds `font-medium` on the
+   workspace name when active. */
 .ws-row {
   margin: 0 6px;
   border-radius: 4px;
-  transition: background var(--dur-fast) ease;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
   cursor: pointer;
   position: relative;
 }
@@ -815,19 +819,23 @@ html, body {
   outline: none;
   transition: border-color 100ms ease, box-shadow 100ms ease;
 }
-.input::placeholder { color: var(--text-tertiary); }
+/* Placeholder weight matches Twenty's input recipe: 500-weight ghost text
+   reads as a "label-ish prompt" rather than soft body. */
+.input::placeholder { color: var(--text-tertiary); font-weight: 500; }
 .input:hover:not(:focus) { border-color: var(--border-bright); }
+/* Twenty's input focus is just a border-color shift — no halo. The caret
+   already announces "you are typing here", and dropping the ring keeps the
+   field as quiet as the rest of the chrome. The ring stays on buttons and
+   selectable-cards where there is no caret cue. */
 .input:focus-visible {
   border-color: var(--accent);
-  /* Single 3px solid halo at 30% accent — Twenty's focus pattern. No more
-     two-layer ring; no more inset shadow on focus. Just a confident edge. */
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
+  box-shadow: none;
 }
 .input--readonly { background: var(--bg-0); color: var(--text-secondary); cursor: default; }
 
 /* Error state — used by inputs flagged with an active validation error.
-   Border firms up to a red mix at rest; focus replaces the accent ring
-   with a red ring so the user knows their fix attempt is being read. */
+   Border firms up to red at rest *and* focus (matches Twenty: error
+   state never swaps to the accent on focus). */
 .input--error {
   border-color: color-mix(in oklab, var(--status-red) 50%, var(--border-bright));
 }
@@ -836,7 +844,7 @@ html, body {
 }
 .input--error:focus-visible {
   border-color: var(--status-red);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--status-red) 30%, transparent);
+  box-shadow: none;
 }
 
 /* Dialog open/close choreography — radix sets [data-state] on Overlay and
@@ -1211,7 +1219,7 @@ html, body {
 .cli-select:hover { border-color: var(--border-bright); }
 .cli-select:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent);
+  box-shadow: none;
 }
 .cli-select__leading {
   position: absolute;

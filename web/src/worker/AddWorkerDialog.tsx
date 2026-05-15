@@ -60,7 +60,7 @@ const RoleCard = ({
     onClick={onSelect}
     aria-pressed={active}
     data-testid={`role-card-${spec.value}`}
-    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-2.5 px-3 py-2.5`}
+    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-3 px-3 py-2`}
   >
     <RoleAvatar role={spec.value} size={20} />
     <span className="flex-1 text-left text-base font-medium text-pri">{spec.label}</span>
@@ -83,7 +83,7 @@ const AgentChip = ({
     aria-pressed={active}
     disabled={preset.available === false}
     data-testid={`agent-radio-${preset.id}`}
-    className="selectable-card flex items-center justify-between gap-2 px-3 py-2.5 disabled:cursor-not-allowed disabled:opacity-45"
+    className="selectable-card flex items-center justify-between gap-2 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-45"
   >
     <span className="flex min-w-0 flex-col items-start gap-0.5">
       <span className="truncate text-base font-medium text-pri">{preset.displayName}</span>
