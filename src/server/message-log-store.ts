@@ -68,8 +68,6 @@ interface MessageRow {
 }
 
 export const createMessageLogStore = (db: Database) => {
-  const initialize = () => {}
-
   const listMessageKinds = () => {
     return db
       .prepare(
@@ -181,7 +179,6 @@ export const createMessageLogStore = (db: Database) => {
 
   return {
     deleteMessage,
-    initialize,
     insertMessage,
     listMessageKinds,
     listMessagesForRecovery,

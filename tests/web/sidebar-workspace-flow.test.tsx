@@ -14,6 +14,7 @@ import { ToastProvider } from '../../web/src/ui/useToast.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 class MockTerminal {
+  unicode = { activeVersion: '' }
   loadAddon() {}
   onData() {
     return { dispose() {} }

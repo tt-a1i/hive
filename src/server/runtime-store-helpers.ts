@@ -71,9 +71,7 @@ export const createRuntimeStoreServices = (
   })
   const uiAuth = createUiAuth()
 
-  messageLogStore.initialize()
-  agentRunStore.initialize()
-  agentRunStore.markUnfinishedRunsStale?.()
+  agentRunStore.markUnfinishedRunsStale()
 
   const workspaceStore = createWorkspaceStore(db, dispatchLedgerStore.listOpenDispatchKinds())
   const startExistingWorkspaceWatches = () => {

@@ -62,13 +62,13 @@ describe('agent runtime stability (unit)', () => {
         writeInput: () => {},
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },

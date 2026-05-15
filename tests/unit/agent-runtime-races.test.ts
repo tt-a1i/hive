@@ -50,13 +50,13 @@ describe('agent runtime races (unit)', () => {
         writeInput: () => {},
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: (runId, status, exitCode) => {
           updates.push({ runId, status, exitCode })
@@ -103,11 +103,11 @@ describe('agent runtime races (unit)', () => {
         writeInput: () => {},
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },
@@ -154,13 +154,13 @@ describe('agent runtime races (unit)', () => {
         },
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },
@@ -217,7 +217,6 @@ describe('agent runtime races (unit)', () => {
         writeInput: () => {},
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {
           throw new Error('sqlite insert failed')
         },
@@ -226,6 +225,7 @@ describe('agent runtime races (unit)', () => {
           { workspaceId: 'ws-1', agentId: 'agent-1', config: { command: '/bin/bash', args: [] } },
         ],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },

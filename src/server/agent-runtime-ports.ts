@@ -4,7 +4,6 @@ type PersistedRunStatus = PersistedAgentRun['status']
 
 export interface AgentRunStorePort {
   close?: () => void
-  initialize?: () => void
   insertAgentRun: (
     runId: string,
     agentId: string,
@@ -20,7 +19,7 @@ export interface AgentRunStorePort {
     config: AgentLaunchConfigInput
     workspaceId: string
   }>
-  markUnfinishedRunsStale?: (endedAt?: number) => void
+  markUnfinishedRunsStale: (endedAt?: number) => void
   deleteLaunchConfig: (workspaceId: string, agentId: string) => void
   saveLaunchConfig: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => void
   updatePersistedRun: (

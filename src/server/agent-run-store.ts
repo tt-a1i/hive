@@ -68,7 +68,6 @@ interface AgentRunRow {
 
 export const createAgentRunStore = (db: Database) => {
   let closed = false
-  const initialize = () => {}
 
   const close = () => {
     closed = true
@@ -230,7 +229,6 @@ export const createAgentRunStore = (db: Database) => {
 
   return {
     close,
-    initialize,
     insertAgentRun,
     deleteLaunchConfig,
     listAgentRuns,

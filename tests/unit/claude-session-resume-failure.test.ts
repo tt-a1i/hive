@@ -91,7 +91,6 @@ describe('claude session resume failure', () => {
         writeInput: () => {},
       },
       {
-        initialize: () => {},
         insertAgentRun: () => {},
         listAgentRuns: () => [],
         listLaunchConfigs: () => [
@@ -107,6 +106,7 @@ describe('claude session resume failure', () => {
           },
         ],
         deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
         saveLaunchConfig: () => {},
         updatePersistedRun: () => {},
       },

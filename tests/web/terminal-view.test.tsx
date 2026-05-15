@@ -49,6 +49,7 @@ vi.mock('@xterm/xterm', () => ({
   Terminal: class {
     cols = 132
     rows = 43
+    unicode = { activeVersion: '' }
     attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
       latestCustomKeyHandler = handler
     }
