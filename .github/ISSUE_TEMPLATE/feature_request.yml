@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement or a new capability.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an idea.
+
+        Hive is still in alpha public preview and deliberately narrow on
+        scope — see
+        [`docs/superpowers/specs/2026-04-18-hive-design.md`](../docs/superpowers/specs/2026-04-18-hive-design.md)
+        for what is and isn't currently in MVP. For larger ideas, please open
+        an issue first to align before sending a PR.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: Describe the workflow or pain point that pushed you to reach for this feature.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Hive to do?
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Concrete use case
+      description: A real workflow this would unlock, ideally including which orchestrator and worker CLIs you'd run.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried, other tools that solved it differently, or related issues.

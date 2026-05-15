@@ -1,0 +1,85 @@
+name: Bug report
+description: Something in Hive is broken or behaves unexpectedly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        - Please search existing issues first to avoid duplicates.
+        - For **security issues**, follow the disclosure process in
+          [SECURITY.md](../SECURITY.md) instead of opening a public issue.
+  - type: input
+    id: hive-version
+    attributes:
+      label: Hive version
+      description: Output of `hive --version`.
+      placeholder: e.g. 0.6.0-alpha.4
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: Output of `node -v`.
+      placeholder: e.g. v22.11.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other (describe in steps)
+    validations:
+      required: true
+  - type: dropdown
+    id: orchestrator
+    attributes:
+      label: Orchestrator CLI
+      description: Which CLI is your orchestrator running?
+      options:
+        - Claude Code (`claude`)
+        - Codex (`codex`)
+        - OpenCode (`opencode`)
+        - Gemini (`gemini`)
+        - Custom
+        - N/A — bug occurs before any orchestrator is selected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal sequence of actions that reproduces the bug.
+      placeholder: |
+        1. Run `hive` on macOS 15.x
+        2. Open `http://127.0.0.1:3000/`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error messages, stack traces, or CLI output verbatim.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and additional context
+      description: |
+        Browser console output, the Hive runtime stdout, screenshots, or a
+        snippet of `.hive/tasks.md` — anything that would speed up triage.
+      render: text
