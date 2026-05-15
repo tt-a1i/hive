@@ -31,9 +31,13 @@
      callsite that needs a 4th shade — defined once, used sparingly. */
   --color-text-primary: #ebebeb;
   --color-text-secondary: #b3b3b3;
-  --color-text-tertiary: #818181;
+  /* Tertiary used to be #818181, which dropped below AA body contrast
+     (≈4.0:1) on `bg-elevated` (#222). Bumped to #9c9c9c for ~5.6:1 across
+     bg-0..bg-3; this is the color a body of 11-13px tertiary text actually
+     wants to sit at. `--text-light` is kept as the same value alias. */
+  --color-text-tertiary: #9c9c9c;
   --color-text-light: #9c9c9c;
-  --color-text-extra-light: #555555;
+  --color-text-extra-light: #6f6f6f;
   --color-text-inverted: #1b1b1b;
   --color-text-danger: #d4544f;
 
@@ -114,9 +118,9 @@
      once so future code doesn't reach for inline hex values. */
   --text-primary: #ebebeb;
   --text-secondary: #b3b3b3;
-  --text-tertiary: #818181;
+  --text-tertiary: #9c9c9c;
   --text-light: #9c9c9c;
-  --text-extra-light: #555555;
+  --text-extra-light: #6f6f6f;
   --text-inverted: #1b1b1b;
   --text-danger: var(--status-red);
 
@@ -432,20 +436,24 @@ html, body {
   border: 1px solid transparent;
   white-space: nowrap;
 }
+/* Pill tone variants — the text gets a small white-mix so it pops on the
+   tinted background. Without this, red/green pills sat at <4:1 contrast on
+   their own 10% wash. The 50-55% mix lifts text into AA territory without
+   changing the visual identity of the tone. */
 .pill--green {
-  color: var(--status-green);
-  background: color-mix(in oklab, var(--status-green) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-green) 24%, transparent);
+  color: color-mix(in oklab, var(--status-green) 55%, white);
+  background: color-mix(in oklab, var(--status-green) 14%, transparent);
+  border-color: color-mix(in oklab, var(--status-green) 28%, transparent);
 }
 .pill--orange {
-  color: var(--status-orange);
-  background: color-mix(in oklab, var(--status-orange) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-orange) 24%, transparent);
+  color: color-mix(in oklab, var(--status-orange) 65%, white);
+  background: color-mix(in oklab, var(--status-orange) 12%, transparent);
+  border-color: color-mix(in oklab, var(--status-orange) 28%, transparent);
 }
 .pill--red {
-  color: var(--status-red);
-  background: color-mix(in oklab, var(--status-red) 10%, transparent);
-  border-color: color-mix(in oklab, var(--status-red) 24%, transparent);
+  color: color-mix(in oklab, var(--status-red) 50%, white);
+  background: color-mix(in oklab, var(--status-red) 14%, transparent);
+  border-color: color-mix(in oklab, var(--status-red) 30%, transparent);
 }
 .pill--neutral {
   color: var(--text-secondary);

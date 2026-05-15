@@ -213,7 +213,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
                   <AlertTriangle size={18} aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <Dialog.Title className="text-lg font-medium text-pri">
+                  <Dialog.Title className="text-lg font-semibold text-pri">
                     {stage.title ?? 'Folder picker failed'}
                   </Dialog.Title>
                   <Dialog.Description className="mt-1.5 break-words text-sm text-ter">

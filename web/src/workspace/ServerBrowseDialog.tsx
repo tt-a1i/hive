@@ -119,7 +119,7 @@ export const ServerBrowseDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-lg font-medium text-pri">
+                <Dialog.Title className="text-lg font-semibold text-pri">
                   Browse server filesystem
                 </Dialog.Title>
                 <Dialog.Description

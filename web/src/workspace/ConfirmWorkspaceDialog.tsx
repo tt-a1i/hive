@@ -105,7 +105,9 @@ export const ConfirmWorkspaceDialog = ({
                 <Folder size={18} aria-hidden />
               </div>
               <div className="min-w-0 flex-1">
-                <Dialog.Title className="text-lg font-medium text-pri">Add workspace</Dialog.Title>
+                <Dialog.Title className="text-lg font-semibold text-pri">
+                  Add workspace
+                </Dialog.Title>
                 <Dialog.Description className="text-xs text-ter">
                   Hive will load <span className="mono">.hive/tasks.md</span> and start the
                   Orchestrator here.

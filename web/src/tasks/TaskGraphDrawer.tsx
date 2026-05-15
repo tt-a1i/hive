@@ -241,12 +241,12 @@ export const TaskGraphDrawer = ({
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <div className="text-xs uppercase text-ter">Progress</div>
-                  <div className="mono mt-1 text-xl text-pri">
+                  <div className="mono mt-1 text-xl text-pri tabular-nums">
                     {completedTasks}/{totalTasks}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="mono text-lg text-sec">{completionPercent}%</div>
+                  <div className="mono text-lg text-sec tabular-nums">{completionPercent}%</div>
                   <div className="mt-1 text-xs text-ter">{openTasks} open</div>
                 </div>
               </div>

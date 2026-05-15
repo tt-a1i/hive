@@ -135,7 +135,7 @@ export const NotificationSettingsButton = () => {
               <Bell size={16} aria-hidden />
             </div>
             <div className="min-w-0">
-              <div className="font-medium text-pri">Notifications</div>
+              <div className="text-sm font-semibold text-pri">Notifications</div>
               <div className="text-ter text-xs">
                 Choose how Hive alerts you when team members report or stop.
               </div>
@@ -143,7 +143,7 @@ export const NotificationSettingsButton = () => {
           </div>
 
           <section className="mb-3">
-            <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wide">
+            <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wider">
               <Volume2 size={12} aria-hidden />
               Sound
             </div>
@@ -215,7 +215,7 @@ export const NotificationSettingsButton = () => {
           </section>
 
           <section className="mb-3">
-            <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wide">
+            <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wider">
               <Info size={12} aria-hidden />
               Information
             </div>

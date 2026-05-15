@@ -178,7 +178,7 @@ export const AddWorkerDialog = ({
                 className="flex shrink-0 flex-col gap-0.5 border-b px-5 py-4"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <Dialog.Title className="text-lg font-medium text-pri">
+                <Dialog.Title className="text-lg font-semibold text-pri">
                   Add team member
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-ter">
