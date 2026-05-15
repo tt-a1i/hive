@@ -5,6 +5,30 @@
 
 export type PillTone = 'green' | 'orange' | 'red' | 'neutral'
 
+/**
+ * Soft palette for owner pills. Deterministic per name (hash-modulo) so the
+ * same owner always lights up the same colour across renders — giving the
+ * eye a stable anchor when scanning long task lists.
+ */
+const OWNER_PALETTE = [
+  '#a78bfa', // violet
+  '#60a5fa', // blue
+  '#5eead4', // teal
+  '#86efac', // green
+  '#fde047', // yellow
+  '#fb923c', // orange
+  '#f9a8d4', // pink
+  '#fca5a5', // red
+] as const
+
+export const ownerToneFromName = (name: string): string => {
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  }
+  return OWNER_PALETTE[hash % OWNER_PALETTE.length] ?? OWNER_PALETTE[0]
+}
+
 export type TaskMetaItem =
   | { kind: 'owner'; value: string }
   | { kind: 'status'; value: string; tone: PillTone }

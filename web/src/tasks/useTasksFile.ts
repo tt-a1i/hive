@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { getWorkspaceTasks, saveWorkspaceTasks } from '../api.js'
-import { toggleTaskLine } from './task-markdown.js'
+import {
+  appendChildTaskAtLine,
+  deleteTaskLine,
+  toggleTaskLine,
+  updateTaskTextAtLine,
+} from './task-markdown.js'
 
 const toTasksSocketUrl = (workspaceId: string) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -123,6 +128,35 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       onSave: async () => {},
       toggleTaskAtLine: async (_lineIndex: number) => {},
       appendTask: async (_text: string) => {},
+      appendSubtask: async (_parentLine: number, _text: string) => {},
+      updateTaskText: async (_lineIndex: number, _nextText: string) => {},
+      deleteTask: async (_lineIndex: number) => {},
+    }
+  }
+
+  const persistTransform = async (
+    transform: (current: string) => string,
+    operationLabel: string
+  ) => {
+    if (!workspaceId) return
+    const previous = contentRef.current
+    const next = transform(previous)
+    if (next === previous) return
+    savedContentRef.current = next
+    contentRef.current = next
+    dirtyRef.current = false
+    setContent(next)
+    try {
+      const response = await saveWorkspaceTasks(workspaceId, { content: next })
+      savedContentRef.current = response.content
+      contentRef.current = response.content
+      setContent(response.content)
+    } catch (error) {
+      savedContentRef.current = previous
+      contentRef.current = previous
+      setContent(previous)
+      console.error(`[hive] swallowed:tasks.${operationLabel}`, error)
+      throw error
     }
   }
 
@@ -200,6 +234,25 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
         setContent(previous)
         throw error
       }
+    },
+    appendSubtask: async (parentLine: number, text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      await persistTransform(
+        (current) => appendChildTaskAtLine(current, parentLine, trimmed),
+        'appendSubtask'
+      )
+    },
+    updateTaskText: async (lineIndex: number, nextText: string) => {
+      const trimmed = nextText.trim()
+      if (!trimmed) return
+      await persistTransform(
+        (current) => updateTaskTextAtLine(current, lineIndex, trimmed),
+        'updateTaskText'
+      )
+    },
+    deleteTask: async (lineIndex: number) => {
+      await persistTransform((current) => deleteTaskLine(current, lineIndex), 'deleteTask')
     },
   }
 }

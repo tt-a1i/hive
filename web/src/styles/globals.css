@@ -710,6 +710,22 @@ html, body {
   transition: width 0.15s ease;
 }
 
+/* Header lays out title + counts + actions on one row; bottom edge omitted so
+   the progress bar below reads as the natural separator. */
+.task-drawer__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  flex-shrink: 0;
+}
+
+/* Progress bar sits flush under the header — acts as the header's lower
+   border, only drawn when there are tasks to count. */
+.task-drawer__progress {
+  margin: 0 16px 8px;
+}
+
 .task-list {
   display: flex;
   flex-direction: column;
@@ -720,20 +736,142 @@ html, body {
   position: relative;
 }
 
-.task-children {
+/* Each task row is a clickable card-like container. The left edge gains an
+   accent when hovered or focused so the eye can track which row is active
+   even when the body of the row is text-heavy. */
+.task-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 8px 10px 8px 12px;
+  cursor: pointer;
   position: relative;
-  margin-left: 10px;
-  padding-left: 10px;
+  transition: background-color var(--dur-fast) ease;
 }
 
+.task-row::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.task-row:hover {
+  background: var(--bg-2);
+}
+
+.task-row:hover::before,
+.task-row:focus-within::before {
+  background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+.task-row__indicator {
+  margin-top: 2px;
+  display: inline-flex;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.task-row__title {
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* The checkbox + status indicator are wrapped in a label so the entire
+   indicator zone toggles the task; the rest of the row is non-clickable
+   surface so the action buttons stay reachable without swallowing clicks. */
+.task-row__checkbox-cell {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.task-row__input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.task-row__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Hover-revealed action cluster on the right edge of the row. */
+.task-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+}
+.task-row:hover .task-row__actions,
+.task-row:focus-within .task-row__actions {
+  opacity: 1;
+}
+.task-row__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.task-row__action:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+}
+.task-row__action--danger:hover {
+  background: color-mix(in oklab, var(--status-red) 18%, transparent);
+  color: var(--status-red);
+}
+
+.task-row--child-input {
+  cursor: default;
+}
+.task-row--child-input:hover {
+  background: var(--bg-2);
+}
+
+.task-children {
+  position: relative;
+  margin-left: 22px;
+  padding-left: 14px;
+}
+
+/* Stronger subtask guideline so multi-level nesting reads at a glance — the
+   prior `var(--border)` was too quiet to register against the row hover bg. */
 .task-children::before {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 6px;
-  left: 10px;
+  top: 4px;
+  bottom: 8px;
+  left: 0;
   width: 1px;
-  background: var(--border);
+  background: var(--border-bright);
 }
 
 .task-status-open {
@@ -746,6 +884,24 @@ html, body {
   background: color-mix(in oklab, var(--status-green) 13%, transparent);
 }
 
+/* Owner pill — tone driven by --owner-tone (hash of name). Same shape across
+   palette entries; only colour shifts so the eye learns the mapping. */
+.task-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 35%, white);
+  background: color-mix(in oklab, var(--owner-tone, var(--status-blue)) 16%, transparent);
+  border: 1px solid color-mix(in oklab, var(--owner-tone, var(--status-blue)) 30%, transparent);
+}
+
+/* Legacy alias kept so any external consumer of `.task-mention` doesn't
+   regress; same shape as `.task-owner` but using the default blue tone. */
 .task-mention {
   display: inline-flex;
   align-items: center;
@@ -769,6 +925,88 @@ html, body {
   color: var(--text-tertiary);
   background: var(--bg-3);
   font-size: 11px;
+}
+
+/* Inline add-task affordance. Starts as a dashed-ring "ghost row" so it
+   blends with the list rhythm; transforms into a real input on click. */
+.task-add-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 8px 10px 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.task-add-toggle:hover {
+  background: var(--bg-2);
+  color: var(--text-secondary);
+}
+.task-add-toggle__icon {
+  display: inline-flex;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-bright);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+}
+
+.task-add-input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 8px 10px 8px 12px;
+  background: var(--bg-2);
+}
+.task-add-input__icon {
+  display: inline-flex;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  color: var(--text-secondary);
+  border-radius: 999px;
+}
+.task-add-input__field {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+}
+.task-add-input__field::placeholder {
+  color: var(--text-tertiary);
+}
+
+.task-completed-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.task-completed-toggle:hover {
+  background: var(--bg-2);
+  color: var(--text-secondary);
 }
 
 

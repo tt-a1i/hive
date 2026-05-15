@@ -137,15 +137,16 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     })
 
     const summary = await within(drawer).findByTestId('task-graph-summary')
-    expect(summary).toHaveTextContent('2 of 3 done')
+    expect(summary).toHaveTextContent('2 / 3')
     expect(summary).toHaveTextContent('67%')
     expect(within(drawer).getByTestId('task-progress-bar')).toHaveAttribute('aria-valuenow', '67')
-    expect(within(drawer).getByText('@Alice')).toBeInTheDocument()
+    // Owner mentions now render with an AtSign icon + plain name, so match
+    // on the name text only (no leading "@" in the DOM).
+    expect(within(drawer).getByText('Alice')).toBeInTheDocument()
     expect(within(drawer).getByTestId('task-line-1')).toHaveTextContent('wire submit')
-    // Completed tasks are folded into a disclosure by default; expand it to
-    // verify the done-task content (incl. its @mention) is still rendered.
-    fireEvent.click(within(drawer).getByTestId('task-completed-toggle'))
-    expect(within(drawer).getByText('@Bob')).toBeInTheDocument()
+    // Completed cohort ≤3 auto-expands so the just-checked task stays visible
+    // (the user doesn't have to hunt for it). Bob lives in that section.
+    expect(within(drawer).getByText('Bob')).toBeInTheDocument()
   })
 
   test('toggling a checkbox persists to .hive/tasks.md', async () => {
@@ -164,12 +165,12 @@ describe('tasks flow driven from the Task Graph drawer', () => {
       await expect(saved.json()).resolves.toEqual({ content: '- [x] implement login\n' })
     })
 
-    // After toggle, the task moves into the collapsed "completed" section.
-    // Expand it to verify the checkbox is now checked.
+    // After toggle, the task moves into the "completed" section, which
+    // auto-expands when the cohort size is ≤3 — so the checkbox stays in
+    // the DOM without an extra disclosure click.
     await waitFor(() => {
       expect(screen.getByTestId('task-completed-toggle')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByTestId('task-completed-toggle'))
     await waitFor(() => {
       expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
     })
@@ -228,6 +229,68 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [x] auto sync\n')
       expect(screen.queryByText('文件已在外部变化')).toBeNull()
+    })
+  })
+
+  test('inline edit rewrites the task text and persists to .hive/tasks.md', async () => {
+    render(<App />)
+    await openTaskGraph()
+    await screen.findByTestId('task-checkbox-0')
+
+    fireEvent.click(screen.getByTestId('task-edit-0'))
+    const input = await screen.findByTestId('task-inline-input')
+    fireEvent.change(input, { target: { value: 'implement SSO' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(async () => {
+      const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+        headers: { cookie: uiCookie },
+      })
+      await expect(saved.json()).resolves.toEqual({ content: '- [ ] implement SSO\n' })
+    })
+  })
+
+  test('delete removes the task line from .hive/tasks.md', async () => {
+    await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
+      body: JSON.stringify({
+        content: '- [ ] keep this one\n- [ ] delete this one\n',
+      }),
+    })
+
+    render(<App />)
+    await openTaskGraph()
+    await screen.findByTestId('task-checkbox-0')
+    await screen.findByTestId('task-checkbox-1')
+
+    fireEvent.click(screen.getByTestId('task-delete-1'))
+
+    await waitFor(async () => {
+      const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+        headers: { cookie: uiCookie },
+      })
+      await expect(saved.json()).resolves.toEqual({ content: '- [ ] keep this one\n' })
+    })
+  })
+
+  test('add subtask inserts a nested task under the parent', async () => {
+    render(<App />)
+    await openTaskGraph()
+    await screen.findByTestId('task-checkbox-0')
+
+    fireEvent.click(screen.getByTestId('task-add-subtask-0'))
+    const input = await screen.findByTestId('task-inline-input')
+    fireEvent.change(input, { target: { value: 'wire login form' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(async () => {
+      const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+        headers: { cookie: uiCookie },
+      })
+      await expect(saved.json()).resolves.toEqual({
+        content: '- [ ] implement login\n  - [ ] wire login form\n',
+      })
     })
   })
 })

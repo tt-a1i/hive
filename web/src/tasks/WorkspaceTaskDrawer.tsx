@@ -32,6 +32,15 @@ export const WorkspaceTaskDrawer = ({ tasksFile, workspacePath, open, onClose }:
     onAppendTask={(text) => {
       void tasksFile.appendTask(text).catch(logSwallowed('tasks.appendTask'))
     }}
+    onAppendSubtask={(parentLine, text) => {
+      void tasksFile.appendSubtask(parentLine, text).catch(logSwallowed('tasks.appendSubtask'))
+    }}
+    onUpdateTaskText={(line, nextText) => {
+      void tasksFile.updateTaskText(line, nextText).catch(logSwallowed('tasks.updateTaskText'))
+    }}
+    onDeleteTask={(line) => {
+      void tasksFile.deleteTask(line).catch(logSwallowed('tasks.deleteTask'))
+    }}
     open={open}
     workspacePath={workspacePath}
   />

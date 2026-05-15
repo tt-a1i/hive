@@ -4,9 +4,13 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  CornerDownRight,
+  FileCode,
   FileText,
   PanelRightClose,
+  Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react'
 import { type KeyboardEvent, useState } from 'react'
 
@@ -15,7 +19,7 @@ import { Tooltip } from '../ui/Tooltip.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
-import { parseTaskMetadata, type TaskMetaItem } from './task-meta.js'
+import { ownerToneFromName, parseTaskMetadata, type TaskMetaItem } from './task-meta.js'
 
 type TaskGraphDrawerProps = {
   content: string
@@ -27,6 +31,9 @@ type TaskGraphDrawerProps = {
   onSave: () => Promise<void>
   onToggleTaskLine: (lineIndex: number) => void
   onAppendTask?: (text: string) => void
+  onAppendSubtask?: (parentLine: number, text: string) => void
+  onUpdateTaskText?: (lineIndex: number, nextText: string) => void
+  onDeleteTask?: (lineIndex: number) => void
   open: boolean
   workspacePath: string | null
 }
@@ -40,8 +47,13 @@ const TaskMetaChip = ({ item }: { item: TaskMetaItem }) => {
     )
   }
   if (item.kind === 'owner') {
+    const tone = ownerToneFromName(item.value)
     return (
-      <span className="task-mention inline-flex items-center gap-1" data-testid="task-meta-owner">
+      <span
+        className="task-owner"
+        data-testid="task-meta-owner"
+        style={{ ['--owner-tone' as string]: tone }}
+      >
         <AtSign size={10} aria-hidden />
         {item.value}
       </span>
@@ -66,75 +78,211 @@ const TaskMetaChip = ({ item }: { item: TaskMetaItem }) => {
   )
 }
 
+type TaskItemHandlers = {
+  onToggle: (lineIndex: number) => void
+  onUpdateText?: (lineIndex: number, nextText: string) => void
+  onDelete?: (lineIndex: number) => void
+  onAppendSubtask?: (parentLine: number, text: string) => void
+}
+
+const TaskInlineEditor = ({
+  initial,
+  onSubmit,
+  onCancel,
+  placeholder,
+}: {
+  initial: string
+  onSubmit: (next: string) => void
+  onCancel: () => void
+  placeholder?: string
+}) => {
+  const [value, setValue] = useState(initial)
+  const submit = () => {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      onCancel()
+      return
+    }
+    onSubmit(trimmed)
+  }
+  const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      submit()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancel()
+    }
+  }
+  return (
+    <input
+      type="text"
+      // biome-ignore lint/a11y/noAutofocus: only mounted in response to a direct user activation (Edit/Add-subtask button)
+      autoFocus
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={onKey}
+      onBlur={submit}
+      data-testid="task-inline-input"
+      className="task-row__input"
+    />
+  )
+}
+
 const TaskItem = ({
   depth = 0,
-  onToggle,
   task,
+  handlers,
 }: {
   depth?: number
-  onToggle: (lineIndex: number) => void
   task: ParsedTask
+  handlers: TaskItemHandlers
 }) => {
   const StatusIcon = task.checked ? CheckCircle2 : Circle
   const { title, meta } = parseTaskMetadata(task.text)
+  const [editing, setEditing] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const { onToggle, onUpdateText, onDelete, onAppendSubtask } = handlers
+  const showActions = !editing && !adding && Boolean(onUpdateText || onDelete || onAppendSubtask)
   return (
     <li className="task-node" data-testid={`task-line-${task.line}`}>
-      <label
-        className="group flex min-w-0 cursor-pointer items-start gap-3 rounded px-2.5 py-2 transition-colors hover:bg-2"
-        style={{ marginLeft: depth ? 14 : 0 }}
-      >
-        <input
-          type="checkbox"
-          checked={task.checked}
-          onChange={() => onToggle(task.line)}
-          className="sr-only"
-          data-testid={`task-checkbox-${task.line}`}
-          aria-label={task.text || `task-line-${task.line}`}
-        />
-        <span
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-            task.checked ? 'task-status-done' : 'task-status-open'
-          }`}
-          aria-hidden
-        >
-          <StatusIcon size={14} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-start gap-2">
-            <span
-              className={`min-w-0 flex-1 text-base ${
-                task.checked ? 'text-ter line-through' : 'text-pri'
-              }`}
-            >
-              {renderInlineMarkdown(title)}
-            </span>
-            {task.children.length > 0 ? (
-              <span className="task-child-count mono">
-                <ChevronRight size={12} />
-                {task.children.length}
-              </span>
-            ) : null}
+      <div className="task-row group">
+        <label className="task-row__checkbox-cell">
+          <input
+            type="checkbox"
+            checked={task.checked}
+            onChange={() => onToggle(task.line)}
+            className="sr-only"
+            data-testid={`task-checkbox-${task.line}`}
+            aria-label={task.text || `task-line-${task.line}`}
+          />
+          <span
+            className={`task-row__indicator ${task.checked ? 'task-status-done' : 'task-status-open'}`}
+            aria-hidden
+          >
+            <StatusIcon size={14} />
           </span>
-          {meta.length > 0 || task.mentions.length > 0 ? (
-            <span className="mt-1.5 flex flex-wrap items-center gap-2">
-              {meta.map((item, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: meta order is deterministic from immutable task.text — items never re-sort within a task
-                <TaskMetaChip key={`${task.line}-meta-${idx}`} item={item} />
-              ))}
-              {task.mentions.map((mention) => (
-                <span className="task-mention" key={`${task.line}-mention-${mention}`}>
-                  {mention}
+        </label>
+        <span className="min-w-0 flex-1">
+          {editing ? (
+            <TaskInlineEditor
+              initial={task.text}
+              placeholder="Edit task"
+              onSubmit={(next) => {
+                setEditing(false)
+                onUpdateText?.(task.line, next)
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <>
+              <span className="flex min-w-0 items-start gap-2">
+                <span
+                  className={`task-row__title min-w-0 flex-1 ${
+                    task.checked ? 'text-ter line-through' : 'text-pri'
+                  }`}
+                >
+                  {renderInlineMarkdown(title)}
                 </span>
-              ))}
-            </span>
-          ) : null}
+                {task.children.length > 0 ? (
+                  <span className="task-child-count mono">
+                    <ChevronRight size={12} />
+                    {task.children.length}
+                  </span>
+                ) : null}
+              </span>
+              {meta.length > 0 || task.mentions.length > 0 ? (
+                <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {meta.map((item, idx) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: meta order is deterministic from immutable task.text — items never re-sort within a task
+                    <TaskMetaChip key={`${task.line}-meta-${idx}`} item={item} />
+                  ))}
+                  {task.mentions.map((mention) => {
+                    const owner = mention.replace(/^@/, '')
+                    return (
+                      <span
+                        className="task-owner"
+                        key={`${task.line}-mention-${mention}`}
+                        style={{ ['--owner-tone' as string]: ownerToneFromName(owner) }}
+                      >
+                        <AtSign size={10} aria-hidden />
+                        {owner}
+                      </span>
+                    )
+                  })}
+                </span>
+              ) : null}
+            </>
+          )}
         </span>
-      </label>
-      {task.children.length > 0 ? (
+        {showActions ? (
+          <div className="task-row__actions">
+            {onUpdateText ? (
+              <Tooltip label="Edit">
+                <button
+                  type="button"
+                  className="task-row__action"
+                  onClick={() => setEditing(true)}
+                  data-testid={`task-edit-${task.line}`}
+                  aria-label="Edit task"
+                >
+                  <Pencil size={12} />
+                </button>
+              </Tooltip>
+            ) : null}
+            {onAppendSubtask ? (
+              <Tooltip label="Add subtask">
+                <button
+                  type="button"
+                  className="task-row__action"
+                  onClick={() => setAdding(true)}
+                  data-testid={`task-add-subtask-${task.line}`}
+                  aria-label="Add subtask"
+                >
+                  <CornerDownRight size={12} />
+                </button>
+              </Tooltip>
+            ) : null}
+            {onDelete ? (
+              <Tooltip label="Delete">
+                <button
+                  type="button"
+                  className="task-row__action task-row__action--danger"
+                  onClick={() => onDelete(task.line)}
+                  data-testid={`task-delete-${task.line}`}
+                  aria-label="Delete task"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {task.children.length > 0 || adding ? (
         <ul className="task-children">
           {task.children.map((child) => (
-            <TaskItem depth={depth + 1} key={child.line} onToggle={onToggle} task={child} />
+            <TaskItem depth={depth + 1} key={child.line} handlers={handlers} task={child} />
           ))}
+          {adding ? (
+            <li className="task-node">
+              <div className="task-row task-row--child-input">
+                <span aria-hidden className="task-row__indicator task-status-open">
+                  <CornerDownRight size={12} />
+                </span>
+                <TaskInlineEditor
+                  initial=""
+                  placeholder="New subtask"
+                  onSubmit={(next) => {
+                    setAdding(false)
+                    onAppendSubtask?.(task.line, next)
+                  }}
+                  onCancel={() => setAdding(false)}
+                />
+              </div>
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </li>
@@ -169,13 +317,9 @@ const AddTaskInline = ({ onSubmit }: { onSubmit: (text: string) => void }) => {
         type="button"
         onClick={() => setOpen(true)}
         data-testid="task-add-toggle"
-        className="group flex w-full cursor-pointer items-center gap-3 rounded px-2.5 py-2 text-left text-sm text-ter transition-colors hover:bg-2 hover:text-sec"
+        className="task-add-toggle"
       >
-        <span
-          aria-hidden
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed"
-          style={{ borderColor: 'var(--border-bright)' }}
-        >
+        <span aria-hidden className="task-add-toggle__icon">
           <Plus size={12} />
         </span>
         <span>Add task</span>
@@ -183,12 +327,8 @@ const AddTaskInline = ({ onSubmit }: { onSubmit: (text: string) => void }) => {
     )
   }
   return (
-    <div className="flex items-center gap-3 rounded px-2.5 py-2">
-      <span
-        aria-hidden
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-        style={{ background: 'var(--bg-3)', color: 'var(--text-secondary)' }}
-      >
+    <div className="task-add-input">
+      <span aria-hidden className="task-add-input__icon">
         <Plus size={12} />
       </span>
       <input
@@ -201,7 +341,7 @@ const AddTaskInline = ({ onSubmit }: { onSubmit: (text: string) => void }) => {
         onKeyDown={onKey}
         onBlur={submit}
         data-testid="task-add-input"
-        className="min-w-0 flex-1 bg-transparent text-base text-pri outline-none placeholder:text-ter"
+        className="task-add-input__field"
       />
     </div>
   )
@@ -220,11 +360,19 @@ export const TaskGraphDrawer = ({
   onSave,
   onToggleTaskLine,
   onAppendTask,
+  onAppendSubtask,
+  onUpdateTaskText,
+  onDeleteTask,
   open,
   workspacePath,
 }: TaskGraphDrawerProps) => {
   const [rawMode, setRawMode] = useState(false)
-  const [completedOpen, setCompletedOpen] = useState(false)
+  const taskHandlers: TaskItemHandlers = {
+    onToggle: onToggleTaskLine,
+    ...(onUpdateTaskText ? { onUpdateText: onUpdateTaskText } : {}),
+    ...(onDeleteTask ? { onDelete: onDeleteTask } : {}),
+    ...(onAppendSubtask ? { onAppendSubtask } : {}),
+  }
   const tasks = parseTaskMarkdown(content)
   const flatTasks = flattenTasks(tasks)
   const totalTasks = flatTasks.length
@@ -233,10 +381,12 @@ export const TaskGraphDrawer = ({
 
   // Partition top-level tasks: open vs done. Children stay nested under
   // their parent regardless (a parent's checked flag doesn't hide its
-  // subtree). This is the simplest grouping that calms a long list
-  // without losing the tree structure.
+  // subtree).
   const openRoots = tasks.filter((task) => !task.checked)
   const doneRoots = tasks.filter((task) => task.checked)
+  // Default to expanded when the completed cohort is small enough that
+  // hiding it feels like the UI "ate" the user's just-checked task.
+  const [completedOpen, setCompletedOpen] = useState(doneRoots.length <= 3)
   const filePath = workspacePath ? `${workspacePath}/.hive/tasks.md` : '.hive/tasks.md'
 
   return (
@@ -252,21 +402,51 @@ export const TaskGraphDrawer = ({
         width: 520,
       }}
     >
-      <div
-        className="flex shrink-0 items-center gap-3 border-b px-4 py-3"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        <Tooltip label={<span className="mono text-ter">{filePath}</span>}>
-          <span className="cursor-default font-semibold text-pri">Todo</span>
+      <header className="task-drawer__header">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <Tooltip label={<span className="mono text-ter">{filePath}</span>}>
+            <span className="cursor-default font-semibold text-pri">Todo</span>
+          </Tooltip>
+          {totalTasks > 0 ? (
+            <span className="text-xs text-ter tabular-nums" data-testid="task-graph-summary">
+              <span data-testid="task-progress-text">
+                {completedTasks} / {totalTasks}
+              </span>{' '}
+              · {completionPercent}%
+            </span>
+          ) : null}
+        </div>
+        <Tooltip label={rawMode ? 'Back to list' : 'View source'}>
+          <button
+            type="button"
+            onClick={() => setRawMode((v) => !v)}
+            data-testid="task-raw-toggle"
+            className="icon-btn"
+            aria-label={rawMode ? 'Back to list' : 'View source'}
+          >
+            <FileCode size={14} />
+          </button>
         </Tooltip>
-        <div className="flex-1" />
         <Tooltip label="Close Todo">
           <button type="button" onClick={onClose} aria-label="Close Todo" className="icon-btn">
             <PanelRightClose size={14} />
           </button>
         </Tooltip>
-      </div>
-      <div className="flex-1 scroll-y px-4 py-3 text-sm">
+      </header>
+      {!rawMode && totalTasks > 0 ? (
+        <div
+          aria-label="Task completion"
+          aria-valuemax={100}
+          aria-valuemin={0}
+          aria-valuenow={completionPercent}
+          className="task-progress-thin task-drawer__progress"
+          data-testid="task-progress-bar"
+          role="progressbar"
+        >
+          <span style={{ width: `${completionPercent}%` }} />
+        </div>
+      ) : null}
+      <div className="flex-1 scroll-y px-3 py-3 text-sm">
         {rawMode ? (
           <TaskGraphRawEditor
             content={content}
@@ -291,28 +471,9 @@ export const TaskGraphDrawer = ({
           </>
         ) : (
           <div className="flex flex-col gap-2">
-            <div data-testid="task-graph-summary" className="px-2.5">
-              <div className="flex items-center justify-between gap-3 text-xs text-ter tabular-nums">
-                <span data-testid="task-progress-text">
-                  {completedTasks} of {totalTasks} done
-                </span>
-                <span>{completionPercent}%</span>
-              </div>
-              <div
-                aria-label="Task completion"
-                aria-valuemax={100}
-                aria-valuemin={0}
-                aria-valuenow={completionPercent}
-                className="task-progress-thin mt-1.5"
-                data-testid="task-progress-bar"
-                role="progressbar"
-              >
-                <span style={{ width: `${completionPercent}%` }} />
-              </div>
-            </div>
-            <ul className="task-list mt-1" data-testid="task-graph-list">
+            <ul className="task-list" data-testid="task-graph-list">
               {openRoots.map((task) => (
-                <TaskItem key={task.line} onToggle={onToggleTaskLine} task={task} />
+                <TaskItem key={task.line} handlers={taskHandlers} task={task} />
               ))}
               {onAppendTask ? (
                 <li>
@@ -327,7 +488,7 @@ export const TaskGraphDrawer = ({
                   onClick={() => setCompletedOpen((v) => !v)}
                   aria-expanded={completedOpen}
                   data-testid="task-completed-toggle"
-                  className="flex w-full cursor-pointer items-center gap-1.5 rounded px-2.5 py-1.5 text-left text-xs text-ter transition-colors hover:bg-2 hover:text-sec"
+                  className="task-completed-toggle"
                 >
                   {completedOpen ? (
                     <ChevronDown size={12} aria-hidden />
@@ -339,7 +500,7 @@ export const TaskGraphDrawer = ({
                 {completedOpen ? (
                   <ul className="task-list" data-testid="task-completed-list">
                     {doneRoots.map((task) => (
-                      <TaskItem key={task.line} onToggle={onToggleTaskLine} task={task} />
+                      <TaskItem key={task.line} handlers={taskHandlers} task={task} />
                     ))}
                   </ul>
                 ) : null}
@@ -347,19 +508,6 @@ export const TaskGraphDrawer = ({
             ) : null}
           </div>
         )}
-      </div>
-      <div
-        className="flex shrink-0 items-center justify-end border-t px-4 py-2 text-xs"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        <button
-          type="button"
-          onClick={() => setRawMode((v) => !v)}
-          data-testid="task-raw-toggle"
-          className="cursor-pointer text-ter hover:text-pri hover:underline"
-        >
-          {rawMode ? 'Back to list' : 'View source'}
-        </button>
       </div>
     </aside>
   )
