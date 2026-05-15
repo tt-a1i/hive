@@ -143,7 +143,7 @@ describe('agent startup instructions', () => {
         expect(output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
         expect(output).toContain('先执行 `team list` 确认真实 Hive worker')
         expect(output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
-        expect(output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+        expect(output).toContain('不要使用你所在 CLI 的内置 subagent / 子代理工具')
         expect(output).not.toContain('team report')
         expect(output).toContain('SUBMITTED')
       })

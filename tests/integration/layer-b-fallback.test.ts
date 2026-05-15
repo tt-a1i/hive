@@ -292,7 +292,7 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('先执行 `team list` 确认真实 Hive worker')
         expect(state.output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
         expect(state.output).toContain('team send <worker-name> "<task>"')
-        expect(state.output).toContain('不要使用 Claude Code 内置的 Task / Explore / subagent')
+        expect(state.output).toContain('不要使用你所在 CLI 的内置 subagent / 子代理工具')
       })
       server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\n')
       server.store.writeRunInput(bobRun.runId, '__HIVE_TEST_EXIT__\n')
