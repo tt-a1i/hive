@@ -25,16 +25,24 @@ export const useTerminalRun = (runId: string) => {
       ([xtermModule, fitModule]) => {
         if (disposed || !containerRef.current) return
 
+        // Read xterm background from CSS so it stays in sync if the palette
+        // shifts. Falls back to bg-crust's literal value if computed style is
+        // unavailable (jsdom). Without this, xterm's canvas sat at #0f0f11 and
+        // the wrapping container at #1b1b1b, so unfilled rows showed a seam.
+        const rootStyles =
+          typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
+        const bgCrust = rootStyles?.getPropertyValue('--bg-crust').trim() || '#0e0e0e'
+        const textPrimary = rootStyles?.getPropertyValue('--text-primary').trim() || '#ebebeb'
         const nextTerminal = new xtermModule.Terminal({
           convertEol: false,
-          fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontFamily: "'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
           fontSize: 13,
           letterSpacing: 0,
           lineHeight: 1,
           scrollback: 10_000,
           theme: {
-            background: '#0f0f11',
-            foreground: '#f7f8f8',
+            background: bgCrust,
+            foreground: textPrimary,
           },
         })
         const nextFitAddon = new fitModule.FitAddon()

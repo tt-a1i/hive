@@ -234,16 +234,28 @@ html, body {
 /* Scrollbar */
 .scroll-y { overflow-y: auto; }
 .scroll-y::-webkit-scrollbar,
-.input::-webkit-scrollbar { width: 8px; height: 8px; }
+.input::-webkit-scrollbar,
+.xterm-viewport::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll-y::-webkit-scrollbar-thumb,
-.input::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
+.input::-webkit-scrollbar-thumb,
+.xterm-viewport::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 4px; }
 .scroll-y::-webkit-scrollbar-thumb:hover,
-.input::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+.input::-webkit-scrollbar-thumb:hover,
+.xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
 .scroll-y::-webkit-scrollbar-track,
-.input::-webkit-scrollbar-track { background: transparent; }
+.input::-webkit-scrollbar-track,
+.xterm-viewport::-webkit-scrollbar-track { background: transparent; }
 /* Firefox fallback — applies to anything that scrolls inside the app. */
 .scroll-y,
-.input { scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
+.input,
+.xterm-viewport { scrollbar-width: thin; scrollbar-color: var(--bg-3) transparent; }
+
+/* xterm focus affordance — when the PTY container has focus, give the user
+   a 1px accent inset so they know keystrokes will be captured. xterm sets
+   .focus on its outermost div whenever the underlying textarea is focused. */
+.xterm.focus {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+}
 
 /* Workspace row — Twenty's NavigationDrawerItem pattern. The interactive
    surface is an inset rounded chip (margin + radius 4) rather than an

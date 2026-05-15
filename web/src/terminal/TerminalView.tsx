@@ -60,11 +60,23 @@ const TerminalPtyView = ({ runId, title: _title }: TerminalViewProps) => {
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <p className="sr-only">{status}</p>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? (
+        <p
+          role="alert"
+          className="mono shrink-0 break-words px-3 py-2 text-xs"
+          style={{
+            background: 'color-mix(in oklab, var(--status-red) 12%, transparent)',
+            borderBottom: '1px solid color-mix(in oklab, var(--status-red) 30%, transparent)',
+            color: 'var(--status-red)',
+          }}
+        >
+          {error}
+        </p>
+      ) : null}
       <div
         data-testid={`terminal-${runId}`}
         ref={containerRef}
-        className="h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-1"
+        className="bg-crust h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden"
       />
     </div>
   )
