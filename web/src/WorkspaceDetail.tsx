@@ -6,7 +6,6 @@ import { WorkspaceNotifications } from './notifications/WorkspaceNotifications.j
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
 import { usePaneSplit } from './usePaneSplit.js'
-import type { WorkspaceStats } from './useWorkspaceStats.js'
 import { AddWorkerDialog } from './worker/AddWorkerDialog.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
 import { useOrchestratorPaneState } from './worker/useOrchestratorPaneState.js'
@@ -31,8 +30,6 @@ type WorkspaceDetailProps = {
   welcomeDisabledReason?: string
   orchestratorAutostartError: string | null
   orchestratorAutostartRunId: string | null
-  /** Kept for API stability — sub-header consumed it; M6-A removed the bar but the prop signature stays so caller wiring is untouched. */
-  stats?: WorkspaceStats
   terminalRuns: TerminalRunSummary[]
   workers: TeamListItem[]
   workspace: WorkspaceSummary | undefined
