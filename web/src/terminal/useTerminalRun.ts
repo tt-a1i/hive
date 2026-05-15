@@ -21,8 +21,15 @@ export const useTerminalRun = (runId: string) => {
     let resizeObserver: ResizeObserver | undefined
     let resizeTimer: number | undefined
 
-    void Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(
-      ([xtermModule, fitModule]) => {
+    void Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      import('@xterm/addon-unicode11'),
+      import('@xterm/addon-webgl'),
+      import('@xterm/addon-clipboard'),
+      import('@xterm/addon-web-links'),
+    ]).then(
+      ([xtermModule, fitModule, unicode11Module, webglModule, clipboardModule, webLinksModule]) => {
         if (disposed || !containerRef.current) return
 
         // Read xterm background from CSS so it stays in sync if the palette
@@ -34,6 +41,7 @@ export const useTerminalRun = (runId: string) => {
         const bgCrust = rootStyles?.getPropertyValue('--bg-crust').trim() || '#0e0e0e'
         const textPrimary = rootStyles?.getPropertyValue('--text-primary').trim() || '#ebebeb'
         const nextTerminal = new xtermModule.Terminal({
+          allowProposedApi: true,
           convertEol: false,
           fontFamily: "'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
           fontSize: 13,
@@ -47,10 +55,23 @@ export const useTerminalRun = (runId: string) => {
         })
         const nextFitAddon = new fitModule.FitAddon()
         nextTerminal.loadAddon(nextFitAddon)
+        nextTerminal.loadAddon(new unicode11Module.Unicode11Addon())
+        nextTerminal.unicode.activeVersion = '11'
+        nextTerminal.loadAddon(new clipboardModule.ClipboardAddon())
+        nextTerminal.loadAddon(new webLinksModule.WebLinksAddon())
         nextTerminal.open(containerRef.current)
         nextFitAddon.fit()
         terminal = nextTerminal
         fitAddon = nextFitAddon
+
+        try {
+          const webglAddon = new webglModule.WebglAddon()
+          webglAddon.onContextLoss(() => webglAddon.dispose())
+          nextTerminal.loadAddon(webglAddon)
+        } catch {
+          // Fall back to the default renderer when WebGL is unavailable.
+        }
+
         if (typeof nextTerminal.attachCustomKeyEventHandler === 'function') {
           nextTerminal.attachCustomKeyEventHandler((event) => {
             if (event.key !== 'Enter' || !event.shiftKey) return true
