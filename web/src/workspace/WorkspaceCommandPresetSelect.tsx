@@ -50,7 +50,7 @@ export const WorkspaceCommandPresetSelect = ({
   }, [open])
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <span className="text-xs font-medium uppercase tracking-wider text-ter">
         Orchestrator CLI
       </span>

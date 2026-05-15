@@ -115,7 +115,7 @@ const TaskItem = ({
             ) : null}
           </span>
           {meta.length > 0 || task.mentions.length > 0 ? (
-            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="mt-1.5 flex flex-wrap items-center gap-2">
               {meta.map((item, idx) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: meta order is deterministic from immutable task.text — items never re-sort within a task
                 <TaskMetaChip key={`${task.line}-meta-${idx}`} item={item} />

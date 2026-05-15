@@ -79,7 +79,7 @@ export const RenameWorkerDialog = ({
                   </Dialog.Description>
                 </div>
               </div>
-              <label className="flex flex-col gap-1.5">
+              <label className="flex flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-wider text-ter">Name</span>
                 <input
                   ref={inputRef}

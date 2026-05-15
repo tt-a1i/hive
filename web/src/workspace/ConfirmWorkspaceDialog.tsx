@@ -116,7 +116,7 @@ export const ConfirmWorkspaceDialog = ({
             </div>
 
             <div className="flex flex-col gap-4 px-5 py-4">
-              <label className="flex flex-col gap-1.5">
+              <label className="flex flex-col gap-2">
                 <FieldLabel>Path</FieldLabel>
                 <input
                   readOnly
@@ -149,7 +149,7 @@ export const ConfirmWorkspaceDialog = ({
                 <span className="text-xs text-ter">No git repository at this path.</span>
               ) : null}
 
-              <label className="flex flex-col gap-1.5">
+              <label className="flex flex-col gap-2">
                 <FieldLabel>Workspace name</FieldLabel>
                 <input
                   value={name}
@@ -181,7 +181,7 @@ export const ConfirmWorkspaceDialog = ({
                 Advanced: custom startup command
               </button>
               {startupExpanded ? (
-                <label className="flex flex-col gap-1.5">
+                <label className="flex flex-col gap-2">
                   <FieldLabel>Startup command</FieldLabel>
                   <input
                     type="text"
@@ -212,7 +212,7 @@ export const ConfirmWorkspaceDialog = ({
                 Advanced: paste path
               </button>
               {pasteExpanded ? (
-                <label className="flex flex-col gap-1.5">
+                <label className="flex flex-col gap-2">
                   <FieldLabel>Absolute path</FieldLabel>
                   <input
                     type="text"

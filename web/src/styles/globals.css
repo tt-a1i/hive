@@ -751,12 +751,12 @@ html, body {
 .task-mention {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  border: 1px solid color-mix(in oklab, var(--status-blue) 30%, transparent);
+  height: 20px;
+  border: 1px solid color-mix(in oklab, var(--status-blue) 28%, transparent);
   border-radius: 999px;
-  padding: 0 7px;
-  color: var(--status-blue);
-  background: color-mix(in oklab, var(--status-blue) 10%, transparent);
+  padding: 0 8px;
+  color: color-mix(in oklab, var(--status-blue) 30%, white);
+  background: color-mix(in oklab, var(--status-blue) 14%, transparent);
   font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }

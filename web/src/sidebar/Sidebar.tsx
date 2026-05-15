@@ -150,7 +150,7 @@ export const Sidebar = ({
                   aria-label={workspace.name}
                   aria-current={isActive ? 'true' : undefined}
                   onClick={() => onSelectWorkspace(workspace.id)}
-                  className={`ws-row block w-full py-2.5 pr-7 pl-1.5 text-left${
+                  className={`ws-row block w-full py-2 pr-7 pl-3 text-left${
                     isActive ? ' active' : ''
                   }`}
                 >

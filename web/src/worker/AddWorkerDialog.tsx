@@ -187,8 +187,8 @@ export const AddWorkerDialog = ({
                 </Dialog.Description>
               </div>
 
-              <div className="flex flex-col gap-5 overflow-y-auto px-5 py-4">
-                <label className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
+                <label className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-2">
                     <SectionLabel>Name</SectionLabel>
                     <Tooltip label="Roll a random playful name">
