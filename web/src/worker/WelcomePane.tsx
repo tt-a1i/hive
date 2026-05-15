@@ -1,4 +1,4 @@
-import { ArrowRight, FolderPlus, Send, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, FolderPlus, Send, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 type WelcomePaneProps = {
@@ -66,6 +66,21 @@ export const WelcomePane = ({
           </li>
         ))}
       </ol>
+      {disabled ? (
+        <div
+          role="alert"
+          data-testid="welcome-pane-disabled-reason"
+          className="flex items-start gap-2 rounded px-3 py-2 text-left text-xs"
+          style={{
+            background: 'color-mix(in oklab, var(--status-red) 10%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--status-red) 28%, transparent)',
+            color: 'var(--status-red)',
+          }}
+        >
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="break-words">{disabledReason}</span>
+        </div>
+      ) : null}
       <button
         type="button"
         disabled={disabled}
@@ -78,11 +93,6 @@ export const WelcomePane = ({
         <span>Add your first workspace</span>
         <ArrowRight size={14} aria-hidden />
       </button>
-      {disabled ? (
-        <div className="text-xs text-status-red" data-testid="welcome-pane-disabled-reason">
-          {disabledReason}
-        </div>
-      ) : null}
       {onTryDemo ? (
         <button
           type="button"

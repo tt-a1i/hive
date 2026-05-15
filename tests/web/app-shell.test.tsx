@@ -150,7 +150,7 @@ describe('app shell with real server', () => {
     render(<App />)
     // Toast surfaces the failure.
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/could not reach hive runtime/i)
+      expect(screen.getByTestId('toast')).toHaveTextContent(/could not reach hive runtime/i)
     })
     // WelcomePane Add Workspace CTA becomes disabled so the user cannot
     // trigger a create flow that will fail against an unreachable runtime.
