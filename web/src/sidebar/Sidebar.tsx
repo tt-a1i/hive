@@ -114,7 +114,10 @@ export const Sidebar = ({
         <div className="flex-1 px-2 py-4">
           <EmptyState
             title="No workspaces"
-            description="Add one to start. Hive will load .hive/tasks.md and start the Orchestrator."
+            description={
+              createDisabledReason ??
+              'Add one to start. Hive will load .hive/tasks.md and start the Orchestrator.'
+            }
             icon={<FolderPlus size={20} />}
             action={
               <button

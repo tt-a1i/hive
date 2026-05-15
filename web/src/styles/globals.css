@@ -765,16 +765,6 @@ html, body {
   font-size: 11px;
 }
 
-.task-empty {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  border: 1px dashed var(--border-bright);
-  border-radius: 4px;
-  padding: 14px;
-  color: var(--text-tertiary);
-  background: var(--bg-2);
-}
 
 /* Deprecated — kept only for compat; prefer `.app-overlay` on a
    <Dialog.Overlay> element. M6-A migrated all known callers; remove this

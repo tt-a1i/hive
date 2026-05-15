@@ -145,7 +145,7 @@ export const WorkersPane = ({
           <EmptyState
             icon={<UserPlus size={28} />}
             title="No team members yet"
-            description="Team members are CLI agents (Claude, Codex, OpenCode…) the Orchestrator dispatches work to via team send."
+            description="Add workers (Claude Code, Codex, Gemini, OpenCode) and the Orchestrator will route tasks to them."
             action={
               <button
                 type="button"

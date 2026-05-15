@@ -88,6 +88,6 @@ describe('workspace create initial state', () => {
 
     const drawer = screen.getByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
-    expect(within(drawer).getByText(/没有任务条目/)).toBeInTheDocument()
+    expect(within(drawer).getByText(/No tasks yet/i)).toBeInTheDocument()
   }, 20000)
 })

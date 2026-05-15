@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 
+import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
@@ -229,15 +230,11 @@ export const TaskGraphDrawer = ({
             onSave={onSave}
           />
         ) : tasks.length === 0 ? (
-          <div className="task-empty">
-            <FileText size={16} />
-            <div>
-              <div className="font-medium text-sec">没有任务条目</div>
-              <div className="mt-1 text-xs text-ter">
-                Orchestrator 写入 .hive/tasks.md 后会自动显示在这里。
-              </div>
-            </div>
-          </div>
+          <EmptyState
+            icon={<FileText size={20} />}
+            title="No tasks yet"
+            description="The Orchestrator writes .hive/tasks.md as it plans. New tasks appear here automatically."
+          />
         ) : (
           <div className="flex flex-col gap-3">
             <div className="task-summary" data-testid="task-graph-summary">
