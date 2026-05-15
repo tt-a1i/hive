@@ -103,62 +103,76 @@ interface TeamReportResponse {
   ok: true
 }
 
-const parseReportArgs = (args: string[], command = 'report') => {
-  const [result, ...rest] = args
-  if (!result) {
-    throw new Error(
-      command === 'status'
-        ? 'Usage: team status <current status> [--artifact <path>]'
-        : 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
-    )
-  }
+const REPORT_USAGE = 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+const STATUS_USAGE = 'Usage: team status <current status> [--artifact <path>]'
 
+const usageFor = (command: string) => (command === 'status' ? STATUS_USAGE : REPORT_USAGE)
+
+const withUsage = (message: string, command: string) => `${message}\n\n${usageFor(command)}`
+
+export const parseReportArgs = (args: string[], command = 'report') => {
+  const positionals: string[] = []
   const artifacts: string[] = []
   let dispatchId: string | undefined
 
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index]
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
 
-    if (arg === '--success' || arg === '--failed') {
-      // Backward-compatible no-op: reports are interpreted from their text.
-      continue
-    }
+    // Backward-compatible no-op: reports are interpreted from their text.
+    if (arg === '--success' || arg === '--failed') continue
 
     if (arg === '--artifact') {
-      const artifactPath = rest[index + 1]
-      if (!artifactPath) {
-        throw new Error(
-          command === 'status'
-            ? 'Usage: team status <current status> [--artifact <path>]'
-            : 'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
-        )
+      const next = args[index + 1]
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(withUsage('--artifact requires a value', command))
       }
-
-      artifacts.push(artifactPath)
+      artifacts.push(next)
       index += 1
       continue
     }
 
     if (arg === '--dispatch') {
       if (command === 'status') {
-        throw new Error('team status does not accept --dispatch; use team report for assigned work')
-      }
-      const nextDispatchId = rest[index + 1]
-      if (!nextDispatchId) {
         throw new Error(
-          'Usage: team report <result> [--dispatch <dispatch-id>] [--artifact <path>]'
+          withUsage(
+            'team status does not accept --dispatch; use team report for assigned work',
+            command
+          )
         )
       }
-
-      dispatchId = nextDispatchId
+      const next = args[index + 1]
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(withUsage('--dispatch requires a value', command))
+      }
+      dispatchId = next
       index += 1
       continue
     }
 
-    throw new Error(`Unknown argument: ${arg}`)
+    if (arg.startsWith('--')) {
+      throw new Error(withUsage(`Unknown argument: ${arg}`, command))
+    }
+
+    positionals.push(arg)
   }
 
-  return { result, artifacts, dispatchId }
+  if (positionals.length === 0) {
+    const label = command === 'status' ? '<current status>' : '<result>'
+    throw new Error(withUsage(`Missing ${label}`, command))
+  }
+  if (positionals.length > 1) {
+    const label = command === 'status' ? 'status' : 'result'
+    throw new Error(
+      withUsage(
+        `Expected exactly one ${label} positional, got ${positionals.length}: ${positionals
+          .map((value) => JSON.stringify(value))
+          .join(', ')}`,
+        command
+      )
+    )
+  }
+
+  return { result: positionals[0], artifacts, dispatchId }
 }
 
 export const runTeamCommand = async (argv: string[]) => {
