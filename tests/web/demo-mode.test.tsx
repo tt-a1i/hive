@@ -172,7 +172,7 @@ test('TaskGraphDrawer shows DEMO_TASKS_MD content when demo is on and Blueprint 
   expect(screen.getByTestId('demo-banner')).toBeInTheDocument()
 
   // Open blueprint drawer
-  fireEvent.click(screen.getByRole('button', { name: /toggle to-do list/i }))
+  fireEvent.click(screen.getByRole('button', { name: /toggle Todo/i }))
 
   await waitFor(() => {
     expect(screen.getByText('Add /todos POST endpoint')).toBeInTheDocument()
