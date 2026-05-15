@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { AppOverlays } from './AppOverlays.js'
@@ -14,6 +14,7 @@ import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
+import { useGlobalShortcuts } from './useGlobalShortcuts.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
@@ -78,6 +79,41 @@ const AppInner = () => {
     setWorkspaces,
     workspaces,
   })
+  const shortcuts = useMemo(() => {
+    const workspaceList = eff.effectiveWorkspaces ?? []
+    const indexShortcuts = workspaceList.slice(0, 9).map((ws, idx) => ({
+      key: String(idx + 1),
+      mod: true,
+      handler: () => {
+        selectWorkspace(ws.id)
+      },
+    }))
+    return [
+      {
+        key: 'b',
+        mod: true,
+        handler: () => {
+          if (eff.effectiveActiveWorkspace) setTaskGraphOpen((open) => !open)
+        },
+      },
+      {
+        key: 'n',
+        mod: true,
+        shift: true,
+        handler: () => {
+          if (!bootstrapError) triggerAddDialog()
+        },
+      },
+      ...indexShortcuts,
+    ]
+  }, [
+    eff.effectiveWorkspaces,
+    eff.effectiveActiveWorkspace,
+    selectWorkspace,
+    bootstrapError,
+    triggerAddDialog,
+  ])
+  useGlobalShortcuts(shortcuts)
   return (
     <MainLayout
       hideTopbarActions={!eff.effectiveActiveWorkspace}

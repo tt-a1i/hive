@@ -63,10 +63,15 @@ export const Confirm = ({
             </div>
           </div>
           <div className="mt-5 flex justify-end gap-2">
+            {/* Destructive intent: focus Cancel by default so Enter does the
+                safe thing. Non-destructive (and informational): focus the
+                primary so Enter confirms — matches OS dialog conventions. */}
             <button
               type="button"
               data-testid="confirm-cancel"
               onClick={() => onOpenChange(false)}
+              // biome-ignore lint/a11y/noAutofocus: dialog is opt-in and short-lived; safe-default focus on destructive Cancel
+              autoFocus={confirmKind === 'danger'}
               className="icon-btn"
             >
               {cancelLabel}
@@ -78,6 +83,8 @@ export const Confirm = ({
                 onConfirm()
                 onOpenChange(false)
               }}
+              // biome-ignore lint/a11y/noAutofocus: dialog is opt-in and short-lived; primary action focus for non-destructive confirms
+              autoFocus={confirmKind !== 'danger'}
               className={
                 confirmKind === 'danger'
                   ? 'icon-btn icon-btn--danger-solid'
