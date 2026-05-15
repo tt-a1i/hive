@@ -154,8 +154,11 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
 
   if (stage.kind === 'idle') return null
   if (stage.kind === 'picking') {
+    // Esc / click-outside cancels the in-flight picker; without onOpenChange
+    // the dialog was unkillable until the native picker resolved.
+    const cancelPicking = () => setStage({ kind: 'idle' })
     return (
-      <Dialog.Root open>
+      <Dialog.Root open onOpenChange={(next) => !next && cancelPicking()}>
         <Dialog.Portal>
           <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
           <Dialog.Content

@@ -1,5 +1,5 @@
 import { Bell, Check, Info, Play, Volume2, VolumeX } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { NotificationDetail, NotificationSound } from './NotificationProvider.js'
 import { useNotifications } from './NotificationProvider.js'
@@ -69,6 +69,8 @@ const detailOptions: Array<{ description: string; label: string; value: Notifica
 
 export const NotificationSettingsButton = () => {
   const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const { notify, previewSound, requestDesktopNotifications, settings, updateSettings } =
     useNotifications()
   const desktopUnsupported = typeof window !== 'undefined' && !('Notification' in window)
@@ -81,14 +83,39 @@ export const NotificationSettingsButton = () => {
     void requestDesktopNotifications()
   }
 
+  // Esc closes the popover, click-outside closes it. Restore focus to the
+  // bell trigger on close so keyboard users land back at their entry point
+  // (Radix Popover normally handles this; we're hand-rolling so we mirror
+  // the same contract).
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    const handlePointer = (event: PointerEvent) => {
+      const root = containerRef.current
+      if (root && !root.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    document.addEventListener('pointerdown', handlePointer)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.removeEventListener('pointerdown', handlePointer)
+    }
+  }, [open])
+
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Notification settings"
-        className="flex items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
+        className="flex cursor-pointer items-center gap-1.5 rounded px-3 py-1 text-xs text-sec hover:bg-3 hover:text-pri"
         data-testid="topbar-settings"
         onClick={() => setOpen((value) => !value)}
       >

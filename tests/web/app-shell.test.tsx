@@ -140,7 +140,7 @@ describe('app shell with real server', () => {
     expect(screen.getByTestId('add-workspace-error')).toHaveTextContent(
       /failed to create workspace/i
     )
-    expect(screen.getByRole('status')).toHaveTextContent(/failed to create workspace/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/failed to create workspace/i)
   }, 20000)
 
   test('init failure surfaces error toast and disables Add Workspace CTA', async () => {
@@ -150,7 +150,7 @@ describe('app shell with real server', () => {
     render(<App />)
     // Toast surfaces the failure.
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(/could not reach hive runtime/i)
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not reach hive runtime/i)
     })
     // WelcomePane Add Workspace CTA becomes disabled so the user cannot
     // trigger a create flow that will fail against an unreachable runtime.
