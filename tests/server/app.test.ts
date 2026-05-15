@@ -211,7 +211,7 @@ describe('runtime http app', () => {
         role: 'coder',
         status: 'working',
         pending_task_count: 1,
-        last_output_line: null,
+        last_pty_line: null,
       },
     ])
   })
@@ -298,7 +298,7 @@ describe('runtime http app', () => {
       role: 'coder',
       status: 'stopped',
       pending_task_count: 0,
-      last_output_line: null,
+      last_pty_line: null,
     })
     expect(store.listWorkers(workspace.id)).toEqual([
       {

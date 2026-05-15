@@ -34,7 +34,7 @@ afterEach(() => {
 
 interface TeamMemberPayload {
   id: string
-  last_output_line: string | null
+  last_pty_line: string | null
   name: string
   pending_task_count: number
   role: string
@@ -55,7 +55,7 @@ const fetchTeam = async (
   return (await response.json()) as TeamMemberPayload[]
 }
 
-describe('team list last_output_line', () => {
+describe('team list last_pty_line', () => {
   test('exposes last non-empty PTY line of a running worker', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-last-output-line-'))
     tempDirs.push(dataDir)
@@ -128,19 +128,19 @@ describe('team list last_output_line', () => {
         const member = team.find((item) => item.id === worker.id)
         expect(member).toBeDefined()
         // Reversibility check: assert the LAST printed line, not the first/middle one.
-        expect(member?.last_output_line).toBe('hello-from-pty')
+        expect(member?.last_pty_line).toBe('hello-from-pty')
       })
 
       // Sanity: payload shape must include the field even when null is the right answer.
       const team = await fetchTeam(server.baseUrl, cookie, workspace.id)
       const member = team.find((item) => item.id === worker.id)
-      expect(member && 'last_output_line' in member).toBe(true)
+      expect(member && 'last_pty_line' in member).toBe(true)
     } finally {
       await server.close()
     }
   }, 15000)
 
-  test('returns null last_output_line when no run is active', async () => {
+  test('returns null last_pty_line when no run is active', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-last-output-line-null-'))
     tempDirs.push(dataDir)
     const workspacePath = join(dataDir, 'workspace')
@@ -173,7 +173,7 @@ describe('team list last_output_line', () => {
 
       const team = await fetchTeam(server.baseUrl, cookie, workspace.id)
       const member = team.find((item) => item.id === worker.id)
-      expect(member?.last_output_line).toBeNull()
+      expect(member?.last_pty_line).toBeNull()
     } finally {
       await server.close()
     }

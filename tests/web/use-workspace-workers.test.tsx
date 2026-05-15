@@ -46,7 +46,7 @@ describe('useWorkspaceWorkers', () => {
         a: [
           {
             id: 'wa',
-            lastOutputLine: undefined,
+            lastPtyLine: undefined,
             name: 'Alice',
             pendingTaskCount: 1,
             role: 'coder',
@@ -56,7 +56,7 @@ describe('useWorkspaceWorkers', () => {
         b: [
           {
             id: 'wb',
-            lastOutputLine: undefined,
+            lastPtyLine: undefined,
             name: 'Bob',
             pendingTaskCount: 0,
             role: 'tester',
@@ -102,7 +102,7 @@ describe('useWorkspaceWorkers', () => {
         b: [
           {
             id: 'wb',
-            lastOutputLine: undefined,
+            lastPtyLine: undefined,
             name: 'Bob',
             pendingTaskCount: 0,
             role: 'tester',

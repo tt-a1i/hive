@@ -26,7 +26,7 @@ export const DEMO_WORKERS: TeamListItem[] = [
     role: 'coder',
     status: 'working',
     pendingTaskCount: 1,
-    lastOutputLine: 'Editing src/routes/todos.ts (line 42)',
+    lastPtyLine: 'Editing src/routes/todos.ts (line 42)',
   },
   { id: 'demo-reviewer', name: 'bob', role: 'reviewer', status: 'idle', pendingTaskCount: 0 },
 ]

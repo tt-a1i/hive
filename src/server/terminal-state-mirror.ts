@@ -52,7 +52,7 @@ export class TerminalStateMirror {
    * truncated to `maxLen`). Returns `null` when scrollback has no printable
    * content, so the wire protocol can express "no output yet" as a null.
    */
-  lastOutputLine(maxLen = 60): string | null {
+  lastPtyLine(maxLen = 60): string | null {
     const buffer = this.terminal.buffer.active
     for (let row = buffer.length - 1; row >= 0; row -= 1) {
       const raw = buffer.getLine(row)?.translateToString(true) ?? ''

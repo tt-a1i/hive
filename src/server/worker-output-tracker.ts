@@ -11,7 +11,7 @@ export interface WorkerOutputTracker {
   attach: (workspaceId: string, agentId: string, runId: string, initialOutput: string) => void
   closeAll: () => void
   detach: (workspaceId: string, agentId: string) => void
-  getLastOutputLine: (workspaceId: string, agentId: string) => string | null
+  getLastPtyLine: (workspaceId: string, agentId: string) => string | null
 }
 
 const trackerKey = (workspaceId: string, agentId: string) => `${workspaceId}:${agentId}`
@@ -56,9 +56,9 @@ export const createWorkerOutputTracker = (outputBus: PtyOutputBus): WorkerOutput
       disposeEntry(entry)
       tracked.delete(key)
     },
-    getLastOutputLine(workspaceId, agentId) {
+    getLastPtyLine(workspaceId, agentId) {
       const entry = tracked.get(trackerKey(workspaceId, agentId))
-      return entry ? entry.mirror.lastOutputLine() : null
+      return entry ? entry.mirror.lastPtyLine() : null
     },
   }
 }

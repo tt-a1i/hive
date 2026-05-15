@@ -26,8 +26,11 @@ export interface TeamListItem {
   role: WorkerRole
   status: AgentStatus
   pendingTaskCount: number
-  /** Optional: last output line shown in the worker card when status is working. */
-  lastOutputLine?: string
+  /**
+   * Last raw line printed to the worker's PTY. Surfaced on the worker card for UI hints only —
+   * not a worker reply. Real replies arrive as [Hive 系统消息] entries on orchestrator stdin.
+   */
+  lastPtyLine?: string
 }
 
 /**
@@ -41,5 +44,5 @@ export interface TeamListItemPayload {
   role: WorkerRole
   status: AgentStatus
   pending_task_count: number
-  last_output_line: string | null
+  last_pty_line: string | null
 }

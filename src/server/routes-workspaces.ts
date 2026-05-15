@@ -16,14 +16,14 @@ import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import { validateWorkspacePath } from './workspace-path-validation.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 
-const enrichWithLastOutput = (
+const enrichWithLastPtyLine = (
   workspaceId: string,
-  store: Pick<RuntimeStore, 'getLastOutputLineForAgent'>,
+  store: Pick<RuntimeStore, 'getLastPtyLineForAgent'>,
   workers: ReturnType<RuntimeStore['listWorkers']>
 ) =>
   workers.map((worker) => {
-    const line = store.getLastOutputLineForAgent(workspaceId, worker.id)
-    return line === null ? worker : { ...worker, lastOutputLine: line }
+    const line = store.getLastPtyLineForAgent(workspaceId, worker.id)
+    return line === null ? worker : { ...worker, lastPtyLine: line }
   })
 
 const getSerializedWorker = (workspaceId: string, workerId: string, store: RuntimeStore) => {
@@ -31,8 +31,8 @@ const getSerializedWorker = (workspaceId: string, workerId: string, store: Runti
   if (!worker) {
     throw new Error(`Worker not found: ${workerId}`)
   }
-  const line = store.getLastOutputLineForAgent(workspaceId, workerId)
-  return serializeTeamListItem(line === null ? worker : { ...worker, lastOutputLine: line })
+  const line = store.getLastPtyLineForAgent(workspaceId, workerId)
+  return serializeTeamListItem(line === null ? worker : { ...worker, lastPtyLine: line })
 }
 
 const getRuntimePort = (request: IncomingMessage) => String(request.socket.localPort ?? '')
@@ -108,7 +108,7 @@ export const workspaceRoutes: RouteDefinition[] = [
     sendJson(
       response,
       200,
-      enrichWithLastOutput(workspaceId, store, store.listWorkers(workspaceId)).map(
+      enrichWithLastPtyLine(workspaceId, store, store.listWorkers(workspaceId)).map(
         serializeTeamListItem
       )
     )
@@ -138,7 +138,7 @@ export const workspaceRoutes: RouteDefinition[] = [
     sendJson(
       response,
       200,
-      enrichWithLastOutput(workspaceId, store, store.listWorkers(workspaceId)).map(
+      enrichWithLastPtyLine(workspaceId, store, store.listWorkers(workspaceId)).map(
         serializeTeamListItem
       )
     )

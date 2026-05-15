@@ -12,7 +12,7 @@ const fromPayload = (payload: TeamListItemPayload): TeamListItem => ({
   role: payload.role,
   status: payload.status,
   pendingTaskCount: payload.pending_task_count,
-  lastOutputLine: payload.last_output_line ?? undefined,
+  lastPtyLine: payload.last_pty_line ?? undefined,
 })
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
