@@ -269,7 +269,6 @@ while the core local orchestration model hardens.
 
 ## License
 
-- **0.6.0-alpha.8 onward**: Business Source License 1.1 (see [LICENSE.BSL](LICENSE.BSL)). Automatically converts to Apache-2.0 on 2030-05-16.
-- **0.6.0-alpha.7 and earlier**: Apache-2.0 (see [LICENSE](LICENSE)), permanent grant.
+Hive is licensed under the Business Source License 1.1 (see [LICENSE.BSL](LICENSE.BSL)). BSL permits personal use, internal deployment, embedding in non-competitive products, and non-commercial forks; it **only prohibits** offering Hive as a hosted multi-agent orchestration service to third parties.
 
-BSL permits personal use, internal deployment, embedding in non-competitive products, and non-commercial forks. **Only prohibits** offering Hive as a hosted multi-agent orchestration service to third parties. See the Additional Use Grant in [LICENSE.BSL](LICENSE.BSL) for the exact boundary.
+See the Additional Use Grant in [LICENSE.BSL](LICENSE.BSL) for the exact boundary.
