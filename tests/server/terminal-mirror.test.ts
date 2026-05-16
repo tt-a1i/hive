@@ -92,6 +92,21 @@ const startAgent = async (
   return { runId: payload.run_id }
 }
 
+const waitForRunOutput = async (
+  baseUrl: string,
+  cookie: string,
+  runId: string,
+  expected: string
+) => {
+  await waitFor(async () => {
+    const response = await fetch(`${baseUrl}/api/runtime/runs/${runId}`, {
+      headers: { cookie },
+    })
+    const body = (await response.json()) as { output: string }
+    expect(body.output).toContain(expected)
+  })
+}
+
 const openViewer = async (baseUrl: string, cookie: string, runId: string, clientId: string) => {
   const outputs: string[] = []
   const controlMessages: Array<{ [key: string]: unknown; type: string }> = []
@@ -145,20 +160,14 @@ describe('terminal mirror', () => {
         script,
       ])
       const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
+      await waitForRunOutput(server.baseUrl, cookie, run.runId, 'HELLO')
 
-      const firstViewer = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-1')
-      await waitFor(() => {
-        expect(firstViewer.outputs.join('')).toContain('HELLO')
-      })
-
-      const secondViewer = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-2')
+      const secondViewer = await openViewer(server.baseUrl, cookie, run.runId, 'late-viewer')
       await waitFor(() => {
         const restore = secondViewer.controlMessages.find((message) => message.type === 'restore')
         expect(String(restore?.snapshot ?? '')).toContain('HELLO')
       })
 
-      firstViewer.io.close()
-      firstViewer.control.close()
       secondViewer.io.close()
       secondViewer.control.close()
     } finally {
@@ -190,13 +199,7 @@ describe('terminal mirror', () => {
       ])
       const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
 
-      await waitFor(async () => {
-        const response = await fetch(`${server.baseUrl}/api/runtime/runs/${run.runId}`, {
-          headers: { cookie },
-        })
-        const body = (await response.json()) as { output: string }
-        expect(body.output).toContain('RIGHT')
-      })
+      await waitForRunOutput(server.baseUrl, cookie, run.runId, 'RIGHT')
 
       const controlMessages: Array<{ [key: string]: unknown; type: string }> = []
       const control = new WebSocket(

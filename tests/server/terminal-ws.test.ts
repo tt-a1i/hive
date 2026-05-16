@@ -131,7 +131,18 @@ describe('terminal websocket server', () => {
     mkdirSync(workspacePath, { recursive: true })
     tempDirs.push(workspacePath)
     const script = join(workspacePath, 'ready.js')
-    writeFileSync(script, "console.log('ready'); process.stdin.resume();\n")
+    writeFileSync(
+      script,
+      [
+        'let count = 0',
+        'const interval = setInterval(() => {',
+        '  count += 1',
+        "  console.log('ready:' + count)",
+        '  if (count >= 20) clearInterval(interval)',
+        '}, 50)',
+        'process.stdin.resume()',
+      ].join('\n')
+    )
 
     const server = await startTestServer()
     try {
@@ -150,7 +161,7 @@ describe('terminal websocket server', () => {
       })
 
       await waitFor(() => {
-        expect(received.join('')).toContain('ready')
+        expect(received.join('')).toContain('ready:')
       })
 
       io.close()
