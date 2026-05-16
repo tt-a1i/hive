@@ -1,10 +1,10 @@
 {
   "name": "@tt-a1i/hive",
-  "version": "0.6.0-alpha.7",
+  "version": "0.6.0-alpha.8",
   "description": "Browser-native hive-mind for CLI coding agents — Claude Code, Codex, Gemini, and OpenCode collaborate as real PTY processes via a team protocol.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "keywords": [
     "ai-agents",
     "cli",
@@ -30,6 +30,7 @@
     "assets/",
     "CHANGELOG.md",
     "LICENSE",
+    "LICENSE.BSL",
     "README.md",
     "README.en.md",
     "SECURITY.md",

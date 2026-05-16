@@ -15,7 +15,7 @@ injects into each agent's shell, and shares a markdown task graph at
 [![ci](https://img.shields.io/github/actions/workflow/status/tt-a1i/hive/release.yml?branch=main&label=ci)](https://github.com/tt-a1i/hive/actions/workflows/release.yml)
 [![Website](https://img.shields.io/badge/website-hive--site.pages.dev-5a8a8a.svg)](https://hive-site.pages.dev)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/license-BUSL--1.1-orange.svg)](./LICENSE.BSL)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#platform-support)
 
 🌐 **Website**: [hive-site.pages.dev/en/](https://hive-site.pages.dev/en/) · [中文](https://hive-site.pages.dev/)
@@ -269,4 +269,7 @@ while the core local orchestration model hardens.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+- **0.6.0-alpha.8 onward**: Business Source License 1.1 (see [LICENSE.BSL](LICENSE.BSL)). Automatically converts to Apache-2.0 on 2030-05-16.
+- **0.6.0-alpha.7 and earlier**: Apache-2.0 (see [LICENSE](LICENSE)), permanent grant.
+
+BSL permits personal use, internal deployment, embedding in non-competitive products, and non-commercial forks. **Only prohibits** offering Hive as a hosted multi-agent orchestration service to third parties. See the Additional Use Grant in [LICENSE.BSL](LICENSE.BSL) for the exact boundary.

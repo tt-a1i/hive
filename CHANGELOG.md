@@ -2,6 +2,23 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.8 - 2026-05-16
+
+License switch — no code changes from alpha.7.
+
+- Starting from this version, Hive is licensed under the **Business Source
+  License 1.1** (BSL), not Apache-2.0. BSL allows personal use, internal
+  organizational deployment, embedding in non-competitive products, and
+  non-commercial forks. It only prohibits offering Hive as a hosted or
+  embedded multi-agent orchestration service to third parties on a paid
+  basis. On **2030-05-16** the license automatically converts to Apache-2.0.
+- All versions at or before `0.6.0-alpha.7` remain permanently licensed
+  under Apache-2.0 — that grant is irrevocable and is not affected by this
+  switch.
+- See [`LICENSE.BSL`](./LICENSE.BSL) for the full BSL text including the
+  Additional Use Grant, and [`LICENSE`](./LICENSE) for the historical
+  Apache-2.0 grant.
+
 ## 0.6.0-alpha.7 - 2026-05-16
 
 Worker identity, language, and workflow polish.
