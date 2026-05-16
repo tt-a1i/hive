@@ -1,12 +1,18 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, Dices, RotateCcw } from 'lucide-react'
-import { type FormEvent, useEffect, useState } from 'react'
+import { Dices } from 'lucide-react'
+import type { FormEvent } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
-import { RoleAvatar } from './RoleAvatar.js'
+import {
+  AgentCliPicker,
+  RoleInstructionsField,
+  RolePicker,
+  SectionLabel,
+  StartupCommandField,
+} from './AddWorkerDialogFields.js'
 
 type AddWorkerDialogProps = {
   commandPresets: CommandPreset[]
@@ -27,80 +33,6 @@ type AddWorkerDialogProps = {
   workerName: string
   workerRole: WorkerRole
 }
-
-interface RoleCardSpec {
-  value: WorkerRole
-  label: string
-  dashed?: boolean
-}
-
-const ROLE_CARDS: RoleCardSpec[] = [
-  { value: 'coder', label: 'Coder' },
-  { value: 'reviewer', label: 'Reviewer' },
-  { value: 'tester', label: 'Tester' },
-  { value: 'custom', label: 'Custom', dashed: true },
-]
-
-const ROLE_LABELS: Record<WorkerRole, string> = {
-  coder: 'Coder',
-  custom: 'Custom',
-  reviewer: 'Reviewer',
-  tester: 'Tester',
-}
-
-const RoleCard = ({
-  active,
-  spec,
-  onSelect,
-}: {
-  active: boolean
-  spec: RoleCardSpec
-  onSelect: () => void
-}) => (
-  <button
-    type="button"
-    onClick={onSelect}
-    aria-pressed={active}
-    data-testid={`role-card-${spec.value}`}
-    className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-3 px-3 py-2`}
-  >
-    <RoleAvatar role={spec.value} size={20} />
-    <span className="flex-1 text-left text-base font-medium text-pri">{spec.label}</span>
-    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
-  </button>
-)
-
-const AgentChip = ({
-  active,
-  preset,
-  onSelect,
-}: {
-  active: boolean
-  preset: CommandPreset
-  onSelect: () => void
-}) => (
-  <button
-    type="button"
-    onClick={onSelect}
-    aria-pressed={active}
-    disabled={preset.available === false}
-    data-testid={`agent-radio-${preset.id}`}
-    className="selectable-card flex items-center justify-between gap-2 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-45"
-  >
-    <span className="flex min-w-0 flex-col items-start gap-0.5">
-      <span className="truncate text-base font-medium text-pri">{preset.displayName}</span>
-      <span className="mono truncate text-xs text-ter">
-        {preset.command}
-        {preset.available === false ? ' · not found' : ''}
-      </span>
-    </span>
-    {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
-  </button>
-)
-
-const SectionLabel = ({ children }: { children: React.ReactNode }) => (
-  <span className="text-sm font-medium text-sec">{children}</span>
-)
 
 export const AddWorkerDialog = ({
   commandPresets,
@@ -126,18 +58,8 @@ export const AddWorkerDialog = ({
     if (!open) onClose()
   }
   const roleDescriptionModified = roleDescription !== roleDescriptionDefault
-  const roleLabel = ROLE_LABELS[workerRole]
   const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
   const startupCommandClean = startupCommand.trim()
-  // Instructions textarea hides behind a disclosure so the dialog stops feeling
-  // like a prompt editor on first open. It auto-expands when the user picks
-  // Custom (no default prompt to seed) or when they have already started
-  // editing — but we only force it *open*, never closed, so users keep control.
-  const [instructionsOpen, setInstructionsOpen] = useState(false)
-  const shouldAutoExpandInstructions = workerRole === 'custom' || roleDescriptionModified
-  useEffect(() => {
-    if (shouldAutoExpandInstructions) setInstructionsOpen(true)
-  }, [shouldAutoExpandInstructions])
 
   // Validation runs only on submit; we don't pre-disable the Add button so
   // the user always gets actionable feedback (a warning toast) instead of
@@ -220,125 +142,20 @@ export const AddWorkerDialog = ({
                   />
                 </label>
 
-                <div className="flex flex-col gap-2">
-                  <SectionLabel>Role</SectionLabel>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ROLE_CARDS.map((spec) => (
-                      <RoleCard
-                        key={spec.value}
-                        active={workerRole === spec.value}
-                        spec={spec}
-                        onSelect={() => onRoleChange(spec.value)}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <details
-                  open={instructionsOpen}
-                  onToggle={(event) =>
-                    setInstructionsOpen((event.currentTarget as HTMLDetailsElement).open)
-                  }
-                  className="group flex flex-col gap-2"
-                >
-                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-                    <span className="flex items-center gap-1.5">
-                      <ChevronDown
-                        size={12}
-                        aria-hidden
-                        className="-rotate-90 text-ter transition-transform duration-150 group-open:rotate-0"
-                      />
-                      <SectionLabel>Role instructions</SectionLabel>
-                      {roleDescriptionModified ? (
-                        <span className="text-sm text-ter">
-                          · Modified from {roleLabel} default
-                        </span>
-                      ) : null}
-                    </span>
-                    {roleDescriptionModified ? (
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          onRoleDescriptionReset()
-                        }}
-                      >
-                        <RotateCcw size={12} aria-hidden />
-                        Reset
-                      </button>
-                    ) : null}
-                  </summary>
-                  <textarea
-                    aria-label="Role instructions"
-                    id="add-worker-role-instructions"
-                    value={roleDescription}
-                    rows={5}
-                    onChange={(event) => onRoleDescriptionChange(event.currentTarget.value)}
-                    placeholder={
-                      workerRole === 'custom'
-                        ? 'You are a security reviewer focused on auth and input validation. Use team report to hand findings back to the orchestrator.'
-                        : undefined
-                    }
-                    title="Injected into the agent's startup prompt and every dispatch. Hive's team protocol stays fixed; this only steers role behavior."
-                    className="input mono resize-y text-sm"
-                    style={{ minHeight: 150 }}
-                    data-testid="role-instructions-textarea"
-                  />
-                </details>
-
-                <div className="flex flex-col gap-2">
-                  <SectionLabel>Agent CLI</SectionLabel>
-                  {commandPresets.length === 0 ? (
-                    <div className="text-sm text-ter">Loading presets…</div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {commandPresets.map((preset) => (
-                        <AgentChip
-                          key={preset.id}
-                          active={commandPresetId === preset.id}
-                          preset={preset}
-                          onSelect={() => onPresetChange(preset.id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <details className="group flex flex-col gap-2">
-                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <ChevronDown
-                        size={12}
-                        aria-hidden
-                        className="-rotate-90 shrink-0 text-ter transition-transform duration-150 group-open:rotate-0"
-                      />
-                      <SectionLabel>Startup command</SectionLabel>
-                      {startupCommandClean ? (
-                        <span className="truncate text-sm text-ter">· overrides CLI launch</span>
-                      ) : null}
-                    </span>
-                  </summary>
-                  <div
-                    className="flex flex-col gap-2 rounded border bg-2 p-3"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    <input
-                      aria-label="Startup command"
-                      value={startupCommand}
-                      onChange={(event) => onStartupCommandChange(event.currentTarget.value)}
-                      placeholder="qwen --model qwen3-coder"
-                      className="input mono text-sm"
-                      spellCheck={false}
-                    />
-                    <p className="text-sm leading-5 text-ter">
-                      Optional. Runs through your login shell in this workspace. Use it for custom
-                      agents or native resume commands such as{' '}
-                      <span className="mono">claude --resume &lt;session-id&gt;</span>.
-                    </p>
-                  </div>
-                </details>
+                <RolePicker workerRole={workerRole} onRoleChange={onRoleChange} />
+                <RoleInstructionsField
+                  modified={roleDescriptionModified}
+                  onChange={onRoleDescriptionChange}
+                  onReset={onRoleDescriptionReset}
+                  roleDescription={roleDescription}
+                  workerRole={workerRole}
+                />
+                <AgentCliPicker
+                  commandPresetId={commandPresetId}
+                  commandPresets={commandPresets}
+                  onPresetChange={onPresetChange}
+                />
+                <StartupCommandField value={startupCommand} onChange={onStartupCommandChange} />
               </div>
 
               <div

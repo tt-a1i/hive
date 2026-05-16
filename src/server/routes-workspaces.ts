@@ -1,11 +1,11 @@
 import type { IncomingMessage } from 'node:http'
 
-import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
 import {
   resolveCommandPresetLaunchConfig,
   resolveStartupCommandLaunchConfig,
-  seedOrchestratorLaunchConfig,
-} from './orchestrator-launch.js'
+} from './agent-launch-resolver.js'
+import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
+import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type {
   CreateWorkerBody,

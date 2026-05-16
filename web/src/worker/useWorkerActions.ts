@@ -21,14 +21,19 @@ interface UseWorkerActionsInput {
   setWorkersByWorkspaceId: React.Dispatch<React.SetStateAction<Record<string, TeamListItem[]>>>
 }
 
+export interface CreateWorkerActionInput {
+  commandPresetId: string
+  name: string
+  role: WorkerRole
+  roleDescription: string
+  startupCommand: string
+}
+
 export interface WorkerActions {
-  createWorker: (
-    workerName: string,
-    workerRole: WorkerRole,
-    commandPresetId: string,
-    roleDescription: string,
-    startupCommand: string
-  ) => Promise<{ error: string | null; runId: string | null }>
+  createWorker: (input: CreateWorkerActionInput) => Promise<{
+    error: string | null
+    runId: string | null
+  }>
   deleteWorker: (workerId: string) => Promise<void>
   startWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   stopWorkerRun: (runId: string) => Promise<{ error: string | null }>
@@ -41,15 +46,15 @@ export const useWorkerActions = ({
   setWorkersByWorkspaceId,
 }: UseWorkerActionsInput): WorkerActions => {
   const createWorkerAction = useCallback<WorkerActions['createWorker']>(
-    async (workerName, workerRole, commandPresetId, roleDescription, startupCommand) => {
+    async ({ commandPresetId, name, role, roleDescription, startupCommand }) => {
       if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       const startupClean = startupCommand.trim()
       const result = await createWorker(activeWorkspaceId, {
         autostart: true,
         command_preset_id: commandPresetId || null,
         description: roleDescription.trim(),
-        name: workerName,
-        role: workerRole,
+        name,
+        role,
         startup_command: startupClean || null,
       })
       setWorkersByWorkspaceId((current) => ({

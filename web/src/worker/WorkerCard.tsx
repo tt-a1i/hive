@@ -85,15 +85,6 @@ export const WorkerCard = ({
           <span className={status.dotClass} aria-hidden />
           {status.label}
         </span>
-        {worker.lastPtyLine ? (
-          <span
-            className="mt-1 truncate text-xs text-ter"
-            title={worker.lastPtyLine}
-            data-testid={`worker-last-pty-${worker.id}`}
-          >
-            {worker.lastPtyLine}
-          </span>
-        ) : null}
       </button>
 
       {onAction ? (

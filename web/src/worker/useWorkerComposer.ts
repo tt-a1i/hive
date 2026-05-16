@@ -166,7 +166,13 @@ export const useWorkerComposer = ({
     setCreating(true)
     setCreateWorkerError(null)
     const launchPresetId = startupCommand.trim() && !commandPresetTouched ? '' : commandPresetId
-    void createWorker(workerName, workerRole, launchPresetId, roleDescription, startupCommand)
+    void createWorker({
+      commandPresetId: launchPresetId,
+      name: workerName,
+      role: workerRole,
+      roleDescription,
+      startupCommand,
+    })
       .then(({ error }) => {
         setWorkerName('')
         selectWorkerRole('coder')

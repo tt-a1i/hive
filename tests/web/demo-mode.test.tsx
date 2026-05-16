@@ -113,8 +113,6 @@ test('clicking Try Demo enters demo mode with banner, demo workspace, alice work
   expect(screen.getByText('demo-todo-app')).toBeInTheDocument()
   // Alice worker should appear
   expect(screen.getByText('alice')).toBeInTheDocument()
-  // Alice's last output line should be visible
-  expect(screen.getByText('Editing src/routes/todos.ts (line 42)')).toBeInTheDocument()
 })
 
 test('demo mode never sends fetch calls for demo-workspace', async () => {

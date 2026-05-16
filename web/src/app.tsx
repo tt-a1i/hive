@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { AppOverlays } from './AppOverlays.js'
@@ -16,6 +16,7 @@ import { useTerminalRuns } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
 import { useAppShortcuts } from './useAppShortcuts.js'
 import { useInitializeUiSession } from './useInitializeUiSession.js'
+import { useWorkerHighlight } from './useWorkerHighlight.js'
 import { useWorkspaceCreate } from './useWorkspaceCreate.js'
 import { useWorkspaceDelete } from './useWorkspaceDelete.js'
 import { useWorkspaceSelection } from './useWorkspaceSelection.js'
@@ -85,28 +86,7 @@ const AppInner = () => {
     onTriggerAddDialog: triggerAddDialog,
     workspaces: eff.effectiveWorkspaces,
   })
-
-  // §6.6.6 — clicking an `@<worker>` chip in the Tasks drawer scrolls the
-  // matching worker card into view and applies a transient highlight. We
-  // look up by `data-worker-name` (set on the WorkerCard root); the timer
-  // ref ensures rapid-fire clicks don't strand a stale "fading" class.
-  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const handleSelectOwner = useCallback((workerName: string) => {
-    if (typeof document === 'undefined') return
-    const escaped =
-      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-        ? CSS.escape(workerName)
-        : workerName.replace(/"/g, '\\"')
-    const target = document.querySelector<HTMLElement>(`[data-worker-name="${escaped}"]`)
-    if (!target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
-    target.classList.add('worker-card-shell--highlight')
-    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
-    highlightTimeoutRef.current = setTimeout(() => {
-      target.classList.remove('worker-card-shell--highlight')
-      highlightTimeoutRef.current = null
-    }, 1000)
-  }, [])
+  const handleSelectOwner = useWorkerHighlight()
   return (
     <MainLayout
       hideTopbarActions={!eff.effectiveActiveWorkspace}
