@@ -2,7 +2,7 @@
 
 All notable user-facing changes will be documented in this file.
 
-## 0.6.0-alpha.6 - 2026-05-16
+## 0.6.0-alpha.7 - 2026-05-16
 
 Worker identity, language, and workflow polish.
 
