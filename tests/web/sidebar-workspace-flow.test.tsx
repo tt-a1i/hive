@@ -182,10 +182,12 @@ describe('Sidebar EmptyState CTA', () => {
     // + correct content rather than visibility).
     const avatarCell = screen.getByTestId('ws-avatar-cell')
     expect(avatarCell).toBeInTheDocument()
-    expect(screen.getByTestId('workspace-avatar')).toHaveTextContent('M')
-    // The same workspace also has the wide-mode row button (different element).
+    // Each workspace now carries two avatars: one in the wide-mode row, one
+    // in the compact-mode cell. Container-query toggles which is visible.
+    expect(within(avatarCell).getByTestId('workspace-avatar')).toHaveTextContent('M')
     const rowButton = avatarCell.parentElement?.querySelector('.ws-row')
     expect(rowButton).not.toBeNull()
+    expect(within(rowButton as HTMLElement).getByTestId('workspace-avatar')).toHaveTextContent('M')
   })
 
   test('clicking the compact avatar cell selects the workspace', () => {

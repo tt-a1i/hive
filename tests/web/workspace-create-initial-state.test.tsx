@@ -82,8 +82,17 @@ describe('workspace create initial state', () => {
     )
 
     // Sub-header and footer were removed in M6 polish. Workspace identity
-    // lives in the sidebar row.
-    expect(screen.getByText(realpathSync(join(sandboxRoot, 'alpha-project')))).toBeInTheDocument()
+    // lives in the sidebar row — name shown inline, path on the row's
+    // hover Tooltip so the chip stays compact. The path is mirrored onto a
+    // `data-workspace-path` attribute so tests can assert without driving
+    // Radix Tooltip's hover state.
+    const rowButton = screen
+      .getAllByRole('button', { name: 'Alpha' })
+      .find((b) => b.classList.contains('ws-row'))
+    expect(rowButton).toHaveAttribute(
+      'data-workspace-path',
+      realpathSync(join(sandboxRoot, 'alpha-project'))
+    )
     expect(screen.queryByRole('contentinfo')).toBeNull()
 
     const drawer = screen.getByTestId('task-graph-drawer')

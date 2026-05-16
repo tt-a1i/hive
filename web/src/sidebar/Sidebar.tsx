@@ -1,4 +1,4 @@
-import { FolderPlus, Plus, Trash2 } from 'lucide-react'
+import { FolderPlus, Plus, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
@@ -35,6 +35,17 @@ const workerSummary = (
   return t('sidebar.teamMemberCount', { count: workers.length })
 }
 
+const GITHUB_DISMISSED_KEY = 'hive.sidebar.githubDismissed'
+
+const readGithubDismissed = (): boolean => {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(GITHUB_DISMISSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const Sidebar = ({
   activeWorkspaceId,
   createDisabledReason,
@@ -47,7 +58,18 @@ export const Sidebar = ({
   const { t } = useI18n()
   const [pendingDelete, setPendingDelete] = useState<WorkspaceSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [githubDismissed, setGithubDismissed] = useState<boolean>(readGithubDismissed)
   const toast = useToast()
+
+  const dismissGithubFooter = () => {
+    setGithubDismissed(true)
+    try {
+      window.localStorage.setItem(GITHUB_DISMISSED_KEY, '1')
+    } catch {
+      // localStorage unavailable (private mode / sandbox) — silent fallback,
+      // state still hides for this session.
+    }
+  }
   const createDisabled = Boolean(createDisabledReason)
 
   const requestDelete = (workspace: WorkspaceSummary) => {
@@ -108,7 +130,7 @@ export const Sidebar = ({
       >
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className="ws-sidebar-title__text text-xs font-medium uppercase tracking-wider text-ter"
+            className="ws-sidebar-title__text text-xs font-medium text-ter"
             data-testid="workspace-sidebar-title"
           >
             {t('sidebar.workspaces')}
@@ -152,49 +174,44 @@ export const Sidebar = ({
             const workingCount = countWorkingMembers(workers)
             return (
               <li key={workspace.id} className="group relative">
-                {/* Wide layout — name + path + inline status dot. Hidden by */}
-                {/* `@container ws-sidebar (max-width: 96px)` in globals.css. */}
-                <button
-                  type="button"
-                  aria-label={workspace.name}
-                  aria-current={isActive ? 'true' : undefined}
-                  onClick={() => onSelectWorkspace(workspace.id)}
-                  className={`ws-row block w-full py-2 pr-7 pl-3 text-left${
-                    isActive ? ' active' : ''
-                  }`}
+                {/* Wide layout — mini avatar + name, path moved to tooltip. */}
+                {/* Hidden by `@container ws-sidebar (max-width: 96px)`. */}
+                <Tooltip
+                  side="right"
+                  label={
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-medium">{workspace.name}</span>
+                      <span className="mono text-ter">{workspace.path}</span>
+                    </span>
+                  }
                 >
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={workspace.name}
+                    aria-current={isActive ? 'true' : undefined}
+                    data-workspace-path={workspace.path}
+                    onClick={() => onSelectWorkspace(workspace.id)}
+                    className={`ws-row flex w-full items-center gap-2.5 py-1.5 pr-7 pl-2 text-left${
+                      isActive ? ' active' : ''
+                    }`}
+                  >
+                    <WorkspaceAvatar
+                      workspaceId={workspace.id}
+                      name={workspace.name}
+                      isActive={isActive}
+                      working={hasWorking}
+                      workingCount={workingCount}
+                      size={22}
+                    />
                     <span
-                      className={`min-w-0 flex-1 truncate ${
+                      className={`min-w-0 flex-1 truncate text-sm ${
                         isActive ? 'font-medium text-pri' : 'text-pri'
                       }`}
                     >
                       {workspace.name}
                     </span>
-                    {hasWorking ? (
-                      <span
-                        className="inline-flex items-center gap-1.5 text-xs text-ter tabular-nums"
-                        role="img"
-                        aria-label={
-                          workingCount > 1
-                            ? t('sidebar.workingMembers', { count: workingCount })
-                            : t('sidebar.oneWorking')
-                        }
-                        title={
-                          workingCount > 1
-                            ? t('sidebar.workingMembers', { count: workingCount })
-                            : t('sidebar.oneWorking')
-                        }
-                      >
-                        <span className="status-dot status-dot--working" aria-hidden />
-                        {workingCount > 1 ? workingCount : null}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="ws-row__path mt-0.5 truncate text-xs text-ter">
-                    {workspace.path}
-                  </div>
-                </button>
+                  </button>
+                </Tooltip>
                 {/* Compact layout — Discord-style square avatar. Shown by the */}
                 {/* same container query when sidebar width is ≤96px. */}
                 <Tooltip
@@ -259,6 +276,36 @@ export const Sidebar = ({
             </Tooltip>
           </li>
         </ul>
+      )}
+
+      {githubDismissed ? null : (
+        <div
+          className="ws-sidebar-footer group relative"
+          style={{ boxShadow: 'inset 0 1px 0 var(--border)' }}
+        >
+          <a
+            href="https://github.com/tt-a1i/hive"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('sidebar.openRepository')}
+            title={t('sidebar.openRepository')}
+            className="ws-sidebar-footer__link flex items-center gap-2.5 px-3 py-3 text-sm text-ter transition-colors hover:text-pri"
+          >
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            <span className="ws-sidebar-footer__label">GitHub</span>
+          </a>
+          <button
+            type="button"
+            aria-label={t('sidebar.dismissRepository')}
+            title={t('sidebar.dismissRepository')}
+            onClick={dismissGithubFooter}
+            className="ws-sidebar-footer__dismiss absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded text-ter opacity-0 transition-opacity hover:bg-3 hover:text-pri focus:opacity-100 group-hover:opacity-100"
+          >
+            <X size={10} aria-hidden />
+          </button>
+        </div>
       )}
 
       {confirm}

@@ -308,7 +308,6 @@ html, body {
   container-name: ws-sidebar;
 }
 @container ws-sidebar (max-width: 140px) {
-  .ws-row__path { display: none; }
   .ws-add__label { display: none; }
   .ws-add { padding-left: 8px; padding-right: 8px; }
 }
@@ -331,6 +330,29 @@ html, body {
     height: 32px;
     padding: 0;
     border-radius: 4px;
+  }
+}
+
+/* Sidebar footer — GitHub repo link pinned to bottom. Label hides under 140px,
+   icon centers under 96px to align with the avatar column. */
+.ws-sidebar-footer {
+  margin-top: auto;
+}
+@container ws-sidebar (max-width: 140px) {
+  .ws-sidebar-footer__label { display: none; }
+}
+@container ws-sidebar (max-width: 96px) {
+  /* The `<a>` is the flex container, not the wrapping `<div>`. Centering must
+     target the link itself so the icon sits in the middle of the column. */
+  .ws-sidebar-footer__link {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  /* Hide the dismiss affordance in compact mode — it would otherwise overlap
+     the centered icon. Users can still hide the footer from wide mode. */
+  .ws-sidebar-footer__dismiss {
+    display: none;
   }
 }
 

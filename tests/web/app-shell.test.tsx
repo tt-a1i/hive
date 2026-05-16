@@ -172,15 +172,15 @@ describe('app shell with real server', () => {
     expect(separator).toHaveAttribute('aria-valuenow', '256')
 
     fireEvent.mouseDown(separator, { clientX: 256 })
-    fireEvent.mouseMove(document, { clientX: 320 })
+    fireEvent.mouseMove(document, { clientX: 280 })
 
-    expect(sidebar).toHaveStyle({ width: '320px' })
-    expect(separator).toHaveAttribute('aria-valuenow', '320')
+    expect(sidebar).toHaveStyle({ width: '280px' })
+    expect(separator).toHaveAttribute('aria-valuenow', '280')
 
     fireEvent.mouseUp(document)
     fireEvent.keyDown(separator, { key: 'ArrowLeft' })
 
-    expect(sidebar).toHaveStyle({ width: '304px' })
-    expect(separator).toHaveAttribute('aria-valuenow', '304')
+    expect(sidebar).toHaveStyle({ width: '264px' })
+    expect(separator).toHaveAttribute('aria-valuenow', '264')
   })
 })

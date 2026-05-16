@@ -2,7 +2,7 @@ import { type KeyboardEvent, type MouseEvent, useCallback, useEffect, useState }
 
 const STORAGE_KEY = 'hive.workspace-sidebar.width'
 export const WORKSPACE_SIDEBAR_MIN = 56
-export const WORKSPACE_SIDEBAR_MAX = 384
+export const WORKSPACE_SIDEBAR_MAX = 280
 const WORKSPACE_SIDEBAR_DEFAULT = 256
 const KEYBOARD_STEP = 16
 
