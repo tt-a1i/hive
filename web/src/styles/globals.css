@@ -1008,6 +1008,96 @@ html, body {
   color: var(--text-secondary);
 }
 
+/* §6.6.1 — depth-cap marker. Drawn at level ≥3 instead of yet another indent
+   step; reads as "this is a continuation of the tree, but we stopped widening
+   the gutter so the drawer doesn't compress into a strip". */
+.task-row__deep-marker {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--text-tertiary);
+}
+
+/* §6.6.1 — once we hit the depth cap the children container keeps stacking
+   visually but stops indenting and stops drawing the parent guide line, so
+   the visual cost of going one level deeper is zero. */
+.task-children--deep {
+  margin-left: 0;
+  padding-left: 8px;
+}
+.task-children--deep::before {
+  display: none;
+}
+
+/* §6.6.5 — per-row collapse/expand button. Sits in the title row alongside
+   the N/M progress badge. Quiet at rest so the title still dominates. */
+.task-row__collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  width: 18px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.task-row__collapse:hover {
+  background: var(--bg-3);
+  color: var(--text-secondary);
+}
+
+/* §6.6.6 — owner chip becomes a button. Keep the visual identical to the
+   non-clickable `.task-owner` (same height, padding, palette) so users can't
+   tell at a glance which chips are interactive — the cursor + hover signal
+   carry the affordance. */
+.task-owner--clickable {
+  cursor: pointer;
+  font: inherit;
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.task-owner--clickable:hover {
+  filter: brightness(1.1);
+}
+.task-owner--clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* §6.6.6 cross-pane jump — 1s highlight ring on the target WorkerCard when
+   an `@<name>` chip is clicked. The animation is the entire feedback signal;
+   if your design tokens don't have a glow var, fall back to the accent ring. */
+@keyframes worker-card-highlight {
+  0% {
+    box-shadow: 0 0 0 2px var(--accent), 0 0 18px 4px color-mix(in oklab, var(--accent) 40%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+  }
+}
+.worker-card-shell--highlight {
+  animation: worker-card-highlight 1000ms ease-out;
+}
+
+/* §3.5.2 + §6.6.4 — Tasks 抽屉 stale overlay. Mirrors the worker-card stale
+   treatment: desaturate + dim, leaving structure legible. Status / progress
+   colors are reapplied at full saturation via nested selectors so users can
+   still distinguish open vs done while in stale mode (per §6.6.4 rule that
+   `connection=stale` doesn't degrade information density). */
+.drawer--stale {
+  filter: saturate(0.35) brightness(0.85);
+}
+.drawer--stale .task-status-done,
+.drawer--stale .task-status-open {
+  filter: saturate(1.6) brightness(1.15);
+}
+
 
 /* Deprecated — kept only for compat; prefer `.app-overlay` on a
    <Dialog.Overlay> element. M6-A migrated all known callers; remove this

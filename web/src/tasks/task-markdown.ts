@@ -9,15 +9,57 @@ export interface ParsedTask {
 
 const TASK_LINE = /^(\s*)-\s+\[( |x|X)\]\s+(.*)$/
 
+/**
+ * Pulls candidate `@name` tokens out of a task title. Word-boundary-anchored
+ * so things like `email@example.com` (where `@` is mid-word) don't false-match.
+ * The token-shape regex is intentionally permissive — fail-soft filtering
+ * against a workspace's actual worker names happens in `parseTaskMarkdown`.
+ */
+const MENTION_RE = /(?:^|[\s\p{P}])(@[A-Za-z0-9_-]+)/gu
+
 const extractMentions = (text: string): string[] => {
-  const matches = text.match(/@[A-Za-z0-9_-]+/g)
-  return matches ? matches : []
+  const matches: string[] = []
+  for (const m of text.matchAll(MENTION_RE)) {
+    if (m[1]) matches.push(m[1])
+  }
+  return matches
 }
 
-export const parseTaskMarkdown = (content: string): ParsedTask[] => {
+/**
+ * Build a case-insensitive lookup once per parse so each mention candidate is
+ * just a hash check. Keys are lowercased worker names; values are the original
+ * cased form for downstream display.
+ */
+const buildWorkerLookup = (names: readonly string[]): Map<string, string> => {
+  const lookup = new Map<string, string>()
+  for (const name of names) {
+    const trimmed = name.trim()
+    if (trimmed) lookup.set(trimmed.toLowerCase(), trimmed)
+  }
+  return lookup
+}
+
+export interface ParseTaskMarkdownOptions {
+  /**
+   * When provided, only `@<name>` tokens whose lowercased form matches an
+   * entry in this list are kept as `mentions`. Unknown / email-like tokens
+   * (`email@example.com`, `@Unknown`, `@alice's task`) are dropped — they stay
+   * in `text` and are rendered as plain markdown, not chips.
+   *
+   * Omit (or pass empty) to preserve the legacy "any `@token` is a mention"
+   * behavior, useful in demos / fixtures where worker identity is mocked.
+   */
+  knownWorkerNames?: readonly string[]
+}
+
+export const parseTaskMarkdown = (
+  content: string,
+  options: ParseTaskMarkdownOptions = {}
+): ParsedTask[] => {
   const root: ParsedTask[] = []
   const stack: ParsedTask[] = []
   const lines = content.split(/\r?\n/)
+  const lookup = options.knownWorkerNames ? buildWorkerLookup(options.knownWorkerNames) : null
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i]
     if (!rawLine) continue
@@ -25,13 +67,41 @@ export const parseTaskMarkdown = (content: string): ParsedTask[] => {
     if (!match) continue
     const [, indentRaw = '', mark = ' ', textRaw = ''] = match
     const indent = indentRaw.replace(/\t/g, '  ').length
+    const rawMentions = extractMentions(textRaw)
+    let mentions: string[]
+    if (lookup) {
+      // Fail-soft: keep only `@name` tokens that resolve to a real worker.
+      // Tokens that don't resolve stay in `text` so the reader still sees the
+      // original prose (e.g. `email@example.com`) rather than a silent strip.
+      mentions = []
+      for (const candidate of rawMentions) {
+        const cased = lookup.get(candidate.slice(1).toLowerCase())
+        if (cased) mentions.push(`@${cased}`)
+      }
+    } else {
+      // Legacy: every word-boundary `@token` is treated as a mention.
+      mentions = rawMentions
+    }
+    // Strip *only* the resolved mentions from the visible text, using the same
+    // word-boundary rule that `MENTION_RE` uses on the way in. Tokens that
+    // weren't accepted as mentions (mid-word `@`, unknown names) stay in body
+    // text so the reader still sees the original prose.
+    let textWithoutMentions = textRaw
+    for (const candidate of mentions) {
+      const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      textWithoutMentions = textWithoutMentions.replace(
+        new RegExp(`(?:^|(?<=\\s|\\p{P}))${escaped}(?!\\w)`, 'u'),
+        ''
+      )
+    }
+    textWithoutMentions = textWithoutMentions.replace(/\s+/g, ' ').trim()
     const task: ParsedTask = {
       checked: mark.toLowerCase() === 'x',
       children: [],
       indent,
       line: i,
-      mentions: extractMentions(textRaw),
-      text: textRaw.replace(/@[A-Za-z0-9_-]+/g, '').trim(),
+      mentions,
+      text: textWithoutMentions,
     }
     while (stack.length > 0) {
       const top = stack[stack.length - 1]
@@ -47,6 +117,28 @@ export const parseTaskMarkdown = (content: string): ParsedTask[] => {
     stack.push(task)
   }
   return root
+}
+
+/**
+ * Direct-child progress for a parent task. Counts only the parent's
+ * immediate `[ ]` / `[x]` children — not grandchildren, not bullets that
+ * aren't checkbox tasks. Returns `null` when the parent has zero direct
+ * checkbox children so callers can skip rendering a `0/0` badge.
+ *
+ * The "direct only" rule keeps the indicator predictable for parents that
+ * decompose deeply: a "实现登录" parent with `- POST /login` + `- POST /logout`
+ * subtasks reports `0/2` regardless of how those subtasks are further
+ * decomposed under each endpoint.
+ */
+export const countDirectCheckboxChildren = (
+  task: ParsedTask
+): { done: number; total: number } | null => {
+  if (task.children.length === 0) return null
+  let done = 0
+  for (const child of task.children) {
+    if (child.checked) done += 1
+  }
+  return { done, total: task.children.length }
 }
 
 export const toggleTaskLine = (content: string, lineIndex: number): string => {

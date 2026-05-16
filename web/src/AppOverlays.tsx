@@ -1,3 +1,4 @@
+import type { TeamListItem } from '../../src/shared/types.js'
 import type { useTasksFile } from './tasks/useTasksFile.js'
 import { WorkspaceTaskDrawer } from './tasks/WorkspaceTaskDrawer.js'
 import { FirstRunWizard } from './wizard/FirstRunWizard.js'
@@ -17,6 +18,12 @@ type AppOverlaysProps = {
   tasksFile: TasksFileApi
   wizardOpen: boolean
   workspacePath: string | null
+  /** Workspace's active worker roster — feeds the §6.6.2 chip resolution. */
+  workers?: readonly TeamListItem[]
+  /** Cross-pane jump on chip click (§6.6.6). */
+  onSelectOwner?: (workerName: string) => void
+  /** §3.5.2 transport disconnect flag passed through unchanged. */
+  connectionStale?: boolean
 }
 
 export const AppOverlays = ({
@@ -30,6 +37,9 @@ export const AppOverlays = ({
   tasksFile,
   wizardOpen,
   workspacePath,
+  workers,
+  onSelectOwner,
+  connectionStale,
 }: AppOverlaysProps) => (
   <>
     {workspacePath ? (
@@ -38,6 +48,9 @@ export const AppOverlays = ({
         tasksFile={tasksFile}
         onClose={onCloseTaskGraph}
         workspacePath={workspacePath}
+        {...(workers ? { workers } : {})}
+        {...(onSelectOwner ? { onSelectOwner } : {})}
+        {...(connectionStale !== undefined ? { connectionStale } : {})}
       />
     ) : null}
     <AddWorkspaceDialog

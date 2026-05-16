@@ -47,7 +47,11 @@ export const WorkerCard = ({
     }
 
   return (
-    <div className="worker-card-shell relative" data-status={status.kind}>
+    <div
+      className="worker-card-shell relative"
+      data-status={status.kind}
+      data-worker-name={worker.name}
+    >
       <button
         type="button"
         onClick={() => onClick(worker)}
