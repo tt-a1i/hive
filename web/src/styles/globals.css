@@ -281,9 +281,12 @@ html, body {
   background: color-mix(in oklab, #ffffff 7%, transparent);
 }
 
-/* Sidebar inline delete (per-row) — hover tints with status-red wash. */
+/* Sidebar inline delete (per-row) — hover mirrors .float-action[data-variant="danger"]:
+   18% red wash + 50% red ring (inset, so the row geometry stays stable). The icon
+   colour switches via the tailwind hover:text-status-red class on the button. */
 .ws-row-delete:hover {
-  background: color-mix(in oklab, var(--status-red) 14%, transparent);
+  background: color-mix(in oklab, var(--status-red) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--status-red) 50%, var(--border-bright));
 }
 
 /* Sidebar add-workspace dashed CTA — gets accent on hover. */
