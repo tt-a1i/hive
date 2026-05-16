@@ -3,7 +3,7 @@ import { AlertTriangle, Play, X } from 'lucide-react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { Tooltip } from '../ui/Tooltip.js'
-import { RoleAvatar } from './RoleAvatar.js'
+import { CliAgentAvatar } from './CliAgentAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { useWorkerModalResize, WORKER_MODAL_MIN } from './useWorkerModalResize.js'
 import { presentWorkerStatus } from './worker-status.js'
@@ -129,7 +129,11 @@ export const WorkerModal = ({
                   />
                 ) : (
                   <div className="m-auto flex max-w-[400px] flex-col items-center gap-3 px-6 text-center">
-                    <RoleAvatar role={worker.role} size={48} />
+                    <CliAgentAvatar
+                      commandPresetId={worker.commandPresetId}
+                      workerRole={worker.role}
+                      size={48}
+                    />
                     <div className="text-sm text-pri">{worker.name}</div>
                     <div className="text-xs text-ter">
                       {worker.status === 'stopped' ? 'PTY stopped — ' : 'PTY not started yet — '}

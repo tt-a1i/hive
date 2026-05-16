@@ -19,9 +19,11 @@ type AddWorkerDialogProps = {
   onRoleDescriptionChange: (value: string) => void
   onRoleDescriptionReset: () => void
   onRoleChange: (value: WorkerRole) => void
+  onStartupCommandChange: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   roleDescription: string
   roleDescriptionDefault: string
+  startupCommand: string
   workerName: string
   workerRole: WorkerRole
 }
@@ -111,9 +113,11 @@ export const AddWorkerDialog = ({
   onRoleDescriptionChange,
   onRoleDescriptionReset,
   onRoleChange,
+  onStartupCommandChange,
   onSubmit,
   roleDescription,
   roleDescriptionDefault,
+  startupCommand,
   workerName,
   workerRole,
 }: AddWorkerDialogProps) => {
@@ -124,6 +128,7 @@ export const AddWorkerDialog = ({
   const roleDescriptionModified = roleDescription !== roleDescriptionDefault
   const roleLabel = ROLE_LABELS[workerRole]
   const selectedPreset = commandPresets.find((preset) => preset.id === commandPresetId)
+  const startupCommandClean = startupCommand.trim()
   // Instructions textarea hides behind a disclosure so the dialog stops feeling
   // like a prompt editor on first open. It auto-expands when the user picks
   // Custom (no default prompt to seed) or when they have already started
@@ -139,8 +144,9 @@ export const AddWorkerDialog = ({
   // a silently-greyed CTA. Returns the first blocking reason or null.
   const validateBeforeSubmit = (): string | null => {
     if (!workerName.trim()) return 'Enter a name'
-    if (!commandPresetId) return 'Pick a CLI agent'
-    if (selectedPreset?.available === false) {
+    if (!commandPresetId && !startupCommandClean)
+      return 'Pick a CLI agent or enter a startup command'
+    if (selectedPreset?.available === false && !startupCommandClean) {
       return `${selectedPreset.displayName} is not installed`
     }
     if (!roleDescription.trim()) return 'Add role instructions'
@@ -299,6 +305,40 @@ export const AddWorkerDialog = ({
                     </div>
                   )}
                 </div>
+
+                <details className="group flex flex-col gap-2">
+                  <summary className="flex cursor-pointer select-none items-center justify-between gap-2 list-none">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <ChevronDown
+                        size={12}
+                        aria-hidden
+                        className="-rotate-90 shrink-0 text-ter transition-transform duration-150 group-open:rotate-0"
+                      />
+                      <SectionLabel>Startup command</SectionLabel>
+                      {startupCommandClean ? (
+                        <span className="truncate text-sm text-ter">· overrides CLI launch</span>
+                      ) : null}
+                    </span>
+                  </summary>
+                  <div
+                    className="flex flex-col gap-2 rounded border bg-2 p-3"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <input
+                      aria-label="Startup command"
+                      value={startupCommand}
+                      onChange={(event) => onStartupCommandChange(event.currentTarget.value)}
+                      placeholder="qwen --model qwen3-coder"
+                      className="input mono text-sm"
+                      spellCheck={false}
+                    />
+                    <p className="text-sm leading-5 text-ter">
+                      Optional. Runs through your login shell in this workspace. Use it for custom
+                      agents or native resume commands such as{' '}
+                      <span className="mono">claude --resume &lt;session-id&gt;</span>.
+                    </p>
+                  </div>
+                </details>
               </div>
 
               <div

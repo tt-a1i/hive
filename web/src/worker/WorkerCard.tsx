@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { Tooltip } from '../ui/Tooltip.js'
-import { RoleAvatar } from './RoleAvatar.js'
+import { CliAgentAvatar } from './CliAgentAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
 
@@ -61,7 +61,12 @@ export const WorkerCard = ({
         data-status={status.kind}
       >
         <div className="flex items-start gap-2">
-          <RoleAvatar role={worker.role} size={40} statusRing={status.kind} />
+          <CliAgentAvatar
+            commandPresetId={worker.commandPresetId}
+            workerRole={worker.role}
+            size={40}
+            statusRing={status.kind}
+          />
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span

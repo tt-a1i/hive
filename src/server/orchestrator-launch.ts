@@ -31,7 +31,7 @@ const parseArgsEnv = (raw: string | undefined): string[] | undefined => {
   return undefined
 }
 
-const resolveCommandPresetLaunchConfig = (
+export const resolveCommandPresetLaunchConfig = (
   settings: SettingsStore,
   commandPresetId: string
 ): AgentLaunchConfigInput | undefined => {
@@ -54,6 +54,25 @@ const findPresetForStartupCommand = (
   return executable ? settings.getCommandPreset(executable) : undefined
 }
 
+export const resolveStartupCommandLaunchConfig = (
+  settings: SettingsStore,
+  startupCommand: string,
+  commandPresetId: string | null = null
+): AgentLaunchConfigInput | undefined => {
+  const trimmedStartupCommand = startupCommand.trim()
+  if (!trimmedStartupCommand) return undefined
+  const parsed = createStartupCommandLaunch(trimmedStartupCommand)
+  const preset = findPresetForStartupCommand(settings, trimmedStartupCommand, commandPresetId)
+  return {
+    command: parsed.command,
+    args: parsed.args,
+    commandPresetId: null,
+    interactiveCommand: preset?.command ?? getStartupCommandExecutable(trimmedStartupCommand),
+    presetAugmentationDisabled: true,
+    sessionIdCapture: preset?.sessionIdCapture ?? null,
+  }
+}
+
 /**
  * Resolve the orchestrator's launch config in priority order:
  * 1. Explicit startup command pasted by the user. It runs through their shell
@@ -72,16 +91,7 @@ export const resolveOrchestratorLaunchConfig = (
 ): AgentLaunchConfigInput | undefined => {
   const trimmedStartupCommand = startupCommand?.trim()
   if (trimmedStartupCommand) {
-    const parsed = createStartupCommandLaunch(trimmedStartupCommand)
-    const preset = findPresetForStartupCommand(settings, trimmedStartupCommand, commandPresetId)
-    return {
-      command: parsed.command,
-      args: parsed.args,
-      commandPresetId: null,
-      interactiveCommand: preset?.command ?? getStartupCommandExecutable(trimmedStartupCommand),
-      presetAugmentationDisabled: true,
-      sessionIdCapture: preset?.sessionIdCapture ?? null,
-    }
+    return resolveStartupCommandLaunchConfig(settings, trimmedStartupCommand, commandPresetId)
   }
   if (commandPresetId) {
     return resolveCommandPresetLaunchConfig(settings, commandPresetId)

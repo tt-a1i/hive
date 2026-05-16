@@ -53,14 +53,14 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
         resumeArgsTemplate: input.resumeArgsTemplate ?? null,
         sessionIdCapture: input.sessionIdCapture ?? null,
       }
+      store.saveLaunchConfig(workspaceId, agentId, normalized)
       launchConfigs.set(cacheKey(workspaceId, agentId), normalized)
       workspaceByAgentId.set(agentId, workspaceId)
-      store.saveLaunchConfig(workspaceId, agentId, normalized)
     },
     remove(workspaceId: string, agentId: string) {
+      store.deleteLaunchConfig(workspaceId, agentId)
       launchConfigs.delete(cacheKey(workspaceId, agentId))
       workspaceByAgentId.delete(agentId)
-      store.deleteLaunchConfig(workspaceId, agentId)
     },
     setWorkspaceId(agentId: string, workspaceId: string) {
       workspaceByAgentId.set(agentId, workspaceId)

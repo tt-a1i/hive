@@ -1,4 +1,5 @@
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
+import { getStartupCommandExecutable } from './startup-command-parser.js'
 
 interface AutostartPort {
   startAgent: (
@@ -67,6 +68,15 @@ const formatEarlyExitError = (command: string, exitCode: number | null): string 
   return `${command} failed to start (exit ${exitCode ?? 'null'})`
 }
 
+const getLaunchErrorCommand = (config: AgentLaunchConfigInput): string => {
+  if (config.presetAugmentationDisabled) {
+    const startupCommand = config.args?.at(-1)
+    const executable = startupCommand ? getStartupCommandExecutable(startupCommand) : null
+    if (executable) return executable
+  }
+  return config.interactiveCommand ?? config.command
+}
+
 /**
  * Wraps `store.startAgent` so spawn failures never bubble up: callers always
  * receive a structured result. The HTTP layer uses this to keep workspace
@@ -125,7 +135,7 @@ export const autostartAgent = async (
     if (status === 'error' || (status === 'exited' && (exitCode ?? 0) !== 0)) {
       return {
         ok: false,
-        error: formatEarlyExitError(config.command, exitCode),
+        error: formatEarlyExitError(getLaunchErrorCommand(config), exitCode),
         run_id: run.runId,
       }
     }
@@ -133,7 +143,7 @@ export const autostartAgent = async (
   } catch (error) {
     return {
       ok: false,
-      error: formatStartError(error, config.command),
+      error: formatStartError(error, getLaunchErrorCommand(config)),
       run_id: null,
     }
   }

@@ -125,6 +125,7 @@ describe('team cli with real server', () => {
 
     const output = logSpy.mock.calls[0]?.[0] ?? ''
     const parsed = JSON.parse(output) as Array<{
+      command_preset_id: string | null
       id: string
       last_pty_line: string | null
       name: string
@@ -135,6 +136,7 @@ describe('team cli with real server', () => {
 
     expect(parsed).toEqual([
       {
+        command_preset_id: null,
         id: expect.any(String),
         last_pty_line: null,
         name: 'Alice',

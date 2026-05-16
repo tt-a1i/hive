@@ -30,6 +30,25 @@ vi.mock('@xterm/addon-fit', () => ({
   },
 }))
 
+vi.mock('@xterm/addon-unicode11', () => ({
+  Unicode11Addon: class {},
+}))
+
+vi.mock('@xterm/addon-webgl', () => ({
+  WebglAddon: class {
+    onContextLoss() {}
+    dispose() {}
+  },
+}))
+
+vi.mock('@xterm/addon-clipboard', () => ({
+  ClipboardAddon: class {},
+}))
+
+vi.mock('@xterm/addon-web-links', () => ({
+  WebLinksAddon: class {},
+}))
+
 let cleanupServer: (() => Promise<void>) | undefined
 const nativeFetch = globalThis.fetch
 let serverContext: Awaited<ReturnType<typeof startTestServer>> | undefined
@@ -256,6 +275,46 @@ describe('worker flow with real server', () => {
       .agents.find((agent) => agent.name === 'ReviewLead')
     expect(worker?.role).toBe('reviewer')
     expect(worker?.description).toBe('你是审查型 worker。先找高风险问题，再给出最小修复建议。')
+  })
+
+  test('Add Worker dialog can override the default preset with a full startup command', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Add Member/ }).length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: /Add Member/ })[0] as HTMLElement)
+
+    const dialog = await screen.findByRole('form', { name: 'Add team member' })
+    fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
+      target: { value: 'CustomAgent' },
+    })
+    fireEvent.click(within(dialog).getByText('Startup command'))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Startup command' }), {
+      target: { value: 'bash -c "echo custom worker; sleep 60"' },
+    })
+    fireEvent.click(within(dialog).getByTestId('add-worker-submit'))
+
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('form', { name: 'Add team member' })).toBeNull()
+      },
+      { timeout: WORKER_FLOW_TIMEOUT_MS }
+    )
+
+    const worker = serverContext?.store
+      .getWorkspaceSnapshot(workspaceId)
+      .agents.find((agent) => agent.name === 'CustomAgent')
+    expect(worker?.id).toEqual(expect.any(String))
+    expect(serverContext?.store.peekAgentLaunchConfig(workspaceId, worker?.id ?? '')).toEqual(
+      expect.objectContaining({
+        args: expect.arrayContaining(['bash -c "echo custom worker; sleep 60"']),
+        commandPresetId: null,
+        interactiveCommand: 'bash',
+        presetAugmentationDisabled: true,
+        sessionIdCapture: null,
+      })
+    )
   })
 
   test('new member opens with its PTY before terminal-runs polling catches up', async () => {

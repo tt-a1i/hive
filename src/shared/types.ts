@@ -31,6 +31,14 @@ export interface TeamListItem {
    * not a worker reply. Real replies arrive as [Hive 系统消息] entries on orchestrator stdin.
    */
   lastPtyLine?: string
+  /**
+   * Built-in command preset this worker was launched with (`claude` / `codex` /
+   * `opencode` / `gemini`). Drives the worker card's CLI logo (§6.4). Undefined
+   * when the worker was created without picking a preset, or when the launch
+   * config row references a custom command — in that case the UI falls back to
+   * the role-letter avatar.
+   */
+  commandPresetId?: string
 }
 
 /**
@@ -45,4 +53,5 @@ export interface TeamListItemPayload {
   status: AgentStatus
   pending_task_count: number
   last_pty_line: string | null
+  command_preset_id: string | null
 }

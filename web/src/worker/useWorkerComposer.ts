@@ -22,10 +22,12 @@ export interface WorkerComposerState {
   creating: boolean
   roleDescription: string
   roleDescriptionDefault: string
+  startupCommand: string
   workerName: string
   workerRole: WorkerRole
   setCommandPresetId: (value: string) => void
   setRoleDescription: (value: string) => void
+  setStartupCommand: (value: string) => void
   setWorkerName: (value: string) => void
   setWorkerRole: (value: WorkerRole) => void
   randomizeWorkerName: () => void
@@ -83,6 +85,8 @@ export const useWorkerComposer = ({
   const [roleDescription, setRoleDescriptionState] = useState(fallbackRoleDescriptions.coder)
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState('claude')
+  const [commandPresetTouched, setCommandPresetTouched] = useState(false)
+  const [startupCommand, setStartupCommand] = useState('')
   const [createWorkerError, setCreateWorkerError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const roleDescriptionEditedRef = useRef(false)
@@ -152,15 +156,23 @@ export const useWorkerComposer = ({
     setRoleDescriptionState(roleDescriptionDefault)
   }
 
+  const selectCommandPresetId = (value: string) => {
+    setCommandPresetTouched(true)
+    setCommandPresetId(value)
+  }
+
   const submit = (event: FormEvent<HTMLFormElement>, onSuccess: () => void) => {
     event.preventDefault()
     setCreating(true)
     setCreateWorkerError(null)
-    void createWorker(workerName, workerRole, commandPresetId, roleDescription)
+    const launchPresetId = startupCommand.trim() && !commandPresetTouched ? '' : commandPresetId
+    void createWorker(workerName, workerRole, launchPresetId, roleDescription, startupCommand)
       .then(({ error }) => {
         setWorkerName('')
         selectWorkerRole('coder')
         setCommandPresetId('claude')
+        setCommandPresetTouched(false)
+        setStartupCommand('')
         onSuccess()
         if (error) setCreateWorkerError(error)
       })
@@ -177,10 +189,12 @@ export const useWorkerComposer = ({
     creating,
     roleDescription,
     roleDescriptionDefault,
+    startupCommand,
     workerName,
     workerRole,
-    setCommandPresetId,
+    setCommandPresetId: selectCommandPresetId,
     setRoleDescription,
+    setStartupCommand,
     setWorkerName,
     setWorkerRole: selectWorkerRole,
     randomizeWorkerName: () => setWorkerName(generateWorkerName()),

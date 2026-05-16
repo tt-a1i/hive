@@ -1,7 +1,11 @@
 import type { IncomingMessage } from 'node:http'
 
 import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
-import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
+import {
+  resolveCommandPresetLaunchConfig,
+  resolveStartupCommandLaunchConfig,
+  seedOrchestratorLaunchConfig,
+} from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type {
   CreateWorkerBody,
@@ -11,28 +15,20 @@ import type {
 } from './route-types.js'
 import type { RuntimeStore } from './runtime-store.js'
 import { authenticateCliAgent, requireCommandForRole } from './team-authz.js'
+import { enrichTeamList } from './team-list-enrichment.js'
 import { serializeTeamListItem } from './team-list-serializer.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import { validateWorkspacePath } from './workspace-path-validation.js'
 import { getOrchestratorId } from './workspace-store-support.js'
-
-const enrichWithLastPtyLine = (
-  workspaceId: string,
-  store: Pick<RuntimeStore, 'getLastPtyLineForAgent'>,
-  workers: ReturnType<RuntimeStore['listWorkers']>
-) =>
-  workers.map((worker) => {
-    const line = store.getLastPtyLineForAgent(workspaceId, worker.id)
-    return line === null ? worker : { ...worker, lastPtyLine: line }
-  })
 
 const getSerializedWorker = (workspaceId: string, workerId: string, store: RuntimeStore) => {
   const worker = store.listWorkers(workspaceId).find((item) => item.id === workerId)
   if (!worker) {
     throw new Error(`Worker not found: ${workerId}`)
   }
-  const line = store.getLastPtyLineForAgent(workspaceId, workerId)
-  return serializeTeamListItem(line === null ? worker : { ...worker, lastPtyLine: line })
+  const [enriched] = enrichTeamList(workspaceId, store, [worker])
+  if (!enriched) throw new Error(`Worker enrichment failed: ${workerId}`)
+  return serializeTeamListItem(enriched)
 }
 
 const getRuntimePort = (request: IncomingMessage) => String(request.socket.localPort ?? '')
@@ -108,9 +104,7 @@ export const workspaceRoutes: RouteDefinition[] = [
     sendJson(
       response,
       200,
-      enrichWithLastPtyLine(workspaceId, store, store.listWorkers(workspaceId)).map(
-        serializeTeamListItem
-      )
+      enrichTeamList(workspaceId, store, store.listWorkers(workspaceId)).map(serializeTeamListItem)
     )
   }),
   route('GET', '/api/workspaces/:workspaceId/team', ({ params, request, response, store }) => {
@@ -138,9 +132,7 @@ export const workspaceRoutes: RouteDefinition[] = [
     sendJson(
       response,
       200,
-      enrichWithLastPtyLine(workspaceId, store, store.listWorkers(workspaceId)).map(
-        serializeTeamListItem
-      )
+      enrichTeamList(workspaceId, store, store.listWorkers(workspaceId)).map(serializeTeamListItem)
     )
   }),
   route(
@@ -160,16 +152,24 @@ export const workspaceRoutes: RouteDefinition[] = [
       requireUiTokenFromRequest(request, store.validateUiToken)
 
       const body = await readJsonBody<CreateWorkerBody>(request)
-      const worker = store.addWorker(workspaceId, body)
       const presetId = body.command_preset_id ?? null
-      if (presetId) {
-        const preset = store.settings.getCommandPreset(presetId)
-        if (!preset) throw new Error(`Command preset not found: ${presetId}`)
-        store.configureAgentLaunch(workspaceId, worker.id, {
-          args: preset.args,
-          command: preset.command,
-          commandPresetId: preset.id,
-        })
+      const startupCommand = typeof body.startup_command === 'string' ? body.startup_command : null
+      const launchConfig = startupCommand?.trim()
+        ? resolveStartupCommandLaunchConfig(store.settings, startupCommand, presetId)
+        : presetId
+          ? resolveCommandPresetLaunchConfig(store.settings, presetId)
+          : undefined
+      if (presetId && !startupCommand?.trim() && !launchConfig) {
+        throw new Error(`Command preset not found: ${presetId}`)
+      }
+      const worker = store.addWorker(workspaceId, body)
+      if (launchConfig) {
+        try {
+          store.configureAgentLaunch(workspaceId, worker.id, launchConfig)
+        } catch (error) {
+          store.deleteWorker(workspaceId, worker.id)
+          throw error
+        }
       }
 
       const agentStart =

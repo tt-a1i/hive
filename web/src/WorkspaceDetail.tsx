@@ -19,7 +19,8 @@ type WorkspaceDetailProps = {
     name: string,
     role: WorkerRole,
     commandPresetId: string,
-    roleDescription: string
+    roleDescription: string,
+    startupCommand: string
   ) => Promise<{ error: string | null; runId: string | null }>
   onDeleteWorker: (workerId: string) => Promise<void>
   onDeleteWorkspace: (workspace: WorkspaceSummary) => Promise<void>
@@ -227,8 +228,10 @@ export const WorkspaceDetail = ({
           onRoleDescriptionReset={composer.resetRoleDescription}
           onRoleChange={composer.setWorkerRole}
           onSubmit={(event) => composer.submit(event, () => setComposerOpen(false))}
+          onStartupCommandChange={composer.setStartupCommand}
           roleDescription={composer.roleDescription}
           roleDescriptionDefault={composer.roleDescriptionDefault}
+          startupCommand={composer.startupCommand}
           workerName={composer.workerName}
           workerRole={composer.workerRole}
         />

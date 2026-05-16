@@ -13,6 +13,7 @@ import type { WorkspaceCreateInput } from './workspace-create-input.js'
 type ServerBrowseDialogProps = {
   commandPresetError: string | null
   commandPresetId: string
+  commandPresetTouched: boolean
   commandPresets: CommandPreset[]
   onClose: () => void
   onCommandPresetChange: (value: string) => void
@@ -30,6 +31,7 @@ type ServerBrowseDialogProps = {
 export const ServerBrowseDialog = ({
   commandPresetError,
   commandPresetId,
+  commandPresetTouched,
   commandPresets,
   onClose,
   onCommandPresetChange,
@@ -77,7 +79,7 @@ export const ServerBrowseDialog = ({
     const path = advanced && manualPath.trim().length > 0 ? manualPath.trim() : (probe?.path ?? '')
     if (!path) return
     onCreate({
-      commandPresetId: commandPresetId || null,
+      commandPresetId: startupClean && !commandPresetTouched ? null : commandPresetId || null,
       name: name.trim(),
       path,
       ...(startupClean ? { startupCommand: startupClean } : {}),

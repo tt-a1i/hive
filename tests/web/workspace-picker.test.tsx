@@ -327,7 +327,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
     expect(onCreate).toHaveBeenCalledWith({
-      commandPresetId: 'claude',
+      commandPresetId: null,
       name: 'alpha',
       path: PICKED,
       startupCommand: 'claude --resume f500de1d-df89-470f-a2ce-e385acffef19',
@@ -351,6 +351,34 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       'placeholder',
       'claude --resume <session-id>'
     )
+    fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
+      target: { value: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19' },
+    })
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      commandPresetId: null,
+      name: 'alpha',
+      path: PICKED,
+      startupCommand: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19',
+    })
+  })
+
+  test('Confirm dialog keeps an explicitly selected preset for startup aliases', async () => {
+    stubFetch(() => ({
+      canceled: false,
+      error: null,
+      path: PICKED,
+      probe: sandboxProbe,
+      supported: true,
+    }))
+    const onCreate = vi.fn()
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={onCreate} />)
+
+    const confirm = await screen.findByTestId('confirm-workspace-dialog')
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset'))
+    fireEvent.click(within(confirm).getByTestId('workspace-command-preset-option-claude'))
+    fireEvent.click(within(confirm).getByTestId('confirm-workspace-startup-toggle'))
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-startup-command'), {
       target: { value: 'ccs --resume f500de1d-df89-470f-a2ce-e385acffef19' },
     })

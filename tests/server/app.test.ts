@@ -212,6 +212,7 @@ describe('runtime http app', () => {
         status: 'working',
         pending_task_count: 1,
         last_pty_line: null,
+        command_preset_id: null,
       },
     ])
   })
@@ -299,6 +300,7 @@ describe('runtime http app', () => {
       status: 'stopped',
       pending_task_count: 0,
       last_pty_line: null,
+      command_preset_id: null,
     })
     expect(store.listWorkers(workspace.id)).toEqual([
       {

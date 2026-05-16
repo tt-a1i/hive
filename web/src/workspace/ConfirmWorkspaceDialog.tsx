@@ -13,6 +13,7 @@ type ConfirmWorkspaceDialogProps = {
   pasteFallbackDefault?: boolean
   commandPresetError: string | null
   commandPresetId: string
+  commandPresetTouched: boolean
   commandPresets: CommandPreset[]
   onCancel: () => void
   onCommandPresetChange: (value: string) => void
@@ -31,6 +32,7 @@ export const ConfirmWorkspaceDialog = ({
   pasteFallbackDefault = false,
   commandPresetError,
   commandPresetId,
+  commandPresetTouched,
   commandPresets,
   onCancel,
   onCommandPresetChange,
@@ -68,7 +70,7 @@ export const ConfirmWorkspaceDialog = ({
   const handleCreate = () => {
     if (!canCreate) return
     onCreate({
-      commandPresetId: commandPresetId || null,
+      commandPresetId: startupClean && !commandPresetTouched ? null : commandPresetId || null,
       name: name.trim(),
       path: resolvedPath,
       ...(startupClean ? { startupCommand: startupClean } : {}),

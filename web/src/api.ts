@@ -12,7 +12,8 @@ const fromPayload = (payload: TeamListItemPayload): TeamListItem => ({
   role: payload.role,
   status: payload.status,
   pendingTaskCount: payload.pending_task_count,
-  lastPtyLine: payload.last_pty_line ?? undefined,
+  ...(payload.last_pty_line ? { lastPtyLine: payload.last_pty_line } : {}),
+  ...(payload.command_preset_id ? { commandPresetId: payload.command_preset_id } : {}),
 })
 
 const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
@@ -317,6 +318,7 @@ export const createWorker = async (
     command_preset_id?: string | null
     description?: string
     role: WorkerRole
+    startup_command?: string | null
   }
 ): Promise<CreateWorkerResult> => {
   const response = await apiFetch(`/api/workspaces/${workspaceId}/workers`, {

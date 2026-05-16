@@ -17,7 +17,7 @@ test('public package metadata is ready for external users', () => {
 
   expect(packageJson.license).toBe('Apache-2.0')
   expect(packageJson.description).toBe(
-    'Local multi-agent workspace for coordinating CLI coding agents through a web UI.'
+    'Browser-native hive-mind for CLI coding agents — Claude Code, Codex, Gemini, and OpenCode collaborate as real PTY processes via a team protocol.'
   )
   expect(packageJson.keywords).toEqual(
     expect.arrayContaining(['ai-agents', 'cli', 'collaboration', 'multi-agent', 'workspace'])
@@ -29,17 +29,22 @@ test('public package metadata is ready for external users', () => {
 
 test('public support documents describe license, safety, and release scope', () => {
   const changelog = readRequiredFile('CHANGELOG.md')
+  const englishReadme = readRequiredFile('README.en.md')
   const license = readRequiredFile('LICENSE')
   const readme = readRequiredFile('README.md')
+  const releaseDocs = readRequiredFile('docs/release.md')
   const security = readRequiredFile('SECURITY.md')
 
   expect(changelog).toContain('0.6.0-alpha.0')
   expect(license).toContain('Apache License')
   expect(license).toContain('Version 2.0')
-  expect(readme).toContain('Quick Start')
-  expect(readme).toContain('Platform Support')
-  expect(readme).toContain('Safety Model')
-  expect(readme).toContain('NPM_TOKEN')
+  expect(readme).toContain('快速开始')
+  expect(readme).toContain('平台支持')
+  expect(readme).toContain('安全模型')
+  expect(englishReadme).toContain('Quick Start')
+  expect(englishReadme).toContain('Platform Support')
+  expect(englishReadme).toContain('Safety Model')
+  expect(releaseDocs).toContain('NPM_TOKEN')
   expect(security).toContain('Reporting a Vulnerability')
   expect(security).toContain('127.0.0.1')
   expect(security).toContain('arbitrary shell commands')

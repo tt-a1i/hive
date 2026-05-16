@@ -27,8 +27,16 @@ export const DEMO_WORKERS: TeamListItem[] = [
     status: 'working',
     pendingTaskCount: 1,
     lastPtyLine: 'Editing src/routes/todos.ts (line 42)',
+    commandPresetId: 'claude',
   },
-  { id: 'demo-reviewer', name: 'bob', role: 'reviewer', status: 'idle', pendingTaskCount: 0 },
+  {
+    id: 'demo-reviewer',
+    name: 'bob',
+    role: 'reviewer',
+    status: 'idle',
+    pendingTaskCount: 0,
+    commandPresetId: 'gemini',
+  },
 ]
 
 export const DEMO_TASKS_MD = `# Todo app

@@ -42,6 +42,8 @@ export interface CreateWorkerBody {
   description?: string
   name: string
   role: WorkerRole
+  /** Optional full startup command. When set, this overrides command_preset_id. */
+  startup_command?: string | null
 }
 
 export interface UserInputBody {
