@@ -2,6 +2,43 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 0.6.0-alpha.6 - 2026-05-16
+
+Worker identity, language, and workflow polish.
+
+- Worker cards and the worker detail modal now display the CLI agent's
+  brand logo (Claude Code, Codex, Gemini, OpenCode) instead of the
+  role-letter placeholder. Unknown presets or workers launched via a
+  custom command fall back to the legacy role-letter avatar so existing
+  rows never render blank. The `team list` payload gained a
+  `command_preset_id` field (snake_case wire, camelCase in-process); the
+  enrichment honours `presetAugmentationDisabled` so the launcher and
+  the UI stay in lockstep.
+- Workers can now boot from a custom `startup_command` (e.g. native
+  `claude --resume <session-id>`) entered from the add-member or
+  add-Workspace dialogs. Routes-workspaces detects shell-driven
+  invocations and stores them without binding to a preset.
+- UI language adapts across the entire surface: task drawer (including
+  the raw Markdown editor that previously mixed Chinese conflict copy
+  with English buttons), notification settings popover, OS-level
+  desktop notifications, the workspace add / confirm / server-browse
+  dialogs, the FS picker, the demo view, the toast container, and the
+  terminal screen-reader status. Adds a `~146`-key expansion of the
+  i18n table covering `tasks.*`, `notifications.*`, `workspace.*`,
+  `layout.*`, `terminal.*`, `terminalPanels.*`, `toast.*`, and a couple
+  of `demo.*` / `common.*` additions; `{plural}` placeholders are gone
+  so the wire shape can't leak literal `{plural}` tokens at runtime.
+- Worker cards lost the bottom raw-PTY line preview (a noisy CLI
+  status row that varied per agent and confused users). The
+  `last_pty_line` field stays on the wire so a future "current task
+  summary" surface can reuse it.
+- Translation copy itself was reviewed: `Queen` is gone from UI chrome
+  (the metaphor only appears in onboarding prose), Workspace /
+  Orchestrator / Agent are normalised as proper nouns in Chinese
+  copy, role names tightened (`Coder → 开发`, `Tester → 测试`),
+  ellipsis switched from ASCII `...` to typographic `…`, `task(s)`
+  notation retired.
+
 ## 0.6.0-alpha.5 - 2026-05-15
 
 Public-preview surface polish + internal hygiene pass.
