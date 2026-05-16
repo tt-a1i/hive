@@ -285,7 +285,7 @@ describe('worker flow with real server', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: /Add Member/ }).length).toBeGreaterThan(0)
     })
-    fireEvent.click(screen.getByRole('button', { name: '中文' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch language to 中文' }))
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: /添加成员/ }).length).toBeGreaterThan(0)
     })

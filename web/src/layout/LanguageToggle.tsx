@@ -2,35 +2,27 @@ import { Languages } from 'lucide-react'
 
 import { useI18n } from '../i18n.js'
 import { Tooltip } from '../ui/Tooltip.js'
-import type { UiLanguage } from '../uiLanguage.js'
-
-const LANGUAGES: UiLanguage[] = ['en', 'zh']
 
 export const LanguageToggle = () => {
   const { language, setLanguage, t } = useI18n()
+  const nextLanguage = language === 'en' ? 'zh' : 'en'
+  const ariaLabel = nextLanguage === 'en' ? t('language.switchToEn') : t('language.switchToZh')
+  const currentLabel = language === 'en' ? t('language.currentEn') : t('language.currentZh')
 
   return (
-    <fieldset
-      aria-label={t('language.aria')}
-      className="flex items-center gap-0.5 rounded border p-0.5"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
-    >
-      <Tooltip label={t('language.tooltip')}>
-        <span className="flex h-6 w-6 items-center justify-center text-ter">
-          <Languages size={13} aria-hidden />
-        </span>
-      </Tooltip>
-      {LANGUAGES.map((value) => (
+    <Tooltip label={ariaLabel}>
+      <span>
         <button
-          key={value}
           type="button"
-          aria-pressed={language === value}
-          onClick={() => setLanguage(value)}
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-ter transition-colors hover:bg-3 hover:text-pri aria-pressed:bg-3 aria-pressed:text-pri"
+          aria-label={ariaLabel}
+          onClick={() => setLanguage(nextLanguage)}
+          className="flex h-7 items-center gap-1 rounded border px-2 text-xs font-medium text-ter transition-colors hover:bg-3 hover:text-pri focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
         >
-          {t(value === 'en' ? 'language.en' : 'language.zh')}
+          <Languages size={13} aria-hidden />
+          <span>{currentLabel}</span>
         </button>
-      ))}
-    </fieldset>
+      </span>
+    </Tooltip>
   )
 }
