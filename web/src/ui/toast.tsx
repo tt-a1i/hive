@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, X, XCircle } from 'lucide-react'
 import type { ComponentType, CSSProperties } from 'react'
 
+import { useI18n } from '../i18n.js'
 import type { ToastEntry, ToastKind } from './useToast.js'
 import { useToast, useToastList } from './useToast.js'
 
@@ -24,6 +25,7 @@ type ToastCardProps = {
 }
 
 const ToastCard = ({ toast, api }: ToastCardProps) => {
+  const { t } = useI18n()
   const Icon = iconByKind[toast.kind]
   const duration = api.getDuration(toast.id)
   return (
@@ -48,7 +50,7 @@ const ToastCard = ({ toast, api }: ToastCardProps) => {
         data-testid="toast-close"
         onClick={() => api.dismiss(toast.id)}
         className="-mt-0.5 -mr-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-ter transition-colors hover:bg-3 hover:text-pri"
-        aria-label="Dismiss"
+        aria-label={t('toast.dismissAria')}
       >
         <X size={14} aria-hidden />
       </button>

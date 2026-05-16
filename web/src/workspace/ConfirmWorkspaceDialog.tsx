@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Folder, GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { CommandPreset, FsProbeResponse } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { WorkspaceCommandPresetSelect } from './WorkspaceCommandPresetSelect.js'
 import type { WorkspaceCreateInput } from './workspace-create-input.js'
 
@@ -39,6 +40,7 @@ export const ConfirmWorkspaceDialog = ({
   onCreate,
   onOpenServerBrowse,
 }: ConfirmWorkspaceDialogProps) => {
+  const { t } = useI18n()
   const initialPath = probe?.path ?? ''
   const initialName = probe?.suggested_name ?? basenameOf(initialPath)
   const [name, setName] = useState(initialName)
@@ -59,7 +61,7 @@ export const ConfirmWorkspaceDialog = ({
   const presetsLoading = commandPresets.length === 0 && !commandPresetError
   const selectedPresetUnavailable = selectedPreset?.available === false && startupClean.length === 0
   const presetAvailabilityError = selectedPresetUnavailable
-    ? `${selectedPreset.displayName} is not installed. Choose another CLI or add a custom startup command.`
+    ? t('workspace.preset.notInstalled', { name: selectedPreset.displayName })
     : null
   const canCreate =
     name.trim().length > 0 &&
@@ -108,22 +110,21 @@ export const ConfirmWorkspaceDialog = ({
               </div>
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-lg font-semibold text-pri">
-                  Add workspace
+                  {t('workspace.confirm.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-ter">
-                  Hive will load <span className="mono">.hive/tasks.md</span> and start the
-                  Orchestrator here.
+                  {t('workspace.confirm.description')}
                 </Dialog.Description>
               </div>
             </div>
 
             <div className="flex flex-col gap-4 px-5 py-4">
               <label className="flex flex-col gap-2">
-                <FieldLabel>Path</FieldLabel>
+                <FieldLabel>{t('workspace.field.path')}</FieldLabel>
                 <input
                   readOnly
                   value={probe?.path ?? ''}
-                  placeholder="(no folder picked — use paste path below)"
+                  placeholder={t('workspace.field.pathEmptyPlaceholder')}
                   className="input input--readonly mono"
                   data-testid="confirm-workspace-path"
                 />
@@ -143,20 +144,22 @@ export const ConfirmWorkspaceDialog = ({
                     }}
                   >
                     <GitBranch size={12} aria-hidden />
-                    {probe.current_branch ?? 'detached'}
+                    {probe.current_branch ?? t('workspace.git.detached')}
                   </span>
-                  <span className="text-ter">git repository detected</span>
+                  <span className="text-ter">{t('workspace.git.detected')}</span>
                 </div>
               ) : probe?.ok ? (
-                <span className="text-xs text-ter">No git repository at this path.</span>
+                <span className="text-xs text-ter">{t('workspace.git.none')}</span>
               ) : null}
 
               <label className="flex flex-col gap-2">
-                <FieldLabel>Workspace name</FieldLabel>
+                <FieldLabel>{t('workspace.field.name')}</FieldLabel>
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder={basenameOf(probe?.path ?? '') || 'my-project'}
+                  placeholder={
+                    basenameOf(probe?.path ?? '') || t('workspace.field.nameDefaultPlaceholder')
+                  }
                   className="input"
                   data-testid="confirm-workspace-name"
                 />
@@ -180,23 +183,20 @@ export const ConfirmWorkspaceDialog = ({
                 ) : (
                   <ChevronRight size={12} aria-hidden />
                 )}
-                Advanced: custom startup command
+                {t('workspace.advanced.startup')}
               </button>
               {startupExpanded ? (
                 <label className="flex flex-col gap-2">
-                  <FieldLabel>Startup command</FieldLabel>
+                  <FieldLabel>{t('workspace.field.startup')}</FieldLabel>
                   <input
                     type="text"
                     value={startupCommand}
                     onChange={(event) => setStartupCommand(event.target.value)}
-                    placeholder="claude --resume <session-id>"
+                    placeholder={t('workspace.field.startupPlaceholder')}
                     className="input mono"
                     data-testid="confirm-workspace-startup-command"
                   />
-                  <span className="text-xs text-ter">
-                    Overrides the preset for this Orchestrator. Runs in the workspace directory
-                    through your login shell, so only paste commands you trust.
-                  </span>
+                  <span className="text-xs text-ter">{t('workspace.startup.hint')}</span>
                 </label>
               ) : null}
 
@@ -211,16 +211,16 @@ export const ConfirmWorkspaceDialog = ({
                 ) : (
                   <ChevronRight size={12} aria-hidden />
                 )}
-                Advanced: paste path
+                {t('workspace.advanced.pastePath')}
               </button>
               {pasteExpanded ? (
                 <label className="flex flex-col gap-2">
-                  <FieldLabel>Absolute path</FieldLabel>
+                  <FieldLabel>{t('workspace.field.absolutePath')}</FieldLabel>
                   <input
                     type="text"
                     value={pastePath}
                     onChange={(event) => setPastePath(event.target.value)}
-                    placeholder="/absolute/path"
+                    placeholder={t('workspace.field.absolutePathPlaceholder')}
                     className="input mono"
                     data-testid="confirm-workspace-paste-path"
                   />
@@ -234,7 +234,7 @@ export const ConfirmWorkspaceDialog = ({
                 data-testid="confirm-workspace-browse-toggle"
               >
                 <ChevronRight size={12} aria-hidden />
-                Advanced: browse server filesystem
+                {t('workspace.advanced.browse')}
               </button>
             </div>
 
@@ -243,7 +243,7 @@ export const ConfirmWorkspaceDialog = ({
               style={{ borderColor: 'var(--border)' }}
             >
               <button type="button" onClick={onCancel} className="icon-btn">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -252,7 +252,7 @@ export const ConfirmWorkspaceDialog = ({
                 data-testid="confirm-workspace-create"
                 className="icon-btn icon-btn--primary"
               >
-                Create workspace
+                {t('workspace.confirm.create')}
               </button>
             </div>
           </Dialog.Content>

@@ -1,80 +1,120 @@
 import { Bell, Check, Info, Play, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TranslationKey } from '../i18n.js'
+import { useI18n } from '../i18n.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import type { NotificationDetail, NotificationSound } from './NotificationProvider.js'
 import { useNotifications } from './NotificationProvider.js'
 
-const soundOptions: Array<{
+interface SoundOption {
   accent: string
-  description: string
-  label: string
+  descriptionKey: TranslationKey
+  labelKey: TranslationKey
   length: 'short' | 'long' | 'silent'
   value: NotificationSound
-}> = [
+}
+
+interface DetailOption {
+  descriptionKey: TranslationKey
+  labelKey: TranslationKey
+  value: NotificationDetail
+}
+
+const SOUND_OPTIONS: SoundOption[] = [
   {
     accent: 'var(--status-green)',
-    description: 'Low and calm',
-    label: 'Soft',
+    descriptionKey: 'notifications.sound.soft.description',
+    labelKey: 'notifications.sound.soft.label',
     length: 'short',
     value: 'soft',
   },
   {
     accent: 'var(--status-blue)',
-    description: 'Short and crisp',
-    label: 'Ping',
+    descriptionKey: 'notifications.sound.ping.description',
+    labelKey: 'notifications.sound.ping.label',
     length: 'short',
     value: 'ping',
   },
   {
     accent: 'var(--status-gold)',
-    description: 'Two-note alert',
-    label: 'Chime',
+    descriptionKey: 'notifications.sound.chime.description',
+    labelKey: 'notifications.sound.chime.label',
     length: 'short',
     value: 'chime',
   },
   {
     accent: 'var(--accent)',
-    description: 'Four-note sweep',
-    label: 'Cascade',
+    descriptionKey: 'notifications.sound.cascade.description',
+    labelKey: 'notifications.sound.cascade.label',
     length: 'long',
     value: 'cascade',
   },
   {
     accent: 'var(--status-orange)',
-    description: 'Three-pulse signal',
-    label: 'Beacon',
+    descriptionKey: 'notifications.sound.beacon.description',
+    labelKey: 'notifications.sound.beacon.label',
     length: 'long',
     value: 'beacon',
   },
   {
     accent: 'var(--status-purple)',
-    description: 'Long resolved tone',
-    label: 'Resolve',
+    descriptionKey: 'notifications.sound.resolve.description',
+    labelKey: 'notifications.sound.resolve.label',
     length: 'long',
     value: 'resolve',
   },
   {
     accent: 'var(--text-tertiary)',
-    description: 'Mute sounds',
-    label: 'Off',
+    descriptionKey: 'notifications.sound.off.description',
+    labelKey: 'notifications.sound.off.label',
     length: 'silent',
     value: 'off',
   },
 ]
 
-const detailOptions: Array<{ description: string; label: string; value: NotificationDetail }> = [
-  { description: 'Compact status line', label: 'Brief', value: 'brief' },
-  { description: 'Workspace and queue context', label: 'Detailed', value: 'detailed' },
+const DETAIL_OPTIONS: DetailOption[] = [
+  {
+    descriptionKey: 'notifications.detail.brief.description',
+    labelKey: 'notifications.detail.brief.label',
+    value: 'brief',
+  },
+  {
+    descriptionKey: 'notifications.detail.detailed.description',
+    labelKey: 'notifications.detail.detailed.label',
+    value: 'detailed',
+  },
 ]
 
 export const NotificationSettingsButton = () => {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const { notify, previewSound, requestDesktopNotifications, settings, updateSettings } =
     useNotifications()
   const desktopUnsupported = typeof window !== 'undefined' && !('Notification' in window)
+
+  // Memoize translated option rows so each render of the popover doesn't
+  // re-create the array. Keys depend on the current language (re-derived via
+  // `t`), so language switches do invalidate the cache as expected.
+  const soundOptions = useMemo(
+    () =>
+      SOUND_OPTIONS.map((option) => ({
+        ...option,
+        description: t(option.descriptionKey),
+        label: t(option.labelKey),
+      })),
+    [t]
+  )
+  const detailOptions = useMemo(
+    () =>
+      DETAIL_OPTIONS.map((option) => ({
+        ...option,
+        description: t(option.descriptionKey),
+        label: t(option.labelKey),
+      })),
+    [t]
+  )
 
   const handleDesktopChange = (checked: boolean) => {
     if (!checked) {
@@ -84,10 +124,6 @@ export const NotificationSettingsButton = () => {
     void requestDesktopNotifications()
   }
 
-  // Esc closes the popover, click-outside closes it. Restore focus to the
-  // bell trigger on close so keyboard users land back at their entry point
-  // (Radix Popover normally handles this; we're hand-rolling so we mirror
-  // the same contract).
   useEffect(() => {
     if (!open) return
     const handleKey = (event: KeyboardEvent) => {
@@ -110,13 +146,13 @@ export const NotificationSettingsButton = () => {
 
   return (
     <div ref={containerRef} className="relative">
-      <Tooltip label="Notifications">
+      <Tooltip label={t('notifications.settings.tooltip')}>
         <button
           ref={triggerRef}
           type="button"
           aria-expanded={open}
           aria-haspopup="dialog"
-          aria-label="Notification settings"
+          aria-label={t('notifications.settings.aria')}
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded text-sec hover:bg-3 hover:text-pri"
           data-testid="topbar-settings"
           onClick={() => setOpen((value) => !value)}
@@ -127,7 +163,7 @@ export const NotificationSettingsButton = () => {
       {open ? (
         <div
           role="dialog"
-          aria-label="Notification settings"
+          aria-label={t('notifications.settings.aria')}
           className="elev-2 absolute top-8 right-0 z-50 w-[380px] rounded border p-3"
           style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border-bright)' }}
           data-testid="notification-settings"
@@ -137,19 +173,23 @@ export const NotificationSettingsButton = () => {
               <Bell size={16} aria-hidden />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-pri">Notifications</div>
-              <div className="text-ter text-xs">
-                Choose how Hive alerts you when team members report or stop.
+              <div className="text-sm font-semibold text-pri">
+                {t('notifications.settings.heading')}
               </div>
+              <div className="text-ter text-xs">{t('notifications.settings.subtitle')}</div>
             </div>
           </div>
 
           <section className="mb-3">
             <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wider">
               <Volume2 size={12} aria-hidden />
-              Sound
+              {t('notifications.sound.sectionLabel')}
             </div>
-            <div role="radiogroup" aria-label="Sound" className="grid grid-cols-2 gap-2">
+            <div
+              role="radiogroup"
+              aria-label={t('notifications.sound.sectionLabel')}
+              className="grid grid-cols-2 gap-2"
+            >
               {soundOptions.map((item) => (
                 <div
                   key={item.value}
@@ -191,7 +231,7 @@ export const NotificationSettingsButton = () => {
                       <span className="font-medium text-pri text-xs">{item.label}</span>
                       {item.length === 'long' ? (
                         <span className="rounded border border-[var(--border-bright)] px-1.5 py-0.5 text-xs text-ter uppercase">
-                          longer
+                          {t('notifications.sound.longerBadge')}
                         </span>
                       ) : null}
                       {settings.sound === item.value ? (
@@ -203,7 +243,7 @@ export const NotificationSettingsButton = () => {
                   {item.value !== 'off' ? (
                     <button
                       type="button"
-                      aria-label={`Preview ${item.label} sound`}
+                      aria-label={t('notifications.sound.previewAria', { label: item.label })}
                       className="absolute right-2 bottom-2 flex h-6 w-6 items-center justify-center rounded border text-sec transition-colors hover:bg-3 hover:text-pri"
                       style={{ borderColor: 'var(--border-bright)' }}
                       onClick={() => previewSound(item.value)}
@@ -219,11 +259,11 @@ export const NotificationSettingsButton = () => {
           <section className="mb-3">
             <div className="mb-2 flex items-center gap-1.5 text-ter text-xs uppercase tracking-wider">
               <Info size={12} aria-hidden />
-              Information
+              {t('notifications.detail.sectionLabel')}
             </div>
             <div
               role="radiogroup"
-              aria-label="Information"
+              aria-label={t('notifications.detail.sectionLabel')}
               className="grid grid-cols-2 rounded border p-1"
               style={{ background: 'var(--bg-1)', borderColor: 'var(--border)' }}
             >
@@ -257,18 +297,18 @@ export const NotificationSettingsButton = () => {
           <label className="mb-3 flex items-start gap-2 rounded border p-2 text-sec text-xs">
             <input
               type="checkbox"
-              aria-label="Browser notifications"
+              aria-label={t('notifications.desktop.aria')}
               checked={settings.desktop}
               disabled={desktopUnsupported}
               className="mt-0.5"
               onChange={(event) => handleDesktopChange(event.currentTarget.checked)}
             />
             <span>
-              <span className="block font-medium text-pri">Browser notifications</span>
+              <span className="block font-medium text-pri">{t('notifications.desktop.label')}</span>
               <span className="text-ter">
                 {desktopUnsupported
-                  ? 'Not supported in this browser.'
-                  : 'Use system notifications when permission is granted.'}
+                  ? t('notifications.desktop.unsupported')
+                  : t('notifications.desktop.helper')}
               </span>
             </span>
           </label>
@@ -278,22 +318,21 @@ export const NotificationSettingsButton = () => {
             style={{ borderColor: 'var(--border)' }}
           >
             <button type="button" className="icon-btn" onClick={() => setOpen(false)}>
-              Close
+              {t('common.close')}
             </button>
             <button
               type="button"
               className="icon-btn icon-btn--primary"
               onClick={() =>
                 notify({
-                  brief: 'Hive notifications are working.',
-                  detail:
-                    'Hive notifications are working with your selected sound and detail level.',
+                  brief: t('notifications.test.brief'),
+                  detail: t('notifications.test.detail'),
                   kind: 'success',
-                  title: 'Hive notification test',
+                  title: t('notifications.test.title'),
                 })
               }
             >
-              Test
+              {t('notifications.test.button')}
             </button>
           </div>
         </div>

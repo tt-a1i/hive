@@ -157,7 +157,7 @@ describe('worker flow with real server', () => {
       const buttons = screen.getAllByRole('button', { name: /Add Member/ })
       expect(buttons.length).toBeGreaterThan(0)
     })
-    expect(screen.getByText('Team Members')).toBeInTheDocument()
+    expect(screen.getByText('Team members')).toBeInTheDocument()
     const newWorkerButtons = screen.getAllByRole('button', { name: /Add Member/ })
     fireEvent.click(newWorkerButtons[0] as HTMLElement)
 
@@ -217,7 +217,7 @@ describe('worker flow with real server', () => {
     })
 
     // Delete via the card's hover-revealed action cluster.
-    fireEvent.click(screen.getByRole('button', { name: /^Delete Alice$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete team member Alice' }))
     const confirm = await screen.findByTestId('confirm-title')
     expect(confirm).toHaveTextContent('Delete Alice?')
     fireEvent.click(screen.getByTestId('confirm-action'))

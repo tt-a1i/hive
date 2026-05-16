@@ -2,8 +2,15 @@ import '@xterm/xterm/css/xterm.css'
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-
+import type { TranslationKey } from '../i18n.js'
+import { useI18n } from '../i18n.js'
 import { useTerminalRun } from './useTerminalRun.js'
+
+const STATUS_KEYS: Record<string, TranslationKey> = {
+  connecting: 'terminal.statusConnecting',
+  running: 'terminal.statusRunning',
+  stopped: 'common.stopped',
+}
 
 interface TerminalViewProps {
   runId: string
@@ -56,10 +63,12 @@ export const TerminalView = ({ runId, title }: TerminalViewProps) => {
 }
 
 const TerminalPtyView = ({ runId, title: _title }: TerminalViewProps) => {
+  const { t } = useI18n()
   const { containerRef, error, status } = useTerminalRun(runId)
+  const statusKey = STATUS_KEYS[status]
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
-      <p className="sr-only">{status}</p>
+      <p className="sr-only">{statusKey ? t(statusKey) : status}</p>
       {error ? (
         <p
           role="alert"

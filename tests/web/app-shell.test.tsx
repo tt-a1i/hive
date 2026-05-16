@@ -71,14 +71,14 @@ describe('app shell with real server', () => {
     expect(screen.queryByTestId('topbar-blueprint')).toBeNull()
 
     await waitFor(() => {
-      expect(screen.getByText('No workspaces')).toBeInTheDocument()
+      expect(screen.getByText('No Workspaces')).toBeInTheDocument()
     })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByTestId('confirm-workspace-dialog')).toBeNull()
     expect(screen.queryByTestId('add-workspace-dialog')).toBeNull()
     expect(fetchCalls).not.toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     expect(within(confirm).getByTestId('confirm-workspace-create')).toBeInTheDocument()
 
@@ -168,7 +168,7 @@ describe('app shell with real server', () => {
     expect(screen.getByTestId('workspace-sidebar-title')).toHaveTextContent('Workspaces')
     expect(screen.queryByRole('button', { name: 'Collapse workspace sidebar' })).toBeNull()
 
-    const separator = screen.getByRole('separator', { name: 'Resize workspace sidebar' })
+    const separator = screen.getByRole('separator', { name: 'Resize Workspace sidebar' })
     expect(separator).toHaveAttribute('aria-valuenow', '256')
 
     fireEvent.mouseDown(separator, { clientX: 256 })

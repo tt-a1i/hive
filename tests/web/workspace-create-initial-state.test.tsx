@@ -54,9 +54,9 @@ describe('workspace create initial state', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('No workspaces')).toBeInTheDocument()
+      expect(screen.getByText('No Workspaces')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
 
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     fireEvent.change(within(confirm).getByTestId('confirm-workspace-name'), {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { useI18n } from '../i18n.js'
 import { Topbar } from './Topbar.js'
 import {
   useWorkspaceSidebarResize,
@@ -24,6 +25,7 @@ export const MainLayout = ({
   sidebar,
   taskGraphOpen,
 }: MainLayoutProps) => {
+  const { t } = useI18n()
   const sidebarResize = useWorkspaceSidebarResize()
 
   return (
@@ -39,7 +41,7 @@ export const MainLayout = ({
       />
       <div className="flex min-h-0 flex-1">
         <aside
-          aria-label="Workspace sidebar"
+          aria-label={t('layout.sidebarAria')}
           className="workspace-sidebar relative flex shrink-0 flex-col"
           data-resizing={sidebarResize.resizing ? 'true' : 'false'}
           style={{
@@ -50,7 +52,7 @@ export const MainLayout = ({
         >
           {sidebar}
           <hr
-            aria-label="Resize workspace sidebar"
+            aria-label={t('layout.sidebarResizeAria')}
             aria-orientation="vertical"
             aria-valuemin={WORKSPACE_SIDEBAR_MIN}
             aria-valuemax={WORKSPACE_SIDEBAR_MAX}

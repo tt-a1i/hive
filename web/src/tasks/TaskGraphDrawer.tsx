@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 
+import { useI18n } from '../i18n.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
@@ -206,6 +207,7 @@ const TaskItem = ({
   handlers: TaskItemHandlers
   depth: number
 }) => {
+  const { t } = useI18n()
   const StatusIcon = task.checked ? CheckCircle2 : Circle
   const { title, meta } = parseTaskMetadata(task.text)
   const [editing, setEditing] = useState(false)
@@ -249,8 +251,8 @@ const TaskItem = ({
   const childrenDeep = depth + 1 >= MAX_VISUAL_DEPTH
   const showCollapseToggle = childCount > 0
   const collapseLabel = collapsed
-    ? `Expand ${childCount} subtask${childCount === 1 ? '' : 's'}`
-    : `Collapse ${childCount} subtask${childCount === 1 ? '' : 's'}`
+    ? t('tasks.aria.expandSubtasks', { count: childCount })
+    : t('tasks.aria.collapseSubtasks', { count: childCount })
   const ownerHandlers: OwnerChipHandlers = onSelectOwner ? { onSelectOwner } : {}
   return (
     <li className="task-node" data-testid={`task-line-${task.line}`}>
@@ -289,7 +291,7 @@ const TaskItem = ({
           {editing ? (
             <TaskInlineEditor
               initial={task.text}
-              placeholder="Edit task"
+              placeholder={t('tasks.placeholder.editTask')}
               onSubmit={(next) => {
                 setEditing(false)
                 onUpdateText?.(task.line, next)
@@ -329,7 +331,10 @@ const TaskItem = ({
                   <span
                     className="task-child-count mono"
                     data-testid={`task-progress-${task.line}`}
-                    title={`${progress.done} of ${progress.total} direct subtasks complete`}
+                    title={t('tasks.progress.subtaskTitle', {
+                      done: progress.done,
+                      total: progress.total,
+                    })}
                   >
                     {progress.done}/{progress.total}
                   </span>
@@ -387,7 +392,7 @@ const TaskItem = ({
         {showActions ? (
           <div className="task-row__actions">
             {canCopy ? (
-              <Tooltip label={copied ? 'Copied' : 'Copy line'}>
+              <Tooltip label={copied ? t('tasks.action.copied') : t('tasks.action.copyLine')}>
                 <button
                   type="button"
                   className="task-row__action"
@@ -401,27 +406,29 @@ const TaskItem = ({
                     }, 1500)
                   }}
                   data-testid={`task-copy-${task.line}`}
-                  aria-label={copied ? 'Copied task line' : 'Copy task line'}
+                  aria-label={
+                    copied ? t('tasks.aria.copiedTaskLine') : t('tasks.aria.copyTaskLine')
+                  }
                 >
                   {copied ? <Check size={12} /> : <Copy size={12} />}
                 </button>
               </Tooltip>
             ) : null}
             {canEdit ? (
-              <Tooltip label="Edit">
+              <Tooltip label={t('tasks.action.edit')}>
                 <button
                   type="button"
                   className="task-row__action"
                   onClick={() => setEditing(true)}
                   data-testid={`task-edit-${task.line}`}
-                  aria-label="Edit task"
+                  aria-label={t('tasks.aria.editTask')}
                 >
                   <Pencil size={12} />
                 </button>
               </Tooltip>
             ) : null}
             {canAddSubtask ? (
-              <Tooltip label="Add subtask">
+              <Tooltip label={t('tasks.action.addSubtask')}>
                 <button
                   type="button"
                   className="task-row__action"
@@ -430,20 +437,20 @@ const TaskItem = ({
                     setAdding(true)
                   }}
                   data-testid={`task-add-subtask-${task.line}`}
-                  aria-label="Add subtask"
+                  aria-label={t('tasks.aria.addSubtask')}
                 >
                   <CornerDownRight size={12} />
                 </button>
               </Tooltip>
             ) : null}
             {canDelete ? (
-              <Tooltip label="Delete">
+              <Tooltip label={t('tasks.action.delete')}>
                 <button
                   type="button"
                   className="task-row__action task-row__action--danger"
                   onClick={() => onDelete?.(task.line)}
                   data-testid={`task-delete-${task.line}`}
-                  aria-label="Delete task"
+                  aria-label={t('tasks.aria.deleteTask')}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -470,7 +477,7 @@ const TaskItem = ({
                 </span>
                 <TaskInlineEditor
                   initial=""
-                  placeholder="New subtask"
+                  placeholder={t('tasks.placeholder.newSubtask')}
                   onSubmit={(next) => {
                     setAdding(false)
                     onAppendSubtask?.(task.line, next)
@@ -493,6 +500,7 @@ const AddTaskInline = ({
   onSubmit: (text: string) => void
   disabled?: boolean
 }) => {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const submit = () => {
@@ -526,7 +534,7 @@ const AddTaskInline = ({
         <span aria-hidden className="task-add-toggle__icon">
           <Plus size={12} />
         </span>
-        <span>Add task</span>
+        <span>{t('tasks.button.addTask')}</span>
       </button>
     )
   }
@@ -540,7 +548,7 @@ const AddTaskInline = ({
         // biome-ignore lint/a11y/noAutofocus: this input is mounted in direct response to a user click on the Add task affordance
         autoFocus
         value={value}
-        placeholder="What needs to be done?"
+        placeholder={t('tasks.placeholder.newTask')}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={onKey}
         onBlur={submit}
@@ -573,6 +581,7 @@ export const TaskGraphDrawer = ({
   onSelectOwner,
   connectionStale = false,
 }: TaskGraphDrawerProps) => {
+  const { t } = useI18n()
   const [rawMode, setRawMode] = useState(false)
   // Copy the *raw markdown line* from the source-of-truth content, not the
   // parsed `task.text` (which has mentions stripped). §6.6.6 — "paste back to
@@ -626,7 +635,7 @@ export const TaskGraphDrawer = ({
 
   return (
     <aside
-      aria-label="Todo"
+      aria-label={t('tasks.aria.drawer')}
       data-testid="task-graph-drawer"
       data-connection-stale={connectionStale || undefined}
       aria-hidden={!open}
@@ -642,7 +651,7 @@ export const TaskGraphDrawer = ({
       <header className="task-drawer__header">
         <div className="flex min-w-0 flex-1 items-baseline gap-2">
           <Tooltip label={<span className="mono text-ter">{filePath}</span>}>
-            <span className="cursor-default font-semibold text-pri">Todo</span>
+            <span className="cursor-default font-semibold text-pri">{t('tasks.title.todo')}</span>
           </Tooltip>
           {totalTasks > 0 ? (
             <span className="text-xs text-ter tabular-nums" data-testid="task-graph-summary">
@@ -653,26 +662,31 @@ export const TaskGraphDrawer = ({
             </span>
           ) : null}
         </div>
-        <Tooltip label={rawMode ? 'Back to list' : 'View source'}>
+        <Tooltip label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}>
           <button
             type="button"
             onClick={() => setRawMode((v) => !v)}
             data-testid="task-raw-toggle"
             className="icon-btn"
-            aria-label={rawMode ? 'Back to list' : 'View source'}
+            aria-label={rawMode ? t('tasks.action.backToList') : t('tasks.action.viewSource')}
           >
             <FileCode size={14} />
           </button>
         </Tooltip>
-        <Tooltip label="Close Todo">
-          <button type="button" onClick={onClose} aria-label="Close Todo" className="icon-btn">
+        <Tooltip label={t('tasks.action.closeTodo')}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('tasks.action.closeTodo')}
+            className="icon-btn"
+          >
             <PanelRightClose size={14} />
           </button>
         </Tooltip>
       </header>
       {!rawMode && totalTasks > 0 ? (
         <div
-          aria-label="Task completion"
+          aria-label={t('tasks.aria.progress')}
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={completionPercent}
@@ -702,8 +716,8 @@ export const TaskGraphDrawer = ({
             ) : null}
             <EmptyState
               icon={<FileText size={20} />}
-              title="No tasks yet"
-              description="Ask the orchestrator in chat to start planning, or add your first task above to bootstrap .hive/tasks.md."
+              title={t('tasks.empty.title')}
+              description={t('tasks.empty.description')}
             />
           </>
         ) : (
@@ -732,7 +746,7 @@ export const TaskGraphDrawer = ({
                   ) : (
                     <ChevronRight size={12} aria-hidden />
                   )}
-                  <span>{doneRoots.length} completed</span>
+                  <span>{t('tasks.completed.toggle', { count: doneRoots.length })}</span>
                 </button>
                 {completedOpen ? (
                   <ul className="task-list" data-testid="task-completed-list">

@@ -32,10 +32,7 @@ const workerSummary = (
   if (!workers || workers.length === 0) return t('sidebar.noMembers')
   const working = workers.filter((worker) => worker.status === 'working').length
   if (working > 0) return t('sidebar.workingCount', { working, total: workers.length })
-  return t('sidebar.teamMemberCount', {
-    count: workers.length,
-    plural: workers.length === 1 ? '' : 's',
-  })
+  return t('sidebar.teamMemberCount', { count: workers.length })
 }
 
 export const Sidebar = ({

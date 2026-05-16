@@ -2,6 +2,7 @@ import { Check, ChevronDown, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import type { CommandPreset } from '../api.js'
+import { useI18n } from '../i18n.js'
 
 type WorkspaceCommandPresetSelectProps = {
   error: string | null
@@ -24,12 +25,13 @@ export const WorkspaceCommandPresetSelect = ({
   presets,
   value,
 }: WorkspaceCommandPresetSelectProps) => {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const selected = presets.find((preset) => preset.id === value)
   const commandPreview = selected
     ? [selected.command, ...selected.args].join(' ').trim()
-    : 'Loading CLI presets…'
+    : t('workspace.preset.loading')
   const buttonLabel = selected?.displayName ?? 'Claude Code (CC)'
   const disabled = presets.length === 0
 
@@ -52,7 +54,7 @@ export const WorkspaceCommandPresetSelect = ({
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium uppercase tracking-wider text-ter">
-        Orchestrator CLI
+        {t('workspace.preset.label')}
       </span>
       <div ref={containerRef} className="cli-select group relative">
         <Terminal size={14} aria-hidden className="cli-select__leading" />
@@ -73,7 +75,7 @@ export const WorkspaceCommandPresetSelect = ({
         {open && presets.length > 0 ? (
           <div
             role="listbox"
-            aria-label="Orchestrator CLI options"
+            aria-label={t('workspace.preset.optionsAria')}
             className="cli-select__menu"
             data-testid="workspace-command-preset-menu"
           >
@@ -103,7 +105,7 @@ export const WorkspaceCommandPresetSelect = ({
                   />
                   <span>
                     {preset.displayName}
-                    {isUnavailable ? ' (not found)' : ''}
+                    {isUnavailable ? t('workspace.preset.notFoundSuffix') : ''}
                   </span>
                 </button>
               )

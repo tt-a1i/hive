@@ -33,10 +33,7 @@ export const Topbar = ({
   const tooltipLabel = taskGraphOpen
     ? t('topbar.hideTodo')
     : hasOpenTasks
-      ? t('topbar.todoOpen', {
-          count: openTaskCount,
-          plural: openTaskCount === 1 ? '' : 's',
-        })
+      ? t('topbar.todoOpen', { count: openTaskCount })
       : t('topbar.showTodo')
   return (
     <header

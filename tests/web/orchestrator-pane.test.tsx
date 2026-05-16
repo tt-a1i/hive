@@ -30,13 +30,13 @@ const renderPane = (state: OrchestratorPaneState) => {
 }
 
 describe('OrchestratorPane three-state UI', () => {
-  test('starting: shows passive startup state without a manual Start Queen CTA', () => {
+  test('starting: shows passive startup state without a manual Start Orchestrator CTA', () => {
     const { onStop, onStart, onRestart } = renderPane({ kind: 'starting' })
 
     expect(screen.getByTestId('orchestrator-starting-body')).toBeInTheDocument()
-    expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Starting Queen')
+    expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Starting Orchestrator')
     expect(screen.queryByTestId('orchestrator-start')).toBeNull()
-    expect(screen.queryByText('Queen is offline')).toBeNull()
+    expect(screen.queryByText('Orchestrator is offline')).toBeNull()
     expect(screen.queryByTestId('orchestrator-failed-body')).toBeNull()
 
     expect(onStop).not.toHaveBeenCalled()
@@ -44,13 +44,13 @@ describe('OrchestratorPane three-state UI', () => {
     expect(onRestart).not.toHaveBeenCalled()
   })
 
-  test('stopped: shows explicit Start Queen CTA', () => {
+  test('stopped: shows explicit Start Orchestrator CTA', () => {
     const { onStop, onStart, onRestart } = renderPane({ kind: 'stopped' })
 
     expect(screen.getByTestId('orchestrator-stopped-body')).toBeInTheDocument()
-    expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Queen is stopped')
+    expect(screen.getByTestId('empty-state-title')).toHaveTextContent('Orchestrator is stopped')
     const start = screen.getByTestId('orchestrator-start')
-    expect(start).toHaveTextContent('Start Queen')
+    expect(start).toHaveTextContent('Start Orchestrator')
 
     fireEvent.click(start)
     expect(onStart).toHaveBeenCalledTimes(1)

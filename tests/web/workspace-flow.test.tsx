@@ -68,9 +68,9 @@ describe('workspace flow with real server', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('No workspaces')).toBeInTheDocument()
+      expect(screen.getByText('No Workspaces')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'New workspace' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Workspace' }))
 
     // User-triggered pick-folder → mock returns the sandbox dir → compact confirm opens.
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
@@ -147,8 +147,8 @@ describe('workspace flow with real server', () => {
       ).toHaveAttribute('aria-current', 'true')
     })
 
-    expect(screen.getByTestId('orchestrator-start')).toHaveTextContent('Start Queen')
-    expect(screen.queryByText('Queen is offline')).toBeNull()
+    expect(screen.getByTestId('orchestrator-start')).toHaveTextContent('Start Orchestrator')
+    expect(screen.queryByText('Orchestrator is offline')).toBeNull()
     expect(document.querySelector('[data-pty-slot="orchestrator"]')).toBeNull()
     expect(serverContext.store.listTerminalRuns(existing.id)).toEqual([])
     expect(screen.queryByTestId('orchestrator-starting-body')).toBeNull()

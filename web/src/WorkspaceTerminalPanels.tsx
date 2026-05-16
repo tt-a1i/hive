@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { listTerminalRuns, type TerminalRunSummary } from './api.js'
+import { useI18n } from './i18n.js'
 import { TerminalView } from './terminal/TerminalView.js'
 import { mergeTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 
@@ -17,6 +18,7 @@ export const WorkspaceTerminalPanels = ({
   optimisticRuns = [],
   workspaceId,
 }: WorkspaceTerminalPanelsProps) => {
+  const { t } = useI18n()
   const [terminalRuns, setTerminalRuns] = useState<TerminalRunSummary[]>([])
   const mergedRuns = mergeTerminalRuns(terminalRuns, optimisticRuns)
 
@@ -41,7 +43,11 @@ export const WorkspaceTerminalPanels = ({
   }, [workspaceId])
 
   return (
-    <section hidden={hidden} aria-hidden={hidden || undefined} aria-label="Terminal panels">
+    <section
+      hidden={hidden}
+      aria-hidden={hidden || undefined}
+      aria-label={t('terminalPanels.aria')}
+    >
       {mergedRuns.map((run) => (
         <TerminalView
           key={run.run_id}

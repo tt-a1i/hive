@@ -45,7 +45,7 @@ describe('UI language switcher', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Switch language to 中文' }))
 
     expect(screen.getByText('欢迎使用 Hive')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /添加第一个 workspace/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /添加第一个 Workspace/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '切换语言到 English' })).toBeInTheDocument()
     expect(window.localStorage.getItem(UI_LANGUAGE_STORAGE_KEY)).toBe('zh')
   })

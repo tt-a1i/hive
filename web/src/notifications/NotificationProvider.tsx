@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
+import { useI18n } from '../i18n.js'
 import type { ToastKind } from '../ui/useToast.js'
 import { useToast } from '../ui/useToast.js'
 
@@ -173,6 +174,7 @@ const NotificationContext = createContext<NotificationApi | null>(null)
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const toast = useToast()
+  const { t } = useI18n()
   const [settings, setSettings] = useState<NotificationSettings>(() => readSettings())
 
   useEffect(() => {
@@ -186,7 +188,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const requestDesktopNotifications = useCallback(async (): Promise<boolean> => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
       updateSettings({ desktop: false })
-      toast.show({ kind: 'warning', message: 'This browser does not support notifications.' })
+      toast.show({ kind: 'warning', message: t('notifications.toast.unsupported') })
       return false
     }
     if (window.Notification.permission === 'granted') {
@@ -195,16 +197,15 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
     if (window.Notification.permission === 'denied') {
       updateSettings({ desktop: false })
-      toast.show({ kind: 'warning', message: 'Browser notifications are blocked.' })
+      toast.show({ kind: 'warning', message: t('notifications.toast.blocked') })
       return false
     }
     const permission = await window.Notification.requestPermission()
     const granted = permission === 'granted'
     updateSettings({ desktop: granted })
-    if (!granted)
-      toast.show({ kind: 'warning', message: 'Browser notifications were not enabled.' })
+    if (!granted) toast.show({ kind: 'warning', message: t('notifications.toast.declined') })
     return granted
-  }, [toast, updateSettings])
+  }, [t, toast, updateSettings])
 
   const notify = useCallback(
     ({ brief, detail, kind, title }: NotifyOptions) => {

@@ -183,7 +183,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     fireEvent.change(screen.getByLabelText('Tasks Markdown'), {
       target: { value: '- [x] implement login\n' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save Tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save tasks' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [x] implement login\n')
@@ -205,16 +205,16 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     writeFileSync(join(workspacePath, '.hive', 'tasks.md'), '- [x] external change\n', 'utf8')
 
     await waitFor(() => {
-      expect(screen.getByText('文件已在外部变化')).toBeInTheDocument()
+      expect(screen.getByText('File changed externally')).toBeInTheDocument()
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [ ] local draft\n')
       expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Keep Local' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Keep local' })).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
 
     await waitFor(() => {
-      expect(screen.queryByText('文件已在外部变化')).toBeNull()
+      expect(screen.queryByText('File changed externally')).toBeNull()
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [x] external change\n')
     })
   })
@@ -228,7 +228,7 @@ describe('tasks flow driven from the Task Graph drawer', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText('Tasks Markdown')).toHaveValue('- [x] auto sync\n')
-      expect(screen.queryByText('文件已在外部变化')).toBeNull()
+      expect(screen.queryByText('File changed externally')).toBeNull()
     })
   })
 

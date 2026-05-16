@@ -156,18 +156,18 @@ describe('Sidebar EmptyState CTA', () => {
   test('empty workspaces shows New workspace CTA inside the EmptyState, not at the bottom', () => {
     renderSidebar({ ...emptyProps, workspaces: [] })
     const emptyState = screen.getByTestId('empty-state')
-    expect(within(emptyState).getByRole('button', { name: 'New workspace' })).toBeInTheDocument()
+    expect(within(emptyState).getByRole('button', { name: 'New Workspace' })).toBeInTheDocument()
     // Bottom dashed button is hidden when list is empty:
-    const allNewBtns = screen.getAllByRole('button', { name: 'New workspace' })
+    const allNewBtns = screen.getAllByRole('button', { name: 'New Workspace' })
     expect(allNewBtns).toHaveLength(1)
     // Callback wiring: clicking the CTA must call onCreateClick.
-    fireEvent.click(within(emptyState).getByRole('button', { name: 'New workspace' }))
+    fireEvent.click(within(emptyState).getByRole('button', { name: 'New Workspace' }))
     expect(emptyProps.onCreateClick).toHaveBeenCalledOnce()
   })
 
   test('non-empty workspaces renders the inline ws-add CTA at the end of the list', () => {
     renderSidebar({ ...emptyProps, workspaces: [fakeWorkspace] })
-    const btn = screen.getByRole('button', { name: 'New workspace' })
+    const btn = screen.getByRole('button', { name: 'New Workspace' })
     expect(btn).toHaveClass('ws-add')
     expect(btn).toHaveClass('ws-add--inline')
     // Must be a child of the workspaces <ul>, not a sibling pinned to the
@@ -205,7 +205,7 @@ describe('Sidebar EmptyState CTA', () => {
       onCreateClick,
       workspaces: [],
     })
-    const emptyStateBtn = screen.getByRole('button', { name: 'New workspace' })
+    const emptyStateBtn = screen.getByRole('button', { name: 'New Workspace' })
     expect(emptyStateBtn).toBeDisabled()
     expect(emptyStateBtn).toHaveAttribute('title', disabledReason)
     fireEvent.click(emptyStateBtn)
@@ -218,7 +218,7 @@ describe('Sidebar EmptyState CTA', () => {
       onCreateClick,
       workspaces: [fakeWorkspace],
     })
-    const bottomBtn = screen.getByRole('button', { name: 'New workspace' })
+    const bottomBtn = screen.getByRole('button', { name: 'New Workspace' })
     expect(bottomBtn).toBeDisabled()
     expect(bottomBtn).toHaveAttribute('title', disabledReason)
     fireEvent.click(bottomBtn)
@@ -289,10 +289,10 @@ describe('workspace sidebar flow', () => {
     })
 
     // Click trash icon → Confirm dialog opens (no native window.confirm).
-    fireEvent.click(screen.getByRole('button', { name: 'Delete workspace Alpha' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Workspace Alpha' }))
     const confirmTitle = await screen.findByTestId('confirm-title')
-    expect(confirmTitle).toHaveTextContent('Delete workspace "Alpha"?')
-    expect(screen.getByTestId('confirm-action')).toHaveTextContent('Delete workspace')
+    expect(confirmTitle).toHaveTextContent('Delete Workspace "Alpha"?')
+    expect(screen.getByTestId('confirm-action')).toHaveTextContent('Delete Workspace')
 
     // Confirming actually performs the delete.
     fireEvent.click(screen.getByTestId('confirm-action'))

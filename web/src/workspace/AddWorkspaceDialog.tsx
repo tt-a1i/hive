@@ -3,6 +3,7 @@ import { AlertTriangle, FolderSearch } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { type CommandPreset, type FsProbeResponse, listCommandPresets, pickFolder } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { ConfirmWorkspaceDialog } from './ConfirmWorkspaceDialog.js'
 import { ServerBrowseDialog } from './ServerBrowseDialog.js'
 import type { WorkspaceCreateInput } from './workspace-create-input.js'
@@ -34,6 +35,14 @@ const chooseDefaultCommandPresetId = (presets: CommandPreset[]) =>
       DEFAULT_COMMAND_PRESET_ID)
 
 export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceDialogProps) => {
+  const { t } = useI18n()
+  // Effect-stable view of `t`: writing to a ref lets the trigger-driven
+  // useEffect read the current translator without re-running each render
+  // (which would re-fire the native folder picker every time language changes).
+  const tRef = useRef(t)
+  useEffect(() => {
+    tRef.current = t
+  }, [t])
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState(DEFAULT_COMMAND_PRESET_ID)
@@ -72,7 +81,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
       })
       .catch(() => {
         if (cancelled) return
-        const errorMessage = 'Failed to load CLI presets; using server default.'
+        const errorMessage = tRef.current('workspace.preset.loadFailed')
         commandPresetSnapshotRef.current = {
           error: errorMessage,
           id: DEFAULT_COMMAND_PRESET_ID,
@@ -107,8 +116,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
         if (!result.probe?.ok || !result.probe.is_dir) {
           setStage({
             kind: 'error',
-            message:
-              result.error ?? 'Picked folder is not inside the Hive sandbox. Use paste path.',
+            message: result.error ?? tRef.current('workspace.error.outsideSandbox'),
           })
           return
         }
@@ -116,7 +124,8 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        const message = error instanceof Error ? error.message : 'Folder picker failed'
+        const message =
+          error instanceof Error ? error.message : tRef.current('workspace.error.pickerFailed')
         setStage({ kind: 'error', message })
       })
     return () => {
@@ -133,8 +142,8 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
     void Promise.resolve(onCreate(input))
       .then(() => setStage({ kind: 'idle' }))
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : 'Failed to create workspace'
-        setStage({ kind: 'error', title: 'Could not create workspace', message })
+        const message = error instanceof Error ? error.message : t('workspace.error.createFailed')
+        setStage({ kind: 'error', title: t('workspace.error.createTitle'), message })
       })
   }
 
@@ -169,7 +178,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
             aria-describedby={undefined}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
-            <Dialog.Title className="sr-only">Opening folder picker</Dialog.Title>
+            <Dialog.Title className="sr-only">{t('workspace.picking.title')}</Dialog.Title>
             <div
               data-testid="add-workspace-picking-panel"
               className="dialog-scale-pop elev-2 flex items-center gap-3 rounded-lg border px-5 py-4"
@@ -184,7 +193,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
                 className="animate-pulse"
                 style={{ color: 'var(--accent)' }}
               />
-              <span className="text-sm text-pri">Opening system folder picker…</span>
+              <span className="text-sm text-pri">{t('workspace.picking.message')}</span>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -217,7 +226,7 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
                 </div>
                 <div className="min-w-0 flex-1">
                   <Dialog.Title className="text-lg font-semibold text-pri">
-                    {stage.title ?? 'Folder picker failed'}
+                    {stage.title ?? t('workspace.error.pickerFailed')}
                   </Dialog.Title>
                   <Dialog.Description className="mt-1.5 break-words text-sm text-ter">
                     {stage.message}
@@ -226,14 +235,14 @@ export const AddWorkspaceDialog = ({ trigger, onClose, onCreate }: AddWorkspaceD
               </div>
               <div className="mt-5 flex justify-end gap-2">
                 <button type="button" onClick={handleCancel} className="icon-btn">
-                  Close
+                  {t('common.close')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setStage({ kind: 'confirm', probe: null, pasteDefault: true })}
                   className="icon-btn icon-btn--primary"
                 >
-                  Paste path instead
+                  {t('workspace.error.pastePathInstead')}
                 </button>
               </div>
             </Dialog.Content>

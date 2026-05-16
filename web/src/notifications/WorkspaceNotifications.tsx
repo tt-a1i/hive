@@ -1,8 +1,17 @@
 import { useEffect, useRef } from 'react'
 
-import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
+import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../../src/shared/types.js'
 import type { TerminalRunSummary } from '../api.js'
+import type { TranslationKey } from '../i18n.js'
+import { useI18n } from '../i18n.js'
 import { useNotifications } from './NotificationProvider.js'
+
+const ROLE_LABEL_KEYS: Record<WorkerRole, TranslationKey> = {
+  coder: 'role.coder',
+  custom: 'role.custom',
+  reviewer: 'role.reviewer',
+  tester: 'role.tester',
+}
 
 type WorkerSnapshot = Pick<TeamListItem, 'id' | 'name' | 'pendingTaskCount' | 'role' | 'status'>
 
@@ -37,6 +46,7 @@ export const WorkspaceNotifications = ({
   workspace,
 }: WorkspaceNotificationsProps) => {
   const { notify } = useNotifications()
+  const { t } = useI18n()
   const previous = useRef<Snapshot | null>(null)
 
   useEffect(() => {
@@ -57,20 +67,28 @@ export const WorkspaceNotifications = ({
 
       if (before.status !== 'stopped' && worker.status === 'stopped') {
         notify({
-          brief: `${worker.name} stopped`,
-          detail: `${worker.name} stopped in ${workspace.name}; ${worker.pendingTaskCount} queued task(s) remain.`,
+          brief: t('notifications.workerStopped.brief', { name: worker.name }),
+          detail: t('notifications.workerStopped.detail', {
+            name: worker.name,
+            workspace: workspace.name,
+            count: worker.pendingTaskCount,
+          }),
           kind: 'error',
-          title: 'Team member stopped',
+          title: t('notifications.workerStopped.title'),
         })
         continue
       }
 
       if (before.status === 'stopped' && worker.status !== 'stopped') {
         notify({
-          brief: `${worker.name} started`,
-          detail: `${worker.name} started in ${workspace.name} as ${worker.role}.`,
+          brief: t('notifications.workerStarted.brief', { name: worker.name }),
+          detail: t('notifications.workerStarted.detail', {
+            name: worker.name,
+            workspace: workspace.name,
+            role: t(ROLE_LABEL_KEYS[worker.role]),
+          }),
           kind: 'success',
-          title: 'Team member started',
+          title: t('notifications.workerStarted.title'),
         })
         continue
       }
@@ -80,14 +98,18 @@ export const WorkspaceNotifications = ({
         (before.status === 'working' && worker.status === 'idle')
       if (completedTask) {
         notify({
-          brief: `${worker.name} reported`,
-          detail: `${worker.name} reported in ${workspace.name}; ${worker.pendingTaskCount} queued task(s) remain.`,
+          brief: t('notifications.workerReported.brief', { name: worker.name }),
+          detail: t('notifications.workerReported.detail', {
+            name: worker.name,
+            workspace: workspace.name,
+            count: worker.pendingTaskCount,
+          }),
           kind: 'success',
-          title: 'Team member report',
+          title: t('notifications.workerReported.title'),
         })
       }
     }
-  }, [notify, workers, workspace])
+  }, [notify, t, workers, workspace])
 
   return null
 }

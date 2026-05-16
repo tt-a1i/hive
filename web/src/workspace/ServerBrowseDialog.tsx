@@ -3,6 +3,7 @@ import { ArrowUp, ChevronDown, ChevronRight, Folder, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import type { CommandPreset } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { FsEntryList } from './FsEntryList.js'
 import { FsSelectionPreview } from './FsSelectionPreview.js'
 import { buildBreadcrumbs } from './path-breadcrumbs.js'
@@ -38,6 +39,7 @@ export const ServerBrowseDialog = ({
   onCreate,
   open,
 }: ServerBrowseDialogProps) => {
+  const { t } = useI18n()
   const { browse, loading, navigate, probe, selectEntry, selected } = useFsBrowser(open)
   const [name, setName] = useState('')
   const [advanced, setAdvanced] = useState(false)
@@ -67,7 +69,7 @@ export const ServerBrowseDialog = ({
   const presetsLoading = commandPresets.length === 0 && !commandPresetError
   const selectedPresetUnavailable = selectedPreset?.available === false && startupClean.length === 0
   const presetAvailabilityError = selectedPresetUnavailable
-    ? `${selectedPreset.displayName} is not installed. Choose another CLI or add a custom startup command.`
+    ? t('workspace.preset.notInstalled', { name: selectedPreset.displayName })
     : null
   const canCreate =
     name.trim().length > 0 &&
@@ -122,19 +124,21 @@ export const ServerBrowseDialog = ({
               </div>
               <div className="min-w-0 flex-1">
                 <Dialog.Title className="text-lg font-semibold text-pri">
-                  Browse server filesystem
+                  {t('workspace.browse.title')}
                 </Dialog.Title>
                 <Dialog.Description
                   className="mono truncate text-xs text-ter"
                   data-testid="fs-root-path"
                 >
-                  root: {browse.root_path || '(loading)'}
+                  {browse.root_path
+                    ? t('workspace.browse.root', { path: browse.root_path })
+                    : t('workspace.browse.rootLoading')}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
                 <button
                   type="button"
-                  aria-label="Close dialog"
+                  aria-label={t('common.closeDialog')}
                   className="flex h-7 w-7 items-center justify-center rounded text-sec hover:bg-3 hover:text-pri"
                 >
                   <X size={14} aria-hidden />
@@ -145,17 +149,17 @@ export const ServerBrowseDialog = ({
             <nav
               className="flex shrink-0 items-center gap-1 border-b px-4 py-2 text-xs"
               style={{ borderColor: 'var(--border)' }}
-              aria-label="Breadcrumb"
+              aria-label={t('workspace.browse.breadcrumb')}
               data-testid="fs-breadcrumb"
             >
               <button
                 type="button"
                 onClick={() => (browse.parent_path ? navigate(browse.parent_path) : null)}
                 disabled={!browse.parent_path}
-                aria-label="Go to parent directory"
+                aria-label={t('workspace.browse.parentAria')}
                 className="flex items-center gap-1 rounded px-2 py-0.5 text-sec hover:bg-3 hover:text-pri disabled:opacity-40"
               >
-                <ArrowUp size={12} aria-hidden /> up
+                <ArrowUp size={12} aria-hidden /> {t('workspace.browse.up')}
               </button>
               <div className="mx-2 h-4 w-px" style={{ background: 'var(--border)' }} />
               {breadcrumbs.map((segment, index) => {
@@ -215,22 +219,21 @@ export const ServerBrowseDialog = ({
                   ) : (
                     <ChevronRight size={12} aria-hidden />
                   )}
-                  Advanced: startup command
+                  {t('workspace.advanced.startup')}
                 </button>
                 {startupExpanded ? (
                   <label className="flex flex-col gap-2 text-xs uppercase tracking-wider text-ter">
-                    Startup command
+                    {t('workspace.field.startup')}
                     <input
                       type="text"
                       value={startupCommand}
                       onChange={(event) => setStartupCommand(event.target.value)}
-                      placeholder="claude --resume <session-id>"
+                      placeholder={t('workspace.field.startupPlaceholder')}
                       className="input mono"
                       data-testid="fs-startup-command"
                     />
                     <span className="text-xs normal-case tracking-normal text-ter">
-                      Runs through your login shell in the workspace directory. Only paste commands
-                      you trust.
+                      {t('workspace.startup.hintShort')}
                     </span>
                   </label>
                 ) : null}
@@ -244,16 +247,16 @@ export const ServerBrowseDialog = ({
                   ) : (
                     <ChevronRight size={12} aria-hidden />
                   )}
-                  Advanced: paste path
+                  {t('workspace.advanced.pastePath')}
                 </button>
                 {advanced ? (
                   <label className="flex flex-col gap-2 text-xs uppercase tracking-wider text-ter">
-                    Absolute path
+                    {t('workspace.field.absolutePath')}
                     <input
                       type="text"
                       value={manualPath}
                       onChange={(event) => setManualPath(event.target.value)}
-                      placeholder="/absolute/path"
+                      placeholder={t('workspace.field.absolutePathPlaceholder')}
                       className="input mono"
                       data-testid="fs-manual-path"
                     />
@@ -267,7 +270,7 @@ export const ServerBrowseDialog = ({
               style={{ borderColor: 'var(--border)' }}
             >
               <button type="button" onClick={onClose} className="icon-btn">
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -276,7 +279,7 @@ export const ServerBrowseDialog = ({
                 data-testid="add-workspace-create"
                 className="icon-btn icon-btn--primary"
               >
-                Create workspace
+                {t('workspace.confirm.create')}
               </button>
             </div>
           </Dialog.Content>
