@@ -1,5 +1,6 @@
 import { Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
+import { useI18n } from '../i18n.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
 
@@ -18,35 +19,41 @@ type OrchestratorPaneProps = {
   onRestart: () => void
 }
 
-const StartingBody = () => (
-  <div data-testid="orchestrator-starting-body" className="flex flex-1">
-    <EmptyState
-      icon={<LoaderCircle size={24} className="animate-spin" />}
-      title="Starting Queen"
-      description="Preparing the orchestrator terminal."
-    />
-  </div>
-)
+const StartingBody = () => {
+  const { t } = useI18n()
+  return (
+    <div data-testid="orchestrator-starting-body" className="flex flex-1">
+      <EmptyState
+        icon={<LoaderCircle size={24} className="animate-spin" />}
+        title={t('orchestrator.startingTitle')}
+        description={t('orchestrator.startingDesc')}
+      />
+    </div>
+  )
+}
 
-const StoppedBody = ({ onStart }: { onStart: () => void }) => (
-  <div data-testid="orchestrator-stopped-body" className="flex flex-1">
-    <EmptyState
-      icon={<Crown size={24} />}
-      title="Queen is stopped"
-      description="Start the Queen to plan tasks and dispatch them to workers."
-      action={
-        <button
-          type="button"
-          onClick={onStart}
-          className="icon-btn icon-btn--primary"
-          data-testid="orchestrator-start"
-        >
-          <Play size={12} aria-hidden /> Start Queen
-        </button>
-      }
-    />
-  </div>
-)
+const StoppedBody = ({ onStart }: { onStart: () => void }) => {
+  const { t } = useI18n()
+  return (
+    <div data-testid="orchestrator-stopped-body" className="flex flex-1">
+      <EmptyState
+        icon={<Crown size={24} />}
+        title={t('orchestrator.stoppedTitle')}
+        description={t('orchestrator.stoppedDesc')}
+        action={
+          <button
+            type="button"
+            onClick={onStart}
+            className="icon-btn icon-btn--primary"
+            data-testid="orchestrator-start"
+          >
+            <Play size={12} aria-hidden /> {t('orchestrator.start')}
+          </button>
+        }
+      />
+    </div>
+  )
+}
 
 const FailedBody = ({
   error,
@@ -57,6 +64,7 @@ const FailedBody = ({
   onRemoveWorkspace: () => void
   onRestart: () => void
 }) => {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const copyError = () => {
     void navigator.clipboard
@@ -79,7 +87,7 @@ const FailedBody = ({
       >
         <Crown size={24} />
       </div>
-      <div className="text-lg font-semibold text-pri">Queen failed to start</div>
+      <div className="text-lg font-semibold text-pri">{t('orchestrator.failed')}</div>
       <div className="relative w-full">
         <pre
           data-testid="orchestrator-error-message"
@@ -92,11 +100,11 @@ const FailedBody = ({
         >
           {error}
         </pre>
-        <Tooltip label={copied ? 'Copied' : 'Copy error'}>
+        <Tooltip label={copied ? t('common.copied') : t('common.copyError')}>
           <button
             type="button"
             onClick={copyError}
-            aria-label="Copy error message"
+            aria-label={t('orchestrator.copyErrorAria')}
             className="icon-btn icon-btn--ghost absolute right-1 top-1 h-6 px-1.5"
             data-testid="orchestrator-copy-error"
           >
@@ -111,7 +119,7 @@ const FailedBody = ({
           className="icon-btn icon-btn--primary"
           data-testid="orchestrator-retry"
         >
-          <RotateCcw size={12} aria-hidden /> Retry
+          <RotateCcw size={12} aria-hidden /> {t('common.retry')}
         </button>
         <button
           type="button"
@@ -119,12 +127,12 @@ const FailedBody = ({
           className="icon-btn icon-btn--danger"
           data-testid="orchestrator-remove-workspace"
         >
-          Remove workspace
+          {t('orchestrator.removeWorkspace')}
         </button>
       </div>
       {/* Header retry was a duplicate; alias kept for back-compat. */}
       <span data-testid="orchestrator-retry-header" className="sr-only">
-        Retry
+        {t('common.retry')}
       </span>
     </div>
   )

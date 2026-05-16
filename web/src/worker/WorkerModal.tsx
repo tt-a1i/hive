@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { AlertTriangle, Play, X } from 'lucide-react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { useI18n } from '../i18n.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { CliAgentAvatar } from './CliAgentAvatar.js'
 import { getRolePresentation } from './role-presentation.js'
@@ -31,6 +32,7 @@ export const WorkerModal = ({
   starting,
   worker,
 }: WorkerModalProps) => {
+  const { t } = useI18n()
   const role = getRolePresentation(worker.role)
   const status = presentWorkerStatus(worker)
   const ptyRunning = !!runId
@@ -50,7 +52,7 @@ export const WorkerModal = ({
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center">
           <Dialog.Content
             data-testid="worker-modal"
-            aria-label={`${worker.name} detail`}
+            aria-label={t('worker.detail', { name: worker.name })}
             className="dialog-scale-pop pointer-events-auto relative flex h-screen max-h-screen max-w-full flex-col overflow-hidden"
             style={{
               background: 'var(--bg-1)',
@@ -61,7 +63,7 @@ export const WorkerModal = ({
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize worker detail width"
+              aria-label={t('worker.widthResize')}
               aria-valuemin={WORKER_MODAL_MIN}
               aria-valuenow={Math.round(resize.width)}
               className="modal-resize-handle modal-resize-handle--left"
@@ -73,7 +75,7 @@ export const WorkerModal = ({
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize worker detail width"
+              aria-label={t('worker.widthResize')}
               aria-valuemin={WORKER_MODAL_MIN}
               aria-valuenow={Math.round(resize.width)}
               className="modal-resize-handle modal-resize-handle--right"
@@ -105,7 +107,7 @@ export const WorkerModal = ({
               className="relative flex min-h-0 flex-1 flex-col p-3"
               data-testid="worker-modal-terminal-slot"
             >
-              <Tooltip label="Close (Esc)">
+              <Tooltip label={`${t('common.close')} (Esc)`}>
                 <Dialog.Close asChild>
                   <button
                     type="button"
@@ -136,10 +138,12 @@ export const WorkerModal = ({
                     />
                     <div className="text-sm text-pri">{worker.name}</div>
                     <div className="text-xs text-ter">
-                      {worker.status === 'stopped' ? 'PTY stopped — ' : 'PTY not started yet — '}
+                      {worker.status === 'stopped'
+                        ? t('worker.terminalStopped')
+                        : t('worker.terminalNotStarted')}
                       {worker.pendingTaskCount > 0
-                        ? `${worker.pendingTaskCount} pending task(s) will resume after restart.`
-                        : 'Start the agent to begin receiving dispatches.'}
+                        ? t('worker.pendingResume', { count: worker.pendingTaskCount })
+                        : t('worker.startAgent')}
                     </div>
                     <button
                       type="button"
@@ -148,7 +152,8 @@ export const WorkerModal = ({
                       className="icon-btn icon-btn--primary"
                       data-testid="worker-start-empty"
                     >
-                      <Play size={12} aria-hidden /> {starting ? 'Starting…' : 'Start'}
+                      <Play size={12} aria-hidden />{' '}
+                      {starting ? t('common.starting') : t('common.start')}
                     </button>
                   </div>
                 )}

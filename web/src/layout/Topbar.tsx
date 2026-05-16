@@ -1,10 +1,12 @@
 import { Hexagon, ListChecks } from 'lucide-react'
 
 import type { VersionInfo } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { NotificationSettingsButton } from '../notifications/NotificationSettingsButton.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useVersionInfo } from '../useVersionInfo.js'
 import { APP_VERSION } from '../version.js'
+import { LanguageToggle } from './LanguageToggle.js'
 
 type TopbarProps = {
   hideActions?: boolean
@@ -23,15 +25,19 @@ export const Topbar = ({
   version = APP_VERSION,
   versionInfo: providedVersionInfo,
 }: TopbarProps) => {
+  const { t } = useI18n()
   const versionInfo = useVersionInfo(providedVersionInfo)
   const updateInfo =
     versionInfo?.updateAvailable && versionInfo.latestVersion !== version ? versionInfo : null
   const hasOpenTasks = openTaskCount > 0
   const tooltipLabel = taskGraphOpen
-    ? 'Hide Todo'
+    ? t('topbar.hideTodo')
     : hasOpenTasks
-      ? `Todo — ${openTaskCount} open task${openTaskCount === 1 ? '' : 's'}`
-      : 'Show Todo (.hive/tasks.md)'
+      ? t('topbar.todoOpen', {
+          count: openTaskCount,
+          plural: openTaskCount === 1 ? '' : 's',
+        })
+      : t('topbar.showTodo')
   return (
     <header
       className="flex h-11 shrink-0 items-center px-4"
@@ -54,7 +60,7 @@ export const Topbar = ({
                 color: 'var(--accent)',
               }}
             >
-              Update available
+              {t('topbar.updateAvailable')}
             </span>
             <span className="text-ter">
               v{version} → v{updateInfo.latestVersion}
@@ -85,9 +91,10 @@ export const Topbar = ({
                    the surrounding text would be too loud. */
                 className={hasOpenTasks ? 'text-accent' : undefined}
               />
-              <span>Todo</span>
+              <span>{t('topbar.todo')}</span>
             </button>
           </Tooltip>
+          <LanguageToggle />
           <NotificationSettingsButton />
         </div>
       )}

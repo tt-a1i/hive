@@ -2,6 +2,8 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Hexagon } from 'lucide-react'
 import { useState } from 'react'
 
+import { useI18n } from '../i18n.js'
+
 type FirstRunWizardProps = {
   open: boolean
   onClose: (shouldMarkSeen?: boolean) => void
@@ -15,6 +17,7 @@ export const FirstRunWizard = ({
   onAddWorkspace,
   onTryDemo,
 }: FirstRunWizardProps) => {
+  const { t } = useI18n()
   const [slideIdx, setSlideIdx] = useState(0)
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -37,7 +40,7 @@ export const FirstRunWizard = ({
         <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center p-4">
           <Dialog.Content
-            aria-label="Welcome to Hive"
+            aria-label={t('firstRun.title')}
             className="dialog-scale-pop elev-2 pointer-events-auto w-[480px] max-w-[calc(100vw-32px)] rounded-lg border p-6"
             style={{
               background: 'var(--bg-elevated)',
@@ -45,7 +48,7 @@ export const FirstRunWizard = ({
             }}
           >
             <Dialog.Description className="sr-only">
-              First-run wizard — step {slideIdx + 1} of 3
+              {t('firstRun.step', { current: slideIdx + 1, total: 3 })}
             </Dialog.Description>
 
             {/* Slide content */}
@@ -66,41 +69,37 @@ export const FirstRunWizard = ({
                   <div className="space-y-2">
                     {/* Dialog.Title IS the visible welcome heading on slide 0 */}
                     <Dialog.Title className="text-xl font-semibold text-pri">
-                      Welcome to Hive
+                      {t('firstRun.title')}
                     </Dialog.Title>
-                    <p className="text-sm text-sec">
-                      Coordinate multiple CLI coding agents — locally.
-                    </p>
-                    <p className="text-xs text-ter">
-                      Each workspace runs a <span className="font-medium text-sec">Queen</span>{' '}
-                      (orchestrator) that dispatches tasks to{' '}
-                      <span className="font-medium text-sec">Workers</span>.
-                    </p>
+                    <p className="text-sm text-sec">{t('firstRun.desc')}</p>
+                    <p className="text-xs text-ter">{t('firstRun.subtitle')}</p>
                   </div>
                 </div>
               )}
               {/* Hidden title for slides 1+ so Radix doesn't warn */}
-              {slideIdx > 0 && <Dialog.Title className="sr-only">Welcome to Hive</Dialog.Title>}
+              {slideIdx > 0 && (
+                <Dialog.Title className="sr-only">{t('firstRun.title')}</Dialog.Title>
+              )}
 
               {slideIdx === 1 && (
                 <div className="flex flex-col gap-4 py-2">
-                  <h2 className="text-lg font-semibold text-pri">How it works</h2>
+                  <h2 className="text-lg font-semibold text-pri">{t('firstRun.howItWorks')}</h2>
                   <ol className="flex flex-col gap-3">
                     {[
                       {
                         n: 1,
-                        title: 'Add a workspace',
-                        desc: 'Pick a project folder on your machine.',
+                        title: t('firstRun.slide1Title'),
+                        desc: t('firstRun.slide1Desc'),
                       },
                       {
                         n: 2,
-                        title: 'Pick an Orchestrator',
-                        desc: 'Claude Code, Codex, Gemini, OpenCode — your choice.',
+                        title: t('firstRun.slide2Title'),
+                        desc: t('firstRun.slide2Desc'),
                       },
                       {
                         n: 3,
-                        title: 'Dispatch tasks',
-                        desc: 'The Queen runs `team send <worker> <task>` for you in the terminal.',
+                        title: t('firstRun.slide3Title'),
+                        desc: t('firstRun.slide3Desc'),
                       },
                     ].map(({ n, title, desc }) => (
                       <li key={n} className="flex items-start gap-3">
@@ -126,8 +125,8 @@ export const FirstRunWizard = ({
 
               {slideIdx === 2 && (
                 <div className="flex flex-col gap-3 py-2">
-                  <h2 className="text-lg font-semibold text-pri">Get started</h2>
-                  <p className="text-sm text-sec">Choose how you want to begin.</p>
+                  <h2 className="text-lg font-semibold text-pri">{t('firstRun.getStarted')}</h2>
+                  <p className="text-sm text-sec">{t('firstRun.optionDesc')}</p>
                   <div className="mt-2 flex flex-col gap-2">
                     <button
                       type="button"
@@ -137,7 +136,7 @@ export const FirstRunWizard = ({
                       }}
                       className="icon-btn icon-btn--primary w-full justify-center"
                     >
-                      Add Workspace
+                      {t('firstRun.addWorkspace')}
                     </button>
                     <button
                       type="button"
@@ -147,14 +146,14 @@ export const FirstRunWizard = ({
                       }}
                       className="icon-btn w-full justify-center"
                     >
-                      Try Demo
+                      {t('firstRun.tryDemo')}
                     </button>
                     <button
                       type="button"
                       onClick={() => handleClose()}
                       className="text-xs text-sec underline hover:text-pri mt-1"
                     >
-                      Skip for now
+                      {t('firstRun.skipForNow')}
                     </button>
                   </div>
                 </div>
@@ -163,7 +162,9 @@ export const FirstRunWizard = ({
 
             {/* Footer */}
             <div className="mt-5 flex items-center justify-between">
-              <span className="text-xs text-ter">Step {slideIdx + 1} of 3</span>
+              <span className="text-xs text-ter">
+                {t('firstRun.step', { current: slideIdx + 1, total: 3 })}
+              </span>
               <div className="flex items-center gap-2">
                 {slideIdx > 0 && !isLastSlide && (
                   <button
@@ -171,7 +172,7 @@ export const FirstRunWizard = ({
                     onClick={() => setSlideIdx((i) => i - 1)}
                     className="icon-btn"
                   >
-                    Back
+                    {t('firstRun.back')}
                   </button>
                 )}
                 {!isLastSlide && (
@@ -180,7 +181,7 @@ export const FirstRunWizard = ({
                     onClick={() => setSlideIdx((i) => i + 1)}
                     className="icon-btn icon-btn--primary"
                   >
-                    Next
+                    {t('firstRun.next')}
                   </button>
                 )}
                 <button
@@ -188,7 +189,7 @@ export const FirstRunWizard = ({
                   onClick={() => handleClose()}
                   className="text-xs text-ter underline hover:text-sec"
                 >
-                  Skip
+                  {t('firstRun.skip')}
                 </button>
               </div>
             </div>

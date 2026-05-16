@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
 import {
@@ -53,6 +54,7 @@ export const AddWorkerDialog = ({
   workerName,
   workerRole,
 }: AddWorkerDialogProps) => {
+  const { t } = useI18n()
   const toast = useToast()
   const handleClose = (open: boolean) => {
     if (!open) onClose()
@@ -65,13 +67,12 @@ export const AddWorkerDialog = ({
   // the user always gets actionable feedback (a warning toast) instead of
   // a silently-greyed CTA. Returns the first blocking reason or null.
   const validateBeforeSubmit = (): string | null => {
-    if (!workerName.trim()) return 'Enter a name'
-    if (!commandPresetId && !startupCommandClean)
-      return 'Pick a CLI agent or enter a startup command'
+    if (!workerName.trim()) return t('addWorker.enterName')
+    if (!commandPresetId && !startupCommandClean) return t('addWorker.pickCliOrStartup')
     if (selectedPreset?.available === false && !startupCommandClean) {
-      return `${selectedPreset.displayName} is not installed`
+      return t('addWorker.unavailable', { name: selectedPreset.displayName })
     }
-    if (!roleDescription.trim()) return 'Add role instructions'
+    if (!roleDescription.trim()) return t('addWorker.emptyInstructions')
     return null
   }
 
@@ -101,34 +102,37 @@ export const AddWorkerDialog = ({
               borderColor: 'var(--border-bright)',
             }}
           >
-            <form onSubmit={handleSubmit} aria-label="Add team member" className="flex flex-col">
+            <form
+              onSubmit={handleSubmit}
+              aria-label={t('addWorker.title')}
+              className="flex flex-col"
+            >
               <div
                 className="flex shrink-0 flex-col gap-0.5 border-b px-5 py-4"
                 style={{ borderColor: 'var(--border)' }}
               >
                 <Dialog.Title className="text-lg font-semibold text-pri">
-                  Add team member
+                  {t('addWorker.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-ter">
-                  Pick a role and a CLI agent. The orchestrator dispatches work via{' '}
-                  <span className="mono">team send</span>.
+                  {t('addWorker.description', { command: 'team send' })}
                 </Dialog.Description>
               </div>
 
               <div className="flex flex-col gap-4 overflow-y-auto px-5 py-4">
                 <label className="flex flex-col gap-2">
                   <div className="flex items-baseline justify-between gap-2">
-                    <SectionLabel>Name</SectionLabel>
-                    <Tooltip label="Roll a random playful name">
+                    <SectionLabel>{t('addWorker.name')}</SectionLabel>
+                    <Tooltip label={t('addWorker.randomTooltip')}>
                       <button
                         type="button"
-                        aria-label="Generate random member name"
+                        aria-label={t('addWorker.randomAria')}
                         className="flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-xs text-ter transition-colors hover:bg-3 hover:text-sec"
                         onClick={onRandomName}
                         data-testid="random-worker-name"
                       >
                         <Dices size={12} aria-hidden />
-                        Random
+                        {t('addWorker.random')}
                       </button>
                     </Tooltip>
                   </div>
@@ -137,7 +141,7 @@ export const AddWorkerDialog = ({
                     autoFocus
                     value={workerName}
                     onChange={(event) => onNameChange(event.target.value)}
-                    placeholder="e.g. Alice"
+                    placeholder={t('addWorker.namePlaceholder')}
                     className="input"
                   />
                 </label>
@@ -168,7 +172,7 @@ export const AddWorkerDialog = ({
                   className="icon-btn"
                   data-testid="add-worker-cancel"
                 >
-                  Cancel
+                  {t('addWorker.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -176,7 +180,7 @@ export const AddWorkerDialog = ({
                   className="icon-btn icon-btn--primary"
                   data-testid="add-worker-submit"
                 >
-                  {creating ? 'Creating…' : 'Add member'}
+                  {creating ? t('addWorker.creating') : t('addWorker.create')}
                 </button>
               </div>
             </form>

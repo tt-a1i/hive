@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import type { TeamListItem, WorkerRole, WorkspaceSummary } from '../../src/shared/types.js'
+import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import { type OrchestratorStartResult, renameWorker, type TerminalRunSummary } from './api.js'
+import { useI18n } from './i18n.js'
 import { WorkspaceNotifications } from './notifications/WorkspaceNotifications.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useToast } from './ui/useToast.js'
@@ -15,13 +16,7 @@ import { WorkerModal } from './worker/WorkerModal.js'
 import { WorkersPane } from './worker/WorkersPane.js'
 
 type WorkspaceDetailProps = {
-  onCreateWorker: (
-    name: string,
-    role: WorkerRole,
-    commandPresetId: string,
-    roleDescription: string,
-    startupCommand: string
-  ) => Promise<{ error: string | null; runId: string | null }>
+  onCreateWorker: WorkerActions['createWorker']
   onDeleteWorker: (workerId: string) => Promise<void>
   onDeleteWorkspace: (workspace: WorkspaceSummary) => Promise<void>
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
@@ -51,6 +46,7 @@ export const WorkspaceDetail = ({
   workers,
   workspace,
 }: WorkspaceDetailProps) => {
+  const { t } = useI18n()
   const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [deleteWorkerError, setDeleteWorkerError] = useState<string | null>(null)
@@ -142,12 +138,12 @@ export const WorkspaceDetail = ({
       await renameWorker(workspace.id, worker.id, newName)
       toast.show({
         kind: 'success',
-        message: `Renamed to "${newName}".`,
+        message: t('worker.renameSuccess', { name: newName }),
       })
       return { error: null }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      toast.show({ kind: 'error', message: `Rename failed: ${message}` })
+      toast.show({ kind: 'error', message: t('worker.renameFailed', { message }) })
       return { error: message }
     }
   }
@@ -181,7 +177,7 @@ export const WorkspaceDetail = ({
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize Orchestrator and Team Members panes"
+          aria-label={t('workerPane.resize')}
           aria-valuenow={Math.round(split.orchPct * 100)}
           aria-valuemin={30}
           aria-valuemax={78}

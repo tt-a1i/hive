@@ -90,6 +90,7 @@ const stubFetchWithEmptyTerminalRuns = () => {
 }
 
 beforeEach(async () => {
+  window.localStorage.clear()
   window.matchMedia =
     window.matchMedia ??
     ((query: string) =>
@@ -138,6 +139,7 @@ beforeEach(async () => {
 afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
+  window.localStorage.clear()
   await cleanupServer?.()
   cleanupServer = undefined
   serverContext = undefined
@@ -239,12 +241,12 @@ describe('worker flow with real server', () => {
 
     const dialog = await screen.findByRole('form', { name: 'Add team member' })
     const instructions = await within(dialog).findByLabelText('Role instructions')
-    expect((instructions as HTMLTextAreaElement).value).toContain('实现型 Coder')
-    expect((instructions as HTMLTextAreaElement).value).toContain('交付说明要包含')
+    expect((instructions as HTMLTextAreaElement).value).toContain('You are a Coder')
+    expect((instructions as HTMLTextAreaElement).value).toContain('Report changed files')
 
     fireEvent.click(within(dialog).getByTestId('role-card-reviewer'))
-    expect((instructions as HTMLTextAreaElement).value).toContain('监工型 Reviewer')
-    expect((instructions as HTMLTextAreaElement).value).toContain('blocking 问题')
+    expect((instructions as HTMLTextAreaElement).value).toContain('You are a Reviewer')
+    expect((instructions as HTMLTextAreaElement).value).toContain('blocking issues')
 
     fireEvent.change(within(dialog).getByPlaceholderText('e.g. Alice'), {
       target: { value: 'ReviewLead' },
@@ -275,6 +277,25 @@ describe('worker flow with real server', () => {
       .agents.find((agent) => agent.name === 'ReviewLead')
     expect(worker?.role).toBe('reviewer')
     expect(worker?.description).toBe('你是审查型 worker。先找高风险问题，再给出最小修复建议。')
+  })
+
+  test('Add Worker random name follows the selected Chinese language', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Add Member/ }).length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getByRole('button', { name: '中文' }))
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /添加成员/ }).length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getAllByRole('button', { name: /添加成员/ })[0] as HTMLElement)
+
+    const dialog = await screen.findByRole('form', { name: '添加团队成员' })
+    const nameInput = within(dialog).getByPlaceholderText('例如 火锅判官-27') as HTMLInputElement
+    fireEvent.click(within(dialog).getByRole('button', { name: '生成随机成员名' }))
+
+    expect(nameInput.value).toMatch(/^[\u4e00-\u9fff]+-[\u4e00-\u9fff]+-[0-9]{2}$/)
   })
 
   test('Add Worker dialog can override the default preset with a full startup command', async () => {

@@ -2,6 +2,7 @@ import { FolderPlus, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
+import { useI18n } from '../i18n.js'
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
@@ -24,11 +25,17 @@ const hasWorkingMember = (workers: TeamListItem[] | undefined): boolean =>
 const countWorkingMembers = (workers: TeamListItem[] | undefined): number =>
   workers?.filter((worker) => worker.status === 'working').length ?? 0
 
-const workerSummary = (workers: TeamListItem[] | undefined): string => {
-  if (!workers || workers.length === 0) return 'no team members yet'
+const workerSummary = (
+  workers: TeamListItem[] | undefined,
+  t: ReturnType<typeof useI18n>['t']
+): string => {
+  if (!workers || workers.length === 0) return t('sidebar.noMembers')
   const working = workers.filter((worker) => worker.status === 'working').length
-  if (working > 0) return `${working} of ${workers.length} working`
-  return `${workers.length} team member${workers.length === 1 ? '' : 's'}`
+  if (working > 0) return t('sidebar.workingCount', { working, total: workers.length })
+  return t('sidebar.teamMemberCount', {
+    count: workers.length,
+    plural: workers.length === 1 ? '' : 's',
+  })
 }
 
 export const Sidebar = ({
@@ -40,6 +47,7 @@ export const Sidebar = ({
   workersByWorkspaceId,
   workspaces,
 }: SidebarProps) => {
+  const { t } = useI18n()
   const [pendingDelete, setPendingDelete] = useState<WorkspaceSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const toast = useToast()
@@ -57,12 +65,12 @@ export const Sidebar = ({
       .then(() => {
         toast.show({
           kind: 'success',
-          message: `Removed workspace "${workspace.name}".`,
+          message: t('sidebar.removed', { name: workspace.name }),
         })
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        toast.show({ kind: 'error', message: `Failed to delete: ${message}` })
+        toast.show({ kind: 'error', message: t('sidebar.deleteFailed', { message }) })
       })
       .finally(() => {
         setDeleting(false)
@@ -76,13 +84,20 @@ export const Sidebar = ({
       onOpenChange={(open) => {
         if (!open && !deleting) setPendingDelete(null)
       }}
-      title={pendingDelete ? `Delete workspace "${pendingDelete.name}"?` : 'Delete workspace?'}
+      title={
+        pendingDelete
+          ? t('sidebar.deleteConfirm', { name: pendingDelete.name })
+          : t('sidebar.deleteLabel')
+      }
       description={
         pendingDelete
-          ? `This stops its agents and removes it from Hive. The folder on disk (${pendingDelete.path}) is left untouched. ${workerSummary(workersByWorkspaceId[pendingDelete.id])}.`
+          ? t('sidebar.deleteDescription', {
+              path: pendingDelete.path,
+              summary: workerSummary(workersByWorkspaceId[pendingDelete.id], t),
+            })
           : ''
       }
-      confirmLabel={deleting ? 'Deleting…' : 'Delete workspace'}
+      confirmLabel={deleting ? t('sidebar.deleting') : t('sidebar.deleteLabel')}
       confirmKind="danger"
       onConfirm={confirmDelete}
     />
@@ -99,7 +114,7 @@ export const Sidebar = ({
             className="ws-sidebar-title__text text-xs font-medium uppercase tracking-wider text-ter"
             data-testid="workspace-sidebar-title"
           >
-            Workspaces
+            {t('sidebar.workspaces')}
           </span>
           {workspaces && workspaces.length > 0 ? (
             <span className="ws-sidebar-count mono rounded bg-2 px-1.5 py-0.5 text-xs text-ter">
@@ -109,27 +124,24 @@ export const Sidebar = ({
         </div>
       </div>
       {workspaces === null ? (
-        <p className="px-3 py-2 text-xs text-ter">Loading…</p>
+        <p className="px-3 py-2 text-xs text-ter">{t('common.loading')}</p>
       ) : workspaces.length === 0 ? (
         <div className="flex-1 px-2 py-4">
           <EmptyState
-            title="No workspaces"
-            description={
-              createDisabledReason ??
-              'Add one to start. Hive will load .hive/tasks.md and start the Orchestrator.'
-            }
+            title={t('sidebar.noWorkspaces')}
+            description={createDisabledReason ?? t('sidebar.noWorkspacesDesc')}
             icon={<FolderPlus size={20} />}
             action={
               <button
                 type="button"
                 onClick={createDisabled ? undefined : onCreateClick}
                 disabled={createDisabled}
-                aria-label="New workspace"
-                title={createDisabledReason ?? 'New workspace'}
+                aria-label={t('sidebar.newWorkspace')}
+                title={createDisabledReason ?? t('sidebar.newWorkspace')}
                 className="icon-btn icon-btn--primary mt-1 flex items-center gap-1.5 px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={14} aria-hidden />
-                New workspace
+                {t('sidebar.newWorkspace')}
               </button>
             }
           />
@@ -168,13 +180,13 @@ export const Sidebar = ({
                         role="img"
                         aria-label={
                           workingCount > 1
-                            ? `${workingCount} team members working`
-                            : 'One team member working'
+                            ? t('sidebar.workingMembers', { count: workingCount })
+                            : t('sidebar.oneWorking')
                         }
                         title={
                           workingCount > 1
-                            ? `${workingCount} team members working`
-                            : 'One team member working'
+                            ? t('sidebar.workingMembers', { count: workingCount })
+                            : t('sidebar.oneWorking')
                         }
                       >
                         <span className="status-dot status-dot--working" aria-hidden />
@@ -214,10 +226,10 @@ export const Sidebar = ({
                     />
                   </button>
                 </Tooltip>
-                <Tooltip label={`Delete workspace ${workspace.name}`}>
+                <Tooltip label={t('sidebar.deleteAria', { name: workspace.name })}>
                   <button
                     type="button"
-                    aria-label={`Delete workspace ${workspace.name}`}
+                    aria-label={t('sidebar.deleteAria', { name: workspace.name })}
                     onClick={() => requestDelete(workspace)}
                     className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
                   >
@@ -231,12 +243,12 @@ export const Sidebar = ({
               so it appears next to existing workspaces in both wide and compact
               modes, instead of pinned to the sidebar footer. */}
           <li>
-            <Tooltip label={createDisabledReason ?? 'New workspace'}>
+            <Tooltip label={createDisabledReason ?? t('sidebar.newWorkspace')}>
               <button
                 type="button"
                 onClick={createDisabled ? undefined : onCreateClick}
                 disabled={createDisabled}
-                aria-label="New workspace"
+                aria-label={t('sidebar.newWorkspace')}
                 /* Keep native `title` as a fallback: Radix Tooltip doesn't
                    reliably surface on a disabled <button> across browsers,
                    so screen-readers and Safari users still get the reason. */
@@ -245,7 +257,7 @@ export const Sidebar = ({
                 style={{ borderColor: 'var(--border-bright)' }}
               >
                 <Plus size={14} aria-hidden />
-                <span className="ws-add__label">New workspace</span>
+                <span className="ws-add__label">{t('sidebar.newWorkspace')}</span>
               </button>
             </Tooltip>
           </li>

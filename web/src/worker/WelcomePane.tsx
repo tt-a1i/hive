@@ -1,6 +1,8 @@
 import { AlertTriangle, ArrowRight, FolderPlus, Send, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { type TranslationKey, useI18n } from '../i18n.js'
+
 type WelcomePaneProps = {
   onAddWorkspace: () => void
   onTryDemo?: () => void
@@ -12,23 +14,24 @@ type WelcomePaneProps = {
   disabledReason?: string
 }
 
-const STEPS: Array<{ icon: ReactNode; title: string; description: string }> = [
-  {
-    icon: <FolderPlus size={16} />,
-    title: 'Add a workspace',
-    description: 'Pick a project folder.',
-  },
-  {
-    icon: <Users size={16} />,
-    title: 'Choose an Orchestrator',
-    description: 'Claude / Codex / Gemini / OpenCode.',
-  },
-  {
-    icon: <Send size={16} />,
-    title: 'Dispatch tasks',
-    description: 'The Orchestrator routes work via team send.',
-  },
-]
+const STEPS: Array<{ descriptionKey: TranslationKey; icon: ReactNode; titleKey: TranslationKey }> =
+  [
+    {
+      icon: <FolderPlus size={16} />,
+      titleKey: 'welcome.step1Title',
+      descriptionKey: 'welcome.step1Desc',
+    },
+    {
+      icon: <Users size={16} />,
+      titleKey: 'welcome.step2Title',
+      descriptionKey: 'welcome.step2Desc',
+    },
+    {
+      icon: <Send size={16} />,
+      titleKey: 'welcome.step3Title',
+      descriptionKey: 'welcome.step3Desc',
+    },
+  ]
 
 export const WelcomePane = ({
   onAddWorkspace,
@@ -36,6 +39,7 @@ export const WelcomePane = ({
   heroImageSrc,
   disabledReason,
 }: WelcomePaneProps) => {
+  const { t } = useI18n()
   const disabled = Boolean(disabledReason)
   return (
     <div
@@ -45,15 +49,13 @@ export const WelcomePane = ({
     >
       {heroImageSrc ? <img src={heroImageSrc} alt="" className="h-24 w-24" aria-hidden /> : null}
       <div className="space-y-2">
-        <div className="text-2xl font-semibold text-pri">Welcome to Hive</div>
-        <div className="text-sm text-sec">
-          Coordinate Claude Code, Codex, Gemini, OpenCode — locally.
-        </div>
+        <div className="text-2xl font-semibold text-pri">{t('welcome.title')}</div>
+        <div className="text-sm text-sec">{t('welcome.desc')}</div>
       </div>
       <ol className="grid w-full grid-cols-3 gap-3 text-left">
         {STEPS.map((step, idx) => (
           <li
-            key={step.title}
+            key={step.titleKey}
             className="rounded border bg-1 p-3"
             style={{ borderColor: 'var(--border)' }}
           >
@@ -61,8 +63,8 @@ export const WelcomePane = ({
               <span className="font-medium text-xs text-ter">{idx + 1}</span>
               {step.icon}
             </div>
-            <div className="text-xs font-medium text-pri">{step.title}</div>
-            <div className="mt-1 text-xs text-ter">{step.description}</div>
+            <div className="text-xs font-medium text-pri">{t(step.titleKey)}</div>
+            <div className="mt-1 text-xs text-ter">{t(step.descriptionKey)}</div>
           </li>
         ))}
       </ol>
@@ -90,7 +92,7 @@ export const WelcomePane = ({
         className="icon-btn icon-btn--primary inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
         data-testid="welcome-pane-add"
       >
-        <span>Add your first workspace</span>
+        <span>{t('welcome.addWorkspace')}</span>
         <ArrowRight size={14} aria-hidden />
       </button>
       {onTryDemo ? (
@@ -99,7 +101,7 @@ export const WelcomePane = ({
           onClick={onTryDemo}
           className="text-xs text-sec underline hover:text-pri"
         >
-          or try the demo (no install needed)
+          {t('welcome.demo')}
         </button>
       ) : null}
     </div>

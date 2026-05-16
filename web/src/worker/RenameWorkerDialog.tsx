@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { useI18n } from '../i18n.js'
 
 type RenameWorkerDialogProps = {
   worker: TeamListItem | null
@@ -17,6 +18,7 @@ export const RenameWorkerDialog = ({
   onClose,
   onSubmit,
 }: RenameWorkerDialogProps) => {
+  const { t } = useI18n()
   const [draft, setDraft] = useState(worker?.name ?? '')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -72,15 +74,17 @@ export const RenameWorkerDialog = ({
                 </div>
                 <div className="min-w-0 flex-1">
                   <Dialog.Title className="text-lg font-semibold text-pri">
-                    Rename team member
+                    {t('worker.renameTitle')}
                   </Dialog.Title>
                   <Dialog.Description className="mt-1 text-sm text-ter">
-                    Pick a new display name. The agent's id and PTY are unchanged.
+                    {t('worker.renameDesc')}
                   </Dialog.Description>
                 </div>
               </div>
               <label className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wider text-ter">Name</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-ter">
+                  {t('addWorker.name')}
+                </span>
                 <input
                   ref={inputRef}
                   type="text"
@@ -98,7 +102,7 @@ export const RenameWorkerDialog = ({
                   className="icon-btn"
                   data-testid="rename-worker-cancel"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -106,7 +110,7 @@ export const RenameWorkerDialog = ({
                   className="icon-btn icon-btn--primary"
                   data-testid="rename-worker-save"
                 >
-                  {busy ? 'Saving…' : 'Save'}
+                  {busy ? t('common.saving') : t('common.save')}
                 </button>
               </div>
             </form>

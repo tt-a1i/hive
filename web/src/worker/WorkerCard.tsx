@@ -2,9 +2,9 @@ import { Pencil, Play, Trash2 } from 'lucide-react'
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
+import { useI18n } from '../i18n.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { CliAgentAvatar } from './CliAgentAvatar.js'
-import { getRolePresentation } from './role-presentation.js'
 import { presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
 
 const pillToneByStatus: Record<WorkerStatusKind, string> = {
@@ -12,6 +12,10 @@ const pillToneByStatus: Record<WorkerStatusKind, string> = {
   idle: 'pill--ghost',
   stopped: 'pill--red',
 }
+const roleKey = (role: TeamListItem['role']) =>
+  `role.${role}` as 'role.coder' | 'role.custom' | 'role.reviewer' | 'role.tester'
+const statusKey = (status: WorkerStatusKind) =>
+  `common.${status}` as 'common.idle' | 'common.stopped' | 'common.working'
 
 export type WorkerCardActionKind = 'start' | 'rename' | 'delete'
 
@@ -36,7 +40,7 @@ export const WorkerCard = ({
   onClick,
   worker,
 }: WorkerCardProps) => {
-  const role = getRolePresentation(worker.role)
+  const { t } = useI18n()
   const status = presentWorkerStatus(worker)
 
   const handleAction =
@@ -55,7 +59,7 @@ export const WorkerCard = ({
       <button
         type="button"
         onClick={() => onClick(worker)}
-        aria-label={`Open ${worker.name}`}
+        aria-label={t('worker.open', { name: worker.name })}
         className="card card--interactive worker-card relative flex w-full flex-col gap-3 overflow-hidden p-4 text-left"
         data-testid={`worker-card-${worker.id}`}
         data-status={status.kind}
@@ -75,15 +79,15 @@ export const WorkerCard = ({
           >
             {worker.name}
           </span>
-          <span className="truncate text-xs leading-tight text-ter">{role.label}</span>
+          <span className="truncate text-xs leading-tight text-ter">{t(roleKey(worker.role))}</span>
         </div>
         <span
           className={`pill ${pillToneByStatus[status.kind]} worker-card__status`}
           role="status"
-          title={status.label}
+          title={t(statusKey(status.kind))}
         >
           <span className={status.dotClass} aria-hidden />
-          {status.label}
+          {t(statusKey(status.kind))}
         </span>
       </button>
 
@@ -91,31 +95,31 @@ export const WorkerCard = ({
         <div className="worker-card__actions">
           {!hasRun ? (
             <CardActionBtn
-              title="Start"
+              title={t('common.start')}
               onClick={handleAction('start')}
               disabled={isPending}
               variant="primary"
               testId={`worker-card-start-${worker.id}`}
-              ariaLabel={`Start ${worker.name}`}
+              ariaLabel={t('worker.startAria', { name: worker.name })}
             >
               <Play size={12} aria-hidden />
             </CardActionBtn>
           ) : null}
           <CardActionBtn
-            title="Rename"
+            title={t('worker.rename')}
             onClick={handleAction('rename')}
             disabled={isPending}
             testId={`worker-card-rename-${worker.id}`}
-            ariaLabel={`Rename ${worker.name}`}
+            ariaLabel={t('worker.renameAria', { name: worker.name })}
           >
             <Pencil size={12} aria-hidden />
           </CardActionBtn>
           <CardActionBtn
-            title="Delete"
+            title={t('common.delete')}
             onClick={handleAction('delete')}
             variant="danger"
             testId={`worker-card-delete-${worker.id}`}
-            ariaLabel={`Delete ${worker.name}`}
+            ariaLabel={t('worker.deleteAria', { name: worker.name })}
           >
             <Trash2 size={12} aria-hidden />
           </CardActionBtn>

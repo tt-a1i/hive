@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
 import type { TerminalRunSummary } from '../api.js'
+import { useI18n } from '../i18n.js'
 import { findRunByAgentId } from '../terminal/useTerminalRuns.js'
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
@@ -21,20 +22,11 @@ type WorkersPaneProps = {
   workers: TeamListItem[]
 }
 
-interface WorkerSection {
-  kind: WorkerStatusKind
-  label: string
-  workers: TeamListItem[]
-}
-
 const SECTION_ORDER: WorkerStatusKind[] = ['working', 'idle', 'stopped']
-const SECTION_LABEL: Record<WorkerStatusKind, string> = {
-  working: 'Working',
-  idle: 'Idle',
-  stopped: 'Stopped',
-}
+const statusKey = (status: WorkerStatusKind) =>
+  `common.${status}` as 'common.idle' | 'common.stopped' | 'common.working'
 
-const groupByStatus = (workers: TeamListItem[]): WorkerSection[] => {
+const groupByStatus = (workers: TeamListItem[]) => {
   const buckets: Record<WorkerStatusKind, TeamListItem[]> = {
     working: [],
     idle: [],
@@ -45,7 +37,6 @@ const groupByStatus = (workers: TeamListItem[]): WorkerSection[] => {
   }
   return SECTION_ORDER.filter((kind) => buckets[kind].length > 0).map((kind) => ({
     kind,
-    label: SECTION_LABEL[kind],
     workers: buckets[kind],
   }))
 }
@@ -60,6 +51,7 @@ export const WorkersPane = ({
   terminalRuns,
   workers,
 }: WorkersPaneProps) => {
+  const { t } = useI18n()
   const sections = useMemo(() => groupByStatus(workers), [workers])
   const summary = useMemo(() => {
     const buckets = { working: 0, idle: 0, stopped: 0 }
@@ -110,7 +102,7 @@ export const WorkersPane = ({
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="font-medium text-pri">Team Members</span>
+          <span className="font-medium text-pri">{t('worker.teamMembers')}</span>
           <span className="mono rounded bg-3 px-1.5 py-0.5 text-xs text-sec">{workers.length}</span>
           <div className="flex-1" />
           <button
@@ -119,22 +111,22 @@ export const WorkersPane = ({
             className="icon-btn icon-btn--primary"
             data-testid="add-worker-trigger"
           >
-            <UserPlus size={14} aria-hidden /> Add Member
+            <UserPlus size={14} aria-hidden /> {t('addWorker.create')}
           </button>
         </div>
         {workers.length > 0 ? (
           <div className="flex items-center gap-3 text-xs text-ter">
             <span className="inline-flex items-center gap-1.5">
               <span className="status-dot status-dot--working" aria-hidden />
-              <span className="text-sec">{summary.working}</span> working
+              <span className="text-sec">{summary.working}</span> {t('common.working')}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="status-dot status-dot--idle" aria-hidden />
-              <span className="text-sec">{summary.idle}</span> idle
+              <span className="text-sec">{summary.idle}</span> {t('common.idle')}
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="status-dot status-dot--stopped" aria-hidden />
-              <span className="text-sec">{summary.stopped}</span> stopped
+              <span className="text-sec">{summary.stopped}</span> {t('common.stopped')}
             </span>
           </div>
         ) : null}
@@ -144,8 +136,8 @@ export const WorkersPane = ({
         {workers.length === 0 ? (
           <EmptyState
             icon={<UserPlus size={28} />}
-            title="No team members yet"
-            description="Add workers (Claude Code, Codex, Gemini, OpenCode) and the Orchestrator will route tasks to them."
+            title={t('worker.emptyTitle')}
+            description={t('worker.emptyDesc')}
             action={
               <button
                 type="button"
@@ -153,7 +145,7 @@ export const WorkersPane = ({
                 className="icon-btn icon-btn--primary"
                 data-testid="add-worker-empty"
               >
-                <UserPlus size={14} aria-hidden /> Add your first member
+                <UserPlus size={14} aria-hidden /> {t('worker.emptyAdd')}
               </button>
             }
           />
@@ -162,10 +154,13 @@ export const WorkersPane = ({
             {sections.map((section) => (
               <section key={section.kind} className="mb-3 last:mb-0">
                 <div className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-ter">
-                  {section.label}
+                  {t(statusKey(section.kind))}
                   <span className="mono ml-1.5 text-ter">{section.workers.length}</span>
                 </div>
-                <ul aria-label={`${section.label} team members`} className="worker-card-grid">
+                <ul
+                  aria-label={`${t(statusKey(section.kind))} team members`}
+                  className="worker-card-grid"
+                >
                   {section.workers.map((worker) => (
                     <li key={worker.id}>
                       <WorkerCard
@@ -189,13 +184,11 @@ export const WorkersPane = ({
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null)
         }}
-        title={pendingDelete ? `Delete ${pendingDelete.name}?` : ''}
+        title={pendingDelete ? t('worker.deleteConfirm', { name: pendingDelete.name }) : ''}
         description={
-          pendingDelete
-            ? `This stops ${pendingDelete.name}'s terminal and removes it from the workspace. All queued dispatches are dropped.`
-            : ''
+          pendingDelete ? t('worker.deleteDescription', { name: pendingDelete.name }) : ''
         }
-        confirmLabel="Delete member"
+        confirmLabel={t('worker.deleteMember')}
         confirmKind="danger"
         onConfirm={confirmDelete}
       />
