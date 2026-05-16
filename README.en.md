@@ -13,9 +13,12 @@ injects into each agent's shell, and shares a markdown task graph at
 
 [![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
 [![ci](https://img.shields.io/github/actions/workflow/status/tt-a1i/hive/release.yml?branch=main&label=ci)](https://github.com/tt-a1i/hive/actions/workflows/release.yml)
+[![Website](https://img.shields.io/badge/website-hive--site.pages.dev-d39860.svg)](https://hive-site.pages.dev)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#platform-support)
+
+🌐 **Website**: [hive-site.pages.dev](https://hive-site.pages.dev/) · [中文](https://hive-site.pages.dev/zh/)
 
 English · [简体中文](./README.md)
 
