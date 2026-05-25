@@ -3,6 +3,7 @@ import type { WorkspaceRecord } from './workspace-store-contract.js'
 import { getStatusFromPendingCount, isWorkerAgent } from './workspace-store-support.js'
 
 type WorkspaceMap = Map<string, WorkspaceRecord>
+type ActiveDiscussionChecker = (workspaceId: string, agentId: string) => boolean
 
 const getWorkspaceRecord = (workspaces: WorkspaceMap, workspaceId: string) => {
   const workspace = workspaces.get(workspaceId)
@@ -63,26 +64,52 @@ export const markAgentStopped = (
 export const markTaskDispatched = (
   workspaces: WorkspaceMap,
   workspaceId: string,
-  workerId: string
+  workerId: string,
+  isInActiveDiscussion: ActiveDiscussionChecker = () => false
 ) => {
   const worker = getWorkerRecord(workspaces, workspaceId, workerId)
   worker.pendingTaskCount += 1
   // spec §3.6.4: a stopped worker may accumulate queued tasks; PTY isn't
   // running so it can't be `working`. Stay stopped until restart (mirrors
   // markTaskReported's stopped guard below).
-  if (worker.status !== 'stopped')
-    worker.status = getStatusFromPendingCount(worker.pendingTaskCount)
+  if (worker.status !== 'stopped') {
+    worker.status = isInActiveDiscussion(workspaceId, workerId)
+      ? 'working'
+      : getStatusFromPendingCount(worker.pendingTaskCount)
+  }
 }
 
 export const markTaskReported = (
   workspaces: WorkspaceMap,
   workspaceId: string,
-  workerId: string
+  workerId: string,
+  isInActiveDiscussion: ActiveDiscussionChecker = () => false
 ) => {
   const worker = getWorkerRecord(workspaces, workspaceId, workerId)
   worker.pendingTaskCount = Math.max(0, worker.pendingTaskCount - 1)
-  if (worker.status !== 'stopped')
-    worker.status = getStatusFromPendingCount(worker.pendingTaskCount)
+  if (worker.status !== 'stopped') {
+    worker.status = isInActiveDiscussion(workspaceId, workerId)
+      ? 'working'
+      : getStatusFromPendingCount(worker.pendingTaskCount)
+  }
 }
 
 export const markTaskCancelled = markTaskReported
+
+export const markDiscussionJoined = (
+  workspaces: WorkspaceMap,
+  workspaceId: string,
+  agentId: string
+) => {
+  const agent = getAgentRecord(workspaces, workspaceId, agentId)
+  if (agent.status !== 'stopped') agent.status = 'working'
+}
+
+export const markDiscussionLeft = (
+  workspaces: WorkspaceMap,
+  workspaceId: string,
+  agentId: string
+) => {
+  const agent = getAgentRecord(workspaces, workspaceId, agentId)
+  if (agent.status !== 'stopped') agent.status = getStatusFromPendingCount(agent.pendingTaskCount)
+}

@@ -106,7 +106,7 @@ describe('hive bin dir', () => {
         expect(runResponse.status).toBe(200)
         await expect(runResponse.json()).resolves.toEqual(
           expect.objectContaining({
-            output: expect.stringContaining('/dist/bin/team'),
+            output: expect.stringMatching(/\/bin\/team\s*$/),
             runId: payload.runId,
             status: 'exited',
           })
@@ -120,7 +120,7 @@ describe('hive bin dir', () => {
       expect(runResponse.status).toBe(200)
       await expect(runResponse.json()).resolves.toEqual(
         expect.objectContaining({
-          output: expect.stringContaining('/dist/bin/team'),
+          output: expect.stringMatching(/\/bin\/team\s*$/),
           runId: payload.runId,
           status: 'exited',
         })

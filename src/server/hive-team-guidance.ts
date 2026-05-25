@@ -18,6 +18,7 @@ import type { AgentSummary } from '../shared/types.js'
 export const ORCHESTRATOR_REMINDER_TAIL =
   '<hive-system-reminder>\n' +
   'You are the Hive Orchestrator. Reply by either: (a) `team send "<worker-name>" "<task>"` to dispatch follow-up work to a Hive worker, (b) `team cancel --dispatch <id> "<reason>"` to cancel an obsolete dispatch, or (c) plain text to the user. Never call your CLI\'s built-in subagent tools (Task / Explore / etc.) — they bypass Hive and will not appear in the UI.\n' +
+  'If you lost context after compaction: run `team list` + `cat .hive/tasks.md` to recover current state.\n' +
   '</hive-system-reminder>'
 
 /**
@@ -29,15 +30,17 @@ export const ORCHESTRATOR_REMINDER_TAIL =
 export const buildWorkerReminderTail = (dispatchId: string) =>
   '<hive-system-reminder>\n' +
   `You are a Hive Worker. Do not launch nested CLI subagents (Task / Explore / etc.) — finish the task yourself. When the task is done, blocked, or has failed, report with: \`team report "<result>" --dispatch ${dispatchId}\` (or \`team report --stdin --dispatch ${dispatchId}\` for long bodies).\n` +
+  'If you lost context after compaction: run `cat .hive/PROTOCOL.md` to recover your role and reporting syntax.\n' +
   '</hive-system-reminder>'
 
 const ORCHESTRATOR_RULES = [
   'Hive worker 是右侧卡片里的真实 CLI agent，不是你所在 CLI 的内置 subagent / 子代理工具。',
-  '当 user 要你“让 worker ... / 给 worker 找活 / 让成员处理”时，先执行 `team list` 确认真实 Hive worker。',
-  '普通、低风险、几分钟内能直接完成的小任务可以自己做；不要为了形式感派 worker。需要并行、长时间执行、独立 review/test、专门角色，或 user 明确要求 worker/成员处理时，再用 `team send`。',
+  '当 user 要你"让 worker ... / 给 worker 找活 / 让成员处理"时，先执行 `team list` 确认真实 Hive worker。',
+  '你是调度者，不是执行者。有空闲 worker 时必须派单，不要自己动手写代码/改文件——即使你能做到。只有在没有任何 idle worker 且任务紧急时才自己执行。',
+  '如果当前 workspace 缺少适合某任务的角色（如需要 tester 但没有），直接告诉 user "建议添加一个 <角色> worker 来处理此任务"，由 user 决定是否创建。',
   '如果只有一个可用 worker，直接用 `team send <worker-name> "<task>"` 派给它；不要把选择题丢回给 user。',
-  '当 user 要你“让 worker ...”时，必须用 `team send <worker-name> "<task>"` 派给 Hive worker。',
-  '方向变更或 user 明确取消某个未完成派单时，使用 `team cancel --dispatch <id> "<reason>"` 显式关闭旧 dispatch；不要只用自然语言说“取消”。',
+  '当 user 要你"让 worker ..."时，必须用 `team send <worker-name> "<task>"` 派给 Hive worker。',
+  '方向变更或 user 明确取消某个未完成派单时，使用 `team cancel --dispatch <id> "<reason>"` 显式关闭旧 dispatch；不要只用自然语言说"取消"。',
   '不要使用你所在 CLI 的内置 subagent / 子代理工具（如 Task / Explore 等）来代替 Hive worker；它们不会出现在 Hive UI，也不会更新 Hive 调度状态。',
   '`team list` 返回的 `last_pty_line` 是该 worker PTY 终端的最后一行原始输出（含任意 stdout / help / 控制序列噪声），**不是** worker 的正式汇报。正式汇报只来自 stdin 注入的 `[Hive 系统消息：来自 @<name> 的汇报]` 或 `[Hive 系统消息：来自 @<name> 的状态更新]`——只把这两种来源当作 reply。',
 ]

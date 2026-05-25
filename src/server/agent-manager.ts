@@ -3,16 +3,22 @@ import { spawn } from 'node-pty'
 import { resolveSpawnCommand } from './agent-command-resolver.js'
 import { attachAgentPty, toAgentRunSnapshot } from './agent-manager-support.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
+import { attachSession, buildSessionName, createSession, hasTmux } from './tmux-session-manager.js'
 
 type RunStatus = 'starting' | 'running' | 'exited' | 'error'
 
 interface StartAgentInput {
   agentId: string
+  agentName?: string
   command: string
   args?: string[]
+  cols?: number
   cwd: string
   env?: NodeJS.ProcessEnv
   onExit?: (event: { runId: string; exitCode: number | null }) => void
+  persistent?: boolean
+  rows?: number
+  workspaceId?: string
 }
 
 interface AgentRunSnapshot {
@@ -35,11 +41,13 @@ interface AgentRunRecord extends AgentRunSnapshot {
     write: (input: Buffer | string) => void
   }
   onExit?: (event: { runId: string; exitCode: number | null }) => void
+  tmuxSession?: string
 }
 
 interface AgentManager {
   getOutputBus: () => PtyOutputBus
   pauseRun: (runId: string) => void
+  reattachTmuxRun?: (runId: string, agentId: string, sessionName: string) => AgentRunSnapshot
   resizeRun: (runId: string, cols: number, rows: number) => void
   resumeRun: (runId: string) => void
   startAgent: (input: StartAgentInput) => Promise<AgentRunSnapshot>
@@ -110,20 +118,57 @@ export const createAgentManager = ({
       runs.set(runId, run)
 
       try {
-        attachAgentPty(
-          run,
-          spawn(spawnCommand.command, spawnCommand.args, {
+        if (input.persistent !== false && input.workspaceId && input.agentName && hasTmux()) {
+          const sessionName = buildSessionName(input.workspaceId, input.agentId, input.agentName)
+          createSession(sessionName, spawnCommand.command, spawnCommand.args, {
             cwd: input.cwd,
-            env,
-            name: 'xterm-256color',
-          }),
-          ptyOutputBus
-        )
+            env: env as Record<string, string>,
+            cols: input.cols ?? 120,
+            rows: input.rows ?? 40,
+          })
+          run.tmuxSession = sessionName
+          attachAgentPty(run, attachSession(sessionName), ptyOutputBus)
+        } else {
+          attachAgentPty(
+            run,
+            spawn(spawnCommand.command, spawnCommand.args, {
+              cwd: input.cwd,
+              env,
+              name: 'xterm-256color',
+            }),
+            ptyOutputBus
+          )
+        }
       } catch (error) {
         runs.delete(runId)
         throw error
       }
 
+      return toAgentRunSnapshot(run)
+    },
+
+    reattachTmuxRun(runId, agentId, sessionName) {
+      const pty = attachSession(sessionName)
+      const run: AgentRunRecord = {
+        runId,
+        agentId,
+        pid: pty.pid,
+        status: 'running',
+        output: '',
+        exitCode: null,
+        process: {
+          isStopped: () => false,
+          pause() {},
+          pid: pty.pid,
+          resize(cols, rows) { pty.resize(cols, rows) },
+          resume() {},
+          stop() { pty.kill() },
+          write(input) { pty.write(typeof input === 'string' ? input : input.toString()) },
+        },
+        tmuxSession: sessionName,
+      }
+      runs.set(runId, run)
+      attachAgentPty(run, pty, ptyOutputBus)
       return toAgentRunSnapshot(run)
     },
 

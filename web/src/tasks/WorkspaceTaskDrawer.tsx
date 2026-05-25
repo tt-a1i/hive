@@ -9,6 +9,7 @@ type TasksFileApi = ReturnType<typeof useTasksFile>
 
 type Props = {
   tasksFile: TasksFileApi
+  workspaceId: string | null
   workspacePath: string
   open: boolean
   onClose: () => void
@@ -39,6 +40,7 @@ type Props = {
  */
 export const WorkspaceTaskDrawer = ({
   tasksFile,
+  workspaceId,
   workspacePath,
   open,
   onClose,
@@ -80,6 +82,7 @@ export const WorkspaceTaskDrawer = ({
         void tasksFile.deleteTask(line).catch(logSwallowed('tasks.deleteTask'))
       }}
       open={open}
+      workspaceId={workspaceId}
       workspacePath={workspacePath}
       {...(knownWorkerNames ? { knownWorkerNames } : {})}
       {...(onSelectOwner ? { onSelectOwner } : {})}

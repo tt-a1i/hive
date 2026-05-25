@@ -21,6 +21,7 @@ export const listRunsWithFallback = (
       exitCode,
       startedAt,
       endedAt: status === 'exited' || status === 'error' ? Date.now() : null,
+      tmuxSession: null,
     }))
     .sort((left, right) => right.startedAt - left.startedAt)
 }

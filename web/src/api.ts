@@ -15,6 +15,7 @@ const fromPayload = (payload: TeamListItemPayload): TeamListItem => ({
   role: payload.role,
   status: payload.status,
   pendingTaskCount: payload.pending_task_count,
+  ...(payload.role_template_name ? { roleTemplateName: payload.role_template_name } : {}),
   ...(payload.last_pty_line ? { lastPtyLine: payload.last_pty_line } : {}),
   ...(payload.command_preset_id ? { commandPresetId: payload.command_preset_id } : {}),
 })
@@ -125,17 +126,24 @@ export interface CommandPreset {
 }
 
 export interface RoleTemplate {
+  commandPresetId: string | null
   description: string
   id: string
   isBuiltin: boolean
   name: string
+  readonly: boolean
   roleType: WorkerRole | 'orchestrator'
+  source: 'builtin' | 'user' | 'external'
+  suggestedName: string | null
+  useCount: number
 }
 
 export interface RoleTemplateInput {
+  commandPresetId?: string
   description: string
   name: string
   roleType: WorkerRole | 'orchestrator'
+  suggestedName?: string
 }
 
 interface CommandPresetPayload {
@@ -147,25 +155,37 @@ interface CommandPresetPayload {
 }
 
 interface RoleTemplatePayload {
+  command_preset_id: string | null
   description: string
   id: string
   is_builtin: boolean
   name: string
+  readonly: boolean
   role_type: WorkerRole | 'orchestrator'
+  source: 'builtin' | 'user' | 'external'
+  suggested_name: string | null
+  use_count?: number
 }
 
 const fromRoleTemplatePayload = (payload: RoleTemplatePayload): RoleTemplate => ({
+  commandPresetId: payload.command_preset_id ?? null,
   description: payload.description,
   id: payload.id,
   isBuiltin: payload.is_builtin,
   name: payload.name,
+  readonly: payload.readonly ?? payload.is_builtin,
   roleType: payload.role_type,
+  source: payload.source ?? (payload.is_builtin ? 'builtin' : 'user'),
+  suggestedName: payload.suggested_name ?? null,
+  useCount: payload.use_count ?? 0,
 })
 
 const toRoleTemplateBody = (input: RoleTemplateInput) => ({
   name: input.name,
   role_type: input.roleType,
   description: input.description,
+  ...(input.suggestedName ? { suggested_name: input.suggestedName } : {}),
+  ...(input.commandPresetId ? { command_preset_id: input.commandPresetId } : {}),
   default_command: '',
   default_args: [],
   default_env: {},
@@ -220,6 +240,39 @@ export const deleteWorkspace = async (workspaceId: string): Promise<void> => {
   if (!response.ok) {
     throw new Error(await readErrorMessage(response, 'Failed to delete workspace'))
   }
+}
+
+export const reorderWorkspaces = async (order: string[]): Promise<void> => {
+  const response = await apiFetch('/api/workspaces/reorder', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ order }),
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to reorder workspaces'))
+  }
+}
+
+export interface CloneWorkspaceInput {
+  branch: string
+  name?: string
+  create_branch?: boolean
+  copy_tasks?: boolean
+}
+
+export const cloneWorkspace = async (
+  workspaceId: string,
+  input: CloneWorkspaceInput
+): Promise<WorkspaceSummary> => {
+  const response = await apiFetch(`/api/workspaces/${workspaceId}/clone`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to clone workspace'))
+  }
+  return (await response.json()) as WorkspaceSummary
 }
 
 export const startAgentRun = async (
@@ -478,6 +531,7 @@ export const createWorker = async (
     command_preset_id?: string | null
     description?: string
     role: WorkerRole
+    role_template_name?: string | null
     startup_command?: string | null
   }
 ): Promise<CreateWorkerResult> => {

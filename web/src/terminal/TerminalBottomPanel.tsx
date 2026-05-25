@@ -1,4 +1,4 @@
-import { LoaderCircle, Play, Terminal as TerminalIcon } from 'lucide-react'
+import { LoaderCircle, Play, Plus, Terminal as TerminalIcon } from 'lucide-react'
 
 import { useI18n } from '../i18n.js'
 import { TerminalTabs } from './TerminalTabs.js'
@@ -8,6 +8,7 @@ import type { TerminalTab } from './useTerminalPanelTabs.js'
 type TerminalBottomPanelProps = {
   tabs: readonly TerminalTab[]
   activeId: string | null
+  scopeKey?: string | undefined
   onSelect: (tabId: string) => void
   onClose: (tabId: string) => void
   onClosePanel: () => void
@@ -42,7 +43,35 @@ export const TerminalBottomPanel = ({
 }: TerminalBottomPanelProps) => {
   const { t } = useI18n()
   const resize = useTerminalPanelHeight()
-  if (tabs.length === 0) return null
+  if (tabs.length === 0) {
+    return (
+      <div
+        data-testid="terminal-bottom-panel"
+        className="relative flex shrink-0 flex-col items-center justify-center gap-3 text-center text-xs text-ter"
+        style={{
+          height: resize.height,
+          background: 'var(--bg-1)',
+          borderTop: '1px solid var(--border)',
+        }}
+      >
+        <TerminalIcon size={16} aria-hidden />
+        <button
+          type="button"
+          onClick={onNewShell}
+          disabled={newShellPending}
+          className="icon-btn icon-btn--primary"
+          data-testid="terminal-empty-new-shell"
+        >
+          {newShellPending ? (
+            <LoaderCircle size={12} className="animate-spin" aria-hidden />
+          ) : (
+            <Plus size={12} aria-hidden />
+          )}
+          {t('terminalPanel.newShell')}
+        </button>
+      </div>
+    )
+  }
   const active = findTab(tabs, activeId) ?? tabs[0] ?? null
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: panel container hosts a Cmd+W keyboard shortcut for closing the active terminal tab

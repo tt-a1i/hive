@@ -18,6 +18,16 @@ const requireNonEmptyString = (value: unknown, field: string) => {
 const getArtifacts = (value: unknown) =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 
+const FAILED_KEYWORDS = /\b(failed|blocked|error|失败|阻塞)\b/i
+
+export const inferPriorityTag = (priority: string | undefined, text: string): string | null => {
+  if (priority === 'failed') return '[FAILED]'
+  if (priority === 'blocked') return '[BLOCKED]'
+  if (priority === 'normal') return null
+  if (FAILED_KEYWORDS.test(text)) return '[FAILED]'
+  return null
+}
+
 export const teamRoutes: RouteDefinition[] = [
   route('POST', '/api/team/send', async ({ request, response, store }) => {
     const body = await readJsonBody<SendTaskBody>(request)
@@ -38,7 +48,23 @@ export const teamRoutes: RouteDefinition[] = [
       hivePort: String(request.socket.localPort ?? ''),
     })
 
-    sendJson(response, 202, { dispatch_id: dispatch.id, ok: true })
+    // Task-dispatch linking: --task <id> or --create-task
+    let taskId: string | null = null
+    if (typeof body.task_id === 'string' && body.task_id.trim()) {
+      store.taskService.linkDispatchToTask(dispatch.id, body.task_id, fromAgentId)
+      taskId = body.task_id
+    } else if (body.create_task === true) {
+      const task = store.taskService.createTask({
+        workspaceId: projectId,
+        title: text.length > 120 ? text.slice(0, 117) + '...' : text,
+        source: 'orch',
+        agentId: fromAgentId,
+      })
+      store.taskService.linkDispatchToTask(dispatch.id, task.id, fromAgentId)
+      taskId = task.id
+    }
+
+    sendJson(response, 202, { dispatch_id: dispatch.id, ok: true, task_id: taskId })
   }),
   route('POST', '/api/team/cancel', async ({ request, response, store }) => {
     const body = await readJsonBody<CancelTaskBody>(request)
@@ -66,7 +92,7 @@ export const teamRoutes: RouteDefinition[] = [
     const body = await readJsonBody<ReportTaskBody>(request)
     const projectId = requireNonEmptyString(body.project_id, 'project_id')
     const fromAgentId = requireNonEmptyString(body.from_agent_id, 'from_agent_id')
-    const resultText = requireNonEmptyString(body.result, 'result')
+    const rawText = requireNonEmptyString(body.result, 'result')
     const agent = authenticateCliAgent({
       fromAgentId,
       getAgent: store.getAgent,
@@ -75,6 +101,19 @@ export const teamRoutes: RouteDefinition[] = [
       workspaceId: projectId,
     })
     requireCommandForRole(agent, 'report')
+    if (typeof body.checkpoint === 'string' && body.checkpoint.trim()) {
+      const db = store.getDb()
+      const activeRun = store.getActiveRunByAgentId(projectId, fromAgentId)
+      if (activeRun) {
+        db.prepare('UPDATE agent_runs SET checkpoint_json = ?, updated_at = ? WHERE run_id = ?')
+          .run(body.checkpoint, Date.now(), activeRun.runId)
+      }
+    }
+    const priorityTag = inferPriorityTag(
+      typeof body.priority === 'string' ? body.priority : undefined,
+      rawText
+    )
+    const resultText = priorityTag ? `${priorityTag} ${rawText}` : rawText
     const reportInput = {
       artifacts: getArtifacts(body.artifacts),
       ...(typeof body.dispatch_id === 'string' ? { dispatchId: body.dispatch_id } : {}),
@@ -86,6 +125,14 @@ export const teamRoutes: RouteDefinition[] = [
         ...reportInput,
         status: body.status,
       })
+      if (result.dispatch?.taskId) {
+        store.taskService.recordSuggestion(
+          result.dispatch.taskId,
+          result.dispatch.id,
+          { reportText: resultText, status: body.status },
+          fromAgentId
+        )
+      }
       sendJson(response, 202, {
         dispatch_id: result.dispatch?.id ?? null,
         forward_error: result.forwardError,
@@ -95,6 +142,14 @@ export const teamRoutes: RouteDefinition[] = [
       return
     } else {
       const result = store.reportTask(projectId, fromAgentId, reportInput)
+      if (result.dispatch?.taskId) {
+        store.taskService.recordSuggestion(
+          result.dispatch.taskId,
+          result.dispatch.id,
+          { reportText: resultText },
+          fromAgentId
+        )
+      }
       sendJson(response, 202, {
         dispatch_id: result.dispatch?.id ?? null,
         forward_error: result.forwardError,

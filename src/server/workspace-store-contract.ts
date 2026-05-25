@@ -24,8 +24,11 @@ export interface WorkspaceStore {
   hasAgent: (workspaceId: string, agentId: string) => boolean
   listWorkers: (workspaceId: string) => TeamListItem[]
   listWorkspaces: () => WorkspaceSummary[]
+  reorderWorkspaces: (workspaceIds: string[]) => void
   markAgentStarted: (workspaceId: string, agentId: string) => void
   markAgentStopped: (workspaceId: string, agentId: string) => void
+  markDiscussionJoined: (workspaceId: string, agentId: string) => void
+  markDiscussionLeft: (workspaceId: string, agentId: string) => void
   markTaskDispatched: (workspaceId: string, workerId: string) => void
   markTaskCancelled: (workspaceId: string, workerId: string) => void
   markTaskReported: (workspaceId: string, workerId: string) => void

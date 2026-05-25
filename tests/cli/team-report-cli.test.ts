@@ -135,7 +135,7 @@ describe('team report cli', () => {
         HIVE_PORT: String(hive.port),
         HIVE_PROJECT_ID: workspace.id,
       }
-      await runTeamCommand(['status', 'Alice 已接入 workspace，等待派单'])
+      await runTeamCommand(['status', '[STOPPED] Alice 已接入 workspace，等待派单'])
 
       await waitFor(async () => {
         const runResponse = await fetch(`${baseUrl}/api/runtime/runs/${payload.run_id}`, {
@@ -149,7 +149,7 @@ describe('team report cli', () => {
       expect(hive.store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
         expect.objectContaining({
           from: worker.id,
-          text: 'Alice 已接入 workspace，等待派单',
+          text: '[STOPPED] Alice 已接入 workspace，等待派单',
           type: 'status',
         })
       )
@@ -160,7 +160,7 @@ describe('team report cli', () => {
         expect(reopenedHive.store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
           expect.objectContaining({
             from: worker.id,
-            text: 'Alice 已接入 workspace，等待派单',
+            text: '[STOPPED] Alice 已接入 workspace，等待派单',
             type: 'status',
           })
         )

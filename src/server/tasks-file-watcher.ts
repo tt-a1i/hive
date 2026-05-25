@@ -6,6 +6,34 @@ import chokidar, { type FSWatcher } from 'chokidar'
 import { ensureProtocolFile, ensureTasksFile, getTasksFilePath } from './tasks-file.js'
 
 const DEBOUNCE_MS = 100
+const TASK_LINE_RE = /^(\s*)-\s+\[( |x|X)\]\s+(.*)$/
+const SEQ_PREFIX_RE = /^#(\d+)\s+/
+
+export interface ParsedTaskLine {
+  checked: boolean
+  indent: number
+  seq: number | null
+  title: string
+}
+
+export const parseTaskLines = (content: string): ParsedTaskLine[] => {
+  const results: ParsedTaskLine[] = []
+  for (const line of content.split(/\r?\n/)) {
+    const m = line.match(TASK_LINE_RE)
+    if (!m) continue
+    const indent = (m[1] ?? '').replace(/\t/g, '  ').length
+    const checked = (m[2] ?? ' ').toLowerCase() === 'x'
+    let text = m[3] ?? ''
+    let seq: number | null = null
+    const seqMatch = text.match(SEQ_PREFIX_RE)
+    if (seqMatch) {
+      seq = Number(seqMatch[1])
+      text = text.slice(seqMatch[0].length)
+    }
+    results.push({ checked, indent, seq, title: text.trim() })
+  }
+  return results
+}
 
 export interface TasksFileWatcher {
   close: () => Promise<void>

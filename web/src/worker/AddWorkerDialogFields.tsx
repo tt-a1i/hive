@@ -1,12 +1,4 @@
-import {
-  BookmarkPlus,
-  Check,
-  ChevronDown,
-  RotateCcw,
-  Search,
-  SquareTerminal,
-  Trash2,
-} from 'lucide-react'
+import { BookmarkPlus, Check, ChevronDown, Plus, RotateCcw, Search, SquareTerminal, Trash2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -26,7 +18,6 @@ const ROLE_CARDS: RoleCardSpec[] = [
   { value: 'coder' },
   { value: 'reviewer' },
   { value: 'tester' },
-  { value: 'custom', dashed: true },
 ]
 
 const roleLabelKey = (role: WorkerRole) =>
@@ -39,50 +30,163 @@ export const SectionLabel = ({ children }: { children: ReactNode }) => (
 const RoleCard = ({
   active,
   spec,
+  subtitle,
+  useCount,
   onSelect,
 }: {
   active: boolean
   spec: RoleCardSpec
+  subtitle?: string | undefined
+  useCount?: number | undefined
   onSelect: () => void
 }) => {
   const { t } = useI18n()
+  const label = t(roleLabelKey(spec.value))
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-pressed={active}
       data-testid={`role-card-${spec.value}`}
-      className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''} flex items-center gap-3 px-3 py-2`}
+      className={`selectable-card${spec.dashed ? ' selectable-card--dashed' : ''}${active ? ' ring-1 ring-accent' : ''} relative flex items-center gap-3 px-3 py-2`}
     >
       <RoleAvatar role={spec.value} size={20} />
-      <span className="flex-1 text-left text-base font-medium text-pri">
-        {t(roleLabelKey(spec.value))}
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-base font-medium text-pri">{label}</span>
+        {subtitle ? (
+          <span className="block truncate text-xs text-sec">{subtitle}</span>
+        ) : null}
       </span>
+      {useCount ? (
+        <span className="text-xs text-ter">×{useCount}</span>
+      ) : null}
       {active ? <Check size={14} className="shrink-0 text-accent" aria-hidden /> : null}
     </button>
   )
 }
 
 export const RolePicker = ({
+  customTemplates,
   onRoleChange,
+  onSelectTemplate,
+  selectedTemplateName,
+  selectedTemplateId,
+  usedTemplateNames,
   workerRole,
 }: {
+  customTemplates: RoleTemplate[]
   onRoleChange: (value: WorkerRole) => void
+  onSelectTemplate: (templateId: string) => void
+  selectedTemplateName?: string | undefined
+  selectedTemplateId: string | null
+  usedTemplateNames?: Set<string> | undefined
   workerRole: WorkerRole
 }) => {
   const { t } = useI18n()
+  const templates = useMemo(
+    () =>
+      customTemplates
+        .filter((tpl) => tpl.suggestedName || tpl.commandPresetId)
+        .sort((a, b) => (b.useCount ?? 0) - (a.useCount ?? 0)),
+    [customTemplates]
+  )
+  const roleOnlyTemplates = useMemo(
+    () =>
+      customTemplates
+        .filter((tpl) => !tpl.suggestedName && !tpl.commandPresetId)
+        .sort((a, b) => (b.useCount ?? 0) - (a.useCount ?? 0)),
+    [customTemplates]
+  )
+  const sourceLabel = (source: 'builtin' | 'user' | 'external') => {
+    if (source === 'external') return t('addWorker.templateSource.external')
+    if (source === 'builtin') return t('addWorker.templateSource.builtin')
+    return ''
+  }
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLabel>{t('addWorker.role')}</SectionLabel>
-      <div className="grid grid-cols-2 gap-2">
-        {ROLE_CARDS.map((spec) => (
-          <RoleCard
-            key={spec.value}
-            active={workerRole === spec.value}
-            spec={spec}
-            onSelect={() => onRoleChange(spec.value)}
-          />
-        ))}
+    <div className="flex flex-col gap-4">
+      {templates.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <SectionLabel>{t('addWorker.quickSelect')}</SectionLabel>
+          <div
+            className="grid grid-cols-2 gap-2"
+            style={templates.length > 6 ? { maxHeight: 280, overflowY: 'auto' } : undefined}
+          >
+            {templates.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => onSelectTemplate(tpl.id)}
+                aria-pressed={selectedTemplateId === tpl.id}
+                data-testid={`template-card-${tpl.id}`}
+                className={`selectable-card flex items-center gap-3 px-3 py-2.5${selectedTemplateId === tpl.id ? ' ring-1 ring-accent' : ''}`}
+              >
+                <RoleAvatar role={tpl.roleType === 'orchestrator' ? 'custom' : tpl.roleType} size={20} />
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block truncate text-sm font-medium text-pri">{tpl.name}</span>
+                  <span className="flex gap-1.5">
+                    {usedTemplateNames?.has(tpl.name) ? (
+                      <span className="text-xs font-medium text-accent">In use</span>
+                    ) : null}
+                    {tpl.source !== 'user' ? (
+                      <span className="truncate text-xs text-ter">{sourceLabel(tpl.source)}</span>
+                    ) : null}
+                  </span>
+                </span>
+                {tpl.useCount ? (
+                  <span className="text-xs text-ter">×{tpl.useCount}</span>
+                ) : null}
+                {selectedTemplateId === tpl.id ? (
+                  <Check size={14} className="shrink-0 text-accent" aria-hidden />
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-2">
+        <SectionLabel>{t('addWorker.role')}</SectionLabel>
+        <div
+          className="grid grid-cols-3 gap-2"
+          style={ROLE_CARDS.length + roleOnlyTemplates.length > 6 ? { maxHeight: 150, overflowY: 'auto' } : undefined}
+        >
+          {ROLE_CARDS.map((spec) => {
+            const tpl = customTemplates.find((t) => t.roleType === spec.value && t.isBuiltin)
+            return (
+              <RoleCard
+                key={spec.value}
+                active={workerRole === spec.value && selectedTemplateId === null}
+                spec={spec}
+                useCount={tpl?.useCount}
+                onSelect={() => onRoleChange(spec.value)}
+              />
+            )
+          })}
+          {roleOnlyTemplates.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => onSelectTemplate(tpl.id)}
+              aria-pressed={selectedTemplateId === tpl.id}
+              data-testid={`role-card-${tpl.id}`}
+              className={`selectable-card selectable-card--dashed flex items-center gap-3 px-3 py-2${selectedTemplateId === tpl.id ? ' ring-1 ring-accent' : ''}`}
+            >
+              <RoleAvatar role="custom" size={20} />
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block truncate text-sm font-medium text-pri">{tpl.name}</span>
+                {tpl.source !== 'user' ? (
+                  <span className="block truncate text-xs text-ter">{sourceLabel(tpl.source)}</span>
+                ) : null}
+              </span>
+              {tpl.useCount ? (
+                <span className="text-xs text-ter">×{tpl.useCount}</span>
+              ) : null}
+              {selectedTemplateId === tpl.id ? (
+                <Check size={14} className="shrink-0 text-accent" aria-hidden />
+              ) : null}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -194,6 +298,7 @@ export const RoleTemplatePicker = ({
               ) : (
                 filteredTemplates.map((template) => {
                   const isSelected = template.id === selectedTemplateId
+                  const isExternal = template.source === 'external'
                   return (
                     <div key={template.id} className="relative">
                       <button
@@ -210,26 +315,40 @@ export const RoleTemplatePicker = ({
                         style={isSelected ? { background: 'var(--bg-3)' } : undefined}
                       >
                         <span className="min-w-0 flex-1 truncate">{template.name}</span>
+                        {isExternal ? (
+                          <span
+                            data-testid={`role-template-external-badge-${template.id}`}
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
+                            style={{
+                              color: 'var(--text-ter)',
+                              background: 'var(--bg-3)',
+                            }}
+                          >
+                            {t('addWorker.templateExternal')}
+                          </span>
+                        ) : null}
                         {isSelected ? (
                           <Check size={14} className="shrink-0 text-accent" aria-hidden />
                         ) : null}
                       </button>
-                      <button
-                        type="button"
-                        aria-label={t('addWorker.templateDeleteAria', { name: template.name })}
-                        data-testid={`role-template-delete-${template.id}`}
-                        disabled={Boolean(disabledReason)}
-                        title={disabledReason ?? undefined}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          if (disabledReason) return
-                          setDeletingTemplate(template)
-                        }}
-                        className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-ter transition-colors hover:bg-3 hover:text-pri"
-                      >
-                        <Trash2 size={14} aria-hidden />
-                      </button>
+                      {!template.readonly ? (
+                        <button
+                          type="button"
+                          aria-label={t('addWorker.templateDeleteAria', { name: template.name })}
+                          data-testid={`role-template-delete-${template.id}`}
+                          disabled={Boolean(disabledReason)}
+                          title={disabledReason ?? undefined}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            if (disabledReason) return
+                            setDeletingTemplate(template)
+                          }}
+                          className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-ter transition-colors hover:bg-3 hover:text-pri"
+                        >
+                          <Trash2 size={14} aria-hidden />
+                        </button>
+                      ) : null}
                     </div>
                   )
                 })
@@ -296,7 +415,7 @@ export const RoleInstructionsField = ({
   roleDescription: string
   templateBusy: boolean
   workerRole: WorkerRole
-  writeDisabledReason?: string
+  writeDisabledReason?: string | undefined
 }) => {
   const { t } = useI18n()
   const [instructionsOpen, setInstructionsOpen] = useState(false)

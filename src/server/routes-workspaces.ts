@@ -4,6 +4,7 @@ import {
   resolveCommandPresetLaunchConfig,
   resolveStartupCommandLaunchConfig,
 } from './agent-launch-resolver.js'
+import { BadRequestError } from './http-errors.js'
 import { autostartAgent, autostartOrchestrator } from './orchestrator-autostart.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
@@ -19,6 +20,13 @@ import { enrichTeamList } from './team-list-enrichment.js'
 import { serializeTeamListItem } from './team-list-serializer.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import { validateWorkspacePath } from './workspace-path-validation.js'
+import {
+  buildWorktreePath,
+  cloneWorkspaceWorkers,
+  copyTasksFile,
+  createWorktree,
+  isGitRepo,
+} from './workspace-clone.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 
 const getSerializedWorker = (workspaceId: string, workerId: string, store: RuntimeStore) => {
@@ -183,6 +191,10 @@ export const workspaceRoutes: RouteDefinition[] = [
         ...getSerializedWorker(workspaceId, worker.id, store),
         agent_start: agentStart,
       })
+
+      if (body.role_template_name) {
+        store.settings.incrementRoleTemplateUseCount(body.role_template_name)
+      }
     }
   ),
   route(
@@ -294,6 +306,68 @@ export const workspaceRoutes: RouteDefinition[] = [
         hivePort: getRuntimePort(request),
       })
       sendJson(response, 201, { run_id: run.runId })
+    }
+  ),
+  route('PUT', '/api/workspaces/reorder', async ({ request, response, store }) => {
+    requireUiTokenFromRequest(request, store.validateUiToken)
+    const body = await readJsonBody<{ order: string[] }>(request)
+    if (!Array.isArray(body.order) || body.order.length === 0) {
+      throw new BadRequestError('Missing or empty order array')
+    }
+    store.reorderWorkspaces(body.order)
+    sendJson(response, 200, { ok: true })
+  }),
+  route(
+    'POST',
+    '/api/workspaces/:workspaceId/clone',
+    async ({ params, request, response, store }) => {
+      const workspaceId = getRequiredParam(
+        response,
+        params,
+        'workspaceId',
+        'Workspace id is required'
+      )
+      if (!workspaceId) return
+
+      requireUiTokenFromRequest(request, store.validateUiToken)
+
+      const body = await readJsonBody<{
+        branch: string
+        name?: string
+        create_branch?: boolean
+        copy_tasks?: boolean
+      }>(request)
+
+      if (!body.branch || typeof body.branch !== 'string') {
+        throw new BadRequestError('Missing branch')
+      }
+
+      const snapshot = store.getWorkspaceSnapshot(workspaceId)
+      const sourcePath = snapshot.summary.path
+
+      if (!isGitRepo(sourcePath)) {
+        throw new BadRequestError('Workspace path is not a git repository')
+      }
+
+      const basePath = buildWorktreePath(sourcePath, body.branch)
+      const worktreePath = createWorktree(sourcePath, basePath, body.branch, body.create_branch ?? false)
+
+      const name = body.name || `${snapshot.summary.name}-${body.branch.replace(/\//g, '-')}`
+      const workspace = store.createWorkspace(worktreePath, name)
+
+      const workersCloned = cloneWorkspaceWorkers(store, workspaceId, workspace.id)
+
+      if (body.copy_tasks !== false) {
+        copyTasksFile(sourcePath, worktreePath)
+      }
+
+      await store.startWorkspaceWatch(workspace.id)
+
+      sendJson(response, 201, {
+        workspace,
+        worktree_path: worktreePath,
+        workers_cloned: workersCloned,
+      })
     }
   ),
 ]

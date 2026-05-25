@@ -28,6 +28,9 @@ export interface AgentRunStorePort {
     exitCode: number | null,
     endedAt: number | null
   ) => void
+  getCheckpoint?: (agentId: string) => string | null
+  updateCheckpoint?: (runId: string, checkpointJson: string) => void
+  updateTmuxSession?: (runId: string, sessionName: string | null) => void
 }
 
 export interface AgentSessionStorePort {

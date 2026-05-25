@@ -51,7 +51,7 @@ describe('team atomicity', () => {
         markTaskDispatched,
         markTaskReported: vi.fn(),
       } as never,
-    })
+    } as never)
 
     await expect(
       ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
@@ -106,11 +106,11 @@ describe('team atomicity', () => {
         writeSendPrompt: vi.fn(),
         writeUserInputPrompt: vi.fn(),
       } as never,
-      createDispatch: vi.fn(() => dispatch),
+      createDispatch: vi.fn(() => dispatch) as never,
       deleteDispatch,
       deleteMessage,
       findOpenDispatch: vi.fn(),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })) as never,
       markDispatchReportedByWorker: vi.fn(),
       markDispatchSubmitted: vi.fn(),
       workspaceStore: {
@@ -118,7 +118,7 @@ describe('team atomicity', () => {
         markAgentStarted: vi.fn(),
         markAgentStopped: vi.fn(),
       } as never,
-    })
+    } as never)
 
     await expect(
       ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
@@ -174,11 +174,11 @@ describe('team atomicity', () => {
         writeSendPrompt,
         writeUserInputPrompt: vi.fn(),
       } as never,
-      createDispatch: vi.fn(() => dispatch),
+      createDispatch: vi.fn(() => dispatch) as never,
       deleteDispatch,
       deleteMessage,
       findOpenDispatch: vi.fn(),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
+      insertMessage: vi.fn(() => ({ sequence: 1 })) as never,
       markDispatchReportedByWorker: vi.fn(),
       markDispatchSubmitted,
       workspaceStore: {
@@ -186,7 +186,7 @@ describe('team atomicity', () => {
         markAgentStarted: vi.fn(),
         markAgentStopped: vi.fn(),
       } as never,
-    })
+    } as never)
 
     await expect(
       ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
@@ -274,8 +274,8 @@ describe('team atomicity', () => {
       createDispatch: vi.fn(),
       deleteDispatch: vi.fn(),
       deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
+      findOpenDispatch: vi.fn(() => dispatch) as never,
+      insertMessage: vi.fn(() => ({ sequence: 1 })) as never,
       markDispatchReportedByWorker: vi.fn(() => {
         throw new Error('dispatch ledger failed')
       }),
@@ -284,7 +284,7 @@ describe('team atomicity', () => {
         getWorker: store.getWorker,
         markTaskReported,
       } as never,
-    })
+    } as never)
 
     expect(() =>
       ops.reportTask(workspace.id, worker.id, {
@@ -335,15 +335,15 @@ describe('team atomicity', () => {
       createDispatch: vi.fn(),
       deleteDispatch: vi.fn(),
       deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
+      findOpenDispatch: vi.fn(() => dispatch) as never,
+      insertMessage: vi.fn(() => ({ sequence: 1 })) as never,
       markDispatchReportedByWorker,
       markDispatchSubmitted: vi.fn(),
       workspaceStore: {
         getWorker: store.getWorker,
         markTaskReported,
       } as never,
-    })
+    } as never)
 
     const result = ops.reportTask(workspace.id, worker.id, {
       requireActiveRun: true,

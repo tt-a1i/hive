@@ -71,7 +71,7 @@ describe('role-templates api client', () => {
     })
 
     expect(fetchMock.mock.calls.length).toBe(1)
-    const [url, init] = fetchMock.mock.calls[0] ?? []
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit | undefined]
     expect(url).toBe('/api/settings/role-templates')
     expect(init?.method).toBe('POST')
     expect(JSON.parse(init?.body as string)).toEqual({
@@ -104,7 +104,7 @@ describe('role-templates api client', () => {
     expect(updated.name).toBe('Renamed')
 
     expect(fetchMock.mock.calls.length).toBe(1)
-    const [url, init] = fetchMock.mock.calls[0] ?? []
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit | undefined]
     expect(url).toBe('/api/settings/role-templates/tpl-1')
     expect(init?.method).toBe('PATCH')
   })
@@ -116,9 +116,9 @@ describe('role-templates api client', () => {
     await expect(deleteRoleTemplate('tpl-1')).resolves.toBeUndefined()
 
     expect(fetchMock.mock.calls.length).toBe(1)
-    const [url, init] = fetchMock.mock.calls[0] ?? []
-    expect(url).toBe('/api/settings/role-templates/tpl-1')
-    expect(init?.method).toBe('DELETE')
+    const [url2, init2] = fetchMock.mock.calls[0] as unknown as [string, RequestInit | undefined]
+    expect(url2).toBe('/api/settings/role-templates/tpl-1')
+    expect(init2?.method).toBe('DELETE')
   })
 
   test('createRoleTemplate surfaces server JSON error detail', async () => {

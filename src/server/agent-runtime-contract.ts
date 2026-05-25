@@ -3,6 +3,7 @@ import type { WorkspaceSummary } from '../shared/types.js'
 import type { PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import type { AgentTokenRegistry } from './agent-tokens.js'
+import type { LiveRunRegistry } from './live-run-registry.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 
 interface StartAgentOptions {
@@ -23,6 +24,7 @@ export interface AgentRuntime {
     agentId: string
   ) => import('./agent-run-store.js').AgentLaunchConfigInput | undefined
   getLiveRun: (runId: string) => LiveAgentRun
+  getLiveRunRegistry: () => LiveRunRegistry
   getPtyOutputBus: () => PtyOutputBus
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   pauseRun: (runId: string) => void
@@ -68,6 +70,7 @@ export interface AgentRuntime {
     input?: { requireActiveRun?: boolean }
   ) => void
   writeUserInputPrompt: (workspaceId: string, text: string) => void
+  writeAgentStdin: (workspaceId: string, agentId: string, text: string) => void
 }
 
 export type { StartAgentOptions }

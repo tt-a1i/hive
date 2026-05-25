@@ -11,8 +11,8 @@ type ShellPanelTabs = {
 
 type UseWorkspaceShellLauncherArgs = {
   onCloseFailed: (message: string) => void
-  onShellRunClosed?: (workspaceId: string, runId: string) => void
-  onShellRunStarted?: (workspaceId: string, run: TerminalRunSummary) => void
+  onShellRunClosed?: ((workspaceId: string, runId: string) => void) | undefined
+  onShellRunStarted?: ((workspaceId: string, run: TerminalRunSummary) => void) | undefined
   panelTabs: ShellPanelTabs
   shellRuns: TerminalRunSummary[]
   workspaceId: string | null

@@ -89,7 +89,7 @@ describe('workspace shell terminal', () => {
       }
 
       expect(shells.map((shell) => shell.agent_name)).toEqual(['Shell', 'Shell', 'Shell'])
-      const closedShellRunId = shells[1].run_id
+      const closedShellRunId = shells[1]!.run_id
 
       const closeResponse = await fetch(
         `${server.baseUrl}/api/workspaces/${workspace.id}/shell/${closedShellRunId}`,

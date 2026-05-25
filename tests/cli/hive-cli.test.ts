@@ -99,7 +99,7 @@ describe('hive update cli', () => {
 
   test('successful npm install exits 0 and prints a restart hint', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const calls: Array<{ command: string; args: string[] }> = []
+    const calls: Array<{ command: string; args: readonly string[] }> = []
     const runUpdate: RunUpdate = async (command, args) => {
       calls.push({ command, args })
       return { exitCode: 0 }

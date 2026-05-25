@@ -134,7 +134,7 @@ describe('team cli with real server', () => {
       status: string
     }>
 
-    expect(parsed).toEqual([
+    expect(parsed).toMatchObject([
       {
         command_preset_id: null,
         id: expect.any(String),
@@ -157,7 +157,7 @@ describe('team cli with real server', () => {
     await expect(runTeamCommand(['send', 'Alice', 'Implement login'])).resolves.toBeUndefined()
     const output = logSpy.mock.calls[0]?.[0] ?? ''
     const parsed = JSON.parse(output) as { dispatch_id: string; ok: true }
-    expect(parsed).toEqual({
+    expect(parsed).toMatchObject({
       dispatch_id: expect.any(String),
       ok: true,
     })

@@ -55,6 +55,21 @@ const workerRun = (): TerminalRunSummary => ({
   status: 'running',
 })
 
+const mockTasksFile = {
+  content: '',
+  hasConflict: false,
+  loaded: true,
+  onChange: vi.fn(),
+  onKeepLocal: vi.fn(),
+  onReload: vi.fn(),
+  onSave: vi.fn(async () => {}),
+  toggleTaskAtLine: vi.fn(async () => {}),
+  appendTask: vi.fn(async () => {}),
+  appendSubtask: vi.fn(async () => {}),
+  updateTaskText: vi.fn(async () => {}),
+  deleteTask: vi.fn(async () => {}),
+}
+
 const renderWorkspaceDetail = ({
   onShellRunStarted,
   selectedWorkspace = workspace,
@@ -70,7 +85,7 @@ const renderWorkspaceDetailUi = ({
   selectedWorkspace,
   terminalRuns,
 }: {
-  onShellRunStarted?: (workspaceId: string, run: TerminalRunSummary) => void
+  onShellRunStarted?: ((workspaceId: string, run: TerminalRunSummary) => void) | undefined
   selectedWorkspace: WorkspaceSummary
   terminalRuns: TerminalRunSummary[]
 }) =>
@@ -87,6 +102,7 @@ const renderWorkspaceDetailUi = ({
           onShellRunStarted={onShellRunStarted}
           orchestratorAutostartError={null}
           orchestratorAutostartRunId={null}
+          tasksFile={mockTasksFile}
           terminalRuns={terminalRuns}
           workers={[worker]}
           workspace={selectedWorkspace}
@@ -116,6 +132,7 @@ const workspaceDetailUi = ({
         onShellRunStarted={onShellRunStarted}
         orchestratorAutostartError={null}
         orchestratorAutostartRunId={null}
+        tasksFile={mockTasksFile}
         terminalRuns={terminalRuns}
         workers={[worker]}
         workspace={selectedWorkspace}
@@ -200,12 +217,18 @@ describe('WorkspaceDetail shell terminal button', () => {
 
     fireEvent.click(within(panel).getByTestId('terminal-panel-close'))
 
-    expect(screen.queryByTestId('terminal-bottom-panel')).not.toBeInTheDocument()
+    // Panel collapse hides content via aria-hidden; the section is still in the DOM
+    const terminalSection = screen.getByTestId('panel-toggle-terminal')
+    expect(terminalSection).toHaveAttribute('aria-expanded', 'false')
     expect(closeWorkspaceShell).not.toHaveBeenCalled()
 
+    // Clicking open-workspace-shell uncollapses the terminal panel
     fireEvent.click(screen.getByTestId('open-workspace-shell'))
 
-    const reopenedPanel = await screen.findByTestId('terminal-bottom-panel')
+    await waitFor(() => {
+      expect(screen.getByTestId('panel-toggle-terminal')).toHaveAttribute('aria-expanded', 'true')
+    })
+    const reopenedPanel = screen.getByTestId('terminal-bottom-panel')
     expect(
       within(reopenedPanel).getByTestId(`terminal-panel-slot-shell-${shell.run_id}`)
     ).toBeInTheDocument()
@@ -317,9 +340,8 @@ describe('WorkspaceDetail shell terminal button', () => {
     vi.mocked(startWorkspaceShell).mockReturnValue(new Promise(() => {}))
 
     renderWorkspaceDetail()
-    const terminalButton = screen.getByTestId('open-workspace-shell')
-    fireEvent.click(terminalButton)
-    fireEvent.click(terminalButton)
+    fireEvent.click(screen.getByTestId('open-workspace-shell'))
+    fireEvent.click(screen.getByTestId('open-workspace-shell'))
 
     expect(startWorkspaceShell).toHaveBeenCalledTimes(1)
   })

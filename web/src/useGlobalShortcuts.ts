@@ -9,7 +9,7 @@ type Shortcut = {
   shift?: boolean
   /** Handler. Returning `false` lets the keystroke continue to its default
    *  action; any other return (including `undefined`) calls preventDefault. */
-  handler: (event: KeyboardEvent) => boolean | undefined
+  handler: (event: KeyboardEvent) => boolean | void | undefined
 }
 
 const isEditableTarget = (target: EventTarget | null): boolean => {

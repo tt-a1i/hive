@@ -1,4 +1,6 @@
 import { resolveCommandPath } from './agent-command-resolver.js'
+import type { DiscussionTriggers } from './discussion-templates.js'
+import { loadExternalAgents } from './external-agents-loader.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
 import type { SessionIdCaptureConfig } from './session-capture.js'
@@ -21,6 +23,9 @@ type RoleTemplateBody = {
   default_command: string
   default_args: string[]
   default_env: Record<string, string>
+  discussion_triggers: DiscussionTriggers | null
+  suggested_name: string | null
+  command_preset_id: string | null
 }
 
 const serializeCommandPreset = (preset: {
@@ -67,6 +72,12 @@ const serializeRoleTemplate = (template: {
   defaultArgs: string[]
   defaultEnv: Record<string, string>
   isBuiltin: boolean
+  discussionTriggers?: DiscussionTriggers | null
+  suggestedName?: string | null
+  commandPresetId?: string | null
+  useCount?: number
+  source?: 'builtin' | 'user' | 'external'
+  readonly?: boolean
 }) => ({
   id: template.id,
   name: template.name,
@@ -76,6 +87,12 @@ const serializeRoleTemplate = (template: {
   default_args: template.defaultArgs,
   default_env: template.defaultEnv,
   is_builtin: template.isBuiltin,
+  discussion_triggers: template.discussionTriggers ?? null,
+  suggested_name: template.suggestedName ?? null,
+  command_preset_id: template.commandPresetId ?? null,
+  use_count: template.useCount ?? 0,
+  source: template.source ?? (template.isBuiltin ? 'builtin' : 'user'),
+  readonly: template.readonly ?? template.isBuiltin,
 })
 
 const readCommandPresetBody = async (
@@ -104,6 +121,9 @@ const readRoleTemplateBody = async (
     defaultCommand: body.default_command ?? '',
     defaultArgs: body.default_args ?? [],
     defaultEnv: body.default_env ?? {},
+    discussionTriggers: body.discussion_triggers ?? null,
+    suggestedName: body.suggested_name ?? null,
+    commandPresetId: body.command_preset_id ?? null,
   }
 }
 
@@ -153,7 +173,12 @@ export const settingsRoutes: RouteDefinition[] = [
   ),
   route('GET', '/api/settings/role-templates', ({ request, response, store }) => {
     requireUiTokenFromRequest(request, store.validateUiToken)
-    sendJson(response, 200, store.settings.listRoleTemplates().map(serializeRoleTemplate))
+    const dbTemplates = store.settings.listRoleTemplates().map(serializeRoleTemplate)
+    const externalDir = store.settings.getAppState('external_agents_dir')?.value
+      ?? process.env.HIVE_EXTERNAL_AGENTS_DIR
+      ?? `${process.env.HOME}/ai/oh-my-claudecode/agents`
+    const externalTemplates = loadExternalAgents(externalDir).map(serializeRoleTemplate)
+    sendJson(response, 200, [...dbTemplates, ...externalTemplates])
   }),
   route('POST', '/api/settings/role-templates', async ({ request, response, store }) => {
     requireUiTokenFromRequest(request, store.validateUiToken)

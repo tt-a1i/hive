@@ -8,6 +8,7 @@ import type {
   SendTaskBody,
   WorkerRole,
 } from './route-types.js'
+import { discussRoutes } from './routes-discuss.js'
 import { dispatchRoutes } from './routes-dispatches.js'
 import { fsRoutes } from './routes-fs.js'
 import { marketplaceRoutes } from './routes-marketplace.js'
@@ -15,6 +16,7 @@ import { openWorkspaceRoutes } from './routes-open-workspace.js'
 import { runtimeRoutes } from './routes-runtime.js'
 import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
+import { taskApiRoutes } from './routes-tasks-api.js'
 import { teamRoutes } from './routes-team.js'
 import { uiRoutes } from './routes-ui.js'
 import { versionRoutes } from './routes-version.js'
@@ -28,8 +30,10 @@ const routes: RouteDefinition[] = [
   ...uiRoutes,
   ...settingsRoutes,
   ...taskRoutes,
+  ...taskApiRoutes,
   ...runtimeRoutes,
   ...teamRoutes,
+  ...discussRoutes,
   ...fsRoutes,
   ...marketplaceRoutes,
 ]

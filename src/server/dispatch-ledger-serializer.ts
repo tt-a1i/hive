@@ -10,6 +10,7 @@ export const serializeDispatchRecord = (record: DispatchRecord) => ({
   report_text: record.reportText,
   state: record.status,
   submitted_at: record.submittedAt,
+  task_id: record.taskId,
   text: record.text,
   to_agent_id: record.toAgentId,
   workspace_id: record.workspaceId,

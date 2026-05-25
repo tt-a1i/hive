@@ -64,6 +64,21 @@ const workerActions: WorkerActions = {
   stopWorkerRun: vi.fn(),
 }
 
+const mockTasksFile = {
+  content: '',
+  hasConflict: false,
+  loaded: true,
+  onChange: vi.fn(),
+  onKeepLocal: vi.fn(),
+  onReload: vi.fn(),
+  onSave: vi.fn(async () => {}),
+  toggleTaskAtLine: vi.fn(async () => {}),
+  appendTask: vi.fn(async () => {}),
+  appendSubtask: vi.fn(async () => {}),
+  updateTaskText: vi.fn(async () => {}),
+  deleteTask: vi.fn(async () => {}),
+}
+
 describe('AppWorkspaceContent', () => {
   test('passes shell runs through the active workspace content boundary', () => {
     const onShellRunStarted = vi.fn()
@@ -96,6 +111,7 @@ describe('AppWorkspaceContent', () => {
         orchestratorAutostartErrors={{}}
         orchestratorAutostartRunIds={{}}
         recordOrchestratorResult={vi.fn()}
+        tasksFile={mockTasksFile}
         terminalRuns={[polledRun]}
         workerActions={workerActions}
         workers={[]}

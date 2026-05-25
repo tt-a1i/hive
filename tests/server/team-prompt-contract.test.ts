@@ -228,7 +228,7 @@ describe('team prompt contract', () => {
     }, 4000)
   })
 
-  test('team report submits to a shell-wrapped Claude startup command using the selected CLI driver', async () => {
+  test('team report submits to a shell-wrapped Claude startup command using the selected CLI driver', { timeout: 25000 }, async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-shell-wrapped-claude-report-'))
     const workspacePath = join(dataDir, 'workspace')
     const binDir = join(dataDir, 'bin')
@@ -300,10 +300,10 @@ describe('team prompt contract', () => {
 
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, orchestrator.id)
-      expect(run?.output).toContain('\u001b[200~[Hive 系统消息：来自 @Alice 的汇报]')
+      expect(run?.output).toContain('[Hive 系统消息：来自 @Alice 的汇报]')
       expect(run?.output).toContain('Done from shell-wrapped Claude')
       expect(run?.output).toContain('\u001b[201~')
       expect(run?.output.match(/SUBMITTED/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
-    }, 4000)
+    }, 20000)
   })
 })

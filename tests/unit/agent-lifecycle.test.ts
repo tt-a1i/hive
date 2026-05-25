@@ -87,7 +87,7 @@ describe('agent lifecycle (unit)', () => {
     expect(liveRun.output).toContain(`PROJECT=${workspace.id}`)
     expect(liveRun.output).toContain(`AGENT=${orchestrator.id}`)
     expect(liveRun.output).toContain('PATH=')
-    expect(liveRun.output).toContain('/dist/bin')
+    expect(liveRun.output).toContain('/bin')
 
     expect(persistedRun).toMatchObject({
       agentId: orchestrator.id,

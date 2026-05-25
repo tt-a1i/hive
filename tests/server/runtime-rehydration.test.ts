@@ -122,6 +122,31 @@ describe('runtime rehydration', () => {
     )
   })
 
+  test('does not rehydrate reported dispatches as pending when legacy status is stale', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-stale-dispatch-status-'))
+    tempDirs.push(dataDir)
+
+    const firstStore = createRuntimeStore({ dataDir })
+    stores.push(firstStore)
+    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+
+    const completedDispatch = await firstStore.dispatchTask(workspace.id, alice.id, 'Already done')
+    firstStore.reportTask(workspace.id, alice.id)
+    await firstStore.dispatchTask(workspace.id, alice.id, 'Still pending')
+
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    db.prepare("UPDATE dispatches SET status = 'submitted' WHERE id = ?").run(completedDispatch.id)
+    db.close()
+
+    const secondStore = createRuntimeStore({ dataDir })
+    stores.push(secondStore)
+
+    expect(secondStore.listWorkers(workspace.id)).toContainEqual(
+      expect.objectContaining({ id: alice.id, pendingTaskCount: 1, status: 'stopped' })
+    )
+  })
+
   test('captures Claude session id into sqlite and reuses it on next start', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-session-'))
     const workspacePath = join(dataDir, 'workspace')

@@ -20,12 +20,25 @@ interface HiveEnv {
 const TEAM_USAGE = [
   'Usage:',
   '  team list',
-  '  team send <worker-name> "<task>"',
+  '  team send <worker-name> "<task>" [--task <id>] [--create-task]',
   '  team cancel --dispatch <dispatch-id> "<reason>"',
-  '  team report "<result>" [--dispatch <dispatch-id>] [--artifact <path>]',
-  '  team report --stdin [--dispatch <dispatch-id>] [--artifact <path>]',
+  '  team report "<result>" [--dispatch <dispatch-id>] [--priority failed|blocked|normal] [--artifact <path>]',
+  '  team report --stdin [--dispatch <dispatch-id>] [--priority failed|blocked|normal] [--artifact <path>]',
   '  team status "<current status>" [--artifact <path>]',
   '  team status --stdin [--artifact <path>]',
+  '  team task list [--status <status>]',
+  '  team task create "<title>"',
+  '  team task done <id>',
+  '  team task block <id>',
+  '  team task cancel <id>',
+  '  team task show <id>',
+  '  team discuss --start --members "<w1>,<w2>" --topic "<question>" [--rounds 3] [--join] [--listen stdin]',
+  '  team discuss "<message>"',
+  '  team discuss --final "<final-position>"',
+  '  team discuss --end [--cancel] [--reason "<reason>"]',
+  '  team discuss --skip <worker-name>',
+  '  team discuss --steer "<direction>"',
+  '  team discuss --extend [N]',
   '',
   'Flags can appear in any order. Use --stdin to pipe long bodies and avoid shell-escaping issues.',
   "Use a quoted heredoc (<<'EOF') so $vars, backticks, and command substitutions stay literal:",
@@ -120,7 +133,7 @@ interface ParsedCancelArgs {
 }
 
 const REPORT_USAGE =
-  'Usage: team report (<result> | --stdin) [--dispatch <dispatch-id>] [--artifact <path>]'
+  'Usage: team report (<result> | --stdin) [--dispatch <dispatch-id>] [--priority failed|blocked|normal] [--artifact <path>]'
 const STATUS_USAGE = 'Usage: team status (<current status> | --stdin) [--artifact <path>]'
 const CANCEL_USAGE = 'Usage: team cancel --dispatch <dispatch-id> <reason>'
 
@@ -128,9 +141,13 @@ const usageFor = (command: string) => (command === 'status' ? STATUS_USAGE : REP
 
 const withUsage = (message: string, command: string) => `${message}\n\n${usageFor(command)}`
 
+export type ReportPriority = 'failed' | 'blocked' | 'normal'
+
 export interface ParsedReportArgs {
   artifacts: string[]
+  checkpoint: string | undefined
   dispatchId: string | undefined
+  priority: ReportPriority | undefined
   result: string | null
   useStdin: boolean
 }
@@ -138,7 +155,9 @@ export interface ParsedReportArgs {
 export const parseReportArgs = (args: string[], command = 'report'): ParsedReportArgs => {
   const positionals: string[] = []
   const artifacts: string[] = []
+  let checkpoint: string | undefined
   let dispatchId: string | undefined
+  let priority: ReportPriority | undefined
   let useStdin = false
 
   for (let index = 0; index < args.length; index += 1) {
@@ -159,6 +178,32 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
         throw new Error(withUsage('--artifact requires a value', command))
       }
       artifacts.push(next)
+      index += 1
+      continue
+    }
+
+    if (arg === '--priority') {
+      if (command === 'status') {
+        throw new Error(withUsage('team status does not accept --priority', command))
+      }
+      const next = args[index + 1]
+      if (next !== 'failed' && next !== 'blocked' && next !== 'normal') {
+        throw new Error(withUsage('--priority must be one of: failed, blocked, normal', command))
+      }
+      priority = next
+      index += 1
+      continue
+    }
+
+    if (arg === '--checkpoint') {
+      if (command === 'status') {
+        throw new Error(withUsage('team status does not accept --checkpoint', command))
+      }
+      const next = args[index + 1]
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(withUsage('--checkpoint requires a value', command))
+      }
+      checkpoint = next
       index += 1
       continue
     }
@@ -213,7 +258,33 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
     )
   }
 
-  return { result: useStdin ? null : (positionals[0] ?? null), artifacts, dispatchId, useStdin }
+  return { result: useStdin ? null : (positionals[0] ?? null), artifacts, checkpoint, dispatchId, priority, useStdin }
+}
+
+const SEQ_PATTERN = /^#(\d+)$/
+
+const resolveTaskId = async (
+  baseUrl: string,
+  env: HiveEnv,
+  idOrSeq: string,
+  headers: Record<string, string>
+): Promise<string> => {
+  const seqMatch = idOrSeq.match(SEQ_PATTERN)
+  if (!seqMatch) return idOrSeq
+  const seq = seqMatch[1]
+  const qs = new URLSearchParams({ workspace_id: env.HIVE_PROJECT_ID, seq: seq! })
+  const response = await fetchRuntime(baseUrl, `/api/team/tasks?${qs.toString()}`, {
+    method: 'GET',
+    headers,
+  })
+  if (!response.ok) {
+    throw new Error(`Task #${seq} not found`)
+  }
+  const body = (await response.json()) as { task?: { id: string } }
+  if (!body.task?.id) {
+    throw new Error(`Task #${seq} not found`)
+  }
+  return body.task.id
 }
 
 export const parseCancelArgs = (args: string[]): ParsedCancelArgs => {
@@ -304,10 +375,21 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'send') {
-    const [workerName, ...taskParts] = args
+    let taskId: string | undefined
+    let createTask = false
+    const filtered: string[] = []
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i]
+      if (arg === '--task' && args[i + 1]) { taskId = args[++i]; continue }
+      if (arg === '--create-task') { createTask = true; continue }
+      filtered.push(arg!)
+    }
+
+    const [workerName, ...taskParts] = filtered
     const task = taskParts.join(' ').trim()
     if (!workerName || !task || uuidPattern.test(workerName)) {
-      throw new Error('Usage: team send <worker-name> <task>')
+      throw new Error('Usage: team send <worker-name> <task> [--task <id>] [--create-task]')
     }
 
     const env = getHiveEnv()
@@ -319,6 +401,8 @@ export const runTeamCommand = async (argv: string[]) => {
       token: env.HIVE_AGENT_TOKEN,
       to: workerName,
       text: task,
+      ...(taskId ? { task_id: taskId } : {}),
+      ...(createTask ? { create_task: true } : {}),
     })
     console.log(JSON.stringify(await response.json()))
     return
@@ -368,6 +452,8 @@ export const runTeamCommand = async (argv: string[]) => {
     const baseUrl = getBaseUrl(env)
     const response = await postJson(baseUrl, '/api/team/report', {
       ...(report.dispatchId ? { dispatch_id: report.dispatchId } : {}),
+      ...(report.priority ? { priority: report.priority } : {}),
+      ...(report.checkpoint ? { checkpoint: report.checkpoint } : {}),
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
@@ -380,6 +466,227 @@ export const runTeamCommand = async (argv: string[]) => {
         `Hive recorded the report, but could not deliver it to Orchestrator in real time: ${payload.forward_error}`
       )
     }
+    return
+  }
+
+  if (command === 'task') {
+    const [subcommand, ...subArgs] = args
+
+    if (!subcommand || subcommand === '--help') {
+      console.log([
+        'Usage:',
+        '  team task list [--status <status>]',
+        '  team task create "<title>"',
+        '  team task done <id>',
+        '  team task block <id>',
+        '  team task cancel <id>',
+        '  team task show <id>',
+      ].join('\n'))
+      return
+    }
+
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
+    const authHeaders = {
+      'x-hive-agent-id': env.HIVE_AGENT_ID,
+      'x-hive-agent-token': env.HIVE_AGENT_TOKEN,
+    }
+
+    if (subcommand === 'list') {
+      let status: string | undefined
+      for (let i = 0; i < subArgs.length; i++) {
+        if (subArgs[i] === '--status' && subArgs[i + 1]) { status = subArgs[++i]; continue }
+      }
+      const qs = new URLSearchParams({ workspace_id: env.HIVE_PROJECT_ID })
+      if (status) qs.set('status', status)
+      const response = await fetchRuntime(baseUrl, `/api/team/tasks?${qs.toString()}`, {
+        method: 'GET',
+        headers: authHeaders,
+      })
+      if (!response.ok) await throwHttpError(response)
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    if (subcommand === 'show') {
+      const rawId = subArgs[0]
+      if (!rawId) throw new Error('Usage: team task show <id|#seq>')
+      const id = await resolveTaskId(baseUrl, env, rawId, authHeaders)
+      const response = await fetchRuntime(baseUrl, `/api/team/tasks/${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers: authHeaders,
+      })
+      if (!response.ok) await throwHttpError(response)
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    if (subcommand === 'create') {
+      const title = subArgs.join(' ').trim()
+      if (!title) throw new Error('Usage: team task create "<title>"')
+      const response = await postJson(baseUrl, '/api/team/tasks', {
+        workspace_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        title,
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    if (subcommand === 'done' || subcommand === 'block' || subcommand === 'cancel') {
+      const rawId = subArgs[0]
+      if (!rawId) throw new Error(`Usage: team task ${subcommand} <id|#seq>`)
+      const id = await resolveTaskId(baseUrl, env, rawId, authHeaders)
+      const statusMap = { done: 'done', block: 'blocked', cancel: 'cancelled' } as const
+      const response = await postJson(baseUrl, `/api/team/tasks/${encodeURIComponent(id)}/status`, {
+        workspace_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        status: statusMap[subcommand],
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    throw new Error(`Unknown task subcommand: ${subcommand}`)
+  }
+
+  if (command === 'discuss') {
+    const env = getHiveEnv()
+    const baseUrl = getBaseUrl(env)
+
+    // --start: create discussion group
+    if (args.includes('--start')) {
+      let members: string | undefined
+      let topic: string | undefined
+      let rounds: number | undefined
+      let listenMode: string | undefined
+      const orchJoin = args.includes('--join')
+
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i]
+        if (arg === '--members' && args[i + 1]) { members = args[++i]; continue }
+        if (arg === '--topic' && args[i + 1]) { topic = args[++i]; continue }
+        if (arg === '--rounds' && args[i + 1]) { rounds = Number(args[++i]); continue }
+        if (arg === '--listen' && args[i + 1]) { listenMode = args[++i]; continue }
+      }
+
+      if (!members || !topic) {
+        throw new Error('Usage: team discuss --start --members "<w1>,<w2>" --topic "<question>"')
+      }
+
+      const memberList = members.split(',').map((m) => m.trim()).filter(Boolean)
+      const response = await postJson(baseUrl, '/api/team/discuss/start', {
+        project_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        members: memberList,
+        topic,
+        ...(rounds ? { rounds } : {}),
+        ...(listenMode ? { listen_mode: listenMode } : {}),
+        ...(orchJoin ? { orch_participates: true } : {}),
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // --end: end discussion (default: summarize; --cancel: no report)
+    if (args.includes('--end')) {
+      let reason: string | undefined
+      const cancel = args.includes('--cancel')
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--reason' && args[i + 1]) { reason = args[++i]; continue }
+      }
+      const response = await postJson(baseUrl, '/api/team/discuss/end', {
+        project_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        ...(reason ? { reason } : {}),
+        ...(cancel ? { cancel: true } : {}),
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // --skip: skip a worker
+    if (args.includes('--skip')) {
+      const skipIndex = args.indexOf('--skip')
+      const workerName = args[skipIndex + 1]
+      if (!workerName || workerName.startsWith('--')) {
+        throw new Error('Usage: team discuss --skip <worker-name>')
+      }
+      const response = await postJson(baseUrl, '/api/team/discuss/skip', {
+        project_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        worker_name: workerName,
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // --steer: inject guidance into discussion
+    if (args.includes('--steer')) {
+      const steerIndex = args.indexOf('--steer')
+      const text = args[steerIndex + 1]
+      if (!text || text.startsWith('--')) {
+        throw new Error('Usage: team discuss --steer "<direction>"')
+      }
+      const response = await postJson(baseUrl, '/api/team/discuss/steer', {
+        workspace_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        text,
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // --extend: add more rounds
+    if (args.includes('--extend')) {
+      const extendIndex = args.indexOf('--extend')
+      const nextArg = args[extendIndex + 1]
+      const rounds = nextArg && !nextArg.startsWith('--') ? Number(nextArg) : 1
+      const response = await postJson(baseUrl, '/api/team/discuss/extend', {
+        workspace_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        rounds,
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // --final: submit final position
+    if (args.includes('--final')) {
+      const finalIndex = args.indexOf('--final')
+      const text = args[finalIndex + 1]
+      if (!text || text.startsWith('--')) {
+        throw new Error('Usage: team discuss --final "<final-position>"')
+      }
+      const response = await postJson(baseUrl, '/api/team/discuss/final', {
+        project_id: env.HIVE_PROJECT_ID,
+        from_agent_id: env.HIVE_AGENT_ID,
+        token: env.HIVE_AGENT_TOKEN,
+        text,
+      })
+      console.log(JSON.stringify(await response.json()))
+      return
+    }
+
+    // No flag: send discussion message (positional arg)
+    const text = args.filter((a) => !a.startsWith('--')).join(' ').trim()
+    if (!text) {
+      throw new Error('Usage: team discuss "<message>"')
+    }
+    const response = await postJson(baseUrl, '/api/team/discuss/message', {
+      project_id: env.HIVE_PROJECT_ID,
+      from_agent_id: env.HIVE_AGENT_ID,
+      token: env.HIVE_AGENT_TOKEN,
+      text,
+    })
+    console.log(JSON.stringify(await response.json()))
     return
   }
 

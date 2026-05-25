@@ -213,6 +213,7 @@ describe('runtime http app', () => {
         pending_task_count: 1,
         last_pty_line: null,
         command_preset_id: null,
+        role_template_name: null,
       },
     ])
   })
@@ -301,6 +302,7 @@ describe('runtime http app', () => {
       pending_task_count: 0,
       last_pty_line: null,
       command_preset_id: null,
+      role_template_name: null,
     })
     expect(store.listWorkers(workspace.id)).toEqual([
       {

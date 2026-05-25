@@ -17,10 +17,10 @@ import { createVersionService, type VersionService } from './version-service.js'
 
 interface CreateAppOptions {
   store: RuntimeStore
-  pickFolderService?: () => Promise<PickFolderResponse>
-  openWorkspaceService?: OpenWorkspaceService
-  tasksFileService?: TasksFileService
-  versionService?: VersionService
+  pickFolderService?: (() => Promise<PickFolderResponse>) | undefined
+  openWorkspaceService?: OpenWorkspaceService | undefined
+  tasksFileService?: TasksFileService | undefined
+  versionService?: VersionService | undefined
 }
 
 const getDefaultStaticDir = () => {

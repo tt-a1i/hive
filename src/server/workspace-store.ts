@@ -12,6 +12,8 @@ import {
   getWorkerRecord,
   markAgentStarted,
   markAgentStopped,
+  markDiscussionJoined,
+  markDiscussionLeft,
   markTaskCancelled,
   markTaskDispatched,
   markTaskReported,
@@ -33,7 +35,8 @@ const normalizeWorkerName = (name: string) => {
 
 export const createWorkspaceStore = (
   db: Database,
-  messageKinds: MessageKindRecord[]
+  messageKinds: MessageKindRecord[],
+  isInActiveDiscussion: (workspaceId: string, agentId: string) => boolean = () => false
 ): WorkspaceStore => {
   const workspaces = new Map<string, WorkspaceRecord>()
   seedWorkspacesFromDb(db, workspaces, messageKinds)
@@ -58,12 +61,21 @@ export const createWorkspaceStore = (
         name,
         description: input.description ?? getDefaultRoleDescription(input.role),
         role: input.role,
+        ...(input.roleTemplateName ? { roleTemplateName: input.roleTemplateName } : {}),
         status: 'stopped',
         pendingTaskCount: 0,
       }
       db.prepare(
-        'INSERT INTO workers (id, workspace_id, name, description, role, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(worker.id, workspaceId, worker.name, worker.description, worker.role, Date.now())
+        'INSERT INTO workers (id, workspace_id, name, description, role, role_template_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(
+        worker.id,
+        workspaceId,
+        worker.name,
+        worker.description,
+        worker.role,
+        input.roleTemplateName ?? null,
+        Date.now()
+      )
       workspace.agents.push(worker)
       return worker
     },
@@ -148,24 +160,42 @@ export const createWorkspaceStore = (
     listWorkers(workspaceId) {
       return getWorkspace(workspaceId)
         .agents.filter(isWorkerAgent)
-        .map(({ id, name, role, status, pendingTaskCount }) => ({
+        .map(({ id, name, role, roleTemplateName, status, pendingTaskCount }) => ({
           id,
           name,
           role,
+          ...(roleTemplateName ? { roleTemplateName } : {}),
           status,
           pendingTaskCount,
         }))
     },
     listWorkspaces() {
-      return Array.from(workspaces.values(), (workspace) => workspace.summary)
+      const order = (
+        db
+          .prepare('SELECT id FROM workspaces ORDER BY sort_order ASC, created_at ASC')
+          .all() as Array<{ id: string }>
+      ).map((row) => row.id)
+      return order
+        .filter((id) => workspaces.has(id))
+        .map((id) => workspaces.get(id)!.summary)
+    },
+    reorderWorkspaces(workspaceIds: string[]) {
+      const stmt = db.prepare('UPDATE workspaces SET sort_order = ? WHERE id = ?')
+      for (let i = 0; i < workspaceIds.length; i++) {
+        stmt.run(i, workspaceIds[i])
+      }
     },
     markAgentStarted: (workspaceId, agentId) => markAgentStarted(workspaces, workspaceId, agentId),
     markAgentStopped: (workspaceId, agentId) => markAgentStopped(workspaces, workspaceId, agentId),
+    markDiscussionJoined: (workspaceId, agentId) =>
+      markDiscussionJoined(workspaces, workspaceId, agentId),
+    markDiscussionLeft: (workspaceId, agentId) =>
+      markDiscussionLeft(workspaces, workspaceId, agentId),
     markTaskDispatched: (workspaceId, workerId) =>
-      markTaskDispatched(workspaces, workspaceId, workerId),
+      markTaskDispatched(workspaces, workspaceId, workerId, isInActiveDiscussion),
     markTaskCancelled: (workspaceId, workerId) =>
-      markTaskCancelled(workspaces, workspaceId, workerId),
+      markTaskCancelled(workspaces, workspaceId, workerId, isInActiveDiscussion),
     markTaskReported: (workspaceId, workerId) =>
-      markTaskReported(workspaces, workspaceId, workerId),
+      markTaskReported(workspaces, workspaceId, workerId, isInActiveDiscussion),
   }
 }

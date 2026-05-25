@@ -2,6 +2,7 @@ import type { AgentSummary, TeamListItem, WorkspaceSummary } from '../shared/typ
 import type { AgentManager } from './agent-manager.js'
 import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
+import { createDiscussionOperations, type DiscussionOperations } from './discussion-operations.js'
 import type { DispatchRecord, ListDispatchesOptions } from './dispatch-ledger-store.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
@@ -15,6 +16,7 @@ import type {
   StatusTaskInput,
 } from './team-operations.js'
 import type { TerminalRunSummary } from './terminal-input-profile.js'
+import type { createTaskService } from './task-service.js'
 import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 
 interface RuntimeStore {
@@ -22,6 +24,7 @@ interface RuntimeStore {
   createWorkspace: (path: string, name: string) => WorkspaceSummary
   deleteWorkspace: (workspaceId: string) => Promise<void>
   listWorkspaces: () => WorkspaceSummary[]
+  reorderWorkspaces: (workspaceIds: string[]) => void
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
   deleteWorker: (workspaceId: string, workerId: string) => void
   renameWorker: (workspaceId: string, workerId: string, name: string) => AgentSummary
@@ -43,6 +46,8 @@ interface RuntimeStore {
   cancelTask: (workspaceId: string, dispatchId: string, input: CancelTaskInput) => ReportTaskResult
   listDispatches: (workspaceId: string, options?: ListDispatchesOptions) => DispatchRecord[]
   listWorkers: (workspaceId: string) => TeamListItem[]
+  markDiscussionJoined: (workspaceId: string, agentId: string) => void
+  markDiscussionLeft: (workspaceId: string, agentId: string) => void
   getLastPtyLineForAgent: (workspaceId: string, agentId: string) => string | null
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
   getWorker: (workspaceId: string, workerId: string) => AgentSummary
@@ -78,6 +83,7 @@ interface RuntimeStore {
   getLiveRun: (runId: string) => LiveAgentRun
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
   registerTasksListener: (listener: (workspaceId: string, content: string) => void) => () => void
+  discussionOps: DiscussionOperations
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   peekAgentToken: (agentId: string) => string | undefined
@@ -85,11 +91,14 @@ interface RuntimeStore {
   resizeAgentRun: (runId: string, cols: number, rows: number) => void
   resumeTerminalRun: (runId: string) => void
   settings: SettingsStore
+  taskService: ReturnType<typeof createTaskService>
   writeRunInput: (runId: string, input: Buffer | string) => void
+  writeAgentStdin: (workspaceId: string, agentId: string, text: string) => void
   getUiToken: () => string
   stopAgentRun: (runId: string) => void
   validateAgentToken: (agentId: string, token: string | undefined) => boolean
   validateUiToken: (token: string | undefined) => boolean
+  getDb: () => import('better-sqlite3').Database
 }
 
 interface RuntimeStoreOptions {
@@ -123,6 +132,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       return workspace
     },
     listWorkspaces: () => services.workspaceStore.listWorkspaces(),
+    reorderWorkspaces: (workspaceIds) => services.workspaceStore.reorderWorkspaces(workspaceIds),
     deleteWorkspace: async (workspaceId) => {
       const workspace = services.workspaceStore.getWorkspaceSnapshot(workspaceId)
       lifecycle.deleteWorkspaceShell(workspaceId)
@@ -160,6 +170,10 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     statusTask: services.teamOps.statusTask,
     listDispatches: services.dispatchLedgerStore.listWorkspaceDispatches,
     listWorkers: (workspaceId) => services.workspaceStore.listWorkers(workspaceId),
+    markDiscussionJoined: (workspaceId, agentId) =>
+      services.workspaceStore.markDiscussionJoined(workspaceId, agentId),
+    markDiscussionLeft: (workspaceId, agentId) =>
+      services.workspaceStore.markDiscussionLeft(workspaceId, agentId),
     getLastPtyLineForAgent: (workspaceId, agentId) =>
       services.workerOutputTracker?.getLastPtyLine(workspaceId, agentId) ?? null,
     getWorkspaceSnapshot: (workspaceId) =>
@@ -179,6 +193,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     getActiveRunByAgentId: (workspaceId, agentId) =>
       services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId),
     registerTasksListener: lifecycle.registerTasksListener,
+    discussionOps: createDiscussionOperations(services.db),
     listAgentRuns: (agentId) => services.agentRuntime.listAgentRuns(agentId),
     listMessagesForRecovery: (workspaceId, sinceMs) =>
       services.messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
@@ -187,11 +202,15 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     resizeAgentRun: lifecycle.resizeTerminalRun,
     resumeTerminalRun: lifecycle.resumeTerminalRun,
     settings: services.settings,
+    taskService: services.taskService,
     writeRunInput: lifecycle.writeRunInput,
+    writeAgentStdin: (workspaceId, agentId, text) =>
+      services.agentRuntime.writeAgentStdin(workspaceId, agentId, text),
     getUiToken: () => services.uiAuth.getToken(),
     stopAgentRun: lifecycle.stopTerminalRun,
     validateAgentToken: (agentId, token) =>
       services.agentRuntime.validateAgentToken(agentId, token),
     validateUiToken: (token) => services.uiAuth.validate(token),
+    getDb: () => services.db,
   }
 }

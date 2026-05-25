@@ -9,6 +9,7 @@ describe('parseReportArgs', () => {
       result: 'done',
       dispatchId: 'abc',
       artifacts: ['src/foo.ts'],
+      priority: undefined,
       useStdin: false,
     })
   })
@@ -19,6 +20,7 @@ describe('parseReportArgs', () => {
       result: 'done',
       dispatchId: 'abc',
       artifacts: [],
+      priority: undefined,
       useStdin: false,
     })
   })
@@ -37,6 +39,7 @@ describe('parseReportArgs', () => {
       result: 'done',
       dispatchId: 'abc',
       artifacts: ['src/a.ts', 'src/b.ts'],
+      priority: undefined,
       useStdin: false,
     })
   })
@@ -47,6 +50,7 @@ describe('parseReportArgs', () => {
       result: 'done',
       dispatchId: undefined,
       artifacts: [],
+      priority: undefined,
       useStdin: false,
     })
   })
@@ -57,6 +61,7 @@ describe('parseReportArgs', () => {
       result: null,
       dispatchId: 'abc',
       artifacts: [],
+      priority: undefined,
       useStdin: true,
     })
   })
@@ -83,6 +88,7 @@ describe('parseReportArgs', () => {
       result: null,
       dispatchId: undefined,
       artifacts: [],
+      priority: undefined,
       useStdin: true,
     })
     try {
@@ -179,6 +185,46 @@ describe('parseReportArgs', () => {
         const message = error instanceof Error ? error.message : String(error)
         expect(message).toContain('Missing <current status>')
         expect(message).toContain('Usage: team status')
+        return
+      }
+      throw new Error('expected parseReportArgs to throw')
+    })
+  })
+
+  describe('--priority flag', () => {
+    test('parses --priority failed', () => {
+      const parsed = parseReportArgs(['done', '--priority', 'failed', '--dispatch', 'abc'])
+      expect(parsed.priority).toBe('failed')
+      expect(parsed.result).toBe('done')
+    })
+
+    test('parses --priority blocked', () => {
+      const parsed = parseReportArgs(['done', '--priority', 'blocked'])
+      expect(parsed.priority).toBe('blocked')
+    })
+
+    test('parses --priority normal', () => {
+      const parsed = parseReportArgs(['done', '--priority', 'normal'])
+      expect(parsed.priority).toBe('normal')
+    })
+
+    test('rejects invalid priority value', () => {
+      try {
+        parseReportArgs(['done', '--priority', 'urgent'])
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        expect(message).toContain('--priority must be one of: failed, blocked, normal')
+        return
+      }
+      throw new Error('expected parseReportArgs to throw')
+    })
+
+    test('rejects --priority on status command', () => {
+      try {
+        parseReportArgs(['working', '--priority', 'failed'], 'status')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        expect(message).toContain('team status does not accept --priority')
         return
       }
       throw new Error('expected parseReportArgs to throw')

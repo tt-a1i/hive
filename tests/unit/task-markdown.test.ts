@@ -5,6 +5,7 @@ import {
   countDirectCheckboxChildren,
   deleteTaskLine,
   parseTaskMarkdown,
+  serializeTaskLine,
   updateTaskTextAtLine,
 } from '../../web/src/tasks/task-markdown.js'
 
@@ -182,5 +183,55 @@ describe('countDirectCheckboxChildren', () => {
     const [parent] = parseTaskMarkdown('- [ ] parent\n  - [x] one\n  - [x] two\n  - [x] three\n')
     if (!parent) throw new Error('expected a parsed parent task')
     expect(countDirectCheckboxChildren(parent)).toEqual({ done: 3, total: 3 })
+  })
+})
+
+describe('parseTaskMarkdown — #N seq prefix', () => {
+  test('extracts seq from #N prefix and strips it from text', () => {
+    const [task] = parseTaskMarkdown('- [ ] #5 implement login\n')
+    expect(task?.seq).toBe(5)
+    expect(task?.text).toBe('implement login')
+  })
+
+  test('assigns incremental seq when no #N prefix present', () => {
+    const tasks = parseTaskMarkdown('- [ ] alpha\n- [ ] beta\n')
+    expect(tasks[0]?.seq).toBe(1)
+    expect(tasks[1]?.seq).toBe(2)
+  })
+
+  test('mixes explicit #N and auto-incremented seq', () => {
+    const tasks = parseTaskMarkdown('- [ ] #10 explicit\n- [ ] auto\n- [x] #3 done\n')
+    expect(tasks[0]?.seq).toBe(10)
+    expect(tasks[0]?.text).toBe('explicit')
+    expect(tasks[1]?.seq).toBe(1)
+    expect(tasks[1]?.text).toBe('auto')
+    expect(tasks[2]?.seq).toBe(3)
+    expect(tasks[2]?.text).toBe('done')
+    expect(tasks[2]?.checked).toBe(true)
+  })
+
+  test('#N prefix on nested children works', () => {
+    const [parent] = parseTaskMarkdown('- [ ] #1 parent\n  - [ ] #2 child\n')
+    expect(parent?.seq).toBe(1)
+    expect(parent?.children[0]?.seq).toBe(2)
+    expect(parent?.children[0]?.text).toBe('child')
+  })
+})
+
+describe('serializeTaskLine', () => {
+  test('serializes unchecked task with seq', () => {
+    expect(serializeTaskLine(3, 'do something', false)).toBe('- [ ] #3 do something')
+  })
+
+  test('serializes checked task with seq', () => {
+    expect(serializeTaskLine(7, 'done task', true)).toBe('- [x] #7 done task')
+  })
+
+  test('serializes task without seq when null', () => {
+    expect(serializeTaskLine(null, 'no seq', false)).toBe('- [ ] no seq')
+  })
+
+  test('serializes with indent', () => {
+    expect(serializeTaskLine(2, 'nested', false, 4)).toBe('    - [ ] #2 nested')
   })
 })

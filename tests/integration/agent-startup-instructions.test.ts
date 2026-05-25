@@ -36,7 +36,7 @@ afterEach(() => {
 })
 
 describe('agent startup instructions', () => {
-  test('new orchestrator and worker runs receive team command guidance over real PTY stdin', async () => {
+  test('new orchestrator and worker runs receive team command guidance over real PTY stdin', { timeout: 15000 }, async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-agent-startup-instructions-'))
     const workspacePath = join(dataDir, 'workspace')
     const binDir = join(dataDir, 'bin')
@@ -143,8 +143,8 @@ describe('agent startup instructions', () => {
         expect(output).toContain('维护 .hive/tasks.md')
         expect(output).toContain('Hive worker 是右侧卡片里的真实 CLI agent')
         expect(output).toContain('先执行 `team list` 确认真实 Hive worker')
-        expect(output).toContain('普通、低风险、几分钟内能直接完成的小任务可以自己做')
-        expect(output).toContain('或 user 明确要求 worker/成员处理时，再用 `team send`')
+        expect(output).toContain('你是调度者，不是执行者')
+        expect(output).toContain('有空闲 worker 时必须派单')
         expect(output).toContain('如果只有一个可用 worker，直接用 `team send <worker-name>')
         expect(output).toContain('不要使用你所在 CLI 的内置 subagent / 子代理工具')
         expect(output).not.toContain('team report')

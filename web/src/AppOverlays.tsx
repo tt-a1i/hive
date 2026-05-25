@@ -30,6 +30,7 @@ type AppOverlaysProps = {
   taskGraphOpen: boolean
   tasksFile: TasksFileApi
   wizardOpen: boolean
+  workspaceId: string | null
   workspacePath: string | null
   /** Workspace's active worker roster — feeds the §6.6.2 chip resolution. */
   workers?: readonly TeamListItem[]
@@ -49,6 +50,7 @@ export const AppOverlays = ({
   taskGraphOpen,
   tasksFile,
   wizardOpen,
+  workspaceId,
   workspacePath,
   workers,
   onSelectOwner,
@@ -64,6 +66,7 @@ export const AppOverlays = ({
           open={taskGraphOpen}
           tasksFile={tasksFile}
           onClose={onCloseTaskGraph}
+          workspaceId={workspaceId}
           workspacePath={workspacePath}
           {...(workers ? { workers } : {})}
           {...(onSelectOwner ? { onSelectOwner } : {})}

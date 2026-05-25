@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { AppOverlays } from './AppOverlays.js'
@@ -11,7 +11,6 @@ import { RuntimeOfflinePage } from './pwa/RuntimeOfflinePage.js'
 import { UpdateAvailableToast } from './pwa/UpdateAvailableToast.js'
 import { useShortcutAction } from './pwa/use-shortcut-action.js'
 import { Sidebar } from './sidebar/Sidebar.js'
-import { parseTaskMarkdown } from './tasks/task-markdown.js'
 import { useTasksFile } from './tasks/useTasksFile.js'
 import { useOptimisticTerminalRuns } from './terminal/useOptimisticTerminalRuns.js'
 import { useTerminalRuns } from './terminal/useTerminalRuns.js'
@@ -69,13 +68,6 @@ export const AppInner = () => {
     demoMode ? null : (activeWorkspaceId ?? null),
     demoMode ? DEMO_TASKS_MD : undefined
   )
-  const openTaskCount = useMemo(
-    () =>
-      eff.effectiveActiveWorkspace
-        ? parseTaskMarkdown(tasksFile.content).filter((task) => !task.checked).length
-        : 0,
-    [eff.effectiveActiveWorkspace, tasksFile.content]
-  )
   const workerActions = useWorkerActions({
     activeWorkspaceId,
     onWorkerDeleted: terms.forgetOptimisticAgent,
@@ -115,16 +107,14 @@ export const AppInner = () => {
     <>
       <MainLayout
         hideTopbarActions={!eff.effectiveActiveWorkspace}
-        onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
-        openTaskCount={openTaskCount}
         topbarActions={<OpenWorkspaceButton workspace={eff.effectiveActiveWorkspace} />}
-        taskGraphOpen={taskGraphOpen}
         sidebar={
           <Sidebar
             activeWorkspaceId={eff.effectiveActiveWorkspaceId}
             createDisabledReason={bootstrapError ?? undefined}
             onCreateClick={triggerAddDialog}
             onDeleteWorkspace={deleteWorkspace}
+            onReorderWorkspaces={setWorkspaces}
             onSelectWorkspace={selectWorkspace}
             workersByWorkspaceId={eff.effectiveWorkersByWorkspaceId}
             workspaces={eff.effectiveWorkspaces}
@@ -158,6 +148,7 @@ export const AppInner = () => {
             orchestratorAutostartErrors={wsCreate.orchestratorAutostartErrors}
             orchestratorAutostartRunIds={wsCreate.orchestratorAutostartRunIds}
             recordOrchestratorResult={wsCreate.recordOrchestratorResult}
+            tasksFile={tasksFile}
             terminalRuns={terms.terminalRuns}
             workerActions={workerActions}
             workers={activeWorkers}
@@ -173,6 +164,7 @@ export const AppInner = () => {
           onTryDemo={enableDemo}
           taskGraphOpen={taskGraphOpen}
           tasksFile={tasksFile}
+          workspaceId={eff.effectiveActiveWorkspace?.id ?? null}
           workspacePath={eff.effectiveActiveWorkspace?.path ?? null}
           workers={activeWorkers}
           onSelectOwner={handleSelectOwner}

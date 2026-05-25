@@ -63,6 +63,7 @@ export const createAgentRuntime = (
       closing = true
       await Promise.allSettled([...startPromises.values()])
       await closeAgentRuntime(agentManager, registry, syncRun)
+      stdinDispatcher.dispose()
     },
     configureAgentLaunch(workspaceId, agentId, input) {
       launchCache.save(workspaceId, agentId, input)
@@ -86,6 +87,9 @@ export const createAgentRuntime = (
       const run = registry.get(runId)
       if (!run) throw new Error(`Live run not found: ${runId}`)
       return syncRun(run)
+    },
+    getLiveRunRegistry() {
+      return registry
     },
     getPtyOutputBus() {
       return flowAdapter.getOutputBus()
@@ -137,10 +141,10 @@ export const createAgentRuntime = (
     },
     validateAgentToken: tokenRegistry.validate,
     writeReportPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
-      stdinDispatcher.writeReportPrompt(workspaceId, workerName, text, artifacts, input)
+      stdinDispatcher.writeReportPrompt(workspaceId, workerName, _workerId, text, artifacts, input)
     },
     writeStatusPrompt(workspaceId, workerName, _workerId, text, artifacts, input = {}) {
-      stdinDispatcher.writeStatusPrompt(workspaceId, workerName, text, artifacts, input)
+      stdinDispatcher.writeStatusPrompt(workspaceId, workerName, _workerId, text, artifacts, input)
     },
     writeSendPrompt(workspaceId, workerId, dispatchId, fromAgentName, workerDescription, text) {
       stdinDispatcher.writeSendPrompt(
@@ -157,6 +161,9 @@ export const createAgentRuntime = (
     },
     writeUserInputPrompt(workspaceId, text) {
       stdinDispatcher.writeUserInputPrompt(workspaceId, text)
+    },
+    writeAgentStdin(workspaceId, agentId, text) {
+      stdinDispatcher.writeToAgent(workspaceId, agentId, text)
     },
   }
 }

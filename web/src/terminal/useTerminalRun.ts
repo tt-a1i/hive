@@ -62,6 +62,7 @@ export const useTerminalRun = (
     let resizeObserver: ResizeObserver | undefined
     let resizeTimer: number | undefined
     let wheelFallbackDispose: (() => void) | undefined
+    let themeObserver: MutationObserver | undefined
     let helperTextarea: HTMLTextAreaElement | null = null
     let onCompositionStart: ((event: Event) => void) | undefined
     let onCompositionEnd: ((event: Event) => void) | undefined
@@ -255,12 +256,22 @@ export const useTerminalRun = (
       }
       onWindowResize = () => resize()
       window.addEventListener('resize', onWindowResize)
+
+      themeObserver = new MutationObserver(() => {
+        if (!terminal) return
+        const rs = getComputedStyle(document.documentElement)
+        const bg = rs.getPropertyValue('--bg-crust').trim() || '#0e0e0e'
+        const fg = rs.getPropertyValue('--text-primary').trim() || '#ebebeb'
+        terminal.options.theme = { background: bg, foreground: fg }
+      })
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     })
 
     return () => {
       disposed = true
       if (onWindowResize) window.removeEventListener('resize', onWindowResize)
       resizeObserver?.disconnect()
+      themeObserver?.disconnect()
       if (resizeTimer) window.clearTimeout(resizeTimer)
       wheelFallbackDispose?.()
       if (helperTextarea && onCompositionStart) {

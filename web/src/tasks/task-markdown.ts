@@ -4,10 +4,12 @@ export interface ParsedTask {
   indent: number
   line: number
   mentions: string[]
+  seq: number
   text: string
 }
 
 const TASK_LINE = /^(\s*)-\s+\[( |x|X)\]\s+(.*)$/
+const SEQ_PREFIX = /^#(\d+)\s+/
 
 /**
  * Pulls candidate `@name` tokens out of a task title. Word-boundary-anchored
@@ -60,6 +62,7 @@ export const parseTaskMarkdown = (
   const stack: ParsedTask[] = []
   const lines = content.split(/\r?\n/)
   const lookup = options.knownWorkerNames ? buildWorkerLookup(options.knownWorkerNames) : null
+  let seqCounter = 0
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i]
     if (!rawLine) continue
@@ -95,12 +98,21 @@ export const parseTaskMarkdown = (
       )
     }
     textWithoutMentions = textWithoutMentions.replace(/\s+/g, ' ').trim()
+    let seq: number
+    const seqMatch = textWithoutMentions.match(SEQ_PREFIX)
+    if (seqMatch) {
+      seq = Number(seqMatch[1])
+      textWithoutMentions = textWithoutMentions.slice(seqMatch[0].length)
+    } else {
+      seq = ++seqCounter
+    }
     const task: ParsedTask = {
       checked: mark.toLowerCase() === 'x',
       children: [],
       indent,
       line: i,
       mentions,
+      seq,
       text: textWithoutMentions,
     }
     while (stack.length > 0) {
@@ -238,4 +250,16 @@ export const appendChildTaskAtLine = (content: string, lineIndex: number, text: 
   const childIndent = `${parentIndentRaw}  `
   lines.splice(insertAt, 0, `${childIndent}- [ ] ${sanitized}`)
   return lines.join('\n')
+}
+
+export const serializeTaskLine = (
+  seq: number | null,
+  title: string,
+  checked: boolean,
+  indent = 0
+): string => {
+  const prefix = ' '.repeat(indent)
+  const mark = checked ? 'x' : ' '
+  const seqPart = seq ? `#${seq} ` : ''
+  return `${prefix}- [${mark}] ${seqPart}${title}`
 }

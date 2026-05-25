@@ -205,7 +205,7 @@ describe('registerServiceWorkerWithEnv', () => {
     installing.transitionTo('installed')
 
     expect(apply).not.toBeNull()
-    apply?.()
+    ;(apply as unknown as () => void)?.()
     expect(installing.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' })
     expect(reload).not.toHaveBeenCalled()
 

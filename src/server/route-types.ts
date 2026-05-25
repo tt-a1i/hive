@@ -17,10 +17,14 @@ export interface SendTaskBody {
   token?: string
   to: string
   text: string
+  task_id?: string
+  create_task?: boolean
 }
 
 export interface ReportTaskBody {
+  checkpoint?: string
   dispatch_id?: string
+  priority?: string
   project_id: string
   from_agent_id: string
   token?: string

@@ -149,7 +149,7 @@ describe('agent runtime races (unit)', () => {
         resumeRun: () => {},
         stopRun: () => {},
         writeInput: (_runId, text) => {
-          writes.push(text)
+          writes.push(String(text))
           throw new Error('EPIPE')
         },
       },

@@ -85,7 +85,7 @@ export const seedWorkspacesFromDb = (
   messageKinds: MessageKindRecord[]
 ) => {
   for (const row of db
-    .prepare('SELECT id, name, path FROM workspaces ORDER BY created_at ASC')
+    .prepare('SELECT id, name, path FROM workspaces ORDER BY sort_order ASC, created_at ASC')
     .all() as WorkspaceRow[]) {
     workspaces.set(row.id, {
       summary: { id: row.id, name: row.name, path: row.path },

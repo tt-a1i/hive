@@ -4,7 +4,8 @@ import type { LiveAgentRun } from './agent-runtime-types.js'
 import { buildWorkerReminderTail, ORCHESTRATOR_REMINDER_TAIL } from './hive-team-guidance.js'
 import { PtyInactiveError } from './http-errors.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
-import { createPostStartInputWriter } from './post-start-input-writer.js'
+import { createOrchMessageQueue, type MessagePriority } from './orch-message-queue.js'
+import { createPostStartInputWriter, hasInteractivePromptReady } from './post-start-input-writer.js'
 
 interface AgentStdinDispatcherInput {
   agentManager: AgentManager | undefined
@@ -74,6 +75,12 @@ export const buildWorkerCancelPayload = (dispatchId: string, reason: string): st
     '',
   ].join('\n')
 
+export const isOperationalAlert = (text: string): boolean =>
+    /^\[(STOPPED|CRASHED|FAILED|ERROR|EXPIRED|UNREACHABLE)\]/im.test(text)
+
+export const isFailedReport = (text: string): boolean =>
+    /^\[(FAILED|BLOCKED|ERROR)\]/im.test(text)
+
 export const createAgentStdinDispatcher = ({
   agentManager,
   getLaunchConfig,
@@ -117,33 +124,94 @@ export const createAgentStdinDispatcher = ({
     }
   }
 
+  const orchQueue = createOrchMessageQueue((workspaceId, messages) => {
+    for (const text of messages) {
+      try {
+        writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, text)
+      } catch {
+        // Orch not active — messages are lost only if PTY is gone
+      }
+    }
+  })
+
+  const flushQueueThenWrite = (workspaceId: string, text: string) => {
+    writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, text)
+    const queued = orchQueue.flush(workspaceId)
+    for (const msg of queued) {
+      try {
+        writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, msg)
+      } catch {
+        // best-effort flush
+      }
+    }
+  }
+
+  const isOrchestratorBusy = (workspaceId: string): boolean => {
+    const orchId = `${workspaceId}:orchestrator`
+    const run = registry
+      .list()
+      .filter((item) => item.agentId === orchId && getWorkspaceId(item.agentId) === workspaceId)
+      .sort((left, right) => right.startedAt - left.startedAt)
+      .find((item) => {
+        const status = syncRun(item).status
+        return status === 'starting' || status === 'running'
+      })
+    if (!run || !agentManager) return false
+    try {
+      const liveRun = agentManager.getRun(run.runId)
+      if (!liveRun.output) return true
+      const config = getLaunchConfig(workspaceId, orchId)
+      const command = config?.interactiveCommand ?? config?.command ?? ''
+      return !hasInteractivePromptReady(liveRun.output, command)
+    } catch {
+      return false
+    }
+  }
+
+  const enqueueOrInject = (
+    workspaceId: string,
+    text: string,
+    input: { requireActiveRun?: boolean; priority?: MessagePriority } = {}
+  ) => {
+    const priority = input.priority ?? 'normal'
+    if (priority === 'high' || isOrchestratorBusy(workspaceId)) {
+      // High priority or Orch busy (not at prompt) — inject immediately
+      writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, text, input)
+    } else {
+      // Orch is at prompt (user might be typing) — queue with batch window
+      orchQueue.enqueue(workspaceId, text, priority)
+    }
+  }
+
   return {
     writeReportPrompt(
       workspaceId: string,
       workerName: string,
+      _workerId: string,
       text: string,
       artifacts: string[],
       input: { requireActiveRun?: boolean } = {}
     ) {
-      writeToActiveAgentRun(
+      const priority: MessagePriority = isFailedReport(text) ? 'high' : 'normal'
+      enqueueOrInject(
         workspaceId,
-        `${workspaceId}:orchestrator`,
         buildOrchestratorReportPayload(workerName, text, artifacts),
-        input
+        { ...input, priority }
       )
     },
     writeStatusPrompt(
       workspaceId: string,
       workerName: string,
+      _workerId: string,
       text: string,
       artifacts: string[],
       input: { requireActiveRun?: boolean } = {}
     ) {
-      writeToActiveAgentRun(
+      if (!isOperationalAlert(text)) return
+      enqueueOrInject(
         workspaceId,
-        `${workspaceId}:orchestrator`,
         buildOrchestratorStatusPayload(workerName, text, artifacts),
-        input
+        { ...input, priority: 'high' }
       )
     },
     writeSendPrompt(
@@ -176,11 +244,13 @@ export const createAgentStdinDispatcher = ({
       )
     },
     writeUserInputPrompt(workspaceId: string, text: string) {
-      writeToActiveAgentRun(
-        workspaceId,
-        `${workspaceId}:orchestrator`,
-        buildOrchestratorUserInputPayload(text)
-      )
+      flushQueueThenWrite(workspaceId, buildOrchestratorUserInputPayload(text))
+    },
+    writeToAgent(workspaceId: string, agentId: string, text: string) {
+      writeToActiveAgentRun(workspaceId, agentId, text, { requireActiveRun: true })
+    },
+    dispose() {
+      orchQueue.dispose()
     },
   }
 }

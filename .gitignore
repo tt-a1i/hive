@@ -8,3 +8,7 @@ coverage/
 .harnessed/
 .screenshots-prod/
 ~/.hive/
+.omc
+.claude/
+.hive/
+.magic-apps.json

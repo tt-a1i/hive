@@ -15,6 +15,7 @@ export interface DispatchRecord {
   sequence: number | null
   status: DispatchStatus
   submittedAt: number | null
+  taskId: string | null
   text: string
   toAgentId: string
   workspaceId: string
@@ -31,6 +32,7 @@ interface DispatchRow {
   sequence: number
   status: DispatchStatus
   submitted_at: number | null
+  task_id: string | null
   text: string
   to_agent_id: string
   workspace_id: string
@@ -86,6 +88,7 @@ const toRecord = (row: DispatchRow): DispatchRecord => ({
   sequence: row.sequence,
   status: row.status,
   submittedAt: row.submitted_at,
+  taskId: row.task_id,
   text: row.text,
   toAgentId: row.to_agent_id,
   workspaceId: row.workspace_id,
@@ -104,6 +107,7 @@ export const createDispatchLedgerStore = (db: Database) => {
       sequence: null,
       status: 'queued',
       submittedAt: null,
+      taskId: null,
       text: input.text,
       toAgentId: input.toAgentId,
       workspaceId: input.workspaceId,
@@ -165,6 +169,7 @@ export const createDispatchLedgerStore = (db: Database) => {
              AND workspace_id = ?
              AND to_agent_id = ?
              AND status IN ('queued', 'submitted')
+             AND reported_at IS NULL
            LIMIT 1`
         )
         .get(dispatchId, workspaceId, toAgentId) as DispatchRow | undefined
@@ -179,6 +184,7 @@ export const createDispatchLedgerStore = (db: Database) => {
          WHERE workspace_id = ?
            AND to_agent_id = ?
            AND status IN ('queued', 'submitted')
+           AND reported_at IS NULL
          ORDER BY sequence ASC
          LIMIT 1`
       )
@@ -195,6 +201,7 @@ export const createDispatchLedgerStore = (db: Database) => {
          WHERE id = ?
            AND workspace_id = ?
            AND status IN ('queued', 'submitted')
+           AND reported_at IS NULL
          LIMIT 1`
       )
       .get(dispatchId, workspaceId) as DispatchRow | undefined
@@ -288,6 +295,7 @@ export const createDispatchLedgerStore = (db: Database) => {
         `SELECT workspace_id, to_agent_id AS worker_id, 'send' AS type
            FROM dispatches
            WHERE status IN ('queued', 'submitted')
+             AND reported_at IS NULL
            ORDER BY sequence ASC`
       )
       .all() as Array<{ type: 'send'; worker_id: string; workspace_id: string }>

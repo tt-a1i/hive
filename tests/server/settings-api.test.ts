@@ -73,16 +73,18 @@ describe('settings api', () => {
         yolo_args_template: ['--yolo'],
       }),
     ])
-    expect(templates).toEqual([
-      expect.objectContaining({
-        id: 'orchestrator',
-        name: 'Orchestrator',
-        role_type: 'orchestrator',
-      }),
-      expect.objectContaining({ id: 'coder', name: 'Coder', role_type: 'coder' }),
-      expect.objectContaining({ id: 'reviewer', name: 'Reviewer', role_type: 'reviewer' }),
-      expect.objectContaining({ id: 'tester', name: 'Tester', role_type: 'tester' }),
-    ])
+    expect(templates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'orchestrator',
+          name: 'Orchestrator',
+          role_type: 'orchestrator',
+        }),
+        expect.objectContaining({ id: 'coder', name: 'Coder', role_type: 'coder' }),
+        expect.objectContaining({ id: 'reviewer', name: 'Reviewer', role_type: 'reviewer' }),
+        expect.objectContaining({ id: 'tester', name: 'Tester', role_type: 'tester' }),
+      ])
+    )
     expect(appStateBefore).toEqual({ key: 'active_workspace_id', value: null })
 
     const updateResponse = await fetch(

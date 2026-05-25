@@ -25,6 +25,7 @@ export interface WorkerComposerState {
   commandPresetId: string
   createWorkerError: string | null
   creating: boolean
+  customRoleName: string
   customTemplates: RoleTemplate[]
   roleDescription: string
   roleDescriptionDefault: string
@@ -32,9 +33,11 @@ export interface WorkerComposerState {
   startupCommand: string
   templateBusy: boolean
   templateError: string | null
+  usedTemplateNames: Set<string>
   workerName: string
   workerRole: WorkerRole
   setCommandPresetId: (value: string) => void
+  setCustomRoleName: (value: string) => void
   setRoleDescription: (value: string) => void
   setStartupCommand: (value: string) => void
   setWorkerName: (value: string) => void
@@ -43,6 +46,8 @@ export interface WorkerComposerState {
   saveAsTemplate: (name: string) => Promise<void>
   deleteTemplate: (templateId: string) => Promise<void>
   randomizeWorkerName: () => void
+  onNameFieldFocus: () => void
+  addCreatedTemplate: (template: RoleTemplate) => void
   resetRoleDescription: () => void
   resetError: () => void
   applyMarketplaceImport: (input: { name: string; description: string }) => void
@@ -148,15 +153,26 @@ export const useWorkerComposer = ({
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState('claude')
   const [startupCommand, setStartupCommand] = useState('')
+  const [customRoleName, setCustomRoleName] = useState('')
   const [createWorkerError, setCreateWorkerError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const workerNameGeneratedRef = useRef(false)
+  const nameFieldFocusedRef = useRef(false)
+  const nameManuallyEditedRef = useRef(false)
   const roleDescriptionEditedRef = useRef(false)
   const roleDescriptionDefault = getDefaultDescription(workerRole, roleTemplates, language)
-  const customTemplates = useMemo(
-    () => roleTemplates.filter((template) => !template.isBuiltin),
-    [roleTemplates]
+  const usedRoleNames = useMemo(
+    () => new Set(workers.map((w) => w.roleTemplateName).filter(Boolean)),
+    [workers]
   )
+  const customTemplates = useMemo(() => {
+    const templates = roleTemplates.filter((template) => !template.isBuiltin)
+    const used = templates.filter((t) => usedRoleNames.has(t.name))
+    const rest = templates
+      .filter((t) => !usedRoleNames.has(t.name))
+      .sort((a, b) => b.useCount - a.useCount)
+    return [...used, ...rest]
+  }, [roleTemplates, usedRoleNames])
 
   useEffect(() => {
     if (!open) return
@@ -204,6 +220,13 @@ export const useWorkerComposer = ({
   }, [open])
 
   useEffect(() => {
+    if (!open) return
+    nameFieldFocusedRef.current = false
+    workerNameGeneratedRef.current = true
+    setWorkerName(generateWorkerName({ language, role: workerRole, usedNames }))
+  }, [open])
+
+  useEffect(() => {
     if (selectedTemplateId !== null) return
     if (!roleDescriptionEditedRef.current) {
       setRoleDescriptionState(getDefaultDescription(workerRole, roleTemplates, language))
@@ -217,6 +240,7 @@ export const useWorkerComposer = ({
 
   const setWorkerNameFromUser = (value: string) => {
     workerNameGeneratedRef.current = false
+    nameManuallyEditedRef.current = true
     setWorkerName(value)
   }
 
@@ -224,14 +248,20 @@ export const useWorkerComposer = ({
 
   const randomizeWorkerName = () => {
     workerNameGeneratedRef.current = true
+    nameFieldFocusedRef.current = false
+    nameManuallyEditedRef.current = false
     setWorkerName(generateWorkerName({ language, role: workerRole, usedNames }))
   }
 
   useEffect(() => {
-    if (workerNameGeneratedRef.current) {
+    if (!nameFieldFocusedRef.current && workerNameGeneratedRef.current) {
       setWorkerName(generateWorkerName({ language, role: workerRole, usedNames }))
     }
   }, [language, workerRole, usedNames])
+
+  const onNameFieldFocus = () => {
+    nameFieldFocusedRef.current = true
+  }
 
   const selectWorkerRole = (value: WorkerRole) => {
     setWorkerRole(value)
@@ -255,6 +285,13 @@ export const useWorkerComposer = ({
     setSelectedTemplateId(templateId)
     roleDescriptionEditedRef.current = false
     setRoleDescriptionState(template.description)
+    if (template.suggestedName && !nameManuallyEditedRef.current) {
+      workerNameGeneratedRef.current = false
+      setWorkerName(template.suggestedName)
+    }
+    if (template.commandPresetId) {
+      setCommandPresetId(template.commandPresetId)
+    }
   }
 
   const saveAsTemplate = async (name: string) => {
@@ -284,7 +321,7 @@ export const useWorkerComposer = ({
 
   const deleteTemplate = async (templateId: string) => {
     const template = roleTemplates.find((entry) => entry.id === templateId)
-    if (!template || template.isBuiltin) return
+    if (!template || template.isBuiltin || template.readonly) return
     setTemplateBusy(true)
     setTemplateError(null)
     try {
@@ -330,11 +367,17 @@ export const useWorkerComposer = ({
     event.preventDefault()
     setCreating(true)
     setCreateWorkerError(null)
+    const resolvedTemplateName = selectedTemplateId
+      ? roleTemplates.find((t) => t.id === selectedTemplateId)?.name
+      : workerRole === 'custom' && customRoleName.trim()
+        ? customRoleName.trim()
+        : null
     void createWorker({
       commandPresetId,
       name: workerName,
       role: workerRole,
       roleDescription,
+      ...(resolvedTemplateName ? { roleTemplateName: resolvedTemplateName } : {}),
       startupCommand,
     })
       .then(({ error }) => {
@@ -344,6 +387,7 @@ export const useWorkerComposer = ({
         setSelectedTemplateId(null)
         setCommandPresetId('claude')
         setStartupCommand('')
+        setCustomRoleName('')
         onSuccess()
         if (error) setCreateWorkerError(error)
       })
@@ -358,6 +402,7 @@ export const useWorkerComposer = ({
     commandPresetId,
     createWorkerError,
     creating,
+    customRoleName,
     customTemplates,
     roleDescription,
     roleDescriptionDefault,
@@ -365,9 +410,11 @@ export const useWorkerComposer = ({
     startupCommand,
     templateBusy,
     templateError,
+    usedTemplateNames: usedRoleNames as Set<string>,
     workerName,
     workerRole,
     setCommandPresetId: selectCommandPresetId,
+    setCustomRoleName,
     setRoleDescription,
     setStartupCommand,
     setWorkerName: setWorkerNameFromUser,
@@ -376,6 +423,10 @@ export const useWorkerComposer = ({
     saveAsTemplate,
     deleteTemplate,
     randomizeWorkerName,
+    onNameFieldFocus,
+    addCreatedTemplate: (template: RoleTemplate) => {
+      setRoleTemplates((current) => [...current, template])
+    },
     resetRoleDescription,
     resetError: () => setCreateWorkerError(null),
     applyMarketplaceImport,

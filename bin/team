@@ -1,5 +1,22 @@
 #!/usr/bin/env node
-import { runTeamCommand } from '../src/cli/team.js'
+import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const binDir = dirname(fileURLToPath(import.meta.url))
+const compiledEntry = resolve(binDir, '../src/cli/team.js')
+const sourceEntry = resolve(binDir, '../src/cli/team.ts')
+
+if (!existsSync(compiledEntry)) {
+  const tsxCli = resolve(binDir, '../node_modules/tsx/dist/cli.mjs')
+  const result = spawnSync(process.execPath, [tsxCli, sourceEntry, ...process.argv.slice(2)], {
+    stdio: 'inherit',
+  })
+  process.exit(result.status ?? 1)
+}
+
+const { runTeamCommand } = await import(compiledEntry)
 
 void runTeamCommand(process.argv.slice(2)).catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))

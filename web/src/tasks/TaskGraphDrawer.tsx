@@ -19,11 +19,14 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '../i18n.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
-import { DEFAULT_WORKERS_PANE_WIDTH } from '../usePaneSplit.js'
+import { ActiveDispatchesSection } from './ActiveDispatchesSection.js'
+import { DispatchBadge } from './DispatchBadge.js'
 import { renderInlineMarkdown } from './inline-markdown.js'
 import { TaskGraphRawEditor } from './TaskGraphRawEditor.js'
 import { countDirectCheckboxChildren, type ParsedTask, parseTaskMarkdown } from './task-markdown.js'
 import { ownerToneFromName, parseTaskMetadata, type TaskMetaItem } from './task-meta.js'
+import { type DispatchItem, groupDispatchesByTaskId, type TaskDispatchSummary, useDispatchesForWorkspace } from './useTasksApi.js'
+import { DispatchHistorySection } from './DispatchHistorySection.js'
 
 /**
  * Max indent levels we render with nested visual structure. Beyond this we
@@ -42,31 +45,33 @@ type TaskGraphDrawerProps = {
   onReload: () => void
   onSave: () => Promise<void>
   onToggleTaskLine: (lineIndex: number) => void
-  onAppendTask?: (text: string) => void
-  onAppendSubtask?: (parentLine: number, text: string) => void
-  onUpdateTaskText?: (lineIndex: number, nextText: string) => void
-  onDeleteTask?: (lineIndex: number) => void
+  onAppendTask?: ((text: string) => void) | undefined
+  onAppendSubtask?: ((parentLine: number, text: string) => void) | undefined
+  onUpdateTaskText?: ((lineIndex: number, nextText: string) => void) | undefined
+  onDeleteTask?: ((lineIndex: number) => void) | undefined
   open: boolean
+  workspaceId: string | null
   workspacePath: string | null
   /**
    * Workspace's active worker roster. When provided, `@<name>` chips render
    * only for names that resolve to a real worker — see §6.6.2 fail-soft rule.
    * Omit for demo/fixture mode where any `@token` should chip.
    */
-  knownWorkerNames?: readonly string[]
+  knownWorkerNames?: readonly string[] | undefined
   /**
    * Click handler for an owner chip. When provided, chips render as buttons
    * and clicking one is the cross-pane "show me this worker" gesture.
    * Hover behavior (highlight without scroll) is up to the parent.
    */
-  onSelectOwner?: (workerName: string) => void
+  onSelectOwner?: ((workerName: string) => void) | undefined
   /**
    * Transport-layer connection flag from §3.5.2 / §3.6.5. When `true`, the
    * drawer is rendered with the `connection-stale` overlay and all write
    * paths (checkbox toggle, inline edit, add, raw-editor save) are disabled.
    * Reads (scroll, copy, expand/collapse) stay enabled.
    */
-  connectionStale?: boolean
+  connectionStale?: boolean | undefined
+  requestAddTask?: number | undefined
 }
 
 type OwnerChipHandlers = {
@@ -203,10 +208,12 @@ const TaskItem = ({
   task,
   handlers,
   depth,
+  dispatchSummary,
 }: {
   task: ParsedTask
   handlers: TaskItemHandlers
   depth: number
+  dispatchSummary?: TaskDispatchSummary
 }) => {
   const { t } = useI18n()
   const StatusIcon = task.checked ? CheckCircle2 : Circle
@@ -306,7 +313,9 @@ const TaskItem = ({
                   className={`task-row__title min-w-0 flex-1 ${
                     task.checked ? 'text-ter line-through' : 'text-pri'
                   }`}
+                  onDoubleClick={() => { if (canEdit) setEditing(true) }}
                 >
+                  <span className="text-xs font-mono text-neutral-400 mr-1.5">#{task.seq}</span>
                   {renderInlineMarkdown(title)}
                 </span>
                 {showCollapseToggle ? (
@@ -385,6 +394,11 @@ const TaskItem = ({
                       </span>
                     )
                   })}
+                </span>
+              ) : null}
+              {dispatchSummary ? (
+                <span className="mt-1 flex items-center">
+                  <DispatchBadge summary={dispatchSummary} />
                 </span>
               ) : null}
             </>
@@ -497,13 +511,18 @@ const TaskItem = ({
 const AddTaskInline = ({
   onSubmit,
   disabled = false,
+  forceOpen,
 }: {
   onSubmit: (text: string) => void
   disabled?: boolean
+  forceOpen?: number
 }) => {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
+  useEffect(() => {
+    if (forceOpen && forceOpen > 0) setOpen(true)
+  }, [forceOpen])
   const submit = () => {
     const trimmed = value.trim()
     if (!trimmed) {
@@ -577,6 +596,42 @@ const getTaskSummary = (tasks: ParsedTask[]) => {
   }
 }
 
+const OrphanDispatchesSection = ({
+  dispatches,
+  dispatchByTaskId,
+}: {
+  dispatches: DispatchItem[]
+  dispatchByTaskId: Map<string | null, TaskDispatchSummary>
+}) => {
+  const { t } = useI18n()
+  const nullSummary = dispatchByTaskId.get(null)
+  const openDispatches = dispatches.filter(
+    (d) => d.task_id === null && d.state !== 'reported' && d.state !== 'cancelled'
+  )
+  if (openDispatches.length === 0 && !nullSummary) return null
+  return (
+    <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
+      <div className="mb-1.5 flex items-center gap-2 text-xs font-medium text-ter">
+        <CornerDownRight size={12} aria-hidden />
+        <span>{t('tasks.dispatches.orphan')}</span>
+        {nullSummary ? <DispatchBadge summary={nullSummary} /> : null}
+      </div>
+      {openDispatches.length > 0 ? (
+        <ul className="flex flex-col gap-1 pl-4 text-xs text-sec">
+          {openDispatches.map((d) => (
+            <li key={d.id} className="flex items-center gap-1.5 truncate">
+              <span className="dispatch-badge" data-tone="orange">
+                {d.state}
+              </span>
+              <span className="truncate">{d.text.slice(0, 60)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
 export const TaskGraphDrawer = ({
   content,
   hasConflict,
@@ -591,13 +646,21 @@ export const TaskGraphDrawer = ({
   onUpdateTaskText,
   onDeleteTask,
   open,
+  workspaceId,
   workspacePath,
   knownWorkerNames,
   onSelectOwner,
   connectionStale = false,
+  requestAddTask,
 }: TaskGraphDrawerProps) => {
   const { t } = useI18n()
   const [rawMode, setRawMode] = useState(false)
+  const { dispatches } = useDispatchesForWorkspace(open ? workspaceId : null)
+  const dispatchByTaskId = useMemo(() => groupDispatchesByTaskId(dispatches), [dispatches])
+  const orphanDispatches = useMemo(
+    () => dispatches.filter((d) => d.task_id !== null && d.state !== 'reported' && d.state !== 'cancelled'),
+    [dispatches]
+  )
   // Copy the *raw markdown line* from the source-of-truth content, not the
   // parsed `task.text` (which has mentions stripped). §6.6.6 — "paste back to
   // orchestrator" works best when the copied text matches what's on disk.
@@ -625,9 +688,19 @@ export const TaskGraphDrawer = ({
     () => getTaskSummary(tasks),
     [tasks]
   )
-  // Default to expanded when the completed cohort is small enough that
-  // hiding it feels like the UI "ate" the user's just-checked task.
-  const [completedOpen, setCompletedOpen] = useState(doneRoots.length <= 3)
+  const [completedOpen, setCompletedOpen] = useState(() => {
+    try {
+      const stored = localStorage.getItem('hive:done-collapsed')
+      if (stored !== null) return stored === 'false'
+    } catch {}
+    return false
+  })
+  const toggleCompleted = () => {
+    setCompletedOpen((v) => {
+      try { localStorage.setItem('hive:done-collapsed', v ? 'true' : 'false') } catch {}
+      return !v
+    })
+  }
   const filePath = workspacePath ? `${workspacePath}/.hive/tasks.md` : '.hive/tasks.md'
 
   // §6.6.7 — `Esc` closes the drawer when no inline editor is consuming the
@@ -655,9 +728,6 @@ export const TaskGraphDrawer = ({
       style={{
         background: 'var(--bg-1)',
         borderColor: 'var(--border)',
-        maxWidth: 'calc(100vw - 3.5rem)',
-        minWidth: 360,
-        width: DEFAULT_WORKERS_PANE_WIDTH,
       }}
     >
       <header className="task-drawer__header">
@@ -710,6 +780,9 @@ export const TaskGraphDrawer = ({
         </div>
       ) : null}
       <div className="flex-1 scroll-y px-3 py-3 text-sm">
+        {!rawMode && dispatches.length > 0 ? (
+          <ActiveDispatchesSection dispatches={dispatches} />
+        ) : null}
         {rawMode ? (
           <TaskGraphRawEditor
             content={content}
@@ -723,7 +796,7 @@ export const TaskGraphDrawer = ({
           <>
             {onAppendTask ? (
               <div className="mb-1">
-                <AddTaskInline disabled={connectionStale} onSubmit={onAppendTask} />
+                <AddTaskInline disabled={connectionStale} onSubmit={onAppendTask} forceOpen={requestAddTask} />
               </div>
             ) : null}
             <EmptyState
@@ -740,7 +813,7 @@ export const TaskGraphDrawer = ({
               ))}
               {onAppendTask ? (
                 <li>
-                  <AddTaskInline disabled={connectionStale} onSubmit={onAppendTask} />
+                  <AddTaskInline disabled={connectionStale} onSubmit={onAppendTask} forceOpen={requestAddTask} />
                 </li>
               ) : null}
             </ul>
@@ -748,7 +821,7 @@ export const TaskGraphDrawer = ({
               <div className="mt-1">
                 <button
                   type="button"
-                  onClick={() => setCompletedOpen((v) => !v)}
+                  onClick={toggleCompleted}
                   aria-expanded={completedOpen}
                   data-testid="task-completed-toggle"
                   className="task-completed-toggle"
@@ -769,6 +842,10 @@ export const TaskGraphDrawer = ({
                 ) : null}
               </div>
             ) : null}
+            {dispatches.length > 0 && !rawMode ? (
+              <OrphanDispatchesSection dispatches={dispatches} dispatchByTaskId={dispatchByTaskId} />
+            ) : null}
+            {!rawMode ? <DispatchHistorySection workspaceId={workspaceId} /> : null}
           </div>
         )}
       </div>

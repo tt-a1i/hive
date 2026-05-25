@@ -1,9 +1,12 @@
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import type { OrchestratorStartResult, TerminalRunSummary } from './api.js'
 import { DemoWorkspaceView } from './demo/DemoWorkspaceView.js'
+import type { useTasksFile } from './tasks/useTasksFile.js'
 import { WorkspaceDetail } from './WorkspaceDetail.js'
 import { WorkspaceTerminalPanels } from './WorkspaceTerminalPanels.js'
 import type { WorkerActions } from './worker/useWorkerActions.js'
+
+type TasksFileApi = ReturnType<typeof useTasksFile>
 
 type AppWorkspaceContentProps = {
   activeId: string | undefined
@@ -20,6 +23,7 @@ type AppWorkspaceContentProps = {
   orchestratorAutostartErrors: Record<string, string | null>
   orchestratorAutostartRunIds: Record<string, string | null>
   recordOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
+  tasksFile: TasksFileApi
   terminalRuns: TerminalRunSummary[]
   workerActions: WorkerActions
   workers: TeamListItem[]
@@ -40,6 +44,7 @@ export const AppWorkspaceContent = ({
   orchestratorAutostartErrors,
   orchestratorAutostartRunIds,
   recordOrchestratorResult,
+  tasksFile,
   terminalRuns,
   workerActions,
   workers,
@@ -73,6 +78,7 @@ export const AppWorkspaceContent = ({
         orchestratorAutostartRunId={
           activeId ? (orchestratorAutostartRunIds[activeId] ?? null) : null
         }
+        tasksFile={tasksFile}
         terminalRuns={terminalRuns}
         workers={workers}
         workspace={activeWorkspace}
