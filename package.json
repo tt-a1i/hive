@@ -1,7 +1,7 @@
 {
   "name": "@tt-a1i/hive",
   "version": "1.4.0",
-  "description": "Browser-native hive-mind for CLI coding agents — Claude Code, Codex, Gemini, and OpenCode collaborate as real PTY processes via a team protocol.",
+  "description": "Run Claude Code, Codex, Gemini, OpenCode, Qwen, and other CLI agents as a visible local team in your browser.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
   "license": "BUSL-1.1",
@@ -34,6 +34,7 @@
     "NOTICE",
     "README.md",
     "README.en.md",
+    "README.zh.md",
     "SECURITY.md",
     "TRADEMARK.md",
     "dist/bin/",

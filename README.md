@@ -5,294 +5,447 @@
 # Hive
 
 <p align="center">
-  <img src="./assets/hive-hero.png" alt="Hive 本机多 agent 协作工作台" />
+  <img src="./assets/hive-hero.png" alt="Hive local-first multi-agent collaboration workspace hero image" />
 </p>
 
-**Hive 是浏览器里的 Agent 协作工作台——一群 Agent 在你本机各自开工，一个当 Orchestrator 派活、归总进展，其余各司其职。** Orchestrator 本身就是一个真实的 `agy` / `claude` / `codex` / `opencode` / `gemini` / `hermes` / `qwen` 进程——不是你、也不是脚本——它派单的 Worker 同样是真 CLI agent。所有 agent 都是本机真实的 PTY 进程，通过 Hive 注入到 shell 里的小型 `team` 协议互相通信，共享 `<workspace>/.hive/tasks.md` 这份 markdown 任务图。
+**Run Claude Code, Codex, Gemini, OpenCode, Qwen, and other CLI agents as a visible local team.** Hive gives you one browser workbench where an
+Orchestrator plans and delegates while workers implement, review, test,
+research, and report back — all as real PTY processes on your laptop.
 
-写代码、做调研、起草文档、做翻译——凡是能拆给一群人协作的脑力活，都可以让一群 Agent 合伙干。
+Use Hive when one agent is not enough, but a pile of terminal windows is not a workflow.
 
 [![npm](https://img.shields.io/npm/v/@tt-a1i/hive.svg)](https://www.npmjs.com/package/@tt-a1i/hive)
 [![ci](https://img.shields.io/github/actions/workflow/status/tt-a1i/hive/release.yml?branch=main&label=ci)](https://github.com/tt-a1i/hive/actions/workflows/release.yml)
 [![Website](https://img.shields.io/badge/website-hivehq.dev-5a8a8a.svg)](https://hivehq.dev)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-BUSL--1.1-orange.svg)](./LICENSE.BSL)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#平台支持)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows%20(best--effort)-lightgrey.svg)](#platform-support)
 
-🌐 **官网**：[hivehq.dev](https://hivehq.dev/)（[English](https://hivehq.dev/en/)）
+🌐 **Website**: [hivehq.dev/en/](https://hivehq.dev/en/) · [中文](https://hivehq.dev/)
 
-[English](./README.en.md) · 简体中文
+English · [简体中文](./README.zh.md)
 
-> Hive 是本机优先的工具，只监听 `127.0.0.1`，面向已经在用 CLI Agent 的人。最新稳定版本见 [npm](https://www.npmjs.com/package/@tt-a1i/hive)，上面的 badge 会指向它。
+> Hive is local-first, runs on `127.0.0.1`, and is intended for anyone who
+> already runs CLI agents. The latest stable release is on
+> [npm](https://www.npmjs.com/package/@tt-a1i/hive) and the badge above resolves
+> to it.
 >
-> 本仓库是 Hive 的公开源码基线。面向用户的正式安装包以 npm 发布为准；如果你只是想安装或升级，请优先使用下面的 npm 命令。
+> This repository is Hive's public source baseline. User-facing releases are
+> distributed through npm; if you only want to install or upgrade Hive, prefer
+> the npm commands below.
 
 <p align="center">
-  <img src="./assets/hive-team-view.png" alt="Hive 工作台：4 个 CLI Agent 团队，Orchestrator 派单、Worker 各自开工" />
+  <img src="./assets/hive-team-view.png" alt="Hive workbench with a 4-agent team — orchestrator dispatching while workers run" />
 </p>
 
-## 为什么需要 Hive
+## Why Hive
 
-CLI Agent 各自都很强，但同时管几个就有点别扭：
+CLI agents are powerful, but coordinating several of them manually is
+awkward:
 
-- 长任务的会话散在好几个终端里，注意力来回切。
-- 想把活儿分给几个 Agent（写代码 / review / 测试，或者调研 / 起草 / 事实核查之类），却缺一层来居中调度。
-- Worker 的进度淹在 scrollback 里，回头看找不到。
-- 想重启接着干，全看每个 CLI 自己的 session 恢复行为，散乱不可控。
+- Long-running sessions are spread across terminals.
+- Splitting work across agents — implementation/review/testing,
+  research/drafting/fact-checking, or any other division of labor — needs a
+  routing layer you don't have.
+- Worker progress disappears into scrollback.
+- Restart recovery depends on each CLI's native session behavior.
 
-Hive 加上这一层调度，**不替换**任何 CLI。Agent 还是真实跑在你电脑上的终端进程，Hive 只是它们外面的"团队 shell"。
+Hive adds the coordination layer without replacing the CLIs. The Orchestrator
+is a real `agy` / `claude` / `codex` / `opencode` / `gemini` / `hermes` /
+`qwen` process, not a scripted PM. Workers are real CLI agents too. Hive
+injects a small `team` command into their shells, so they can dispatch,
+report, and keep a shared markdown task graph at `<workspace>/.hive/tasks.md`.
 
-## 先看看 demo
+## Use It For
 
-还没装任何 agent CLI？运行 `hive`、打开它打印出的本地地址、在 first-run 向导里点 **Try Demo**。你会看到一个完全跑在客户端的预览——假 orchestrator + 两个 worker、预录的终端 scrollback、一份预填的任务清单——既不会连服务器，也不需要任何真实 CLI agent。适合决定要不要继续装真 CLI。
+**Ship a PR with a reviewer in the loop**
 
-## 快速开始
+Ask the Orchestrator to implement a change, spawn a reviewer, and keep the
+review feedback visible before you merge. The coder edits; the reviewer checks
+the diff; the Orchestrator decides what still needs work.
 
-前置条件：
+```text
+Ship the settings search bugfix. Use one worker to implement it and another to
+review edge cases before the final report.
+```
 
-- Node.js 22 或更新版本
-- 至少一个支持的 Agent CLI 已经安装好、登录过、在 `PATH` 上可调用
+**Run a parallel bug hunt**
 
-安装并启动 Hive：
+Give several workers separate slices of a flaky behavior: one reads the server
+path, one checks the UI path, one looks for regressions in recent commits. You
+watch the reports converge instead of juggling terminals.
+
+```text
+Find why mobile reconnect sometimes stalls. Split server transport, browser UI,
+and recent commit history across separate workers.
+```
+
+**Research, draft, and fact-check without losing the thread**
+
+Let one worker gather sources, another draft, and a reviewer check claims. The
+task graph and reports stay in one workspace, so the handoff is inspectable
+instead of trapped in chat scrollback.
+
+```text
+Write a technical note on our release flow. Have one worker collect evidence,
+one draft, and one verify every command and file reference.
+```
+
+## Try the demo first
+
+Don't have an agent CLI installed yet? Run `hive`, open the printed URL, and
+click **Try Demo** in the first-run wizard. You get a fully client-side
+preview — fake orchestrator + two workers, prerecorded scrollback, a
+prefilled task list — without touching the server or any real CLI agent.
+Useful for deciding whether to install a real CLI.
+
+## Quick Start
+
+Prerequisites:
+
+- Node.js 22 or newer.
+- At least one supported agent CLI installed, authenticated, and available on
+  `PATH`.
+
+Install and start Hive:
 
 ```bash
 npm install -g @tt-a1i/hive
 hive
 ```
 
-安装时如果看到 `npm warn allow-scripts` 或 `prebuild-install@7.1.3 deprecated`，先看最后是否显示 `added ... packages`。这些 warning 多数来自 npm 对安装脚本的安全审查，以及 `node-pty` / `better-sqlite3` / `esbuild` 这类原生依赖的二进制安装链路；不代表 Hive 启动失败。下面的故障排查里有逐项解释。
+If npm prints `npm warn allow-scripts` or `prebuild-install@7.1.3 deprecated`
+during install, first check whether the command ends with `added ... packages`.
+Those warnings usually come from npm's install-script review plus native
+binary setup for `node-pty`, `better-sqlite3`, and `esbuild`; they do not mean
+Hive failed to install. The troubleshooting section below breaks them down.
 
-打开终端打印出来的本机地址，通常是 `http://127.0.0.1:3000/`。如果你想指定端口，可以用 `hive --port 4010`。
+Open the printed local URL, usually `http://127.0.0.1:3000/`. Use
+`hive --port 4010` when you need a specific local port.
 
-升级到最新版本：
+To upgrade in place:
 
 ```bash
 hive update
 ```
 
-`hive update` 会在原位运行 `npm install -g @tt-a1i/hive@latest`，完事后重启 Hive 就能用上新版。如果当初是用 pnpm / yarn 装的 Hive，请用同一个包管理器升级，避免装出第二份。
+`hive update` runs `npm install -g @tt-a1i/hive@latest` in place. Restart any
+in-flight Hive process to pick up the new version. If you installed Hive with
+pnpm or yarn, upgrade through the same package manager — otherwise the new
+npm copy will shadow your existing install.
 
-如果 npm 镜像还没同步最新版本，直接使用官方 registry：
+If your npm mirror has not synced the latest release yet, use the official
+registry directly:
 
 ```bash
 npm install -g @tt-a1i/hive@latest --registry=https://registry.npmjs.org
 ```
 
-把 Hive 装为应用（可选）：
+Install Hive as an app (optional):
 
-在 Chrome / Edge / Brave 里打开 `http://127.0.0.1:3000/`，点浏览器地址栏右侧的安装图标即可。装好后 Hive 会以独立窗口启动、有自己的 dock 图标，且 dock 右键菜单上会显示 **添加 Workspace** / **试用演示** 两个快捷入口。Firefox 和 Safari 暂未实现 PWA install-prompt 协议，浏览器地址栏的安装图标只在 Chromium 系浏览器里出现。
+Open `http://127.0.0.1:3000/` in Chrome, Edge, or Brave and click the install
+icon at the right edge of the browser's omnibox. The PWA launches in its own
+dock-anchored window without browser chrome and shows **Add Workspace** /
+**Try Demo** shortcuts from the dock right-click menu. Firefox and Safari
+currently don't implement the install-prompt protocol, so the omnibox icon
+only appears in Chromium-based browsers.
 
-PWA 只是 UI 壳，Hive 后端仍需要在终端里跑着。如果启动 PWA 时后端没起，会看到 “Hive 后端未启动” 页面，等你跑起 `hive` 后会自动刷新。PWA 的 install scope 按 origin（含端口）划分，所以 `hive --port 4011` 跟 `hive --port 3000` 在浏览器看来是两个独立应用。卸载方法：浏览器地址栏访问 `chrome://apps`，右键 Hive 图标，选 **从 Chrome 中移除…**。
+The Hive daemon must still be running for the PWA to do anything; if the
+runtime isn't reachable when you launch the app, you'll see a "Hive runtime
+is not running" page that auto-reloads once `hive` is back on `127.0.0.1`.
+The PWA install scope is keyed by origin, so `hive --port 4011` installs as
+a separate app from `hive --port 3000`. To uninstall, visit `chrome://apps`,
+right-click the Hive tile, and choose **Remove from Chrome…**.
 
-关闭 PWA 窗口或 tab 时 Hive 会主动请求浏览器弹原生确认对话框，避免关闭快捷键（macOS 上是 Cmd+W、Windows / Linux 上是 Ctrl+W）误关丢失会话。但现代浏览器要求你跟页面"交互过"（点击 / 滚动 / 输入）才会真的弹这个对话框——刚打开 PWA 立刻按关闭快捷键仍会直接关闭，这是浏览器策略，不是 Hive 的 bug。
+Hive asks the browser to confirm before closing the tab or PWA window so an
+accidental close shortcut (Cmd-W on macOS, Ctrl-W on Windows/Linux) doesn't
+drop your session. Modern browsers gate that prompt on prior page interaction
+— if you open the PWA and immediately press the close shortcut without
+clicking or typing anywhere first, it still closes cleanly. That's a browser
+policy, not a Hive bug.
 
-首次使用流程：
+First-run flow:
 
-1. 选择一个项目目录作为 workspace。
-2. 挑一个 Orchestrator 预设。
-3. Hive 会创建 `<workspace>/.hive/tasks.md`，启动 Orchestrator 的 PTY，把内部的 `team` 命令注入这个 agent 会话。
-4. 在 Team Members 面板里添加 Worker。
-5. 跟 Orchestrator 说一声让它派活，它会用 `team send <worker-name> "<task>"` 发任务，Worker 完事后用 `team report` 回报。
+1. Create a workspace from a project folder.
+2. Choose an Orchestrator preset.
+3. Hive creates `<workspace>/.hive/tasks.md`, starts the Orchestrator PTY, and
+   injects the internal `team` command into the agent session.
+4. Add workers from the Team Members panel.
+5. Ask the Orchestrator to delegate work. It sends tasks with
+   `team send <worker-name> "<task>"`; workers report back with `team report`.
 
-想让 Orchestrator 自己决定团队规模，可以保留 **自动组队** 开关开启（默认开启）：它会按任务需要临时 `team spawn` 合适数量的 coder / tester / reviewer，任务结束后自动收回临时成员。
+If you want the Orchestrator to size the team itself, leave **Auto-staff**
+enabled (it is on by default). It can `team spawn` the right temporary mix of
+coders, testers, and reviewers for the task, then Hive dismisses those
+temporary workers when their work is done.
 
-想试更强的自动化，可以在右上角设置里开启实验性的 **Workflow** 开关。开启后，Orchestrator 可以编写并运行多 agent workflow，把一个目标拆成 fan-out / review / test 等阶段；顶部的 **Workflows** 面板会显示运行记录、阶段结果、定时任务和停止按钮。Workflow 创建的新 agent 默认使用哪种 CLI、允许使用哪些 CLI，也可以在 Workflows 面板里配置。
+For stronger automation, enable the experimental **Workflows** toggle in
+settings. The Orchestrator can then author and run multi-agent workflows that
+fan out across implementation, review, testing, or other stages. The topbar
+**Workflows** panel shows runs, phase results, logs, schedules, and stop
+controls. The same panel also lets you choose which CLI workflow-created
+agents use by default and which CLIs they are allowed to use.
 
-## 工作方式
+## How It Works
 
 ```text
-浏览器 UI 跑在 127.0.0.1
-  任务 · 团队 · 终端 · 汇报
+Browser UI on 127.0.0.1
+  tasks, team, terminals, reports
           |
           | HTTP + WebSocket
           v
-Hive Runtime
-  SQLite 元数据 · PTY 生命周期 · 任务派单
+Hive runtime
+  SQLite metadata, PTY lifecycle, task dispatch
           |
           +-- Orchestrator PTY
-          |     可调用：team send、team list、team report
+          |     can call: team send, team list, team report
           |
           +-- Worker PTY
-          |     可调用：team report
+          |     can call: team report
           |
           +-- Worker PTY
-                可调用：team report
+                can call: team report
 
-Workspace 任务图：
+Workspace task graph:
   <workspace>/.hive/tasks.md
 ```
 
-三个细节值得记住：
+Three details matter:
 
-- Agent 是真正的 CLI 进程，不是模拟的 subagent。
-- `team` 命令**只**在 Hive 管理的 agent 会话里可用——通过把包内 bin 目录 prepend 到 PATH 实现，不会装成全局命令。
-- 任务图就是 workspace 里的一份 markdown 文件，你可以在编辑器里直接看或者改。
+- Agents are real CLI processes, not simulated subagents.
+- `team` is injected only inside Hive-managed agent sessions by prepending the
+  package's internal bin directory to `PATH`; it is not installed as a global
+  command.
+- The task graph is a markdown file in the workspace, so you can inspect or
+  edit it outside the app.
 
-## Agent 预设
+## Agent Presets
 
-| 预设 | `PATH` 上的命令 | 默认 bypass 模式 | 会话恢复 |
+| Preset | Command expected on `PATH` | Default bypass mode | Session resume |
 | --- | --- | --- | --- |
 | Antigravity CLI | `agy` | `--dangerously-skip-permissions` | `--conversation <session_id>` |
-| Claude Code | `claude` | `--dangerously-skip-permissions`、`--permission-mode=bypassPermissions` | `--resume <session_id>` |
+| Claude Code | `claude` | `--dangerously-skip-permissions`, `--permission-mode=bypassPermissions` | `--resume <session_id>` |
 | Codex | `codex` | `--dangerously-bypass-approvals-and-sandbox` | `resume <session_id>` |
-| OpenCode | `opencode` | 由 `~/.config/opencode/opencode.json` 配置 | `--session <session_id>` |
+| OpenCode | `opencode` | Config-driven in `~/.config/opencode/opencode.json` | `--session <session_id>` |
 | Gemini | `gemini` | `--yolo` | `--resume <session_id>` |
 | Hermes | `hermes` | `--yolo` | `--resume <session_id>` |
 | Qwen Code | `qwen` | `--approval-mode yolo` | `--resume <session_id>` |
-| Cursor CLI | `cursor` | `--force` | 暂未自动捕获 session id |
-| Grok Build | `grok` | `--always-approve` | 暂未自动捕获 session id |
-| 自定义 | 任意可执行文件 | 自己配 | 自己配 |
+| Cursor CLI | `cursor` | `--force` | Session id capture not wired yet |
+| Grok Build | `grok` | `--always-approve` | Session id capture not wired yet |
+| Custom | Any executable | User configured | User configured |
 
-Hive 不替你安装这些 CLI。请在启动 Hive 的同一个 shell 环境里先装好、登录好。
+Hive does not install these CLIs for you. Install and authenticate them in the
+same shell environment you use to start Hive.
 
-## Hive 提供什么
+## What Hive Provides
 
-- Workspace 侧边栏，方便在多个本机项目之间切换。
-- Orchestrator 和 Worker 终端都是真实 PTY 支撑的。
-- Add Worker 预置 coder / reviewer / tester 等角色模板，也支持完全自定义 prompt 与命令——把任何 CLI agent 编排成你需要的角色。
-- 自动组队（实验性，默认开启）：Orchestrator 可以根据任务动态创建临时 coder / tester / reviewer，完成后自动回收。
-- Workflows（实验性，默认关闭）：Orchestrator 可以运行多阶段、多 agent 的 workflow，Hive 在 Workflows 面板里展示运行、日志、结果、定时任务和停止控制。
-- Workflow CLI 策略：为 workflow 创建的 agent 选择默认 CLI，并限制允许使用的 CLI，避免脚本误启未配置的 agent。
-- 团队记忆：把 workspace 约束、长期上下文和团队共识留在 Hive 里，后续派单时更容易把背景带给正确的 agent。
-- `.hive/tasks.md` 编辑器，带外部文件冲突处理。
-- PTY 后台保留 + 尽力使用各 CLI 原生 session 恢复。
-- 升级后的 What's New 弹窗，用简短 release highlights 告诉你新版改了什么。
-- 元数据存在本机 SQLite，Windows 默认在 `%APPDATA%\hive`，macOS / Linux 默认在 `~/.config/hive`，也可以通过 `$HIVE_DATA_DIR` 指定。
+- Workspace sidebar for switching between local projects.
+- Orchestrator and worker terminals backed by real PTYs.
+- Add Worker flow with role presets for coder, reviewer, tester, and fully
+  custom prompts and commands — wire any CLI agent into the role you need.
+- Auto-staff (experimental, on by default): the Orchestrator can create
+  temporary coders, testers, and reviewers based on the task, and Hive cleans
+  them up after their dispatch reports back.
+- Workflows (experimental, off by default): the Orchestrator can run
+  multi-stage, multi-agent workflows while Hive shows runs, logs, results,
+  schedules, and stop controls in the Workflows panel.
+- Workflow CLI policy: choose the default CLI for workflow-created agents and
+  restrict which CLIs workflow scripts may launch.
+- Team memory: keep workspace constraints, long-running context, and team
+  decisions in Hive so later dispatches can carry the right background.
+- `.hive/tasks.md` editor with external-file conflict handling.
+- Background PTY preservation and best-effort native session resume.
+- A What's New dialog after upgrades with curated release highlights.
+- Local SQLite metadata under `%APPDATA%\hive` on Windows and `~/.config/hive`
+  on macOS / Linux by default, or `$HIVE_DATA_DIR` when set.
 
-Hive **不**提供 sandbox 隔离、多用户认证，也不自带任何 agent 模型。它只负责调度你已经在用的本机 CLI。
+Hive does not provide sandboxing, multi-user auth, or any bundled agent model.
+It coordinates the CLIs you already run locally.
 
-## 远程访问（可选，默认关闭）
+## Remote Access (optional, off by default)
 
-如果想在外面用手机查看、操作正在本机跑着的 Hive，可以开启可选的 **Remote access**。开启后，手机浏览器登录、跟桌面完成一次配对，就能通过端到端加密隧道访问 Hive Web UI。已配对的手机是与本地浏览器**等权**的受信任设备。
+If you want to reach your running Hive from your phone while you're away,
+enable optional **Remote access**. After the phone signs in and pairs with the
+desktop, it reaches the Hive Web UI through an end-to-end encrypted tunnel.
+A paired phone is a trusted device with the same authority as the local desktop
+browser.
 
-需要清楚的几点：
+Important boundaries:
 
-- **默认关闭**。不开就没有远程通路，行为仍然是本机优先。
-- **需要一个网关**。Hive 通过网关中转手机和本机 daemon 的连接；本机主动出站连接，不要求你打开公网端口。
-- **数据和执行永远在本机**。网关只负责登录后的路由与中转，不运行你的 agent，也不保存 workspace 内容。
-- **信任根在桌面**。新设备配对必须人在电脑前确认；已配对手机不能凭自己批准新设备。设备随时可吊销。
+- **Off by default.** If you never enable Remote access, Hive remains
+  local-first.
+- **A gateway is required.** Hive relays the phone-to-daemon connection through
+  a gateway; your machine connects outbound and does not require opening a
+  public port.
+- **Data and execution stay local.** The gateway routes authenticated
+  connections; it does not run your agents or store workspace contents.
+- **The desktop is the trust root.** New device pairing must be confirmed at
+  the computer. A paired phone cannot approve another device by itself, and
+  devices can be revoked at any time.
 
-## 平台支持
+## Platform Support
 
-所有平台都需要 Node.js 22+。Hive 依赖 `node-pty` 和 `better-sqlite3` 这类原生包，没有预编译二进制时需要你本机有原生构建工具链。
+| Platform | Status | Notes |
+| --- | --- | --- |
+| macOS | Tier 1 | Main development and release verification target. |
+| Linux | Tier 1 | CI verified. Native folder picking expects `zenity`; manual path entry works without it. |
+| Windows | Tier 2 | CI runs a Windows test subset and a packaged-install smoke. Folder picking uses the in-browser server filesystem browser and the package includes `team.cmd`. Treat as best-effort — full Windows verification before each release is manual. |
 
-## 安全模型
+All platforms require Node.js 22+. Hive depends on native packages
+(`node-pty` and `better-sqlite3`), so native install tooling may be required
+when prebuilt binaries are unavailable.
 
-Hive 是本机开发工具，**不是**托管服务。
+## Safety Model
 
-- Remote access 关闭时，runtime 只监听 `127.0.0.1`。不要把 Hive 端口通过公网隧道、反向代理或任何共享网络接口暴露出去。
-- Remote access 开启后，已配对手机与本地浏览器等权；只给你信任的设备配对，不用时及时关闭或吊销。
-- 内置预设会主动传 CLI 的 non-interactive / bypass flag。Worker 在选中的 workspace 里有跟启动 shell **同等**的执行权限——把它当成"会自动跑命令的你自己"。
-- 只打开你信任的 workspace。Worker 拥有跟你登录账户一样的文件系统访问权限。
-- Agent token 是 session 级的，由本机 runtime 生成，注入到 agent 进程环境变量里，**不**用于跨网络通信。
-- Hive 不做多用户认证。任何能从本机访问到端口的进程都视为可信本地访问。
-- 浏览器 UI token 只是本机会话保护，不是用来防同一系统账户下其他进程的安全边界。
+Hive is a local development tool, not a hosted service.
 
-在敏感仓库里用 Hive 之前，请先读 [SECURITY.md](SECURITY.md)。
+- When Remote access is off, the runtime binds to `127.0.0.1`. Do not expose
+  the Hive port through a public tunnel, reverse proxy, or shared network
+  interface.
+- When Remote access is on, paired phones have the same authority as the local
+  browser. Pair only devices you trust, and revoke or disable Remote access
+  when you no longer need it.
+- Built-in presets intentionally use each CLI's non-interactive or bypass mode
+  where available. Treat workers as able to run arbitrary shell commands inside
+  the selected workspace.
+- Open only trusted workspaces. A worker has the same filesystem access as the
+  shell account running Hive.
+- Agent tokens are session scoped, generated by the local runtime, injected into
+  agent process environments, and not intended as internet-facing credentials.
+- Hive has no multi-user authentication boundary. Treat same-machine processes
+  that can reach the local port as trusted local access.
+- The browser UI token is a local session guard, not protection against other
+  processes already running as your OS user.
 
-## 数据位置
+Read [SECURITY.md](SECURITY.md) before using Hive with sensitive repositories.
 
-| 数据 | 位置 |
+## Data Locations
+
+| Data | Location |
 | --- | --- |
-| Runtime 元数据 | Windows: `%APPDATA%\hive`；macOS / Linux: `~/.config/hive`；或 `$HIVE_DATA_DIR` |
-| Workspace 任务图 | `<workspace>/.hive/tasks.md` |
-| 内部 `team` 命令 | 包内 `dist/bin/`，通过 PATH 注入 PTY |
-| Web UI 资源 | 由 runtime 从包内 `web/dist` 直接服务 |
+| Runtime metadata | Windows: `%APPDATA%\hive`; macOS / Linux: `~/.config/hive`; or `$HIVE_DATA_DIR` |
+| Workspace tasks | `<workspace>/.hive/tasks.md` |
+| Internal `team` command | Packaged under `dist/bin/`, injected into PTYs |
+| Web UI assets | Served by the runtime from the packaged `web/dist` build |
 
-## 故障排查
+## Troubleshooting
 
-**找不到 Agent CLI**
+**Agent CLI not found**
 
-确认选中的命令已经安装好、登录好、在启动 Hive 那个 shell 里能直接调用，且在 `PATH` 上。
+Check that the selected command is installed, authenticated, executable from the
+same shell, and available on `PATH`.
 
-**端口被占用**
+**Port already in use**
 
-换个本机端口启动：
+Start Hive with another local port:
 
 ```bash
 hive --port 4020
 ```
 
-**升级后版本没变**
+**Version does not change after upgrading**
 
-先确认当前 npm 官方源上的最新版本：
+Check the latest version on the official npm registry:
 
 ```bash
 npm view @tt-a1i/hive version --registry=https://registry.npmjs.org
 ```
 
-如果你使用的是国内镜像或公司私有 npm 源，它们可能晚几分钟到几小时才同步。可以直接走官方源升级：
+If you use a mirror or private npm registry, it may lag behind the official
+registry by minutes or hours. Upgrade directly from npmjs when you need the
+freshest release:
 
 ```bash
 npm install -g @tt-a1i/hive@latest --registry=https://registry.npmjs.org
 ```
 
-升级后关闭旧的 `hive` 进程再重新运行 `hive --version`。如果仍然是旧版本，检查 `which hive` / `where hive`，通常是 PATH 里还有另一份全局安装。
+After upgrading, stop the old `hive` process and run `hive --version` again.
+If it still prints an older version, check `which hive` / `where hive`; PATH
+usually points at another global install.
 
-**原生包构建失败**
+**Native package install fails**
 
-Hive 依赖 `node-pty` 和 `better-sqlite3`，它们用原生二进制。确认 Node.js 22+，清干净 package manager 缓存，并准备好你平台的构建工具（macOS Xcode CLI、Linux build-essential + python3、Windows VS Build Tools）。
+Hive depends on `node-pty` and `better-sqlite3`, which use native binaries. Use
+Node.js 22+, keep your package manager cache clean, and verify your platform
+build tools are available.
 
-安装时如果看到 `prebuild-install@7.1.3` 的 deprecated warning，可以忽略。它来自 `better-sqlite3` 的原生二进制下载链路，只是上游安装器维护状态提示，不代表 Hive 安装失败，也不会影响运行。
+If npm prints a deprecated warning for `prebuild-install@7.1.3`, it is safe to
+ignore. The warning comes from `better-sqlite3`'s native binary download chain;
+it is an upstream installer maintenance notice, not a Hive install failure, and
+does not affect runtime behavior.
 
-安装成功但看到 npm warning 时，可以按来源判断：
+When installation succeeds but npm prints warnings, use the source to decide:
 
-| warning | 来源 | 处理 |
+| warning | Source | What to do |
 | --- | --- | --- |
-| `allow-scripts @tt-a1i/hive` | Hive 的 postinstall 会修正打包后的 native/PTY helper 权限。 | 安装成功后可忽略。 |
-| `allow-scripts better-sqlite3` | SQLite 原生绑定需要下载预编译二进制，失败时会本机构建。 | 安装成功后可忽略；失败再检查构建工具链。 |
-| `allow-scripts node-pty` | 终端 PTY 原生绑定需要准备平台二进制。 | 安装成功后可忽略；失败再检查构建工具链。 |
-| `allow-scripts esbuild` | esbuild 会校验/选择当前平台的二进制包。 | 安装成功后可忽略。 |
+| `allow-scripts @tt-a1i/hive` | Hive's postinstall fixes packaged native/PTY helper permissions. | Ignore after a successful install. |
+| `allow-scripts better-sqlite3` | SQLite native bindings download a prebuilt binary or build locally. | Ignore after success; check build tools if install fails. |
+| `allow-scripts node-pty` | Terminal PTY native bindings prepare the platform binary. | Ignore after success; check build tools if install fails. |
+| `allow-scripts esbuild` | esbuild verifies/selects the current platform binary. | Ignore after success. |
 
-这是 npm 11 的安装脚本审查提示。当前 npm 版本仍是提示性质，未来可能要求用户显式批准这些脚本。你想审查时可以运行 `npm approve-scripts --allow-scripts-pending` 查看待审列表。
+This is npm 11's install-script review prompt. Today it is usually advisory;
+future npm versions may require explicit approval. To inspect pending scripts,
+run `npm approve-scripts --allow-scripts-pending`.
 
-**Linux 上目录选择器不弹**
+**Folder picker does not open on Linux**
 
-装 `zenity`，或者直接在对话框里粘路径。
+Install `zenity`, or paste the workspace path manually.
 
-**Windows 上目录选择器**
+**Folder picker on Windows**
 
-Windows 版默认使用浏览器内的服务器文件系统浏览器来添加 Workspace，不再弹 PowerShell 原生目录选择器。浏览器会从“此电脑”开始列出可访问盘符，所以可以进入 `C:\`、`D:\` 等其他盘；如果目标目录不在浏览器列表里，可以展开“高级：粘贴路径”直接输入绝对路径。
+Windows uses Hive's in-browser server filesystem browser when adding a
+workspace. It starts from "This PC" and lets you enter drives such as `C:\` or
+`D:\`. If the target folder is not listed, expand the advanced path entry and
+paste the absolute path.
 
-**Windows 上 `hive update` 报 `ENOENT mkdir ... C:\Program`**
+**`hive update` on Windows fails with `ENOENT mkdir ... C:\Program`**
 
-这是旧版本在带空格的全局 npm prefix 上调用 update 时可能触发的路径转义问题。直接手动升级即可：
+Older Hive versions could quote a global npm prefix with spaces incorrectly
+when running update. Upgrade manually:
 
 ```powershell
 npm install -g @tt-a1i/hive@latest --registry=https://registry.npmjs.org
 ```
 
-如果你的 npm 全局目录不在默认 PATH 里，先看 prefix：
+If your global npm directory is not on the default PATH, check the prefix:
 
 ```powershell
 npm prefix -g
 where hive
 ```
 
-然后确认 `where hive` 指向的是刚升级的那份。
+Then confirm `where hive` points at the copy you just upgraded.
 
-**Codex 终端在 Windows 上无法滚动**
+**Codex terminal cannot scroll on Windows**
 
-先升级到 `2.0.2` 或更新版本并重启 Hive。Codex 这种全屏 TUI 本身通常不会显示浏览器原生滚动条，Hive 会把鼠标滚轮 / PageUp / PageDown 转成 Codex 能识别的终端输入；旧安装里如果保存过 `node.exe ...\@openai\codex\bin\codex.js` 这类启动命令，2.0.2 已修正对应识别。
+Upgrade to `2.0.2` or newer and restart Hive. Codex is a full-screen TUI, so it
+usually will not show a browser-native scrollbar; Hive translates wheel,
+PageUp, and PageDown input into terminal input Codex understands. Version
+2.0.2 fixes saved Windows launch commands that still point at
+`node.exe ...\@openai\codex\bin\codex.js`.
 
-**Tasks 文件冲突 banner 出现**
+**Tasks file conflict banner appears**
 
-Hive 检测到磁盘上的 `.hive/tasks.md` 比 UI 里的新。`Reload` 接受磁盘版本，`Keep Local` 保留 UI 编辑并覆盖保存。
+Hive detected a newer `.hive/tasks.md` on disk. Use `Reload` to accept the file
+from disk, or `Keep Local` to keep the editor contents and save again.
 
-**Worker 卡在 `working` 状态**
+**Worker appears stuck in `working`**
 
-Hive 不通过进程活动猜测任务完成。Worker 只有在调 `team report` 时才会回到 `idle`。如果它确实卡了，从 UI 里 Stop 或 Restart。
+Hive does not guess task completion from process activity. Workers move back to
+`idle` when they call `team report`. If a worker is blocked, stop or restart it
+from the UI.
 
-## 开发
+## Development
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-开发模式下 runtime 跑在 `127.0.0.1:4010`，Vite 跑在 `127.0.0.1:5180`，把 API 和 WebSocket 代理到 runtime。
+Development mode runs the runtime on `127.0.0.1:4010`; Vite runs on
+`127.0.0.1:5180` and proxies API and WebSocket traffic to the runtime.
 
-常用命令：
+Useful checks:
 
 ```bash
 pnpm check
@@ -300,39 +453,49 @@ pnpm build
 pnpm test
 ```
 
-预演 production 构建：
+Production-style local run:
 
 ```bash
 pnpm build
 node dist/src/cli/hive.js --port 4010
 ```
 
-Production 模式下 runtime 直接服务构建好的 web UI，不需要单独的 Vite。
+The production server serves the built web UI directly. No Vite server is
+needed after `pnpm build`.
 
-## 安装包
+## Published Package
 
-用户安装和升级以 [npm 上的 `@tt-a1i/hive`](https://www.npmjs.com/package/@tt-a1i/hive) 为准。公开 changelog 只记录已经发布、用户可见的变化；如果你只是想用 Hive，不需要从本仓库构建。
+User installs and upgrades should follow
+[`@tt-a1i/hive` on npm](https://www.npmjs.com/package/@tt-a1i/hive). The public
+changelog records already-shipped user-facing changes; you do not need to build
+from this repository just to use Hive.
 
-## 状态
+## Status
 
-Hive 目前处于 alpha 阶段，核心流程已可用。当前 npm 版本已经包含多 CLI agent 预设、自动组队、Workflows、团队记忆、PWA 安装和可选 Remote access。公开仓库保留稳定源码基线；面向用户的最新能力以 npm 包和本 README 为准。
+Hive is in alpha. The current npm release includes multi-CLI agent presets,
+Auto-staff, Workflows, team memory, PWA installation, and optional Remote
+access. This public repository remains the stable source baseline; the latest
+user-facing capability is reflected by the npm package and this README.
 
-## 另一种形态：squad
+## A different form factor: squad
 
-如果你更喜欢 **纯 CLI、零后台进程、能直接在 SSH 进的远端服务器上跑** 的形态，[squad](https://github.com/mco-org/squad) 是同一个想法的另一条路线——SQLite 当通信层，每个 agent 各自开一个终端。两个项目互不替代，按工作流挑就行：
+If you'd rather have **pure CLI, zero background process, and the ability to
+run on a remote SSH box**, [squad](https://github.com/mco-org/squad) takes the
+same idea down a different path — SQLite as the protocol layer, one terminal
+per agent. The two projects don't replace each other; pick by workflow:
 
-- **Hive** — 想要可视化工作台、一键重启、侧边栏切 workspace、给团队演示
-- **squad** — 活在 tmux 里、SSH 远端开发、不想跑额外后台进程、Windows server
+- **Hive** — visual workbench, one-click restart, workspace sidebar, easier to demo to a team
+- **squad** — lives in tmux, SSH remote dev, no extra background process, Windows servers
 
-## 鸣谢
+## Acknowledgements
 
-Hive 的"模板市场"内置了两份社区角色 prompt 库的快照，两份都按各自上游的 MIT 许可分发：
+The built-in template marketplace ships snapshots of two community-maintained prompt libraries, both distributed under their upstream MIT licenses:
 
-- 英文版（界面切到 EN 时使用）：[`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)
-- 中文版（界面切到中文时使用）：[`jnMetaCode/agency-agents-zh`](https://github.com/jnMetaCode/agency-agents-zh)
+- English (used when the UI is set to EN): [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)
+- Chinese (used when the UI is set to 中文): [`jnMetaCode/agency-agents-zh`](https://github.com/jnMetaCode/agency-agents-zh)
 
-上游内容未做修改，许可证文本保留在 `vendor/marketplace/<lang>/LICENSE`；快照通过 `pnpm sync:marketplace` 在 hive 发版前刷新。
+Upstream content is mirrored verbatim, license files are kept under `vendor/marketplace/<lang>/LICENSE`, and snapshots are refreshed by `pnpm sync:marketplace` before each Hive release.
 
 ## License
 
-Hive 在 Business Source License 1.1 下开源。个人使用、内部部署、嵌入、fork 都可以；详细边界见 [LICENSE.BSL](LICENSE.BSL)。Hive 名称、logo 和视觉标识的使用边界见 [TRADEMARK.md](TRADEMARK.md)。
+Hive is open source under the Business Source License 1.1. Personal use, internal deployment, embedding, and forks are permitted — see [LICENSE.BSL](LICENSE.BSL) for the exact boundary. Use of the Hive name, logo, and visual identity is covered by [TRADEMARK.md](TRADEMARK.md).
