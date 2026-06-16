@@ -5,7 +5,7 @@
 # Hive
 
 <p align="center">
-  <img src="./assets/hive-hero.png" alt="Hive 本机多 agent 协作工作台" />
+  <img src="./assets/hive-hero-v2.png" alt="Hive 本机多 agent 协作工作台" />
 </p>
 
 **Hive 是浏览器里的 Agent 协作工作台——一群 Agent 在你本机各自开工，一个当 Orchestrator 派活、归总进展，其余各司其职。** Orchestrator 本身就是一个真实的 `agy` / `claude` / `codex` / `opencode` / `gemini` / `hermes` / `qwen` 进程——不是你、也不是脚本——它派单的 Worker 同样是真 CLI agent。所有 agent 都是本机真实的 PTY 进程，通过 Hive 注入到 shell 里的小型 `team` 协议互相通信，共享 `<workspace>/.hive/tasks.md` 这份 markdown 任务图。
