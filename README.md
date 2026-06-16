@@ -5,7 +5,7 @@
 # Hive
 
 <p align="center">
-  <img src="./assets/hive-hero-v2.png" alt="Hive local-first multi-agent collaboration workspace hero image" />
+  <img src="./assets/hive-hero.png" alt="Hive local-first multi-agent collaboration workspace hero image" />
 </p>
 
 **Run Claude Code, Codex, Gemini, OpenCode, Qwen, and other CLI agents as a visible local team.** Hive gives you one browser workbench where an
