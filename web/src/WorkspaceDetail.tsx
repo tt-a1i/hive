@@ -1,14 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ClipboardList, Plus, Terminal, UserPlus, Users } from 'lucide-react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import {
   isWorkspaceShellRun,
   type OrchestratorStartResult,
   renameWorker,
+  stopAgentRun,
   type TerminalRunSummary,
 } from './api.js'
 import { useI18n } from './i18n.js'
+import { CollapsiblePanel } from './layout/CollapsiblePanel.js'
+import { type PanelId, usePanelLayout } from './layout/usePanelLayout.js'
+import { logSwallowed } from './lib/log-swallowed.js'
 import { WorkspaceNotifications } from './notifications/WorkspaceNotifications.js'
+import { TaskGraphDrawer } from './tasks/TaskGraphDrawer.js'
+import type { useTasksFile } from './tasks/useTasksFile.js'
 import { TerminalBottomPanel } from './terminal/TerminalBottomPanel.js'
 import { useTerminalPanelTabs } from './terminal/useTerminalPanelTabs.js'
 import { findRunByAgentId } from './terminal/useTerminalRuns.js'
@@ -29,6 +39,53 @@ const WorkerModal = lazy(() =>
   import('./worker/WorkerModal.js').then((module) => ({ default: module.WorkerModal }))
 )
 
+type TasksFileApi = ReturnType<typeof useTasksFile>
+
+const PANEL_ICONS: Record<PanelId, typeof Users> = {
+  tasks: ClipboardList,
+  workers: Users,
+  terminal: Terminal,
+}
+
+const SortablePanel = ({
+  id,
+  title,
+  icon,
+  collapsed,
+  onToggle,
+  children,
+  rightSlot,
+}: {
+  id: string
+  title: string
+  icon: React.ReactNode
+  collapsed: boolean
+  onToggle: () => void
+  children: React.ReactNode
+  rightSlot?: React.ReactNode
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+  return (
+    <div ref={setNodeRef} style={style} {...attributes}>
+      <CollapsiblePanel
+        id={id}
+        title={title}
+        icon={icon}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        rightSlot={rightSlot}
+        dragHandleProps={listeners ? { onPointerDown: listeners.onPointerDown as (e: React.PointerEvent) => void, 'data-drag-handle': true } : undefined}
+      >
+        {children}
+      </CollapsiblePanel>
+    </div>
+  )
+}
+
 type WorkspaceDetailProps = {
   onCreateWorker: WorkerActions['createWorker']
   onDeleteWorker: (workerId: string) => Promise<void>
@@ -36,12 +93,13 @@ type WorkspaceDetailProps = {
   onStartWorker: (workerId: string) => Promise<{ error: string | null; runId: string | null }>
   onOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void
   onRequestAddWorkspace: () => void
-  onShellRunClosed?: (workspaceId: string, runId: string) => void
-  onShellRunStarted?: (workspaceId: string, run: TerminalRunSummary) => void
-  onTryDemo?: () => void
-  welcomeDisabledReason?: string
+  onShellRunClosed?: ((workspaceId: string, runId: string) => void) | undefined
+  onShellRunStarted?: ((workspaceId: string, run: TerminalRunSummary) => void) | undefined
+  onTryDemo?: (() => void) | undefined
+  welcomeDisabledReason?: string | undefined
   orchestratorAutostartError: string | null
   orchestratorAutostartRunId: string | null
+  tasksFile: TasksFileApi
   terminalRuns: TerminalRunSummary[]
   workers: TeamListItem[]
   workspace: WorkspaceSummary | undefined
@@ -60,6 +118,7 @@ export const WorkspaceDetail = ({
   welcomeDisabledReason,
   orchestratorAutostartError,
   orchestratorAutostartRunId,
+  tasksFile,
   terminalRuns,
   workers,
   workspace,
@@ -67,10 +126,11 @@ export const WorkspaceDetail = ({
   const { t } = useI18n()
   const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [addTaskCounter, setAddTaskCounter] = useState(0)
   const [deleteWorkerError, setDeleteWorkerError] = useState<string | null>(null)
   const [startWorkerError, setStartWorkerError] = useState<string | null>(null)
   const [startingWorkerId, setStartingWorkerId] = useState<string | null>(null)
-  const [terminalPanelHidden, setTerminalPanelHidden] = useState(false)
+  const { layout, toggleCollapsed, reorder } = usePanelLayout()
   const toast = useToast()
   const composer = useWorkerComposer({
     createWorker: onCreateWorker,
@@ -144,8 +204,12 @@ export const WorkspaceDetail = ({
     setDeleteWorkerError(null)
     setStartWorkerError(null)
     setStartingWorkerId(null)
-    setTerminalPanelHidden(false)
   }, [workspace?.id])
+
+  const knownWorkerNames = useMemo(
+    () => (workers.length ? workers.map((w) => w.name) : undefined),
+    [workers]
+  )
 
   if (!workspace) {
     const welcomeProps: {
@@ -202,12 +266,152 @@ export const WorkspaceDetail = ({
 
   const orchWidth = `${(split.orchPct * 100).toFixed(2)}%`
   const openShellTerminal = () => {
-    setTerminalPanelHidden(false)
+    if (layout.collapsed.terminal) toggleCollapsed('terminal')
     openShell()
   }
   const startNewShellFromPanel = () => {
-    setTerminalPanelHidden(false)
     startNewShell()
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = layout.order.indexOf(active.id as PanelId)
+    const newIndex = layout.order.indexOf(over.id as PanelId)
+    if (oldIndex === -1 || newIndex === -1) return
+    reorder(arrayMove(layout.order, oldIndex, newIndex))
+  }
+
+  const panelSummary = (panelId: PanelId): React.ReactNode => {
+    if (panelId === 'workers') {
+      const working = workers.filter((w) => w.status === 'working').length
+      const stopped = workers.filter((w) => w.status === 'stopped').length
+      const idle = workers.length - working - stopped
+      return (
+        <>
+          <span>{workers.length} ({working}{t('common.running')} · {idle}{t('common.idle')} · {stopped}{t('common.stopped')})</span>
+          <button
+            type="button"
+            className="panel-header-btn"
+            onClick={(e) => { e.stopPropagation(); toggleCollapsed('workers', false); setComposerOpen(true) }}
+            data-testid="panel-add-worker"
+          >
+            <UserPlus size={12} aria-hidden />
+          </button>
+        </>
+      )
+    }
+    if (panelId === 'tasks') {
+      const lines = tasksFile.content.split('\n')
+      const total = lines.filter((l) => /^\s*-\s+\[[ xX]\]/.test(l)).length
+      const done = lines.filter((l) => /^\s*-\s+\[[xX]\]/.test(l)).length
+      return (
+        <>
+          {total > 0 ? <span>{done}/{total} done</span> : null}
+          <button
+            type="button"
+            className="panel-header-btn"
+            onClick={(e) => { e.stopPropagation(); toggleCollapsed('tasks', false); setAddTaskCounter((c) => c + 1) }}
+            data-testid="panel-add-task"
+          >
+            <Plus size={12} aria-hidden />
+          </button>
+        </>
+      )
+    }
+    if (panelId === 'terminal') {
+      return (
+        <>
+          {shellPanelTabs.length > 0 ? <span>{shellPanelTabs.length} tabs</span> : null}
+          <button
+            type="button"
+            className="panel-header-btn"
+            onClick={(e) => { e.stopPropagation(); toggleCollapsed('terminal', false); startNewShellFromPanel() }}
+            data-testid="panel-new-shell"
+          >
+            <Plus size={12} aria-hidden />
+          </button>
+        </>
+      )
+    }
+    return null
+  }
+
+  const panelContent = (panelId: PanelId) => {
+    if (panelId === 'workers') {
+      return (
+        <WorkersPane
+          onAddWorkerClick={() => setComposerOpen(true)}
+          onDeleteWorker={handleDeleteWorker}
+          onOpenWorker={(worker) => setActiveWorkerId(worker.id)}
+          onRenameWorker={handleRenameWorker}
+          onStartWorker={handleStartWorker}
+          onStopWorkerRun={(runId) => void stopAgentRun(runId)}
+          startingWorkerId={startingWorkerId}
+          terminalRuns={terminalRuns}
+          workers={workers}
+        />
+      )
+    }
+    if (panelId === 'tasks') {
+      return (
+        <div className="relative min-h-0 flex-1 overflow-hidden" data-inline-task-panel>
+          <TaskGraphDrawer
+            content={tasksFile.content}
+            hasConflict={tasksFile.hasConflict}
+            onClose={() => toggleCollapsed('tasks')}
+            onContentChange={tasksFile.onChange}
+            onKeepLocal={tasksFile.onKeepLocal}
+            onReload={tasksFile.onReload}
+            onSave={tasksFile.onSave}
+            onToggleTaskLine={(line) => {
+              void tasksFile.toggleTaskAtLine(line).catch(logSwallowed('tasks.toggleTaskAtLine'))
+            }}
+            onAppendTask={(text) => {
+              void tasksFile.appendTask(text).catch(logSwallowed('tasks.appendTask'))
+            }}
+            onAppendSubtask={(parentLine, text) => {
+              void tasksFile.appendSubtask(parentLine, text).catch(logSwallowed('tasks.appendSubtask'))
+            }}
+            onUpdateTaskText={(line, nextText) => {
+              void tasksFile.updateTaskText(line, nextText).catch(logSwallowed('tasks.updateTaskText'))
+            }}
+            onDeleteTask={(line) => {
+              void tasksFile.deleteTask(line).catch(logSwallowed('tasks.deleteTask'))
+            }}
+            open={true}
+            workspaceId={workspace.id}
+            workspacePath={workspace.path}
+            knownWorkerNames={knownWorkerNames}
+            requestAddTask={addTaskCounter}
+          />
+        </div>
+      )
+    }
+    return (
+      <div className="min-h-0 flex-1">
+        <TerminalBottomPanel
+          tabs={shellPanelTabs}
+          activeId={panelTabs.activeId}
+          scopeKey={workspace.id}
+          onSelect={panelTabs.setActive}
+          onClose={(tabId) => {
+            if (tabId.startsWith('shell:')) {
+              closeShellTab(tabId.slice('shell:'.length))
+            }
+            panelTabs.closeTab(tabId)
+          }}
+          onClosePanel={() => toggleCollapsed('terminal')}
+          onNewShell={startNewShellFromPanel}
+          newShellPending={shellStarting}
+          onStartWorker={(workerId) => {
+            const worker = workers.find((w) => w.id === workerId)
+            if (worker) handleStartWorker(worker)
+          }}
+          startingWorkerId={startingWorkerId}
+        />
+      </div>
+    )
   }
 
   return (
@@ -248,40 +452,32 @@ export const WorkspaceDetail = ({
           onPointerDown={split.beginDrag}
           onKeyDown={split.onKeyDown}
         />
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          <WorkersPane
-            onAddWorkerClick={() => setComposerOpen(true)}
-            onDeleteWorker={handleDeleteWorker}
-            onOpenShellTerminal={openShellTerminal}
-            onOpenWorker={(worker) => setActiveWorkerId(worker.id)}
-            onRenameWorker={handleRenameWorker}
-            onStartWorker={handleStartWorker}
-            startingWorkerId={startingWorkerId}
-            terminalRuns={terminalRuns}
-            workers={workers}
-          />
-          {terminalPanelHidden ? null : (
-            <TerminalBottomPanel
-              tabs={shellPanelTabs}
-              activeId={panelTabs.activeId}
-              scopeKey={workspace.id}
-              onSelect={panelTabs.setActive}
-              onClose={(tabId) => {
-                if (tabId.startsWith('shell:')) {
-                  closeShellTab(tabId.slice('shell:'.length))
-                }
-                panelTabs.closeTab(tabId)
-              }}
-              onClosePanel={() => setTerminalPanelHidden(true)}
-              onNewShell={startNewShellFromPanel}
-              newShellPending={shellStarting}
-              onStartWorker={(workerId) => {
-                const worker = workers.find((w) => w.id === workerId)
-                if (worker) handleStartWorker(worker)
-              }}
-              startingWorkerId={startingWorkerId}
-            />
-          )}
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={layout.order} strategy={verticalListSortingStrategy}>
+              {layout.order.map((panelId) => {
+                const Icon = PANEL_ICONS[panelId]
+                return (
+                  <SortablePanel
+                    key={panelId}
+                    id={panelId}
+                    title={t(`workspace.panel.${panelId}`)}
+                    icon={<Icon size={14} />}
+                    collapsed={layout.collapsed[panelId]}
+                    onToggle={() => {
+                      toggleCollapsed(panelId)
+                      if (layout.collapsed[panelId]) {
+                        setTimeout(() => window.dispatchEvent(new Event('resize')), 300)
+                      }
+                    }}
+                    rightSlot={panelSummary(panelId)}
+                  >
+                    {panelContent(panelId)}
+                  </SortablePanel>
+                )
+              })}
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
       {activeWorker ? (
@@ -302,11 +498,14 @@ export const WorkspaceDetail = ({
             commandPresets={composer.commandPresets}
             commandPresetId={composer.commandPresetId}
             creating={composer.creating}
+            customRoleName={composer.customRoleName}
             customTemplates={composer.customTemplates}
             onApplyMarketplaceImport={composer.applyMarketplaceImport}
             onClose={() => setComposerOpen(false)}
+            onCustomRoleNameChange={composer.setCustomRoleName}
             onDeleteTemplate={composer.deleteTemplate}
             onNameChange={composer.setWorkerName}
+            onNameFieldFocus={composer.onNameFieldFocus}
             onPresetChange={composer.setCommandPresetId}
             onRandomName={composer.randomizeWorkerName}
             onRoleDescriptionChange={composer.setRoleDescription}
@@ -321,6 +520,7 @@ export const WorkspaceDetail = ({
             selectedTemplateId={composer.selectedTemplateId}
             startupCommand={composer.startupCommand}
             templateBusy={composer.templateBusy}
+            usedTemplateNames={composer.usedTemplateNames}
             workerName={composer.workerName}
             workerRole={composer.workerRole}
           />

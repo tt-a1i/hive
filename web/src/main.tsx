@@ -5,6 +5,9 @@ import './styles/globals.css'
 import { App } from './app.js'
 import { registerServiceWorker } from './pwa/register-service-worker.js'
 
+const theme = localStorage.getItem('hive-theme') || 'dark'
+document.documentElement.setAttribute('data-theme', theme)
+
 const container = document.getElementById('root')
 
 if (!container) {

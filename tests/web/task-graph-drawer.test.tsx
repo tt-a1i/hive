@@ -18,6 +18,7 @@ const baseProps = () => ({
   content: '',
   hasConflict: false,
   open: true,
+  workspaceId: 'ws-1',
   workspacePath: '/tmp/ws',
   onClose: vi.fn(),
   onContentChange: vi.fn(),

@@ -28,8 +28,11 @@ export const createNoopRestartPolicy = (): RestartPolicy => ({
 
 export const createRestartPolicy = ({
   deleteMessage,
+  getCheckpoint,
   getWorkspaceSnapshot,
   insertMessage,
+  listActiveDispatches,
+  listActiveDiscussions,
   listAgentRuns,
   listMessagesForRecovery,
   readTasks,
@@ -49,8 +52,11 @@ export const createRestartPolicy = ({
     if (startConfig.resumedSessionId) return true
 
     const text = buildRecoverySummary({
+      activeDispatches: listActiveDispatches(workspace.id),
+      activeDiscussions: listActiveDiscussions(workspace.id),
       agent,
       allTaskMessages: listMessagesForRecovery(workspace.id, 0),
+      checkpoint: getCheckpoint(agentId),
       messages: listMessagesForRecovery(workspace.id, Date.now() - RECOVERY_WINDOW_MS),
       tasksContent,
       workers,

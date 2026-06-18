@@ -202,8 +202,7 @@ describe('app shell terminal flow with real server', () => {
     delayShellDeletes = true
     render(<App />)
 
-    const terminalButton = await screen.findByTestId('open-workspace-shell')
-    fireEvent.click(terminalButton)
+    fireEvent.click(await screen.findByTestId('open-workspace-shell'))
     await waitFor(() => expect(shellStarts).toHaveLength(1))
     const firstRunId = shellStarts[0]?.run_id ?? ''
     expect(shellStarts[0]?.agent_name).toBe('Shell')
@@ -211,7 +210,7 @@ describe('app shell terminal flow with real server', () => {
 
     fireEvent.click(screen.getByTestId(`terminal-tab-close-shell:${firstRunId}`))
     await waitFor(() => expect(releaseDelayedDelete).toBeDefined())
-    fireEvent.click(terminalButton)
+    fireEvent.click(screen.getByTestId('open-workspace-shell'))
 
     await new Promise((resolve) => window.setTimeout(resolve, 50))
     expect(shellStarts).toHaveLength(1)

@@ -28,6 +28,7 @@ const TaskDrawerHarness = () => {
       open
       tasksFile={tasksFile}
       onClose={() => {}}
+      workspaceId={workspaceId}
       workspacePath={workspacePath}
     />
   )

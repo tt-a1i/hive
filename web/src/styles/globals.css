@@ -189,6 +189,52 @@
   color-scheme: dark;
 }
 
+[data-theme='light'] {
+  --bg-0: #ffffff;
+  --bg-1: #f8f8f8;
+  --bg-2: #f3f3f3;
+  --bg-3: #ebebeb;
+  --bg-crust: #e5e5e5;
+  --bg-overlay: rgba(0, 0, 0, 0.25);
+  --bg-elevated: #ffffff;
+
+  --charcoal-775: #f0f0f0;
+  --charcoal-750: #eaeaea;
+  --charcoal-700: #e0e0e0;
+  --charcoal-650: #d6d6d6;
+  --charcoal-600: #c8c8c8;
+
+  --background-dimmed: var(--bg-1);
+  --background-bright: var(--bg-2);
+  --grid-dimmed: var(--border);
+  --grid-bright: var(--border-bright);
+
+  --border: #e0e0e0;
+  --border-bright: #cccccc;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-tertiary: #888888;
+  --text-light: #888888;
+  --text-extra-light: #aaaaaa;
+  --text-inverted: #ffffff;
+  --text-danger: #cf222e;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+
+  --status-green: #1a7f37;
+  --status-orange: #bc4c00;
+  --status-red: #cf222e;
+  --status-blue: #2563eb;
+  --status-purple: #8250df;
+  --status-gold: #9a6700;
+
+  --shadow-tint: 0 0 0;
+
+  color-scheme: light;
+}
+
 /* Accent-tinted selection. 22% reads as highlighted without shouting. */
 ::selection {
   background: color-mix(in oklab, var(--accent) 22%, transparent);
@@ -497,6 +543,29 @@ html, body {
   padding-right: 0;
 }
 
+.dispatch-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.dispatch-badge[data-tone='green'] {
+  color: var(--green-text, #166534);
+  background: var(--green-bg, #dcfce7);
+}
+.dispatch-badge[data-tone='orange'] {
+  color: var(--orange-text, #9a3412);
+  background: var(--orange-bg, #ffedd5);
+}
+.dispatch-badge[data-tone='red'] {
+  color: var(--red-text, #991b1b);
+  background: var(--red-bg, #fee2e2);
+}
+
 /* Button — Twenty-style. Two key shifts from the old `.icon-btn`:
    1. Larger touch target (height 28px, was ~22px) with proportional padding.
       Twenty runs 24px small / 32px medium; we sit at 28px, the lightest
@@ -719,10 +788,27 @@ html, body {
 
 /* Drawer */
 .drawer {
+  width: 40%;
+  min-width: 360px;
+  max-width: calc(100vw - 3.5rem);
   transform: translateX(100%);
   transition: transform 0.25s ease-out;
 }
 .drawer.open { transform: translateX(0); }
+
+/* Inline task panel: override drawer's absolute overlay sizing when embedded
+   inside the workspace tab panel. */
+[data-inline-task-panel] > .drawer {
+  position: static;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  border-left: none;
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
 
 /* Slim 2px progress bar — replaces the full progress card. Solid accent
    (no gradient), 999px ends so the leading edge of the fill looks
@@ -1368,7 +1454,7 @@ html, body {
 .worker-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 /* Worker card — centered "person tile" with hero avatar, name, role text,
@@ -1460,6 +1546,196 @@ html, body {
   background: color-mix(in oklab, var(--status-red) 14%, transparent);
   border-color: color-mix(in oklab, var(--status-red) 40%, var(--border-bright));
   color: var(--status-red);
+}
+
+/* Dropdown menu (Radix) */
+.dropdown-menu {
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: dropdown-in 120ms ease-out;
+  z-index: 50;
+}
+@keyframes dropdown-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-2px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.dropdown-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  color: var(--text-sec);
+  cursor: pointer;
+  outline: none;
+}
+.dropdown-menu__item[data-highlighted] {
+  background: var(--bg-3);
+  color: var(--text-pri);
+}
+.dropdown-menu__item[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.dropdown-menu__item--danger {
+  color: var(--status-red);
+}
+.dropdown-menu__item--danger[data-highlighted] {
+  background: color-mix(in oklab, var(--status-red) 10%, transparent);
+  color: var(--status-red);
+}
+.dropdown-menu__separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+/* Accordion (Radix) — worker sections */
+.accordion-section {
+  border-radius: 6px;
+  overflow: hidden;
+}
+.accordion-trigger-wrap {
+  padding: 0 8px;
+}
+.accordion-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 4px;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+.accordion-trigger:hover {
+  background: var(--bg-3);
+  border-radius: 4px;
+}
+.accordion-chevron {
+  color: var(--text-ter);
+  transition: transform 200ms ease;
+}
+.accordion-trigger[data-state="open"] .accordion-chevron {
+  transform: rotate(180deg);
+}
+.accordion-content {
+  overflow: hidden;
+  animation: accordion-collapse 200ms ease;
+}
+.accordion-content[data-state="open"] {
+  animation: accordion-expand 200ms ease;
+}
+@keyframes accordion-expand {
+  from { height: 0; opacity: 0; }
+  to { height: var(--radix-accordion-content-height); opacity: 1; }
+}
+@keyframes accordion-collapse {
+  from { height: var(--radix-accordion-content-height); opacity: 1; }
+  to { height: 0; opacity: 0; }
+}
+
+/* Collapsible Panel */
+.collapsible-panel {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.collapsible-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.collapsible-panel__header:hover {
+  background: var(--bg-3);
+}
+.collapsible-panel__drag {
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  color: var(--text-ter);
+  padding: 2px;
+  border-radius: 3px;
+}
+.collapsible-panel__drag:hover {
+  background: var(--bg-3);
+  color: var(--text-sec);
+}
+.collapsible-panel__drag:active {
+  cursor: grabbing;
+}
+.collapsible-panel__icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-ter);
+}
+.collapsible-panel__title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-pri);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.collapsible-panel__summary {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-ter);
+  white-space: nowrap;
+}
+.panel-header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-ter);
+  cursor: pointer;
+}
+.panel-header-btn:hover {
+  background: var(--bg-3);
+  color: var(--text-pri);
+}
+.collapsible-panel__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-ter);
+  flex-shrink: 0;
+}
+.collapsible-panel__content {
+  max-height: 9999px;
+  overflow: hidden;
+  transition: max-height 300ms ease, opacity 200ms ease;
+  opacity: 1;
+}
+.collapsible-panel[data-collapsed] .collapsible-panel__content {
+  max-height: 0;
+  opacity: 0;
+}
+.collapsible-panel[data-collapsed] .collapsible-panel__header {
+  border-bottom-color: transparent;
 }
 
 .modal-resize-handle {

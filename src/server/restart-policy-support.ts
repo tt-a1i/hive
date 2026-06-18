@@ -1,14 +1,18 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import type { PersistedAgentRun } from './agent-run-store.js'
 import type { MessageLogHandle, MessageLogRecord, RecoveryMessage } from './message-log-store.js'
+import type { ActiveDiscussionInfo, ActiveDispatchInfo } from './recovery-summary.js'
 
 export interface RestartPolicyInput {
   deleteMessage: (handle: MessageLogHandle) => void
+  getCheckpoint: (agentId: string) => string | null
   getWorkspaceSnapshot: (workspaceId: string) => {
     agents: AgentSummary[]
     summary: WorkspaceSummary
   }
   insertMessage: (record: MessageLogRecord) => MessageLogHandle
+  listActiveDispatches: (workspaceId: string) => ActiveDispatchInfo[]
+  listActiveDiscussions: (workspaceId: string) => ActiveDiscussionInfo[]
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   readTasks: (workspacePath: string) => string

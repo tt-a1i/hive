@@ -22,6 +22,7 @@ export interface PersistedAgentRun {
   pid: number | null
   startedAt: number
   endedAt: number | null
+  tmuxSession: string | null
 }
 
 const parseArgsJson = (argsJson: string, agentId: string) => {
@@ -64,6 +65,7 @@ interface AgentRunRow {
   exit_code: number | null
   started_at: number
   ended_at: number | null
+  tmux_session: string | null
 }
 
 export const createAgentRunStore = (db: Database) => {
@@ -199,7 +201,7 @@ export const createAgentRunStore = (db: Database) => {
 
     return db
       .prepare(
-        'SELECT run_id, agent_id, pid, status, exit_code, started_at, ended_at FROM agent_runs WHERE agent_id = ? ORDER BY started_at DESC'
+        'SELECT run_id, agent_id, pid, status, exit_code, started_at, ended_at, tmux_session FROM agent_runs WHERE agent_id = ? ORDER BY started_at DESC'
       )
       .all(agentId)
       .map((row: unknown) => {
@@ -212,6 +214,7 @@ export const createAgentRunStore = (db: Database) => {
           exitCode: typedRow.exit_code,
           startedAt: typedRow.started_at,
           endedAt: typedRow.ended_at,
+          tmuxSession: typedRow.tmux_session,
         }
       }) satisfies PersistedAgentRun[]
   }
@@ -227,14 +230,58 @@ export const createAgentRunStore = (db: Database) => {
     ).run(endedAt, endedAt)
   }
 
+  const updateCheckpoint = (runId: string, checkpointJson: string) => {
+    if (closed) return
+    db.prepare(
+      'UPDATE agent_runs SET checkpoint_json = ?, updated_at = ? WHERE run_id = ?'
+    ).run(checkpointJson, Date.now(), runId)
+  }
+
+  const updateTmuxSession = (runId: string, sessionName: string | null) => {
+    if (closed) return
+    db.prepare(
+      'UPDATE agent_runs SET tmux_session = ?, updated_at = ? WHERE run_id = ?'
+    ).run(sessionName, Date.now(), runId)
+  }
+
+  const findRunByTmuxSession = (sessionName: string): PersistedAgentRun | null => {
+    if (closed) return null
+    const row = db.prepare(
+      'SELECT run_id, agent_id, pid, status, exit_code, started_at, ended_at, tmux_session FROM agent_runs WHERE tmux_session = ? AND status IN (\'starting\', \'running\') ORDER BY started_at DESC LIMIT 1'
+    ).get(sessionName) as AgentRunRow | undefined
+    if (!row) return null
+    return {
+      runId: row.run_id,
+      agentId: row.agent_id,
+      pid: row.pid,
+      status: row.status,
+      exitCode: row.exit_code,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      tmuxSession: row.tmux_session,
+    }
+  }
+
+  const getCheckpoint = (agentId: string): string | null => {
+    if (closed) return null
+    const row = db.prepare(
+      'SELECT checkpoint_json FROM agent_runs WHERE agent_id = ? AND checkpoint_json IS NOT NULL ORDER BY started_at DESC LIMIT 1'
+    ).get(agentId) as { checkpoint_json: string } | undefined
+    return row?.checkpoint_json ?? null
+  }
+
   return {
     close,
+    findRunByTmuxSession,
+    getCheckpoint,
     insertAgentRun,
     deleteLaunchConfig,
     listAgentRuns,
     listLaunchConfigs,
     markUnfinishedRunsStale,
     saveLaunchConfig,
+    updateCheckpoint,
     updatePersistedRun,
+    updateTmuxSession,
   }
 }

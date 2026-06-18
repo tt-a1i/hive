@@ -194,7 +194,7 @@ describe('worker flow with real server', () => {
     )
     expect(card).toBeInTheDocument()
     expect(within(card).getByText('Alice')).toBeInTheDocument()
-    expect(within(card).getByText('Coder')).toBeInTheDocument()
+    expect(within(card).getByText(/· Coder/)).toBeInTheDocument()
     expect(within(card).getByText('idle')).toBeInTheDocument()
     // Add Member affordance now lives only in the WorkersPane header (the
     // dashed in-grid Add Member tile was redundant and visually misleading).
@@ -220,8 +220,12 @@ describe('worker flow with real server', () => {
       expect(screen.queryByTestId('worker-modal')).toBeNull()
     })
 
-    // Delete via the card's hover-revealed action cluster.
-    fireEvent.click(screen.getByRole('button', { name: 'Delete team member Alice' }))
+    // Delete via the card's dropdown action menu.
+    const workers = serverContext?.store.listWorkers(workspaceId) ?? []
+    const alice = workers.find((w) => w.name === 'Alice')
+    fireEvent.click(screen.getByTestId(`worker-card-more-${alice?.id}`))
+    const deleteItem = await screen.findByTestId(`worker-card-delete-${alice?.id}`)
+    fireEvent.click(deleteItem)
     const confirm = await screen.findByTestId('confirm-title')
     expect(confirm).toHaveTextContent('Delete Alice?')
     fireEvent.click(screen.getByTestId('confirm-action'))

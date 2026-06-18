@@ -1,19 +1,26 @@
-import { FolderPlus, Plus, Trash2, X } from 'lucide-react'
-import { useState } from 'react'
+import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { FolderPlus, GitBranch, GripVertical, Plus, Trash2, X } from 'lucide-react'
+import { useCallback, useState } from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../../src/shared/types.js'
+import { reorderWorkspaces } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { Confirm } from '../ui/Confirm.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
+import { CloneWorkspaceDialog } from '../workspace/CloneWorkspaceDialog.js'
 import { WorkspaceAvatar } from './WorkspaceAvatar.js'
 
 type SidebarProps = {
   activeWorkspaceId: string | null
-  createDisabledReason?: string
+  createDisabledReason?: string | undefined
+  onCloneWorkspace?: ((cloned: WorkspaceSummary) => void) | undefined
   onCreateClick: () => void
   onDeleteWorkspace: (workspace: WorkspaceSummary) => void | Promise<void>
+  onReorderWorkspaces?: ((reordered: WorkspaceSummary[]) => void) | undefined
   onSelectWorkspace: (workspaceId: string) => void
   workersByWorkspaceId: Record<string, TeamListItem[]>
   workspaces: WorkspaceSummary[] | null
@@ -46,17 +53,144 @@ const readGithubDismissed = (): boolean => {
   }
 }
 
+const SortableWorkspaceItem = ({
+  workspace,
+  isActive,
+  hasWorking,
+  workingCount,
+  onSelect,
+  onClone,
+  onDelete,
+  cloneLabel,
+  deleteLabel,
+}: {
+  workspace: WorkspaceSummary
+  isActive: boolean
+  hasWorking: boolean
+  workingCount: number
+  onSelect: () => void
+  onClone: () => void
+  onDelete: () => void
+  cloneLabel: string
+  deleteLabel: string
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: workspace.id,
+  })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    boxShadow: isDragging ? '0 2px 8px rgba(0,0,0,0.15)' : undefined,
+  }
+  return (
+    <li ref={setNodeRef} style={style} className="group relative">
+      <Tooltip
+        side="right"
+        label={
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium">{workspace.name}</span>
+            <span className="mono text-ter">{workspace.path}</span>
+          </span>
+        }
+      >
+        <button
+          type="button"
+          aria-label={workspace.name}
+          aria-current={isActive ? 'true' : undefined}
+          data-workspace-path={workspace.path}
+          onClick={onSelect}
+          className={`ws-row flex w-full items-center gap-2.5 py-1.5 pr-7 pl-2 text-left${
+            isActive ? ' active' : ''
+          }`}
+        >
+          <span
+            className="ws-drag-handle flex items-center text-ter opacity-0 transition-opacity group-hover:opacity-100"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical size={12} aria-hidden />
+          </span>
+          <WorkspaceAvatar
+            workspaceId={workspace.id}
+            name={workspace.name}
+            isActive={isActive}
+            working={hasWorking}
+            workingCount={workingCount}
+          />
+          <span
+            className={`min-w-0 flex-1 truncate text-sm ${
+              isActive ? 'font-medium text-pri' : 'text-pri'
+            }`}
+          >
+            {workspace.name}
+          </span>
+        </button>
+      </Tooltip>
+      <Tooltip
+        side="right"
+        label={
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium">{workspace.name}</span>
+            <span className="mono text-ter">{workspace.path}</span>
+          </span>
+        }
+      >
+        <button
+          type="button"
+          aria-label={workspace.name}
+          aria-current={isActive ? 'true' : undefined}
+          onClick={onSelect}
+          className="ws-avatar-cell hidden w-full justify-center py-2"
+          data-testid="ws-avatar-cell"
+        >
+          <WorkspaceAvatar
+            workspaceId={workspace.id}
+            name={workspace.name}
+            isActive={isActive}
+            working={hasWorking}
+            workingCount={workingCount}
+          />
+        </button>
+      </Tooltip>
+      <Tooltip label={cloneLabel}>
+        <button
+          type="button"
+          aria-label={cloneLabel}
+          onClick={(e) => { e.stopPropagation(); onClone() }}
+          className="ws-row-clone absolute top-2 right-9 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-accent focus:opacity-100 group-hover:opacity-100"
+        >
+          <GitBranch size={14} aria-hidden />
+        </button>
+      </Tooltip>
+      <Tooltip label={deleteLabel}>
+        <button
+          type="button"
+          aria-label={deleteLabel}
+          onClick={onDelete}
+          className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
+        >
+          <Trash2 size={14} aria-hidden />
+        </button>
+      </Tooltip>
+    </li>
+  )
+}
+
 export const Sidebar = ({
   activeWorkspaceId,
   createDisabledReason,
+  onCloneWorkspace,
   onCreateClick,
   onDeleteWorkspace,
+  onReorderWorkspaces,
   onSelectWorkspace,
   workersByWorkspaceId,
   workspaces,
 }: SidebarProps) => {
   const { t } = useI18n()
   const [pendingDelete, setPendingDelete] = useState<WorkspaceSummary | null>(null)
+  const [cloningWorkspace, setCloningWorkspace] = useState<WorkspaceSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [githubDismissed, setGithubDismissed] = useState<boolean>(readGithubDismissed)
   const toast = useToast()
@@ -75,6 +209,22 @@ export const Sidebar = ({
   const requestDelete = (workspace: WorkspaceSummary) => {
     setPendingDelete(workspace)
   }
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id || !workspaces) return
+      const oldIndex = workspaces.findIndex((w) => w.id === active.id)
+      const newIndex = workspaces.findIndex((w) => w.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return
+      const reordered = arrayMove(workspaces, oldIndex, newIndex)
+      onReorderWorkspaces?.(reordered)
+      void reorderWorkspaces(reordered.map((w) => w.id)).catch((error: unknown) => {
+        console.error('[hive] swallowed:sidebar.reorder', error)
+      })
+    },
+    [workspaces, onReorderWorkspaces]
+  )
 
   const confirmDelete = () => {
     if (!pendingDelete || deleting) return
@@ -166,92 +316,29 @@ export const Sidebar = ({
           />
         </div>
       ) : (
-        <ul className="flex-1 scroll-y pb-2">
-          {workspaces.map((workspace) => {
-            const workers = workersByWorkspaceId[workspace.id]
-            const isActive = workspace.id === activeWorkspaceId
-            const hasWorking = hasWorkingMember(workers)
-            const workingCount = countWorkingMembers(workers)
-            return (
-              <li key={workspace.id} className="group relative">
-                {/* Wide layout — mini avatar + name, path moved to tooltip. */}
-                {/* Hidden by `@container ws-sidebar (max-width: 96px)`. */}
-                <Tooltip
-                  side="right"
-                  label={
-                    <span className="flex flex-col gap-0.5">
-                      <span className="font-medium">{workspace.name}</span>
-                      <span className="mono text-ter">{workspace.path}</span>
-                    </span>
-                  }
-                >
-                  <button
-                    type="button"
-                    aria-label={workspace.name}
-                    aria-current={isActive ? 'true' : undefined}
-                    data-workspace-path={workspace.path}
-                    onClick={() => onSelectWorkspace(workspace.id)}
-                    className={`ws-row flex w-full items-center gap-2.5 py-1.5 pr-7 pl-2 text-left${
-                      isActive ? ' active' : ''
-                    }`}
-                  >
-                    <WorkspaceAvatar
-                      workspaceId={workspace.id}
-                      name={workspace.name}
-                      isActive={isActive}
-                      working={hasWorking}
-                      workingCount={workingCount}
-                    />
-                    <span
-                      className={`min-w-0 flex-1 truncate text-sm ${
-                        isActive ? 'font-medium text-pri' : 'text-pri'
-                      }`}
-                    >
-                      {workspace.name}
-                    </span>
-                  </button>
-                </Tooltip>
-                {/* Compact layout — Discord-style square avatar. Shown by the */}
-                {/* same container query when sidebar width is ≤96px. */}
-                <Tooltip
-                  side="right"
-                  label={
-                    <span className="flex flex-col gap-0.5">
-                      <span className="font-medium">{workspace.name}</span>
-                      <span className="mono text-ter">{workspace.path}</span>
-                    </span>
-                  }
-                >
-                  <button
-                    type="button"
-                    aria-label={workspace.name}
-                    aria-current={isActive ? 'true' : undefined}
-                    onClick={() => onSelectWorkspace(workspace.id)}
-                    className="ws-avatar-cell hidden w-full justify-center py-2"
-                    data-testid="ws-avatar-cell"
-                  >
-                    <WorkspaceAvatar
-                      workspaceId={workspace.id}
-                      name={workspace.name}
-                      isActive={isActive}
-                      working={hasWorking}
-                      workingCount={workingCount}
-                    />
-                  </button>
-                </Tooltip>
-                <Tooltip label={t('sidebar.deleteAria', { name: workspace.name })}>
-                  <button
-                    type="button"
-                    aria-label={t('sidebar.deleteAria', { name: workspace.name })}
-                    onClick={() => requestDelete(workspace)}
-                    className="ws-row-delete absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded text-ter opacity-0 transition-colors hover:text-status-red focus:opacity-100 group-hover:opacity-100"
-                  >
-                    <Trash2 size={14} aria-hidden />
-                  </button>
-                </Tooltip>
-              </li>
-            )
-          })}
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={workspaces.map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            <ul className="flex-1 scroll-y pb-2">
+              {workspaces.map((workspace) => {
+                const workers = workersByWorkspaceId[workspace.id]
+                const isActive = workspace.id === activeWorkspaceId
+                const hasWorking = hasWorkingMember(workers)
+                const workingCount = countWorkingMembers(workers)
+                return (
+                  <SortableWorkspaceItem
+                    key={workspace.id}
+                    workspace={workspace}
+                    isActive={isActive}
+                    hasWorking={hasWorking}
+                    workingCount={workingCount}
+                    onSelect={() => onSelectWorkspace(workspace.id)}
+                    onClone={() => setCloningWorkspace(workspace)}
+                    onDelete={() => requestDelete(workspace)}
+                    cloneLabel={t('sidebar.cloneAria', { name: workspace.name })}
+                    deleteLabel={t('sidebar.deleteAria', { name: workspace.name })}
+                  />
+                )
+              })}
           {/* New-workspace CTA lives at the bottom of the list (Discord-style)
               so it appears next to existing workspaces in both wide and compact
               modes, instead of pinned to the sidebar footer. */}
@@ -275,6 +362,8 @@ export const Sidebar = ({
             </Tooltip>
           </li>
         </ul>
+          </SortableContext>
+        </DndContext>
       )}
 
       {githubDismissed ? null : (
@@ -308,6 +397,18 @@ export const Sidebar = ({
       )}
 
       {confirm}
+      {cloningWorkspace ? (
+        <CloneWorkspaceDialog
+          open
+          workspace={cloningWorkspace}
+          onClose={() => setCloningWorkspace(null)}
+          onCloned={(cloned) => {
+            setCloningWorkspace(null)
+            onCloneWorkspace?.(cloned)
+            onSelectWorkspace(cloned.id)
+          }}
+        />
+      ) : null}
     </nav>
   )
 }

@@ -18,7 +18,7 @@ afterEach(async () => {
   }
 })
 
-const expectDispatchSchema = (db: Database) => {
+const expectDispatchSchema = (db: InstanceType<typeof Database>) => {
   const dispatchTable = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'dispatches'")
     .get() as { name: string } | undefined
@@ -33,7 +33,7 @@ const expectDispatchSchema = (db: Database) => {
   expect(dispatchIndexes.has('idx_dispatches_open_by_worker')).toBe(true)
 }
 
-const indexColumns = (db: Database, indexName: string) =>
+const indexColumns = (db: InstanceType<typeof Database>, indexName: string) =>
   (db.prepare(`PRAGMA index_info(${indexName})`).all() as Array<{ name: string }>).map(
     (column) => column.name
   )
@@ -137,6 +137,7 @@ describe('schema version', () => {
         'is_builtin',
         'created_at',
         'updated_at',
+        'discussion_triggers',
       ])
     )
     expect(appStateColumns).toEqual(new Set(['key', 'value', 'updated_at']))
@@ -156,6 +157,7 @@ describe('schema version', () => {
         'reported_at',
         'report_text',
         'artifacts',
+        'task_id',
       ])
     )
     expectDispatchSchema(db)
@@ -190,6 +192,19 @@ describe('schema version', () => {
 
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
 
       CREATE TABLE command_presets (
         id TEXT PRIMARY KEY,
@@ -265,6 +280,19 @@ describe('schema version', () => {
 
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
 
       CREATE TABLE command_presets (
         id TEXT PRIMARY KEY,
@@ -376,6 +404,19 @@ describe('schema version', () => {
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10);
 
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
       CREATE TABLE command_presets (
         id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
@@ -451,6 +492,19 @@ describe('schema version', () => {
 
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (13, 13), (14, 14), (15, 15), (16, 16);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
 
       CREATE TABLE command_presets (
         id TEXT PRIMARY KEY,
@@ -712,6 +766,19 @@ describe('schema version', () => {
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (13, 13);
 
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
       CREATE TABLE messages (
         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
         workspace_id TEXT NOT NULL,
@@ -809,6 +876,19 @@ describe('schema version', () => {
 
       INSERT INTO schema_version (version, applied_at)
       VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10), (11, 11), (12, 12), (13, 13), (14, 14);
+
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
 
       CREATE TABLE dispatches (
         id TEXT PRIMARY KEY,
