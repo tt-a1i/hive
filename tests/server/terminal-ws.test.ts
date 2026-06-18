@@ -414,6 +414,49 @@ describe('terminal websocket server', () => {
     }
   })
 
+  test('stale io input after PTY exit does not crash the server', async () => {
+    const workspacePath = join(tmpdir(), `hive-terminal-stale-io-${Date.now()}`)
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(workspacePath)
+    const script = join(workspacePath, 'exit-fast.js')
+    writeFileSync(script, 'setTimeout(() => process.exit(0), 20)\n')
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspace(server.baseUrl, cookie, workspacePath)
+      const worker = await createWorker(server.baseUrl, cookie, workspace.id)
+      await configureAgent(server.baseUrl, cookie, workspace.id, worker.id, process.execPath, [
+        script,
+      ])
+      const run = await startAgent(server.baseUrl, cookie, workspace.id, worker.id)
+      const io = await openSocket(toWsUrl(server.baseUrl, `/ws/terminal/${run.runId}/io`), cookie)
+      const messages: string[] = []
+      let closed = false
+
+      io.on('message', (chunk) => {
+        messages.push(chunk.toString())
+      })
+      io.on('close', () => {
+        closed = true
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 150))
+
+      io.send('late input after exit\n')
+
+      await waitFor(() => {
+        expect(messages.some((message) => message.includes('PTY is not active'))).toBe(true)
+        expect(closed).toBe(true)
+      })
+
+      const health = await fetch(`${server.baseUrl}/api/workspaces`, { headers: { cookie } })
+      expect(health.status).toBe(200)
+    } finally {
+      await server.close()
+    }
+  }, 15000)
+
   test('workspace shell control socket receives an exit event when the shell exits', async () => {
     const workspacePath = join(tmpdir(), `hive-terminal-shell-exit-${Date.now()}`)
     mkdirSync(workspacePath, { recursive: true })

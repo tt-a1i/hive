@@ -193,7 +193,18 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         },
       })
       socket.on('message', (raw, isBinary) => {
-        store.writeRunInput(runId, normalizeTerminalInput(raw, isBinary))
+        try {
+          store.writeRunInput(runId, normalizeTerminalInput(raw, isBinary))
+        } catch (error) {
+          if (socket.readyState === socket.OPEN) {
+            socket.send(
+              serializeTerminalError(
+                error instanceof Error ? error.message : 'Terminal input failed'
+              )
+            )
+          }
+          socket.close()
+        }
       })
       socket.on('close', () => {
         if (viewer.ioSocket === socket) viewer.ioSocket = null
