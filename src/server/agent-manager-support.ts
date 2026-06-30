@@ -107,6 +107,7 @@ export const attachAgentPty = (run: AgentRunRecord, pty: IPty, ptyOutputBus: Pty
     },
     pid: pty.pid,
     resize(cols, rows) {
+      if (stopped()) return
       pty.resize(cols, rows)
     },
     resume() {
