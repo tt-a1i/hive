@@ -23,9 +23,11 @@ vi.mock('node-pty', () => ({
   spawn: () => {
     const exitCodes = exitSequences.shift() ?? [0, 0]
     let exitHandler: ((event: { exitCode: number | null }) => void) | undefined
+    let exited = false
 
     queueMicrotask(() => {
       for (const exitCode of exitCodes) {
+        exited = true
         exitHandler?.({ exitCode })
       }
     })
@@ -36,6 +38,9 @@ vi.mock('node-pty', () => ({
       onData() {},
       onExit(handler: (event: { exitCode: number | null }) => void) {
         exitHandler = handler
+      },
+      resize() {
+        if (exited) throw new Error('Cannot resize a pty that has already exited')
       },
       write() {},
     }
@@ -110,5 +115,21 @@ describe('agent manager finishRun', () => {
     expect(onExitSpy).toHaveBeenCalledTimes(1)
     expect(onExitSpy).toHaveBeenCalledWith({ exitCode: null, runId: run.runId })
     expect(manager.getRun(run.runId)).toMatchObject({ exitCode: null, status: 'error' })
+  })
+
+  test('ignores resize requests after the PTY has already exited', async () => {
+    exitSequences.push([1])
+    const manager = createAgentManager()
+    const run = await manager.startAgent({
+      agentId: 'agent-resize-after-exit',
+      command: '/bin/bash',
+      cwd: '/tmp',
+    })
+
+    await waitFor(() => {
+      expect(manager.getRun(run.runId).status).toBe('error')
+    })
+
+    expect(() => manager.resizeRun(run.runId, 120, 40)).not.toThrow()
   })
 })
