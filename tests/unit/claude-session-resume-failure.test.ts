@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { shouldClearResumedSessionAfterExit } from '../../src/server/agent-run-exit-handler.js'
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
 import { createAgentSessionStore } from '../../src/server/agent-session-store.js'
 import { encodeClaudeProjectPath } from '../../src/server/session-capture-claude.js'
@@ -33,6 +34,20 @@ afterEach(() => {
 })
 
 describe('claude session resume failure', () => {
+  test.each([
+    'Error: Missing optional dependency @openai/codex-win32-x64',
+    'Cannot open external editor: set $VISUAL or $EDITOR before starting Codex.',
+    'failed to parse hooks config C:\\Users\\alice\\.codex\\hooks.json: unknown field `SessionStart`',
+  ])('preserves resumed session id for recoverable startup configuration failure', (output) => {
+    expect(
+      shouldClearResumedSessionAfterExit({
+        exitCode: 1,
+        output,
+        resumedSessionId: '77777777-7777-4777-8777-777777777777',
+      })
+    ).toBe(false)
+  })
+
   test('clears stale session id after resumed Claude run exits non-zero and next start is bare', async () => {
     const cwd = '/tmp/hive-resume-failure-workspace'
     const staleSessionId = '77777777-7777-4777-8777-777777777777'
@@ -129,5 +144,91 @@ describe('claude session resume failure', () => {
     ).toEqual({ last_session_id: null })
 
     db.close()
+  })
+
+  test('keeps session id when resumed run exits with Codex startup configuration error', async () => {
+    const cwd = '/tmp/hive-codex-startup-failure-workspace'
+    const sessionId = '88888888-8888-4888-8888-888888888888'
+    const startupError = 'Error: Missing optional dependency @openai/codex-win32-x64'
+    let lastSessionId: string | undefined = sessionId
+    const clearLastSessionId = vi.fn(() => {
+      lastSessionId = undefined
+    })
+    const sessionStore = {
+      clearLastSessionId,
+      getLastSessionId: () => lastSessionId,
+      setLastSessionId: (_workspaceId: string, _agentId: string, nextSessionId: string) => {
+        lastSessionId = nextSessionId
+      },
+    }
+    let runIndex = 0
+    const startArgs: Array<string[] | undefined> = []
+    const runtime = createAgentRuntime(
+      {
+        getRun: (runId) => ({
+          agentId: 'agent-1',
+          exitCode: runId === 'run-1' ? 1 : null,
+          output: runId === 'run-1' ? startupError : '',
+          pid: 1,
+          runId,
+          status: runId === 'run-1' ? 'error' : 'running',
+        }),
+        startAgent: async (input) => {
+          runIndex += 1
+          const runId = `run-${runIndex}`
+          startArgs.push(input.args)
+          if (runId === 'run-1') {
+            input.onExit?.({ runId, exitCode: 1 })
+          }
+          return {
+            agentId: 'agent-1',
+            exitCode: runId === 'run-1' ? 1 : null,
+            output: runId === 'run-1' ? startupError : '',
+            pid: 1,
+            runId,
+            status: runId === 'run-1' ? 'starting' : 'starting',
+          }
+        },
+        getOutputBus: () => outputBus,
+        pauseRun: () => {},
+        removeRun: () => {},
+        resizeRun: () => {},
+        resumeRun: () => {},
+        stopRun: () => {},
+        writeInput: () => {},
+      },
+      {
+        insertAgentRun: () => {},
+        listAgentRuns: () => [],
+        listLaunchConfigs: () => [
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: {
+              command: 'codex',
+              args: [],
+              resumeArgsTemplate: '--resume {session_id}',
+              sessionIdCapture: null,
+            },
+          },
+        ],
+        deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
+        saveLaunchConfig: () => {},
+        updatePersistedRun: () => {},
+      },
+      sessionStore,
+      () => undefined,
+      () => {}
+    )
+
+    await runtime.startAgent({ id: 'ws-1', name: 'A', path: cwd }, 'agent-1', { hivePort: '4010' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await runtime.startAgent({ id: 'ws-1', name: 'A', path: cwd }, 'agent-1', { hivePort: '4010' })
+
+    expect(startArgs[0]).toEqual(['--resume', sessionId])
+    expect(startArgs[1]).toEqual(['--resume', sessionId])
+    expect(clearLastSessionId).not.toHaveBeenCalled()
+    expect(lastSessionId).toBe(sessionId)
   })
 })

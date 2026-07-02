@@ -1,7 +1,7 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import type { AgentManager } from './agent-manager.js'
 import { buildAgentRunBootstrap, startAgentRunCapture } from './agent-run-bootstrap.js'
-import { handleAgentRunExit } from './agent-run-exit-handler.js'
+import { handleAgentRunExit, shouldClearResumedSessionAfterExit } from './agent-run-exit-handler.js'
 import type { AgentRunExitContext, AgentRunStarterStorePort } from './agent-run-start-context.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
@@ -60,6 +60,7 @@ export const createAgentRunStarter =
     const token = tokenRegistry.issue(agentId)
     const exitContext: AgentRunExitContext = {
       agentId,
+      getRunOutput: (runId) => agentManager.getRun(runId).output,
       handledRunExits,
       onAgentExit,
       registry,
@@ -125,7 +126,13 @@ export const createAgentRunStarter =
 
     if (run.status === 'error') {
       store.updatePersistedRun(run.runId, 'error', run.exitCode, Date.now())
-      if (startConfig.resumedSessionId) {
+      if (
+        shouldClearResumedSessionAfterExit({
+          exitCode: run.exitCode,
+          output: run.output,
+          resumedSessionId: startConfig.resumedSessionId,
+        })
+      ) {
         sessionStore.clearLastSessionId(workspace.id, agentId)
       }
       tokenRegistry.revokeIfMatches(agentId, token)
