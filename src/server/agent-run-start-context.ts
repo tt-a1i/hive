@@ -26,9 +26,11 @@ export interface AgentRunStarterStorePort {
 
 export interface AgentRunExitContext {
   agentId: string
+  getRunOutput?: (runId: string) => string
   handledRunExits: Set<string>
   onAgentExit: (workspaceId: string, agentId: string) => void
   registry: LiveRunRegistry
+  sessionExists?: (sessionId: string) => boolean
   sessionStore: AgentSessionStorePort
   startConfig: { resumedSessionId?: string | null }
   store: AgentRunStarterStorePort
