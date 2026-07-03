@@ -27,8 +27,29 @@ const createClaudeSessionRoot = (cwd: string, sessionId: string) => {
   process.env.HIVE_CLAUDE_PROJECTS_DIR = root
 }
 
+const createCodexSessionRoot = (cwd: string, sessionId: string) => {
+  const root = join(tmpdir(), `hive-codex-session-${crypto.randomUUID()}`)
+  const sessionDir = join(root, 'sessions', '2026', '07', '03')
+  mkdirSync(sessionDir, { recursive: true })
+  writeFileSync(
+    join(sessionDir, `rollout-2026-07-03T09-59-05-${sessionId}.jsonl`),
+    `${JSON.stringify({
+      payload: {
+        cwd,
+        id: sessionId,
+        session_id: sessionId,
+      },
+      timestamp: '2026-07-03T01:59:17.305Z',
+      type: 'session_meta',
+    })}\n`
+  )
+  tempDirs.push(root)
+  process.env.CODEX_HOME = root
+}
+
 afterEach(() => {
   delete process.env.HIVE_CLAUDE_PROJECTS_DIR
+  delete process.env.CODEX_HOME
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
   vi.restoreAllMocks()
 })
@@ -44,6 +65,17 @@ describe('claude session resume failure', () => {
         exitCode: 1,
         output,
         resumedSessionId: '77777777-7777-4777-8777-777777777777',
+      })
+    ).toBe(false)
+  })
+
+  test('preserves resumed session id when the captured session still exists after a crash', () => {
+    expect(
+      shouldClearResumedSessionAfterExit({
+        exitCode: -1073740791,
+        output: '',
+        resumedSessionId: '77777777-7777-4777-8777-777777777777',
+        sessionStillExists: true,
       })
     ).toBe(false)
   })
@@ -144,6 +176,95 @@ describe('claude session resume failure', () => {
     ).toEqual({ last_session_id: null })
 
     db.close()
+  })
+
+  test('keeps session id when resumed Codex run crashes but its session file still exists', async () => {
+    const cwd = '/tmp/hive-codex-runtime-crash-workspace'
+    const sessionId = '99999999-9999-4999-8999-999999999999'
+    createCodexSessionRoot(cwd, sessionId)
+    let lastSessionId: string | undefined = sessionId
+    const clearLastSessionId = vi.fn(() => {
+      lastSessionId = undefined
+    })
+    const sessionStore = {
+      clearLastSessionId,
+      getLastSessionId: () => lastSessionId,
+      setLastSessionId: (_workspaceId: string, _agentId: string, nextSessionId: string) => {
+        lastSessionId = nextSessionId
+      },
+    }
+    let runIndex = 0
+    const startArgs: Array<string[] | undefined> = []
+    const runtime = createAgentRuntime(
+      {
+        getRun: (runId) => ({
+          agentId: 'agent-1',
+          exitCode: runId === 'run-1' ? -1073740791 : null,
+          output: '',
+          pid: 1,
+          runId,
+          status: runId === 'run-1' ? 'error' : 'running',
+        }),
+        startAgent: async (input) => {
+          runIndex += 1
+          const runId = `run-${runIndex}`
+          startArgs.push(input.args)
+          if (runId === 'run-1') {
+            input.onExit?.({ runId, exitCode: -1073740791 })
+          }
+          return {
+            agentId: 'agent-1',
+            exitCode: runId === 'run-1' ? -1073740791 : null,
+            output: '',
+            pid: 1,
+            runId,
+            status: 'starting',
+          }
+        },
+        getOutputBus: () => outputBus,
+        pauseRun: () => {},
+        removeRun: () => {},
+        resizeRun: () => {},
+        resumeRun: () => {},
+        stopRun: () => {},
+        writeInput: () => {},
+      },
+      {
+        insertAgentRun: () => {},
+        listAgentRuns: () => [],
+        listLaunchConfigs: () => [
+          {
+            workspaceId: 'ws-1',
+            agentId: 'agent-1',
+            config: {
+              command: 'codex',
+              args: [],
+              resumeArgsTemplate: 'resume {session_id}',
+              sessionIdCapture: {
+                pattern: '~/.codex/sessions/**/*.jsonl',
+                source: 'codex_session_jsonl_dir',
+              },
+            },
+          },
+        ],
+        deleteLaunchConfig: () => {},
+        markUnfinishedRunsStale: () => {},
+        saveLaunchConfig: () => {},
+        updatePersistedRun: () => {},
+      },
+      sessionStore,
+      () => undefined,
+      () => {}
+    )
+
+    await runtime.startAgent({ id: 'ws-1', name: 'A', path: cwd }, 'agent-1', { hivePort: '4010' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await runtime.startAgent({ id: 'ws-1', name: 'A', path: cwd }, 'agent-1', { hivePort: '4010' })
+
+    expect(startArgs[0]).toEqual(['resume', sessionId])
+    expect(startArgs[1]).toEqual(['resume', sessionId])
+    expect(clearLastSessionId).not.toHaveBeenCalled()
+    expect(lastSessionId).toBe(sessionId)
   })
 
   test('keeps session id when resumed run exits with Codex startup configuration error', async () => {

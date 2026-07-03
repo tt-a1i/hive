@@ -20,12 +20,15 @@ export const shouldClearResumedSessionAfterExit = ({
   exitCode,
   output,
   resumedSessionId,
+  sessionStillExists,
 }: {
   exitCode: number | null
   output: string
   resumedSessionId: string | null | undefined
+  sessionStillExists?: boolean
 }) => {
   if (exitCode === 0 || !resumedSessionId) return false
+  if (sessionStillExists) return false
   return !isRecoverableStartupConfigurationFailure(output)
 }
 
@@ -42,15 +45,20 @@ const getRunOutput = (
 }
 
 const clearResumedSessionOnFailure = (
-  context: Pick<AgentRunExitContext, 'agentId' | 'sessionStore' | 'startConfig' | 'workspace'>,
+  context: Pick<
+    AgentRunExitContext,
+    'agentId' | 'sessionExists' | 'sessionStore' | 'startConfig' | 'workspace'
+  >,
   exitCode: number | null,
   output: string
 ) => {
+  const resumedSessionId = context.startConfig.resumedSessionId
   if (
     shouldClearResumedSessionAfterExit({
       exitCode,
       output,
-      resumedSessionId: context.startConfig.resumedSessionId,
+      resumedSessionId,
+      sessionStillExists: resumedSessionId ? context.sessionExists?.(resumedSessionId) : undefined,
     })
   ) {
     context.sessionStore.clearLastSessionId(context.workspace.id, context.agentId)

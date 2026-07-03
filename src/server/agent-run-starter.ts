@@ -12,6 +12,7 @@ import type { CommandPresetRecord } from './command-preset-store.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
 import { createPostStartInputWriter, isInteractiveAgentCommand } from './post-start-input-writer.js'
 import type { RestartPolicy } from './restart-policy.js'
+import { doesCapturedSessionExist } from './session-capture.js'
 
 interface AgentRunStarterInput {
   agentManager: AgentManager | undefined
@@ -64,6 +65,11 @@ export const createAgentRunStarter =
       handledRunExits,
       onAgentExit,
       registry,
+      sessionExists: (sessionId) =>
+        Boolean(
+          startConfig.sessionIdCapture &&
+            doesCapturedSessionExist(workspace.path, startConfig.sessionIdCapture, sessionId)
+        ),
       sessionStore,
       startConfig,
       store,
@@ -131,6 +137,14 @@ export const createAgentRunStarter =
           exitCode: run.exitCode,
           output: run.output,
           resumedSessionId: startConfig.resumedSessionId,
+          sessionStillExists:
+            startConfig.resumedSessionId && startConfig.sessionIdCapture
+              ? doesCapturedSessionExist(
+                  workspace.path,
+                  startConfig.sessionIdCapture,
+                  startConfig.resumedSessionId
+                )
+              : undefined,
         })
       ) {
         sessionStore.clearLastSessionId(workspace.id, agentId)
