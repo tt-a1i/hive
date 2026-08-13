@@ -60,6 +60,7 @@ describe('worker status presentation', () => {
         onOpenWorker={vi.fn()}
         onRenameWorker={vi.fn()}
         onStartWorker={vi.fn()}
+        onStopWorkerRun={vi.fn()}
         startingWorkerId={null}
         terminalRuns={[terminalRun(idleWorker.id), terminalRun(activeWorker.id)]}
         workers={[idleWorker, activeWorker, stoppedWorker]}

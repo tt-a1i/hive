@@ -157,7 +157,7 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
 
       expect(new Set(runs.map((run) => run.runId)).size).toBe(1)
       await waitFor(() => {
-        expect(store.getLiveRun(runs[0].runId).status).toBe('running')
+        expect(store.getLiveRun(runs[0]!.runId).status).toBe('running')
       })
       let spawnedPid: number | undefined
       await waitFor(() => {

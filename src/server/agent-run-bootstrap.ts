@@ -21,8 +21,8 @@ const resolveHiveBinDir = () => {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
   const packageRoot = resolve(moduleDir, '../..')
   return moduleDir.includes(`${sep}dist${sep}src${sep}`)
-    ? resolve(packageRoot, 'bin')
-    : resolve(packageRoot, 'dist/bin')
+    ? resolve(packageRoot, 'dist/bin')
+    : resolve(packageRoot, 'bin')
 }
 
 const HIVE_BIN_DIR = resolveHiveBinDir()

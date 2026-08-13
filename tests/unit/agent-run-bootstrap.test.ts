@@ -1,3 +1,5 @@
+import { accessSync, constants } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 import { buildAgentRunBootstrap } from '../../src/server/agent-run-bootstrap.js'
@@ -26,6 +28,27 @@ const createSessionStore = (sessionId: string): AgentSessionStore => ({
 })
 
 describe('agent run bootstrap', () => {
+  test('injects a PATH directory that contains the team launcher', () => {
+    const bootstrap = buildAgentRunBootstrap(
+      {
+        id: 'workspace-1',
+        name: 'Workspace',
+        path: '/tmp/no-such-workspace',
+      },
+      'agent-1',
+      {
+        args: [],
+        command: 'claude',
+      },
+      createSessionStore(''),
+      () => undefined
+    )
+
+    const [hiveBinDir] = (bootstrap.startEnv.PATH ?? '').split(delimiter)
+    expect(hiveBinDir).toBeTruthy()
+    accessSync(join(hiveBinDir!, process.platform === 'win32' ? 'team.cmd' : 'team'), constants.X_OK)
+  })
+
   test('does not snapshot sessions before spawning when a preset resume id is available', () => {
     const sessionId = '019dc277-0e8e-75c1-9794-94929426288e'
     const bootstrap = buildAgentRunBootstrap(

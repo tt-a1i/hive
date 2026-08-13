@@ -13,6 +13,10 @@ import type { LiveRunRegistry } from './live-run-registry.js'
 import { createPostStartInputWriter, isInteractiveAgentCommand } from './post-start-input-writer.js'
 import type { RestartPolicy } from './restart-policy.js'
 
+interface DiscussionRecoveryInjector {
+  inject: (workspaceId: string, agentId: string, agentRunId: string) => void
+}
+
 interface AgentRunStarterInput {
   agentManager: AgentManager | undefined
   registry: LiveRunRegistry
@@ -23,6 +27,7 @@ interface AgentRunStarterInput {
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
   getAgent: ((workspaceId: string, agentId: string) => AgentSummary | undefined) | undefined
   restartPolicy: RestartPolicy
+  discussionRecoveryInjector?: DiscussionRecoveryInjector
 }
 
 export const createAgentRunStarter =
@@ -36,6 +41,7 @@ export const createAgentRunStarter =
     getCommandPreset,
     getAgent,
     restartPolicy,
+    discussionRecoveryInjector,
   }: AgentRunStarterInput) =>
   async (
     workspace: WorkspaceSummary,
@@ -72,8 +78,10 @@ export const createAgentRunStarter =
     }
     const startInput = {
       agentId,
+      ...(agent?.name ? { agentName: agent.name } : {}),
       command: startConfig.command,
       cwd: workspace.path,
+      workspaceId: workspace.id,
       env: {
         ...startEnv,
         COLORTERM: 'truecolor',
@@ -157,6 +165,15 @@ export const createAgentRunStarter =
           isInteractiveAgentCommand(startConfig.interactiveCommand ?? startConfig.command)
         ) {
           postStartWriter(run.runId, buildAgentStartupInstructions({ agent, workspace }))
+        }
+        if (injectedRestartMessage && !startConfig.resumedSessionId && discussionRecoveryInjector) {
+          setTimeout(() => {
+            try {
+              discussionRecoveryInjector.inject(workspace.id, agentId, run.runId)
+            } catch {
+              // Agent may have exited before discussion recovery could be injected.
+            }
+          }, 1500)
         }
       } catch {
         // The agent may have exited before post-start guidance could be written.

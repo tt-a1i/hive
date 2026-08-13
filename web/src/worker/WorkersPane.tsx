@@ -1,5 +1,6 @@
-import { Terminal, UserPlus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import * as Accordion from '@radix-ui/react-accordion'
+import { ChevronDown, UserPlus } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
 import type { TerminalRunSummary } from '../api.js'
@@ -13,11 +14,10 @@ import { presentWorkerStatus, type WorkerStatusKind } from './worker-status.js'
 type WorkersPaneProps = {
   onAddWorkerClick: () => void
   onDeleteWorker: (worker: TeamListItem) => void
-  onOpenShellTerminal: () => void
   onOpenWorker: (worker: TeamListItem) => void
   onRenameWorker: (worker: TeamListItem, newName: string) => Promise<{ error: string | null }>
   onStartWorker: (worker: TeamListItem) => void
-  shellTerminalAvailable?: boolean
+  onStopWorkerRun: (runId: string) => void
   startingWorkerId: string | null
   terminalRuns: TerminalRunSummary[]
   workers: TeamListItem[]
@@ -53,11 +53,10 @@ const summarizeWorkers = (workers: TeamListItem[]) => {
 export const WorkersPane = ({
   onAddWorkerClick,
   onDeleteWorker,
-  onOpenShellTerminal,
   onOpenWorker,
   onRenameWorker,
   onStartWorker,
-  shellTerminalAvailable = true,
+  onStopWorkerRun,
   startingWorkerId,
   terminalRuns,
   workers,
@@ -72,9 +71,18 @@ export const WorkersPane = ({
   const [renameTarget, setRenameTarget] = useState<TeamListItem | null>(null)
   const [renameBusy, setRenameBusy] = useState(false)
 
+  const handleAccordionChange = useCallback(() => {
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 300)
+  }, [])
+
   const handleAction = (kind: WorkerCardActionKind, worker: TeamListItem) => {
     if (kind === 'start') {
       onStartWorker(worker)
+      return
+    }
+    if (kind === 'stop') {
+      const runId = runIdsByAgentId.get(worker.id)
+      if (runId) onStopWorkerRun(runId)
       return
     }
     if (kind === 'rename') {
@@ -114,17 +122,6 @@ export const WorkersPane = ({
             {workers.length}
           </span>
           <div className="flex-1" />
-          {shellTerminalAvailable ? (
-            <button
-              type="button"
-              onClick={onOpenShellTerminal}
-              className="icon-btn icon-btn--tertiary"
-              aria-label={t('shellTerminal.openAria')}
-              data-testid="open-workspace-shell"
-            >
-              <Terminal size={14} aria-hidden /> {t('shellTerminal.open')}
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={onAddWorkerClick}
@@ -170,32 +167,49 @@ export const WorkersPane = ({
             }
           />
         ) : (
-          <div data-testid="worker-grid">
+          <Accordion.Root
+            type="multiple"
+            defaultValue={['working', 'idle']}
+            data-testid="worker-grid"
+            onValueChange={handleAccordionChange}
+          >
             {sections.map((section) => (
-              <section key={section.kind} className="mb-3 last:mb-0">
-                <div className="px-2 py-1 text-xs font-medium uppercase tracking-wider text-ter">
-                  {t(statusKey(section.kind))}
-                  <span className="mono ml-1.5 text-ter">{section.workers.length}</span>
-                </div>
-                <ul
-                  aria-label={`${t(statusKey(section.kind))} team members`}
-                  className="worker-card-grid"
-                >
-                  {section.workers.map((worker) => (
-                    <li key={worker.id}>
-                      <WorkerCard
-                        hasRun={runIdsByAgentId.has(worker.id)}
-                        isPending={startingWorkerId === worker.id}
-                        onAction={handleAction}
-                        onClick={onOpenWorker}
-                        worker={worker}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <Accordion.Item key={section.kind} value={section.kind} className="accordion-section mb-1 last:mb-0">
+                <Accordion.Header asChild>
+                  <div className="accordion-trigger-wrap">
+                    <Accordion.Trigger className="accordion-trigger" data-testid={`accordion-trigger-${section.kind}`}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className={`status-dot status-dot--${section.kind}`} aria-hidden />
+                        <span className="text-xs font-medium uppercase tracking-wider text-ter">
+                          {t(statusKey(section.kind))}
+                        </span>
+                        <span className="mono text-xs text-ter">{section.workers.length}</span>
+                      </span>
+                      <ChevronDown size={12} className="accordion-chevron" aria-hidden />
+                    </Accordion.Trigger>
+                  </div>
+                </Accordion.Header>
+                <Accordion.Content className="accordion-content">
+                  <ul
+                    aria-label={`${t(statusKey(section.kind))} team members`}
+                    className="worker-card-grid"
+                  >
+                    {section.workers.map((worker) => (
+                      <li key={worker.id}>
+                        <WorkerCard
+                          hasRun={runIdsByAgentId.has(worker.id)}
+                          isPending={startingWorkerId === worker.id}
+                          onAction={handleAction}
+                          onClick={onOpenWorker}
+                          worker={worker}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </Accordion.Content>
+              </Accordion.Item>
             ))}
-          </div>
+          </Accordion.Root>
         )}
       </div>
 

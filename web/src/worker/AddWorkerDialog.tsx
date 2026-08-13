@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Dices, Store } from 'lucide-react'
-import { type FormEvent, useMemo, useState } from 'react'
+import { BookmarkPlus, Dices, Store } from 'lucide-react'
+import type { FormEvent } from 'react'
+import { useState } from 'react'
 
 import type { WorkerRole } from '../../../src/shared/types.js'
 import type { CommandPreset, RoleTemplate } from '../api.js'
@@ -12,7 +13,6 @@ import {
   AgentCliPicker,
   RoleInstructionsField,
   RolePicker,
-  RoleTemplatePicker,
   SectionLabel,
   StartupCommandField,
 } from './AddWorkerDialogFields.js'
@@ -21,11 +21,14 @@ type AddWorkerDialogProps = {
   commandPresets: CommandPreset[]
   commandPresetId: string
   creating?: boolean
+  customRoleName: string
   customTemplates: RoleTemplate[]
   onApplyMarketplaceImport: (input: { name: string; description: string }) => void
   onClose: () => void
+  onCustomRoleNameChange: (value: string) => void
   onDeleteTemplate: (templateId: string) => Promise<void> | void
   onNameChange: (value: string) => void
+  onNameFieldFocus?: () => void
   onPresetChange: (value: string) => void
   onRandomName: () => void
   onRoleDescriptionChange: (value: string) => void
@@ -40,20 +43,24 @@ type AddWorkerDialogProps = {
   selectedTemplateId: string | null
   startupCommand: string
   templateBusy: boolean
+  usedTemplateNames?: Set<string> | undefined
   workerName: string
   workerRole: WorkerRole
-  writeDisabledReason?: string
+  writeDisabledReason?: string | undefined
 }
 
 export const AddWorkerDialog = ({
   commandPresets,
   commandPresetId,
   creating = false,
+  customRoleName,
   customTemplates,
   onApplyMarketplaceImport,
   onClose,
+  onCustomRoleNameChange,
   onDeleteTemplate,
   onNameChange,
+  onNameFieldFocus,
   onPresetChange,
   onRandomName,
   onRoleDescriptionChange,
@@ -68,6 +75,7 @@ export const AddWorkerDialog = ({
   selectedTemplateId,
   startupCommand,
   templateBusy,
+  usedTemplateNames,
   workerName,
   workerRole,
   writeDisabledReason,
@@ -75,8 +83,14 @@ export const AddWorkerDialog = ({
   const { t } = useI18n()
   const toast = useToast()
   const [marketplaceOpen, setMarketplaceOpen] = useState(false)
+  const [saveAsTemplateMode, setSaveAsTemplateMode] = useState(false)
+  const [templateName, setTemplateName] = useState('')
   const importedNames = useMemo(
     () => new Set(customTemplates.map((template) => template.name)),
+    [customTemplates]
+  )
+  const existingRoles = useMemo(
+    () => customTemplates.filter((tpl) => !tpl.suggestedName && !tpl.commandPresetId),
     [customTemplates]
   )
   const handleMarketplaceImport = (detail: { name: string; description: string }) => {
@@ -96,6 +110,9 @@ export const AddWorkerDialog = ({
   const validateBeforeSubmit = (): string | null => {
     if (writeDisabledReason) return writeDisabledReason
     if (!workerName.trim()) return t('addWorker.enterName')
+    if (workerRole === 'custom' && !selectedTemplateId && !customRoleName.trim()) {
+      return t('addWorker.customRoleNameRequired')
+    }
     if (!commandPresetId && !startupCommandClean) return t('addWorker.pickCliOrStartup')
     if (selectedPreset?.available === false && !startupCommandClean) {
       return t('addWorker.unavailable', { name: selectedPreset.displayName })
@@ -110,6 +127,15 @@ export const AddWorkerDialog = ({
       event.preventDefault()
       toast.show({ kind: 'warning', message: reason })
       return
+    }
+    if (saveAsTemplateMode && !templateName.trim()) {
+      event.preventDefault()
+      toast.show({ kind: 'warning', message: t('addWorker.templateNameRequired') })
+      return
+    }
+    if (saveAsTemplateMode && templateName.trim()) {
+      event.preventDefault()
+      void onSaveAsTemplate(templateName.trim())
     }
     onSubmit(event)
   }
@@ -169,12 +195,21 @@ export const AddWorkerDialog = ({
                     autoFocus
                     value={workerName}
                     onChange={(event) => onNameChange(event.target.value)}
+                    onFocus={onNameFieldFocus}
                     placeholder={t('addWorker.namePlaceholder')}
                     className="input"
                   />
                 </label>
 
-                <RolePicker workerRole={workerRole} onRoleChange={onRoleChange} />
+                <RolePicker
+                  customTemplates={customTemplates}
+                  workerRole={workerRole}
+                  selectedTemplateName={customTemplates.find((t) => t.id === selectedTemplateId)?.name}
+                  selectedTemplateId={selectedTemplateId}
+                  usedTemplateNames={usedTemplateNames}
+                  onRoleChange={onRoleChange}
+                  onSelectTemplate={onTemplateChange}
+                />
                 <button
                   type="button"
                   onClick={() => setMarketplaceOpen(true)}
@@ -190,14 +225,17 @@ export const AddWorkerDialog = ({
                   <Store size={14} aria-hidden />
                   {t('marketplace.openFromAddWorker')}
                 </button>
-                {workerRole === 'custom' ? (
-                  <RoleTemplatePicker
-                    customTemplates={customTemplates}
-                    disabledReason={writeDisabledReason}
-                    onDeleteTemplate={onDeleteTemplate}
-                    onSelect={onTemplateChange}
-                    selectedTemplateId={selectedTemplateId}
-                  />
+                {workerRole === 'custom' && !selectedTemplateId ? (
+                  <label className="flex flex-col gap-2">
+                    <SectionLabel>{t('addWorker.customRoleName')}</SectionLabel>
+                    <input
+                      value={customRoleName}
+                      onChange={(event) => onCustomRoleNameChange(event.target.value)}
+                      placeholder={t('addWorker.customRoleNamePlaceholder')}
+                      className="input"
+                      data-testid="custom-role-name-input"
+                    />
+                  </label>
                 ) : null}
                 <RoleInstructionsField
                   canSaveAsTemplate={
@@ -223,26 +261,60 @@ export const AddWorkerDialog = ({
               </div>
 
               <div
-                className="flex shrink-0 items-center justify-end gap-2 border-t px-5 py-3"
+                className="flex shrink-0 flex-col border-t"
                 style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}
               >
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="icon-btn"
-                  data-testid="add-worker-cancel"
-                >
-                  {t('addWorker.cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating || Boolean(writeDisabledReason)}
-                  title={writeDisabledReason ?? undefined}
-                  className="icon-btn icon-btn--primary"
-                  data-testid="add-worker-submit"
-                >
-                  {creating ? t('addWorker.creating') : t('addWorker.create')}
-                </button>
+                {saveAsTemplateMode ? (
+                  <div
+                    className="flex items-center gap-2 px-5 py-2"
+                    style={{ background: 'var(--bg-elevated)' }}
+                  >
+                    <input
+                      value={templateName}
+                      onChange={(e) => setTemplateName(e.target.value)}
+                      placeholder={`${workerName || 'Worker'} - ${commandPresets.find((p) => p.id === commandPresetId)?.displayName || 'agent'}`}
+                      className="input flex-1 text-sm"
+                      data-testid="save-template-name-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setSaveAsTemplateMode(false); setTemplateName('') }}
+                      className="text-xs text-sec hover:text-pri"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-2 px-5 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setSaveAsTemplateMode(!saveAsTemplateMode)}
+                    className="flex items-center gap-1 text-xs text-sec hover:text-pri"
+                    data-testid="save-as-template-toggle"
+                  >
+                    <BookmarkPlus size={12} aria-hidden />
+                    {t('addWorker.saveAndAdd')}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="icon-btn"
+                      data-testid="add-worker-cancel"
+                    >
+                      {t('addWorker.cancel')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating || Boolean(writeDisabledReason)}
+                      title={writeDisabledReason ?? undefined}
+                      className="icon-btn icon-btn--primary"
+                      data-testid="add-worker-submit"
+                    >
+                      {creating ? t('addWorker.creating') : (saveAsTemplateMode ? t('addWorker.saveAndCreate') : t('addWorker.create'))}
+                    </button>
+                  </div>
+                </div>
               </div>
             </form>
           </Dialog.Content>

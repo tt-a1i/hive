@@ -3,6 +3,7 @@ import { type AgentLaunchConfigInput, createAgentRunStore } from './agent-run-st
 import { createAgentRuntime } from './agent-runtime.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
+import { createDiscussionOperations } from './discussion-operations.js'
 import { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
@@ -10,6 +11,7 @@ import type { PtyOutputBus } from './pty-output-bus.js'
 import { openRuntimeDatabase } from './runtime-database.js'
 import { buildRuntimeRestartPolicy } from './runtime-restart-policy.js'
 import { createSettingsStore } from './settings-store.js'
+import { createTaskService } from './task-service.js'
 import { createTasksFileService } from './tasks-file.js'
 import { createTasksFileWatcher } from './tasks-file-watcher.js'
 import { createTeamOperations } from './team-operations.js'
@@ -18,6 +20,7 @@ import { createUiAuth } from './ui-auth.js'
 import { createWorkerOutputTracker, type WorkerOutputTracker } from './worker-output-tracker.js'
 import { createWorkspaceShellRuntime } from './workspace-shell-runtime.js'
 import { createWorkspaceStore } from './workspace-store.js'
+import { reattachSurvivedSessions } from './tmux-reattach.js'
 
 export interface RuntimeStoreServices {
   agentRunStore: ReturnType<typeof createAgentRunStore>
@@ -31,6 +34,7 @@ export interface RuntimeStoreServices {
   tasksFileWatchCallbacks: Set<(workspaceId: string, content: string) => void>
   tasksFileService: ReturnType<typeof createTasksFileService>
   teamOps: ReturnType<typeof createTeamOperations>
+  taskService: ReturnType<typeof createTaskService>
   uiAuth: ReturnType<typeof createUiAuth>
   workerOutputTracker: WorkerOutputTracker | null
   workspaceStore: ReturnType<typeof createWorkspaceStore>
@@ -62,6 +66,7 @@ export const createRuntimeStoreServices = (
   const db = openRuntimeDatabase(options.dataDir)
   const messageLogStore = createMessageLogStore(db)
   const dispatchLedgerStore = createDispatchLedgerStore(db)
+  const taskService = createTaskService(db)
   const agentRunStore = createAgentRunStore(db)
   const agentSessionStore = createAgentSessionStore(db)
   const settings = createSettingsStore(db)
@@ -77,7 +82,12 @@ export const createRuntimeStoreServices = (
 
   agentRunStore.markUnfinishedRunsStale()
 
-  const workspaceStore = createWorkspaceStore(db, dispatchLedgerStore.listOpenDispatchKinds())
+  const discussionOps = createDiscussionOperations(db)
+  const workspaceStore = createWorkspaceStore(
+    db,
+    dispatchLedgerStore.listOpenDispatchKinds(),
+    (workspaceId, agentId) => discussionOps.getActiveGroupForAgent(workspaceId, agentId) !== null
+  )
   const startExistingWorkspaceWatches = () => {
     for (const workspace of workspaceStore.listWorkspaces()) {
       void tasksFileWatcher.start(workspace.id, workspace.path)
@@ -85,6 +95,8 @@ export const createRuntimeStoreServices = (
   }
   const restartPolicy = buildRuntimeRestartPolicy({
     agentRunStore,
+    discussionOps,
+    dispatchLedgerStore,
     messageLogStore,
     tasksFileService,
     workspaceStore,
@@ -128,6 +140,7 @@ export const createRuntimeStoreServices = (
     messageLogStore,
     settings,
     shellRuntime,
+    taskService,
     tasksFileWatcher,
     tasksFileWatchCallbacks,
     tasksFileService,
@@ -251,6 +264,14 @@ export const createRuntimeStoreLifecycle = ({
         services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary
       ),
     autostartConfiguredAgents,
+    reattachTmuxSessions: () => {
+      if (!agentManager) return 0
+      return reattachSurvivedSessions({
+        agentManager,
+        agentRunStore: services.agentRunStore,
+        registry: services.agentRuntime.getLiveRunRegistry(),
+      })
+    },
     registerTasksListener: (listener: (workspaceId: string, content: string) => void) => {
       services.tasksFileWatchCallbacks.add(listener)
       return () => {
