@@ -7,6 +7,33 @@ import { TASKS_RELATIVE_PATH } from './tasks-file.js'
 
 const TASKS_HEAD_LIMIT = 1536
 
+export interface ActiveDispatchInfo {
+  status: string
+  text: string
+  toWorkerName: string
+}
+
+export interface ActiveDiscussionInfo {
+  currentRound: number
+  maxRounds: number
+  status: string
+  topic: string
+}
+
+const formatActiveDispatches = (dispatches: ActiveDispatchInfo[]) => {
+  if (dispatches.length === 0) return ['- （无活跃派单）']
+  return dispatches.slice(0, 5).map(
+    (d) => `- @${d.toWorkerName} [${d.status}]: ${d.text.slice(0, 80)}`
+  )
+}
+
+const formatActiveDiscussions = (discussions: ActiveDiscussionInfo[]) => {
+  if (discussions.length === 0) return ['- （无进行中讨论）']
+  return discussions.slice(0, 3).map(
+    (d) => `- "${d.topic}" (${d.status}, round ${d.currentRound}/${d.maxRounds})`
+  )
+}
+
 const formatUserInputs = (messages: RecoveryMessage[]) => {
   const userInputs = messages.filter((message) => message.type === 'user_input')
   return userInputs.length > 0
@@ -90,43 +117,74 @@ const getTaskSectionTitle = (agent: AgentSummary) =>
   agent.role === 'orchestrator' ? '## 你已派出的任务' : '## 最近派给你的任务'
 
 export const buildRecoverySummary = ({
+  activeDispatches,
+  activeDiscussions,
   agent,
   allTaskMessages,
+  checkpoint,
   messages,
   tasksContent,
   workers,
   workspace,
 }: {
+  activeDispatches?: ActiveDispatchInfo[]
+  activeDiscussions?: ActiveDiscussionInfo[]
   agent: AgentSummary
   allTaskMessages?: RecoveryMessage[]
+  checkpoint?: string | null
   messages: RecoveryMessage[]
   tasksContent: string
   workers: AgentSummary[]
   workspace: WorkspaceSummary
-}) =>
-  wrapSystemMessage(
-    [
-      `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
-      '你刚被 Hive 重启了，且无法通过原生 session resume 恢复。下面是接力上下文。',
-      '',
-      '## 最近 1 小时与 user 的对话',
-      ...formatUserInputs(messages),
-      '',
-      getTaskSectionTitle(agent),
-      ...formatTaskEvents(messages, agent),
-      '',
-      '## 当前未完成任务',
-      ...formatOpenTasks(allTaskMessages ?? messages, agent, workers),
-      '',
-      `## 当前 ${TASKS_RELATIVE_PATH} 状态`,
-      tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
-      '',
-      '## 当前活跃 worker',
-      ...formatWorkers(workers),
-      '',
-      agent.role === 'orchestrator' ? '## Hive worker 派单规则' : '## Hive worker 边界',
-      ...getHiveTeamRules(agent),
-      '',
-      '请基于此继续。如果不确定，问 user。',
-    ].join('\n')
+}) => {
+  const sections: string[] = [
+    `你是 ${workspace.name} 的 ${agent.name}（${agent.role}）。`,
+    '你刚被 Hive 重启了，且无法通过原生 session resume 恢复。下面是接力上下文。',
+  ]
+
+  if (checkpoint) {
+    sections.push('', '## 你上次进度', checkpoint)
+  }
+
+  sections.push(
+    '',
+    '## 最近 1 小时与 user 的对话',
+    ...formatUserInputs(messages),
+    '',
+    getTaskSectionTitle(agent),
+    ...formatTaskEvents(messages, agent),
+    '',
+    '## 当前未完成任务',
+    ...formatOpenTasks(allTaskMessages ?? messages, agent, workers),
   )
+
+  if (activeDispatches && activeDispatches.length > 0) {
+    sections.push('', '## 活跃派单', ...formatActiveDispatches(activeDispatches))
+  }
+
+  if (activeDiscussions && activeDiscussions.length > 0) {
+    sections.push('', '## 进行中讨论', ...formatActiveDiscussions(activeDiscussions))
+  }
+
+  sections.push(
+    '',
+    `## 当前 ${TASKS_RELATIVE_PATH} 状态`,
+    tasksContent.slice(0, TASKS_HEAD_LIMIT) || '(空)',
+    '',
+    '## 任务纪律',
+    '- 派单前先建 task：执行 `team send` 前，确保 tasks.md 中有对应条目（手动编辑或 `team send --create-task`）',
+    '- 新需求立即记录：讨论/review/用户指示产生新工作时，第一时间写入 tasks.md',
+    '- 完成即勾选：worker report 后及时标记对应 task 完成（编辑 tasks.md 勾选 checkbox）',
+    '- 不要只在对话中提到任务而不写入 tasks.md',
+    '',
+    '## 当前活跃 worker',
+    ...formatWorkers(workers),
+    '',
+    agent.role === 'orchestrator' ? '## Hive worker 派单规则' : '## Hive worker 边界',
+    ...getHiveTeamRules(agent),
+    '',
+    '请基于此继续。如果不确定，问 user。',
+  )
+
+  return wrapSystemMessage(sections.join('\n'))
+}
