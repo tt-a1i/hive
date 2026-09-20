@@ -187,6 +187,10 @@ Hive 不替你安装这些 CLI。请在启动 Hive 的同一个 shell 环境里�
 
 Hive **不**提供 sandbox 隔离、多用户认证，也不自带任何 agent 模型。它只负责调度你已经在用的本机 CLI。
 
+### 可选集成
+
+- [TypeSafe Jev](https://github.com/tt-a1i/hive/tree/main/integrations/hive-jev)：为现有成员提供可选的任务路由、上下文副本压缩、待执行动作审核，以及使用 DeepSeek 文本助手的受限浏览器执行。它作为独立 MCP 进程运行，避免模型供应商凭据被 Hive 成员进程继承。
+
 ## 远程访问（可选，默认关闭）
 
 如果想在外面用手机查看、操作正在本机跑着的 Hive，可以开启可选的 **Remote access**。开启后，手机浏览器登录、跟桌面完成一次配对，就能通过端到端加密隧道访问 Hive Web UI。已配对的手机是与本地浏览器**等权**的受信任设备。

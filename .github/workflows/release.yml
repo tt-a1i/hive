@@ -30,11 +30,22 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - run: npm install -g node-gyp
         if: runner.os == 'Linux'
       - run: pnpm install --frozen-lockfile
+      - run: npm ci
+        working-directory: integrations/hive-jev
       - run: pnpm check
       - run: pnpm build
+      - run: npm run check
+        working-directory: integrations/hive-jev
+      - run: npm test
+        working-directory: integrations/hive-jev
+      - run: python -m unittest test/browser_policy_test.py
+        working-directory: integrations/hive-jev
       - run: pnpm vitest run --no-file-parallelism --maxWorkers=1 --testTimeout=60000 --hookTimeout=60000
         if: runner.os != 'Windows'
       - run: pnpm test:windows

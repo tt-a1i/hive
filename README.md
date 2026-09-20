@@ -262,6 +262,13 @@ same shell environment you use to start Hive.
 Hive does not provide sandboxing, multi-user auth, or any bundled agent model.
 It coordinates the CLIs you already run locally.
 
+### Optional integrations
+
+- [TypeSafe Jev](https://github.com/tt-a1i/hive/tree/main/integrations/hive-jev): optional existing-member
+  routing, transcript-copy compaction, pending-action review, and bounded browser
+  execution with a DeepSeek text helper. It runs as a separate MCP process so
+  provider credentials are not inherited by Hive members.
+
 ## Remote Access (optional, off by default)
 
 If you want to reach your running Hive from your phone while you're away,

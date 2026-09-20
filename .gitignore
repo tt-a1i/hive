@@ -5,6 +5,8 @@ coverage/
 .DS_Store
 .env
 .env.local
+.venv/
+__pycache__/
 .harnessed/
 .screenshots-prod/
 ~/.hive/
