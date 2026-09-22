@@ -919,6 +919,7 @@ describe('team atomicity', () => {
 
     expect(markDispatchReportedByWorker).toHaveBeenCalledWith({
       artifacts: [],
+      outcome: 'success',
       reportText: 'Done',
       toAgentId: worker.id,
       workspaceId: workspace.id,

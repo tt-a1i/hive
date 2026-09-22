@@ -19,6 +19,8 @@ const fields: Record<string, readonly string[]> = {
   send: ['worker_name', 'text', 'operation_id', 'related_to_dispatch_id'],
   message: ['dispatch_id', 'kind', 'text', 'operation_id', 'reply_to'],
   messages: ['dispatch_id', 'after_seq'],
+  question: ['question_id'],
+  reply: ['question_id', 'text', 'operation_id'],
   spawn: ['role', 'cli', 'name', 'operation_id'],
   start: ['worker_name', 'operation_id'],
   stop: ['worker_name', 'operation_id'],
@@ -84,6 +86,19 @@ export const executeControllerMutation = async (
     return result
   }
   switch (input.action) {
+    case 'reply': {
+      const reply = store.getDispatchReplyInput(
+        workspaceId,
+        fromAgentId,
+        controllerString(input, 'question_id'),
+        controllerString(input, 'text')
+      )
+      return {
+        message: serializeDispatchMessage(
+          store.sendDispatchMessage(workspaceId, fromAgentId, reply)
+        ),
+      }
+    }
     case 'send': {
       const target = worker()
       const dispatch = await store.dispatchTaskByWorkerName(

@@ -8,7 +8,7 @@ import {
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
-import { ConflictError, PromptReadinessTimeoutError } from './http-errors.js'
+import { ConflictError, ForbiddenError, PromptReadinessTimeoutError } from './http-errors.js'
 import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
 import type { ReportOutboxStore } from './report-outbox-store.js'
 import {
@@ -92,6 +92,7 @@ export const formatNoOpenDispatchError = (
 export interface TeamOperationsInput {
   agentRuntime: AgentRuntime
   createDispatch: (input: {
+    delegatedFromId?: string
     fromAgentId?: string
     label?: string
     relatedToDispatchId?: string
@@ -118,6 +119,8 @@ export interface TeamOperationsInput {
     workspaceId: string
   }) => DispatchRecord | undefined
   markDispatchReportedByWorker: (input: {
+    ackBatchId?: string
+    outcome?: 'success' | 'failed'
     artifacts: string[]
     dispatchId?: string
     seenSeq?: number
@@ -158,11 +161,13 @@ export interface TeamOperationsInput {
    *  a dispatch. Non-zero when notes/questions were attached while the
    *  dispatch sat queued, so the (re)played envelope tells the truth. */
   requiredSeenSeq?: (dispatchId: string, workerId: string) => number
+  drainDispatchMessages?: (workspaceId: string, agentId: string) => void
   /** Live experimental flags for payloads that are persisted for later replay. */
   getFlags?: () => FeatureFlags
 }
 
 export interface DispatchTaskInput {
+  delegatedFromId?: string
   relatedToDispatchId?: string
   autoStartWorker?: boolean
   fromAgentId?: string
@@ -174,6 +179,7 @@ export interface DispatchTaskInput {
 }
 
 export interface ReportTaskInput {
+  ackBatchId?: string
   seenSeq?: number
   artifacts?: string[]
   dispatchId?: string
@@ -238,11 +244,35 @@ export const createTeamOperations = ({
   markDispatchDelivered,
   recordReportPayloadBytes,
   requiredSeenSeq,
+  drainDispatchMessages,
   getFlags,
 }: TeamOperationsInput) => {
   const flags = () => getFlags?.() ?? FEATURE_FLAGS_ALL_OFF
   const runMutation = runDataMutation ?? ((mutation: () => void) => mutation())
   const runtimeClosing = () => isRuntimeClosing?.() === true
+  const settleCancelledDelegations = (records: DispatchRecord[]) => {
+    for (const record of records) {
+      if (record.fromAgentId) drainDispatchMessages?.(record.workspaceId, record.fromAgentId)
+      if (!workspaceStore.hasAgent(record.workspaceId, record.toAgentId)) continue
+      workspaceStore.markTaskCancelled(record.workspaceId, record.toAgentId)
+      const member = workspaceStore.getWorker(record.workspaceId, record.toAgentId)
+      dismissEphemeralWhenIdle(record.workspaceId, member.id, member.pendingTaskCount)
+      if (record.workflowRunId)
+        workflowDispatchAwaiter.notifyCancel(record.id, record.reportText ?? 'Cancelled')
+      void Promise.resolve()
+        .then(() => {
+          if (runtimeClosing()) return
+          return agentRuntime.writeCancelPrompt(
+            record.workspaceId,
+            record.toAgentId,
+            record.id,
+            record.reportText ?? 'Parent responsibility cancelled',
+            { requireActiveRun: true }
+          )
+        })
+        .catch((error) => console.error('[hive] delegated cancellation delivery failed', error))
+    }
+  }
   const recordDispatchDelivery = (dispatchId: string, { payloadBytes, write }: SendPromptWrite) => {
     if (!markDispatchDelivered) return
     // Stamp delivery when the PTY write actually completes, not when it is
@@ -391,6 +421,9 @@ export const createTeamOperations = ({
   ) => {
     const cancelled = markDispatchCancelled({ dispatchId, reason, workspaceId })
     if (!cancelled) return
+    settleCancelledDelegations(cancelled.cancelledDescendants ?? [])
+    if (cancelled.delegatedFromId && cancelled.fromAgentId)
+      drainDispatchMessages?.(workspaceId, cancelled.fromAgentId)
     try {
       workspaceStore.markTaskCancelled(workspaceId, workerId)
     } catch (error) {
@@ -399,7 +432,7 @@ export const createTeamOperations = ({
     if (workflowRunId !== undefined) {
       workflowDispatchAwaiter.notifyCancel(dispatchId, reason)
     }
-    if (notifyAgentId !== undefined) {
+    if (notifyAgentId !== undefined && !cancelled.delegatedFromId) {
       notifyIssuerDurably(
         workspaceId,
         notifyAgentId,
@@ -478,6 +511,7 @@ export const createTeamOperations = ({
     const targetAgentIds = new Set<string>()
     for (const item of open) {
       if (!item.fromAgentId) continue
+      if (item.delegatedFromId) continue // The ledger emits its durable parent input.
       targetAgentIds.add(item.fromAgentId)
       reportOutbox.enqueue({
         workspaceId,
@@ -617,6 +651,7 @@ export const createTeamOperations = ({
 
     try {
       const dispatchInput: {
+        delegatedFromId?: string
         fromAgentId?: string
         label?: string
         relatedToDispatchId?: string
@@ -636,6 +671,7 @@ export const createTeamOperations = ({
           throw new ConflictError('Only the orchestrator may relate responsibilities')
         dispatchInput.relatedToDispatchId = input.relatedToDispatchId
       }
+      if (input.delegatedFromId !== undefined) dispatchInput.delegatedFromId = input.delegatedFromId
       if (fromAgentId) dispatchInput.fromAgentId = fromAgentId
       if (input.workflowRunId !== undefined) dispatchInput.workflowRunId = input.workflowRunId
       if (input.stepIndex !== undefined) dispatchInput.stepIndex = input.stepIndex
@@ -808,12 +844,18 @@ export const createTeamOperations = ({
   }
 
   return {
+    settleCancelledDelegations,
     async cancelTask(workspaceId: string, dispatchId: string, input: CancelTaskInput) {
-      workspaceStore.getAgent(workspaceId, input.fromAgentId)
+      const actor = workspaceStore.getAgent(workspaceId, input.fromAgentId)
       const openDispatch = findOpenDispatchById(workspaceId, dispatchId)
       if (!openDispatch) {
         throw new ConflictError(`No open dispatch: ${dispatchId}`)
       }
+      if (
+        actor.role !== 'orchestrator' &&
+        (!openDispatch.delegatedFromId || openDispatch.fromAgentId !== actor.id)
+      )
+        throw new ForbiddenError('Members may cancel only tasks they directly delegated')
       const dispatch = markDispatchCancelled({
         dispatchId,
         reason: input.reason,
@@ -822,6 +864,9 @@ export const createTeamOperations = ({
       if (!dispatch) {
         throw new ConflictError(`No open dispatch: ${dispatchId}`)
       }
+      settleCancelledDelegations(dispatch.cancelledDescendants ?? [])
+      if (dispatch.delegatedFromId && dispatch.fromAgentId)
+        drainDispatchMessages?.(workspaceId, dispatch.fromAgentId)
       // The ledger row is already cancelled; a worker dismissed in the
       // meantime has no pending counter left to decrement.
       if (
@@ -1002,7 +1047,8 @@ export const createTeamOperations = ({
         openDispatch.id
       )
       const workflowDispatch = openDispatch.fromAgentId === getWorkflowAgentId(workspaceId)
-      const shouldQueueForOrchestrator = input.requireActiveRun === true && !workflowDispatch
+      const shouldQueueForOrchestrator =
+        input.requireActiveRun === true && !workflowDispatch && !openDispatch.delegatedFromId
       if (
         shouldQueueForOrchestrator &&
         agentRuntime.getActiveRunByAgentId(workspaceId, orchestratorId)
@@ -1025,6 +1071,8 @@ export const createTeamOperations = ({
           }
           const nextDispatch = markDispatchReportedByWorker({
             artifacts,
+            ...(input.ackBatchId ? { ackBatchId: input.ackBatchId } : {}),
+            ...(status ? { outcome: status } : {}),
             ...(input.seenSeq !== undefined ? { seenSeq: input.seenSeq } : {}),
             ...(input.dispatchId ? { dispatchId: input.dispatchId } : {}),
             reportText: text,
@@ -1072,6 +1120,17 @@ export const createTeamOperations = ({
       let forwarded = false
       let deliveryState: ReportDeliveryState | undefined
       const pendingWarning = buildPendingWarning(worker.name, remainingPendingTaskCount, 'report')
+      if (committedDispatch.delegatedFromId && committedDispatch.fromAgentId) {
+        drainDispatchMessages?.(workspaceId, committedDispatch.fromAgentId)
+        dismissEphemeralWhenIdle(workspaceId, workerId, remainingPendingTaskCount)
+        return {
+          dispatch: committedDispatch,
+          deliveryState: 'queued' as const,
+          forwarded: false,
+          forwardError: null,
+          ...(pendingWarning ? { pendingWarning } : {}),
+        }
+      }
 
       // Workflow-sourced dispatches: the source is the in-process runner, not a
       // PTY. Resolve its awaiting Promise instead of injecting into orchestrator

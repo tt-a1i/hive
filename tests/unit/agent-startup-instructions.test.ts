@@ -68,19 +68,17 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     const out = buildAgentStartupInstructions({ agent: worker, workspace })
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
+    expect(out).toContain('Stay quiet for routine readiness or standby.')
     expect(out).toContain(
-      'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
+      'If no dispatch has been assigned in this conversation, end this turn quietly'
     )
-    expect(out).toContain('Await a dispatch; do not report readiness as an outcome')
   })
 
   test('reviewer startup uses the same optional status note and does not impose a handshake', () => {
     const out = buildAgentStartupInstructions({ agent: reviewer, workspace })
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
-    expect(out).toContain(
-      'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
-    )
+    expect(out).toContain('Stay quiet for routine readiness or standby.')
     expect(out).not.toContain('final review gate')
   })
 
@@ -119,10 +117,11 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
       workspace,
     })
     expect(out).toContain('one-shot Hive workflow member')
-    expect(out).toContain('team report --dispatch <id> --seen <required_seen_seq> --stdin')
+    expect(out).toContain('team report --dispatch <id> --success --stdin')
     expect(out).toContain('Members share the filesystem')
     expect(out).toContain('assigned scope')
-    expect(out).toContain('team message --dispatch <own-id> --to orchestrator --kind question')
+    expect(out).toContain('--dispatch <own-id> --to orchestrator')
+    expect(out).toContain('team reply <question-id> --stdin')
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
     expect(out).not.toContain('Available team commands:')

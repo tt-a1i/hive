@@ -35,6 +35,18 @@ import {
   parseSendArgs,
   parseSequence,
 } from './team-message-args.js'
+import {
+  ASK_USAGE,
+  DELEGATE_USAGE,
+  INBOX_USAGE,
+  QUESTION_HISTORY_USAGE,
+  REPLY_USAGE,
+  RESUME_USAGE,
+  runDelegateCommand,
+  runInboxCommand,
+  runQuestionCommand,
+  waitForTeamResult,
+} from './team-question.js'
 
 const REQUIRED_ENV_KEYS = [
   'HIVE_PORT',
@@ -66,15 +78,22 @@ const TEAM_USAGE = [
   '  team memory forget <memory-id>',
   '  team send <member-name> "<task>" [--related-to <dispatch-id>]',
   `  ${MESSAGE_USAGE}`,
-  '  team messages --dispatch <id> [--after <sequence>]',
+  '  team messages --dispatch <id> [--after <sequence>] [--wait <0..60 seconds>]',
+  `  ${ASK_USAGE}`,
+  `  ${RESUME_USAGE}`,
+  `  ${QUESTION_HISTORY_USAGE}`,
+  `  ${REPLY_USAGE}`,
+  `  ${INBOX_USAGE}`,
+  `  ${DELEGATE_USAGE}`,
+  '  team peers',
   `  team spawn <role> [--name <name>] [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--ephemeral]`,
   `  team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`,
   '  team dismiss <member-name>',
   '  team cancel --dispatch <dispatch-id> "<reason>"',
   '  team goal report --goal <goal-id> --status progress|done|blocked|failed "<body>"',
   '  team goal report --goal <goal-id> --status progress|done|blocked|failed --stdin',
-  '  team report "<result>" [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
-  '  team report --stdin [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
+  '  team report "<result>" [--dispatch <dispatch-id>] [--seen <sequence>] [--ack <batch-id>] [--success | --failed] [--artifact <path>]',
+  '  team report --stdin [--dispatch <dispatch-id>] [--seen <sequence>] [--ack <batch-id>] [--success | --failed] [--artifact <path>]',
   '  team status "<current status>" [--artifact <path>]  (optional readiness note; never closes a dispatch)',
   '  team status --stdin [--artifact <path>]',
   '',
@@ -154,11 +173,12 @@ const throwHttpError = async (response: Response): Promise<never> => {
   )
 }
 
-const postJson = async (baseUrl: string, path: string, body: unknown) => {
+const postJson = async (baseUrl: string, path: string, body: unknown, signal?: AbortSignal) => {
   const response = await fetchRuntime(baseUrl, path, {
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
+    ...(signal ? { signal } : {}),
   })
 
   if (!response.ok) {
@@ -190,7 +210,7 @@ interface ParsedCancelArgs {
 }
 
 const REPORT_USAGE =
-  'Usage: team report (<result> | --stdin) [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]'
+  'Usage: team report (<result> | --stdin) [--dispatch <dispatch-id>] [--ack <batch-id>] [--seen <sequence>] [--success | --failed] [--artifact <path>]'
 const STATUS_USAGE = 'Usage: team status (<current status> | --stdin) [--artifact <path>]'
 const CANCEL_USAGE = 'Usage: team cancel --dispatch <dispatch-id> <reason>'
 const REVIEW_USAGE = `Usage: team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`
@@ -221,7 +241,7 @@ const printOrchestratorDeliveryWarning = (
   if (payload.delivery_state === 'queued') {
     const detail = payload.forward_error ? `: ${payload.forward_error}` : '.'
     console.error(
-      `Hive recorded the ${action}, but Orchestrator did not receive it in real time. It is queued for durable delivery${detail}`
+      `Hive recorded the ${action}. Delivery to the responsible recipient is queued${detail}`
     )
     return
   }
@@ -254,6 +274,8 @@ const readGeneratedProtocolGuide = (topic: string): string | null => {
 }
 
 export interface ParsedReportArgs {
+  ackBatchId?: string
+  outcome?: 'success' | 'failed'
   artifacts: string[]
   dispatchId: string | undefined
   seenSeq?: number
@@ -267,13 +289,26 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
   let dispatchId: string | undefined
   let seenSeq: number | undefined
   let useStdin = false
+  let ackBatchId: string | undefined
+  let outcome: 'success' | 'failed' | undefined
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === undefined) continue
 
-    // Backward-compatible no-op: reports are interpreted from their text.
-    if (arg === '--success' || arg === '--failed') continue
+    if (arg === '--success' || arg === '--failed') {
+      if (command !== 'report' || outcome)
+        throw new Error(withUsage('Invalid or duplicate outcome', command))
+      outcome = arg === '--success' ? 'success' : 'failed'
+      continue
+    }
+    if (arg === '--ack') {
+      const value = args[++index]
+      if (command !== 'report' || ackBatchId || !value?.trim() || value.startsWith('--'))
+        throw new Error(withUsage('--ack requires one batch ID', command))
+      ackBatchId = value
+      continue
+    }
 
     if (arg === '--stdin') {
       useStdin = true
@@ -359,6 +394,8 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
     dispatchId,
     useStdin,
     ...(seenSeq !== undefined ? { seenSeq } : {}),
+    ...(ackBatchId ? { ackBatchId } : {}),
+    ...(outcome ? { outcome } : {}),
   }
 }
 
@@ -1220,21 +1257,75 @@ export const runTeamCommand = async (argv: string[]) => {
     )
   }
 
-  if (command === 'message' || command === 'messages') {
+  if (
+    command === 'delegate' ||
+    command === 'peers' ||
+    command === 'inbox' ||
+    command === 'ask' ||
+    command === 'reply' ||
+    command === 'message' ||
+    command === 'messages'
+  ) {
     const env = getHiveEnv()
     const identity = {
       project_id: env.HIVE_PROJECT_ID,
       from_agent_id: env.HIVE_AGENT_ID,
       token: env.HIVE_AGENT_TOKEN,
     }
+    const post = (path: string, body: object, signal?: AbortSignal) =>
+      postJson(getBaseUrl(env), path, { ...identity, ...body }, signal ?? AbortSignal.timeout(5000))
+    if (command === 'delegate') {
+      await runDelegateCommand(args, post, () => readStdinToString('delegate', DELEGATE_USAGE))
+      return
+    }
+    if (command === 'peers') {
+      if (args.length) throw new Error('Usage: team peers')
+      console.log(
+        JSON.stringify(await (await postJson(getBaseUrl(env), '/api/team/peers', identity)).json())
+      )
+      return
+    }
+    if (command === 'inbox') {
+      await runInboxCommand(args, post)
+      return
+    }
+    if (command === 'ask' || command === 'reply') {
+      await runQuestionCommand(command, args, post, () =>
+        readStdinToString(command, command === 'ask' ? ASK_USAGE : REPLY_USAGE)
+      )
+      return
+    }
     if (command === 'messages') {
       const parsed = parseMessagesArgs(args)
-      const response = await postJson(getBaseUrl(env), '/api/team/messages', {
-        ...identity,
-        dispatch_id: parsed.dispatchId,
-        ...(parsed.afterSeq !== undefined ? { after_seq: parsed.afterSeq } : {}),
-      })
-      console.log(JSON.stringify(await response.json()))
+      const { result, timedOut } = await waitForTeamResult(
+        async (signal) => {
+          const response = await postJson(
+            getBaseUrl(env),
+            '/api/team/messages',
+            {
+              ...identity,
+              dispatch_id: parsed.dispatchId,
+              ...(parsed.afterSeq !== undefined ? { after_seq: parsed.afterSeq } : {}),
+            },
+            signal
+          )
+          return (await response.json()) as {
+            messages: unknown[]
+            related_dispatches: { id: string; state: string }[]
+          }
+        },
+        (value) =>
+          value.messages.length > 0 ||
+          value.related_dispatches.some(
+            (item) =>
+              item.id === parsed.dispatchId &&
+              (item.state === 'reported' || item.state === 'cancelled')
+          ),
+        parsed.waitSeconds
+      )
+      console.log(
+        JSON.stringify({ ...result, ...(parsed.waitSeconds ? { timed_out: timedOut } : {}) })
+      )
     } else {
       const parsed = parseMessageArgs(args)
       const text = parsed.useStdin ? await readStdinToString('message', MESSAGE_USAGE) : parsed.text
@@ -1561,6 +1652,8 @@ export const runTeamCommand = async (argv: string[]) => {
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     const response = await postJson(baseUrl, '/api/team/report', {
+      ...(report.ackBatchId ? { ack_batch_id: report.ackBatchId } : {}),
+      ...(report.outcome ? { status: report.outcome } : {}),
       ...(report.dispatchId ? { dispatch_id: report.dispatchId } : {}),
       ...(report.seenSeq !== undefined ? { seen_seq: report.seenSeq } : {}),
       project_id: env.HIVE_PROJECT_ID,

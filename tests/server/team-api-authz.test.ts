@@ -82,6 +82,57 @@ afterEach(async () => {
 })
 
 describe('team API authz (R1.4)', () => {
+  test('all collaboration routes preserve input, identity, workspace and role boundaries', async () => {
+    const ctx = await setupHive()
+    try {
+      const identity = {
+        project_id: ctx.workspaceId,
+        from_agent_id: ctx.worker.id,
+        token: ctx.hive.store.peekAgentToken(ctx.worker.id),
+      }
+      const post = (command: string, body: unknown) =>
+        fetch(`${ctx.baseUrl}/api/team/${command}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      for (const command of [
+        'questions',
+        'delegate',
+        'peers',
+        'inbox',
+        'question',
+        'reply',
+        'message',
+        'messages',
+      ]) {
+        for (const [body, status] of [
+          [[], 400],
+          [{ ...identity, unexpected: true, token: 'invalid' }, 400],
+          [{ ...identity, project_id: ' ' }, 400],
+          [{ ...identity, from_agent_id: ' ' }, 400],
+          [{ ...identity, token: 42 }, 400],
+          [{ ...identity, token: undefined }, 401],
+          [{ ...identity, token: 'invalid' }, 401],
+          [{ ...identity, project_id: 'another-workspace' }, 401],
+        ] as const) {
+          const response = await post(command, body)
+          expect(response.status, `${command}: ${JSON.stringify(body)}`).toBe(status)
+          await response.arrayBuffer()
+        }
+      }
+      const forbidden = await post('delegate', {
+        ...identity,
+        from_agent_id: ctx.orchestratorId,
+        token: ctx.hive.store.peekAgentToken(ctx.orchestratorId),
+      })
+      expect(forbidden.status).toBe(403)
+      await forbidden.arrayBuffer()
+    } finally {
+      await ctx.hive.close()
+    }
+  })
+
   test('rejects spoofed orchestrator id without a valid token (401)', async () => {
     const ctx = await setupHive()
     try {
@@ -463,9 +514,6 @@ describe('team API authz (R1.4)', () => {
       })
 
       expect(response.status).toBe(403)
-      await expect(response.json()).resolves.toEqual({
-        error: "Role 'coder' is not allowed to run team cancel",
-      })
       expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toEqual([
         expect.objectContaining({ id: sendBody.dispatch_id, status: 'submitted' }),
       ])

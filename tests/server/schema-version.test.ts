@@ -197,6 +197,8 @@ describe('schema version', () => {
         'parent_dispatch_id',
         'root_dispatch_id',
         'seen_seq',
+        'outcome',
+        'delegated_from_id',
         'artifacts',
         'workflow_run_id',
         'step_index',
@@ -2250,13 +2252,13 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(40)).toEqual({
       version: 40,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
+    expect(CURRENT_SCHEMA_VERSION).toBe(46)
     expect(db.prepare('SELECT version FROM schema_version WHERE version = 41').get()).toEqual({
       version: 41,
     })
     expect(
       db.prepare('SELECT version FROM schema_version WHERE version >= 42 ORDER BY version').all()
-    ).toEqual([{ version: 42 }, { version: 43 }, { version: 44 }, { version: 45 }])
+    ).toEqual([{ version: 42 }, { version: 43 }, { version: 44 }, { version: 45 }, { version: 46 }])
 
     db.close()
   })
@@ -2802,7 +2804,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
+    expect(CURRENT_SCHEMA_VERSION).toBe(46)
 
     db.close()
   })
@@ -2938,7 +2940,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
+    expect(CURRENT_SCHEMA_VERSION).toBe(46)
 
     db.close()
   })

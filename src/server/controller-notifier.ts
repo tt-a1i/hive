@@ -118,7 +118,7 @@ export const createControllerNotifier = (db: Database) => {
           '--thread',
           row.thread_id,
           '--message',
-          `Hive workspace ${row.workspace_id} queued a notification for report_ids=${JSON.stringify(ids)}. If this conversation already acknowledged these IDs, ignore this delayed notification. Otherwise use hive.controller_action with action read_reports, inspect the receipts, then use action ack_reports for the IDs you read. You may acknowledge before answering; acknowledgement only confirms receipt and does not answer questions or approve work. Answer separately with action message, kind answer and reply_to when you have the needed context. Unanswered questions remain actionable in inspect/messages. An empty read means no pending receipts now: end this notification without polling or redispatching work. Do not create another Hive controller.`,
+          `Hive workspace ${row.workspace_id} queued a notification for report_ids=${JSON.stringify(ids)}. If this conversation already acknowledged these IDs, ignore this delayed notification. Otherwise use hive.controller_action with action read_reports, inspect the receipts, then use action ack_reports for the IDs you read. You may acknowledge before answering; acknowledgement only confirms receipt and does not answer questions or approve work. Answer separately with action reply, question_id, text and operation_id when you have the needed context. Unanswered questions remain actionable in inspect/messages. An empty read means no pending receipts now: end this notification without polling or redispatching work. Do not create another Hive controller.`,
         ],
         { timeout: 15_000, maxBuffer: 64 * 1024, windowsHide: true },
         (error) => {

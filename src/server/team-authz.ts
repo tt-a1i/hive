@@ -2,6 +2,7 @@ import type { AgentSummary } from '../shared/types.js'
 import { ForbiddenError, UnauthorizedError } from './http-errors.js'
 
 export type TeamCommand =
+  | 'delegate'
   | 'message'
   | 'messages'
   | 'send'
@@ -46,6 +47,8 @@ const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>([
   'goal_report',
 ])
 const WORKER_COMMANDS = new Set<TeamCommand>([
+  'delegate',
+  'cancel',
   'message',
   'messages',
   'report',

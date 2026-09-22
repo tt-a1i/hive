@@ -165,7 +165,7 @@ describe('team protocol end to end', () => {
         const body = (await workerRunResponse.json()) as { output: string }
         expect(body.output).toContain(`dispatch_id: ${sendBody.dispatch_id}`)
         expect(body.output).toContain(
-          `team report --dispatch ${sendBody.dispatch_id} --seen <required_seen_seq> --stdin`
+          `team report --dispatch ${sendBody.dispatch_id} --success --stdin`
         )
       })
 

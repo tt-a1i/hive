@@ -29,6 +29,7 @@ export const createRuntimeStoreWorkflowRuntime = (
           workspaceId,
         })
         if (!cancelled) return false
+        services.teamOps.settleCancelledDelegations(cancelled.cancelledDescendants ?? [])
         services.workspaceStore.markTaskCancelled(workspaceId, openDispatch.toAgentId)
         try {
           void services.agentRuntime

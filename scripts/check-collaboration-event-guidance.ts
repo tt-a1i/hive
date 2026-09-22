@@ -45,7 +45,7 @@ const answerQuestion = async (messageId: string, recipientId: string) => {
       ? tail.split('</hive-message>')[0]
       : undefined
     if (envelope) {
-      command = envelope.match(/(?:^|\n)Reply: (team message [^\r\n]+)/u)?.[1]
+      command = envelope.match(/(?:^|\n)Reply: (team reply [^\r\n]+)/u)?.[1]
       assert.ok(command, `Delivered question lacks its executable reply command: ${envelope}`)
     } else await setTimeout(20)
   }
@@ -89,7 +89,7 @@ try {
     passive,
     "process.stdin.setRawMode(true); process.stdout.write('SELF_CHECK_READY\\n'); process.stdin.on('data', data => process.stdout.write(data))\n"
   )
-  runtime = await runHiveCommand(['--port', '0'])
+  runtime = await runHiveCommand(['--port', '0', '--no-open'])
   cookie = (await request('/api/ui/session')).headers.get('set-cookie') ?? ''
   workspaceId = (
     await (

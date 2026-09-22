@@ -55,14 +55,34 @@ describe('parseReportArgs', () => {
     })
   })
 
-  test('treats --success and --failed as backward-compatible no-ops', () => {
-    const parsed = parseReportArgs(['done', '--success', '--failed'])
-    expect(parsed).toEqual({
+  test.each(['success', 'failed'] as const)('records explicit %s outcome', (outcome) => {
+    expect(parseReportArgs(['done', `--${outcome}`])).toEqual({
       result: 'done',
       dispatchId: undefined,
       artifacts: [],
       useStdin: false,
+      outcome,
     })
+  })
+
+  test.each([
+    ['--success', '--failed'],
+    ['--success', '--success'],
+    ['--failed', '--failed'],
+  ])('rejects conflicting or repeated outcome flags %s %s', (first, second) => {
+    expect(() => parseReportArgs(['done', first, second])).toThrow(Error)
+  })
+
+  test('combines a mailbox receipt with a failed report without inventing a seen watermark', () => {
+    expect(parseReportArgs(['--stdin', '--dispatch', 'D', '--ack', 'B', '--failed'])).toEqual({
+      result: null,
+      dispatchId: 'D',
+      artifacts: [],
+      useStdin: true,
+      ackBatchId: 'B',
+      outcome: 'failed',
+    })
+    expect(() => parseReportArgs(['--stdin', '--ack', 'B'], 'status')).toThrow(Error)
   })
 
   test('--stdin marks the body as deferred to stdin and leaves result null', () => {

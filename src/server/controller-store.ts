@@ -13,6 +13,7 @@ export interface ControllerRow {
   connection_error: string | null
 }
 export interface ControllerReport {
+  outcome: 'success' | 'failed' | null
   id: number
   dispatch_id: string
   worker_name: string
@@ -69,6 +70,7 @@ export const createControllerStore = (db: Database) => {
         .prepare(`
       SELECT o.id, o.dispatch_id AS receipt_dispatch_id, COALESCE(o.source_dispatch_id,o.dispatch_id) AS dispatch_id, o.event_kind AS kind, COALESCE(w.name, d.to_agent_id, 'removed member') AS worker_name,
         CASE WHEN o.event_kind IN ('member_exit','dispatch_message') THEN 'needs_attention' ELSE COALESCE(d.status, 'cancelled') END AS status,
+        CASE WHEN o.event_kind IN ('member_exit','dispatch_message') THEN NULL ELSE d.outcome END AS outcome,
         CASE WHEN o.event_kind IN ('member_exit','dispatch_message') THEN o.payload ELSE COALESCE(d.report_text, o.payload) END AS result,
         CASE WHEN o.event_kind IN ('member_exit','dispatch_message') THEN '[]' ELSE d.artifacts END AS artifacts
       FROM report_outbox o LEFT JOIN dispatches d ON d.id = COALESCE(o.source_dispatch_id,o.dispatch_id)

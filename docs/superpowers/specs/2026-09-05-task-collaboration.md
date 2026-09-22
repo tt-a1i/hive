@@ -155,3 +155,30 @@ Orchestrator 也可以针对已 reported 成果提出 question；原作者仅能
 - 工作流示例以交付物、证据和有界投入展示停止条件，不以空轮次数或票数代替验收。仓库贡献者审查要求仍仅用于开发 Hive。
 
 实施和验证记录见 [本轮计划](../plans/2026-09-08-collaboration-guidance.md)。
+
+## 2026-09-22 有界问答与增量等待
+
+用户授权在独立分支吸收 Orca 优点，减少协作成本。本补充替代旧 MVP “不提供阻塞 API”的限制：等待是成员显式选择的有界 CLI 操作，不改变三态，不替用户重启/扩容，不默认要求主控等所有报告。
+
+- `team ask --dispatch D [--from-dispatch S] [--to orchestrator] (<question> | --stdin) [--wait 0..60]` 写一条既有 question 并等待，默认 30 秒。写成功立即向 stderr 输出问题 ID；最终 stdout 是单个 JSON，包含 question、answers、status、question_id、timed_out、resume。status 为 pending/answered/closed，是问题可答状态的查询结果，不是新持久状态机。
+- `team ask --resume Q [--wait 0..60]` 只读取原问题。问题及回答来自 SQLite，CLI 结束或进程重启不创建第二份问题；必须仍具有有效的当前成员凭据。写请求结果不确定时依然先查历史，不能把没有收到问题 ID 当作未写入。
+- `team reply Q (<answer> | --stdin)` 通过 POST /api/team/reply，只传 question_id/text 与原身份字段；服务端根据持久问题推导 dispatch/source/recipient 并沿原消息校验写入。旧 `message --kind answer --reply-to` 保持兼容。两者都不承诺写入幂等。
+- `POST /api/team/question` 接受 question_id 与身份字段，只允许问题发送者/接收者读取；返回持久问题、全部已保存回答和当前可答状态。无回答且原反向回复不再合法（取消、退役、成员删除、控制器换绑等）时 closed；已有回答返回 answered，仍不等于验收。
+- `team messages --dispatch D --after N --wait S` 复用消息查询，默认不等；显式等待须提供实际读过的 after。发现增量或本 dispatch 已终结即返回，否则超时。CLI 内每秒只读轮询，每次重新鉴权，每个 HTTP 请求另有 5 秒网络上限；不增服务端等待对象。该设计减少模型工具回合，不宣称减少 HTTP 请求或提升实测速度。
+- 问题读取不自动拉取或确认所有任务补充，不携带可直接套用的 seen；保持 report 事务及原水位规则。消息查询仍返回正文与水位。PTy 注入和外部控制器收据机制保持既有语义；本批不引入通用 ACK 邮箱、跨 root 咨询或 Worker 派单。
+
+本批实施、验证和待评估项见[计划](../plans/2026-09-22-lean-communication.md)。
+
+## 2026-09-22 完整协作减负修订
+
+用户明确要求按完整目标推进。本节替代上述仅主控派单、所有问答同 root、仅手动 seen 的限制；工作区隔离、用户资源选择、文件归属和三态保持不变。完整契约和边界覆盖见[完整计划](../plans/2026-09-22-lean-collaboration-full.md)。
+
+- `team inbox [--wait 0..60]` / `team inbox --ack B`：SQLite 保存收件人专属固定批次，最多50条/64KiB正文（单条超限完整返回）；未确认批次可重读并跨重启恢复。首次只选仍有意义的开放任务输入和未答历史问题，不导入全部历史。ACK 声明已考虑准确消息集合，不吞后来消息，不回答问题，不验收成果。`report --ack B` 将声明与报告放在同一事务；新输入出现则整笔拒绝、批次保持未确认。旧 `--seen` 声明继续可用，无未确认输入时无额外步骤。
+- `team delegate <member-name> --from-dispatch D (<task>|--stdin)`：成员从自己已投递且开放的责任向现有成员委派。服务端事务校验最大2层、每父3份开放子任务、每树累计8份子任务，禁止回到祖先成员。委派父链 `delegated_from_id` 与仅协作关联的 parent/root 分开，不由客户端自报层级。不启动停止成员，不创建资源；成员仍不能普通 send/spawn。
+- 子责任结果作为持久 note 回到父责任和原委派者，复用消息 outbox、输入屏障和恢复；主控可在账本查看，不强制转述。父报告前子责任须终结；成员可取消自己直接委派的子树，主控可取消任意树。父取消、投递失败取消、成员删除均退役委派后代并同步 pending，不影响 merely related 的其他任务，也不杀共享成员进程。
+- 同工作区不同 root 可 question，answer 必须精确反向匹配原问题。source 须归自己且仍开放，历史作者只可回答收到的问题；取消、删除、控制器换绑继续封闭旧问答。跨 root note、工作区越界和读取对方整个任务树仍拒绝。`team peers` 仅提供成员资料和最近非取消责任 ID/状态，不泄露任务正文。
+- `report --success|--failed` 真正声明 outcome，沿用 HTTP status 输入；省略为 null，旧历史不猜结果。outcome 独立于 reported/cancelled；账本、关联摘要、UI数据接口、外部 read_reports 均可读。部分未达验收以 failed 和报告文字描述，不另增状态机。
+- 外部控制器沿用宿主绑定的 read_reports/ack_reports 消费通知，不使用成员邮箱 ACK 冒充输入确认。新增 `action=question`（question_id）查询和 `action=reply`（question_id/text/operation_id）短回复；读操作校验当前宿主绑定，写操作复用幂等记录和原问答权限。两种 ACK 的含义不可混用。
+- 存储版本46仅增加所需字段和邮箱表，保留旧数据；完整协议/migration 回归和恢复检查后才可交付。升级正式运行库前保留一致备份，回退需要对应旧库快照，禁止直接删除新历史。
+
+问题写入回执丢失恢复：`team ask --list [--dispatch D] [--before Q]` 返回当前认证成员自己发送的问题，每页最多 50 条及 `next_before` 游标；HTTP `POST /api/team/questions` 使用 `dispatch_id` / `before_id`，只筛选当前工作区和发送者。跨 root 提问者不因此获得目标整棵任务树的读取权。找到 ID 后使用 `team ask --resume Q`，不得自动重发问题。

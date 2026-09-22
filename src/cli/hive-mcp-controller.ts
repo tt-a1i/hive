@@ -45,7 +45,7 @@ export const CONTROLLER_TOOLS = [
     name: 'hive.controller_action',
     description:
       ORCHESTRATOR_PRINCIPLES.join('\n') +
-      '\nManage the workspace bound to THIS Codex App conversation. At a new task or after losing context, inspect first. For unfamiliar action syntax, historical questions, or uncertain delivery, read action guide. send creates responsibility; message exchanges within it. Mutations send/message/spawn/start/stop/cancel require one operation_id per intended operation, reused on retries; inspect uncertain outcomes before retrying. Answer questions with message kind answer and reply_to. read_reports receives notifications; ack_reports consumes report_ids already read, independently of answering or accepting work. ack never closes a dispatch or advances a member seen sequence. After dispatch, continue independent work or finish the turn; actionable results trigger notifications. Ignore already acknowledged notification IDs; end an empty read without polling or redispatching.',
+      '\nManage the workspace bound to THIS Codex App conversation. At a new task or after losing context, inspect first. For unfamiliar action syntax, historical questions, or uncertain delivery, read action guide. send creates responsibility; message exchanges within it. Mutations send/message/reply/spawn/start/stop/cancel require one operation_id per intended operation, reused on retries; inspect uncertain outcomes before retrying. Answer questions with reply question_id, text and operation_id. read_reports receives notifications; ack_reports consumes report_ids already read, independently of answering or accepting work. ack never closes a dispatch or advances a member seen sequence. After dispatch, continue independent work or finish the turn; actionable results trigger notifications. Ignore already acknowledged notification IDs; end an empty read without polling or redispatching.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -58,6 +58,8 @@ export const CONTROLLER_TOOLS = [
             'send',
             'message',
             'messages',
+            'question',
+            'reply',
             'spawn',
             'start',
             'stop',
@@ -76,6 +78,7 @@ export const CONTROLLER_TOOLS = [
         related_to_dispatch_id: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: ['note', 'question', 'answer'] },
         reply_to: { type: 'string', minLength: 1 },
+        question_id: { type: 'string', minLength: 1 },
         after_seq: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
         reason: { type: 'string', minLength: 1 },
         report_ids: { type: 'array', items: { type: 'integer', minimum: 1 }, uniqueItems: true },
@@ -92,6 +95,8 @@ const ACTION_FIELDS: Record<string, string[]> = {
   send: ['operation_id', 'worker_name', 'text', 'related_to_dispatch_id'],
   message: ['operation_id', 'dispatch_id', 'kind', 'text', 'reply_to'],
   messages: ['dispatch_id', 'after_seq'],
+  question: ['question_id'],
+  reply: ['operation_id', 'question_id', 'text'],
   spawn: ['operation_id', 'role', 'cli', 'name'],
   start: ['operation_id', 'worker_name'],
   stop: ['operation_id', 'worker_name'],

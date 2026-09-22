@@ -412,6 +412,9 @@ export const teamRoutes: RouteDefinition[] = [
       throw new BadRequestError('seen_seq requires dispatch_id')
     if (body.dispatch_id !== undefined) requireNonEmptyString(body.dispatch_id, 'dispatch_id')
     const reportInput = {
+      ...(body.ack_batch_id !== undefined
+        ? { ackBatchId: requireNonEmptyString(body.ack_batch_id, 'ack_batch_id') }
+        : {}),
       ...(seenSeq !== undefined ? { seenSeq } : {}),
       artifacts: getArtifacts(body.artifacts),
       ...(typeof body.dispatch_id === 'string' ? { dispatchId: body.dispatch_id } : {}),
@@ -426,6 +429,7 @@ export const teamRoutes: RouteDefinition[] = [
       })
       sendJson(response, 202, {
         delivery_state: result.deliveryState,
+        outcome: result.dispatch?.outcome ?? null,
         dispatch_id: result.dispatch?.id ?? null,
         forward_error: result.forwardError,
         forwarded: result.forwarded,
@@ -436,6 +440,7 @@ export const teamRoutes: RouteDefinition[] = [
     } else {
       const result = store.reportTask(projectId, fromAgentId, reportInput)
       sendJson(response, 202, {
+        outcome: result.dispatch?.outcome ?? null,
         delivery_state: result.deliveryState,
         dispatch_id: result.dispatch?.id ?? null,
         forward_error: result.forwardError,

@@ -1,6 +1,8 @@
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 
 export const serializeDispatchRecord = (record: DispatchRecord) => ({
+  outcome: record.outcome ?? null,
+  delegated_from_id: record.delegatedFromId ?? null,
   parent_dispatch_id: record.parentDispatchId ?? null,
   root_dispatch_id: record.rootDispatchId ?? record.id,
   seen_seq: record.seenSeq ?? 0,

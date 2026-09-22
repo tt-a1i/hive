@@ -259,14 +259,8 @@ describe('agent startup instructions', () => {
         expectOutputToContainTerminalText(output, 'Digest startup memory')
         expectOutputToContainTerminalText(output, 'reusable')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')
-        expectOutputToContainTerminalText(
-          output,
-          'Report only when ending this round of responsibility'
-        )
-        expectOutputToContainTerminalText(
-          output,
-          'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
-        )
+        expectOutputToContainTerminalText(output, 'Report once when ending responsibility')
+        expectOutputToContainTerminalText(output, 'Stay quiet for routine readiness or standby.')
         expect(compactTerminalText(output)).not.toContain(compactTerminalText('Startup handshake:'))
         expect(compactTerminalText(output)).not.toContain(compactTerminalText('Run once:'))
         expect(compactTerminalText(output)).not.toContain(
@@ -274,13 +268,13 @@ describe('agent startup instructions', () => {
         )
         expectOutputToContainTerminalText(
           output,
-          'Await a dispatch; do not report readiness as an outcome'
+          'If no dispatch has been assigned in this conversation, end this turn quietly'
         )
         // Members are not authorized for `team list` (403) — the startup
         // command list must not advertise it.
         expect(output).not.toContain('- team list')
-        expect(output).not.toContain('--success')
-        expect(output).not.toContain('--failed')
+        expect(output).toContain('--success')
+        expect(output).toContain('--failed')
         expect(output).not.toContain('team send <member-name>')
         expect(output).toContain('SUBMITTED')
       }, 6000)

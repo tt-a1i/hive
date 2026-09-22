@@ -32,6 +32,8 @@ export const serializeDispatchMessagesResult = (
     to_agent_id: dispatch.toAgentId,
     owner_name: dispatch.ownerName,
     state: dispatch.state,
+    outcome: dispatch.outcome ?? null,
+    delegated_from_id: dispatch.delegatedFromId ?? null,
     text: dispatch.text,
   })),
 })

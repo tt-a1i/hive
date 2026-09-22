@@ -135,12 +135,10 @@ describe('team send CLI side effects (R1.3)', () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         expect(run?.output).toContain('WRK:')
         expect(run?.output).toContain('@Orchestrator')
-        expect(run?.output).toContain('Hive member; keep your assigned role and scope')
+        expect(run?.output).toContain('Hive member; preserve scope and file ownership')
         expect(run?.output).toContain('实现登录')
         expect(run?.output).toContain(`dispatch_id: ${dispatch?.id}`)
-        expect(run?.output).toContain(
-          `team report --dispatch ${dispatch?.id} --seen <required_seen_seq> --stdin`
-        )
+        expect(run?.output).toContain(`team report --dispatch ${dispatch?.id} --success --stdin`)
       })
 
       const messages = hive.store.listMessagesForRecovery(workspace.id, 0)

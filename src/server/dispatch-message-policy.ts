@@ -50,7 +50,11 @@ export const authorizeDispatchMessage = (
   if (actor.role !== 'orchestrator') {
     if (!source || source.toAgentId !== fromAgentId)
       throw new ForbiddenError('Provide a source dispatch you own')
-    if (dispatchRoot(source) !== dispatchRoot(target))
+    if (
+      dispatchRoot(source) !== dispatchRoot(target) &&
+      input.kind !== 'question' &&
+      input.kind !== 'answer'
+    )
       throw new ForbiddenError('Dispatches must belong to the same collaboration')
     if (input.recipient === 'orchestrator' && source.id !== target.id)
       throw new ForbiddenError('Address the orchestrator using your own dispatch')
@@ -74,8 +78,7 @@ export const authorizeDispatchMessage = (
       )
     }
     const replyTarget = ports.getDispatch(workspaceId, reply.dispatchId)
-    if (!replyTarget || dispatchRoot(replyTarget) !== dispatchRoot(target))
-      throw new ForbiddenError('Question belongs to another collaboration')
+    if (!replyTarget) throw new ForbiddenError('Question responsibility no longer exists')
     if (reply.fromAgentId !== recipientAgentId)
       throw new ForbiddenError('Answer must return to the question sender')
     if (actor.role === 'orchestrator') {

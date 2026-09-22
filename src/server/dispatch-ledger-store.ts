@@ -1,11 +1,20 @@
 import { randomUUID } from 'node:crypto'
+import {
+  delegatedDescendantIds,
+  recordDelegatedResult,
+  validateDelegation,
+} from './dispatch-delegation.js'
 import { retireClosedDispatchMessages } from './dispatch-message-delivery-policy.js'
 import { ConflictError } from './http-errors.js'
+import { acknowledgeMailboxBatch } from './mailbox-store.js'
 import type { Database } from './sqlite.js'
 
 export type DispatchStatus = 'queued' | 'submitted' | 'reported' | 'cancelled'
 
 export interface DispatchRecord {
+  cancelledDescendants?: DispatchRecord[]
+  outcome?: 'success' | 'failed' | null
+  delegatedFromId?: string | null
   parentDispatchId?: string | null
   rootDispatchId?: string
   seenSeq?: number
@@ -31,6 +40,8 @@ export interface DispatchRecord {
 }
 
 interface DispatchRow {
+  outcome: 'success' | 'failed' | null
+  delegated_from_id: string | null
   parent_dispatch_id: string | null
   root_dispatch_id: string
   seen_seq: number
@@ -56,6 +67,7 @@ interface DispatchRow {
 }
 
 export interface CreateDispatchInput {
+  delegatedFromId?: string
   relatedToDispatchId?: string
   fromAgentId?: string
   label?: string
@@ -68,6 +80,8 @@ export interface CreateDispatchInput {
 }
 
 interface ReportDispatchInput {
+  ackBatchId?: string
+  outcome?: 'success' | 'failed'
   seenSeq?: number
   artifacts: string[]
   dispatchId?: string
@@ -102,6 +116,8 @@ const parseArtifacts = (value: string | null) => {
 }
 
 const toRecord = (row: DispatchRow): DispatchRecord => ({
+  outcome: row.outcome ?? null,
+  delegatedFromId: row.delegated_from_id ?? null,
   parentDispatchId: row.parent_dispatch_id,
   rootDispatchId: row.root_dispatch_id,
   seenSeq: row.seen_seq,
@@ -141,10 +157,19 @@ export const createDispatchLedgerStore = (db: Database) => {
         )
         .all(workspaceId, rootDispatchId) as DispatchRow[]
     ).map(toRecord)
-  const createDispatch = (input: CreateDispatchInput) => {
-    const parent = input.relatedToDispatchId
-      ? getDispatch(input.workspaceId, input.relatedToDispatchId)
-      : undefined
+  const createDispatch = db.transaction((input: CreateDispatchInput) => {
+    if (input.delegatedFromId) {
+      if (input.relatedToDispatchId) throw new ConflictError('A delegation has exactly one parent')
+      validateDelegation(
+        db,
+        input.workspaceId,
+        input.delegatedFromId,
+        input.fromAgentId,
+        input.toAgentId
+      )
+    }
+    const parentId = input.delegatedFromId ?? input.relatedToDispatchId
+    const parent = parentId ? getDispatch(input.workspaceId, parentId) : undefined
     if (input.relatedToDispatchId && !parent)
       throw new ConflictError('Related dispatch does not exist in this workspace')
     const id = randomUUID()
@@ -158,6 +183,8 @@ export const createDispatchLedgerStore = (db: Database) => {
       parentDispatchId: parent?.id ?? null,
       rootDispatchId: parent?.rootDispatchId ?? parent?.id ?? id,
       seenSeq: 0,
+      outcome: null,
+      delegatedFromId: input.delegatedFromId ?? null,
       label: input.label ?? null,
       phase: input.phase ?? null,
       reportedAt: null,
@@ -190,8 +217,8 @@ export const createDispatchLedgerStore = (db: Database) => {
         workflow_run_id,
         step_index,
         phase,
-        label, parent_dispatch_id, root_dispatch_id, seen_seq
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        label, parent_dispatch_id, root_dispatch_id, seen_seq, delegated_from_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       record.id,
       record.workspaceId,
@@ -211,11 +238,12 @@ export const createDispatchLedgerStore = (db: Database) => {
       record.label,
       record.parentDispatchId ?? null,
       record.rootDispatchId ?? null,
-      0
+      0,
+      input.delegatedFromId ?? null
     )
 
     return record
-  }
+  })
 
   const deleteDispatch = (dispatchId: string) => {
     db.prepare('DELETE FROM dispatches WHERE id = ?').run(dispatchId)
@@ -344,6 +372,19 @@ export const createDispatchLedgerStore = (db: Database) => {
         return undefined
       }
 
+      if (
+        db
+          .prepare(
+            "SELECT 1 FROM dispatches WHERE delegated_from_id = ? AND status IN ('queued','submitted') LIMIT 1"
+          )
+          .get(dispatch.id)
+      )
+        throw new ConflictError(
+          'Finish or cancel your delegated children before reporting this responsibility'
+        )
+      if (input.ackBatchId)
+        acknowledgeMailboxBatch(db, input.workspaceId, input.toAgentId, input.ackBatchId)
+
       const required = (
         db
           .prepare(`SELECT COALESCE(MAX(sequence), 0) AS seq FROM dispatch_messages
@@ -351,9 +392,20 @@ export const createDispatchLedgerStore = (db: Database) => {
           .get(dispatch.id, dispatch.toAgentId, dispatch.toAgentId) as { seq: number }
       ).seq
       const seenSeq = input.seenSeq ?? 0
-      if (!Number.isSafeInteger(seenSeq) || seenSeq < 0 || seenSeq !== required) {
+      const unacknowledged = db
+        .prepare(`SELECT 1 FROM dispatch_messages m
+        WHERE m.dispatch_id = ? AND m.recipient_agent_id = ? AND m.from_agent_id != ?
+          AND m.kind != 'progress' AND m.sequence > ?
+          AND NOT EXISTS (SELECT 1 FROM mailbox_receipts r WHERE r.message_id = m.id) LIMIT 1`)
+        .get(dispatch.id, dispatch.toAgentId, dispatch.toAgentId, seenSeq)
+      if (
+        !Number.isSafeInteger(seenSeq) ||
+        seenSeq < 0 ||
+        seenSeq > required ||
+        (seenSeq !== required && unacknowledged)
+      ) {
         throw new ConflictError(
-          `Dispatch ${dispatch.id} requires seen_seq ${required}. Read \`team messages --dispatch ${dispatch.id}\`, consider its inbound messages, then report the same dispatch with \`--seen ${required}\`. Do not substitute another dispatch ID.`
+          `Dispatch ${dispatch.id} has unacknowledged inputs. Read \`team inbox\`, consider the batch, then report this dispatch with \`--ack <batch-id>\`; or read \`team messages --dispatch ${dispatch.id}\` and use \`--seen ${required}\`. Do not substitute another dispatch ID.`
         )
       }
       const reportedAt = Date.now()
@@ -363,24 +415,28 @@ export const createDispatchLedgerStore = (db: Database) => {
            reported_at = ?,
            report_text = ?,
            artifacts = ?,
-           seen_seq = ?
+           seen_seq = ?, outcome = ?
        WHERE id = ?`
       ).run(
         'reported',
         reportedAt,
         input.reportText,
         JSON.stringify(input.artifacts),
-        input.seenSeq ?? 0,
+        required,
+        input.outcome ?? null,
         dispatch.id
       )
       retireClosedDispatchMessages(db, dispatch.id)
+
+      recordDelegatedResult(db, input.workspaceId, dispatch.id)
 
       return {
         ...dispatch,
         artifacts: input.artifacts,
         reportedAt,
         reportText: input.reportText,
-        seenSeq: input.seenSeq ?? 0,
+        seenSeq: required,
+        outcome: input.outcome ?? null,
         status: 'reported' as const,
       }
     })()
@@ -393,6 +449,7 @@ export const createDispatchLedgerStore = (db: Database) => {
       }
 
       const cancelledAt = Date.now()
+      const descendants = delegatedDescendantIds(db, input.workspaceId, dispatch.id)
       db.prepare(
         `UPDATE dispatches
        SET status = ?,
@@ -401,12 +458,22 @@ export const createDispatchLedgerStore = (db: Database) => {
        WHERE id = ?`
       ).run('cancelled', cancelledAt, input.reason, dispatch.id)
       retireClosedDispatchMessages(db, dispatch.id)
+      for (const id of descendants) {
+        db.prepare(
+          "UPDATE dispatches SET status = 'cancelled', reported_at = ?, report_text = ? WHERE id = ?"
+        ).run(cancelledAt, input.reason, id)
+        retireClosedDispatchMessages(db, id)
+      }
+      recordDelegatedResult(db, input.workspaceId, dispatch.id)
 
       return {
         ...dispatch,
         reportedAt: cancelledAt,
         reportText: input.reason,
         status: 'cancelled' as const,
+        cancelledDescendants: descendants
+          .map((id) => getDispatch(input.workspaceId, id))
+          .filter((item) => item !== undefined),
       }
     })()
 
@@ -491,28 +558,39 @@ export const createDispatchLedgerStore = (db: Database) => {
 
   const deleteWorkspaceDispatches = (workspaceId: string) => {
     db.prepare(
+      'DELETE FROM mailbox_receipts WHERE batch_id IN (SELECT id FROM mailbox_batches WHERE workspace_id = ?)'
+    ).run(workspaceId)
+    db.prepare('DELETE FROM mailbox_batches WHERE workspace_id = ?').run(workspaceId)
+    db.prepare(
       'DELETE FROM dispatch_message_outbox WHERE message_id IN (SELECT id FROM dispatch_messages WHERE workspace_id = ?)'
     ).run(workspaceId)
     db.prepare('DELETE FROM dispatch_messages WHERE workspace_id = ?').run(workspaceId)
     db.prepare('DELETE FROM dispatches WHERE workspace_id = ?').run(workspaceId)
   }
 
-  const deleteWorkerDispatches = (workspaceId: string, workerId: string) => {
-    // Keep responsibility and conversation evidence after a member is removed.
-    db.prepare(`UPDATE dispatches SET status = 'cancelled', reported_at = ?, report_text = 'Worker removed'
-      WHERE workspace_id = ? AND to_agent_id = ? AND status IN ('queued','submitted')`).run(
-      Date.now(),
-      workspaceId,
-      workerId
-    )
-    db.prepare(`UPDATE dispatch_message_outbox SET state = 'cancelled' WHERE state IN ('queued','delivering')
+  const deleteWorkerDispatches = (workspaceId: string, workerId: string) =>
+    db.transaction(() => {
+      // Keep responsibility and conversation evidence after a member is removed.
+      const affected = db
+        .prepare(`SELECT id FROM dispatches WHERE workspace_id = ? AND status IN ('queued','submitted')
+      AND (to_agent_id = ? OR (from_agent_id = ? AND delegated_from_id IS NOT NULL))`)
+        .all(workspaceId, workerId, workerId) as { id: string }[]
+      const cancelled = new Map<string, DispatchRecord>()
+      for (const row of affected) {
+        const result = markCancelled({ workspaceId, dispatchId: row.id, reason: 'Worker removed' })
+        if (!result) continue
+        for (const item of [result, ...(result.cancelledDescendants ?? [])])
+          cancelled.set(item.id, item)
+      }
+      db.prepare(`UPDATE dispatch_message_outbox SET state = 'cancelled' WHERE state IN ('queued','delivering')
       AND message_id IN (SELECT id FROM dispatch_messages WHERE workspace_id = ?
         AND (recipient_agent_id = ? OR (from_agent_id = ? AND kind = 'question')))`).run(
-      workspaceId,
-      workerId,
-      workerId
-    )
-  }
+        workspaceId,
+        workerId,
+        workerId
+      )
+      return [...cancelled.values()]
+    })()
 
   // Every dispatch fired by a workflow run carries the run id (M1-B added the
   // column; M2-C plumbs it through). This is the timeline query the UI uses to

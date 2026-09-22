@@ -6,7 +6,7 @@ import { type AgentLaunchConfigInput, createAgentRunStore } from './agent-run-st
 import { createAgentRuntime } from './agent-runtime.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentSessionStore } from './agent-session-store.js'
-import { createDispatchLedgerStore } from './dispatch-ledger-store.js'
+import { createDispatchLedgerStore, type DispatchRecord } from './dispatch-ledger-store.js'
 import { createDispatchMessageOperations } from './dispatch-message-operations.js'
 import { createDispatchMessageStore } from './dispatch-message-store.js'
 import { createExternalGoalStore } from './external-goal-store.js'
@@ -291,6 +291,9 @@ export const createRuntimeStoreServices = (
             workspaceId,
           })
           if (!cancelled) continue
+          teamOps.settleCancelledDelegations(cancelled.cancelledDescendants ?? [])
+          if (cancelled.delegatedFromId && cancelled.fromAgentId)
+            dispatchMessageOps.drainDispatchMessageOutbox(workspaceId, cancelled.fromAgentId)
           try {
             workspaceStore.markTaskCancelled(workspaceId, agentId)
           } catch (error) {
@@ -360,6 +363,7 @@ export const createRuntimeStoreServices = (
   function removeWorkerCompletely(workspaceId: string, workerId: string) {
     const activeRun = agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
     const droppedNoticeTargets = new Set<string>()
+    let cancelledDelegations: DispatchRecord[] = []
     db.transaction(() => {
       for (const dispatch of dispatchLedgerStore.listOpenWorkspaceDispatches(workspaceId)) {
         if (
@@ -379,9 +383,10 @@ export const createRuntimeStoreServices = (
       )) {
         droppedNoticeTargets.add(targetAgentId)
       }
-      dispatchLedgerStore.deleteWorkerDispatches(workspaceId, workerId)
+      cancelledDelegations = dispatchLedgerStore.deleteWorkerDispatches(workspaceId, workerId)
       workspaceStore.deleteWorker(workspaceId, workerId)
     })()
+    teamOps.settleCancelledDelegations(cancelledDelegations)
     for (const targetAgentId of droppedNoticeTargets) {
       teamOps.drainReportOutbox(workspaceId, targetAgentId)
     }
@@ -426,6 +431,7 @@ export const createRuntimeStoreServices = (
     reparkClaimedDispatch: dispatchLedgerStore.reparkClaimedDispatch,
     reportOutbox,
     notifyWebhook: webhookNotifier.notify,
+    drainDispatchMessages: dispatchMessageOps.drainDispatchMessageOutbox,
     runDataMutation: (mutation) => db.transaction(mutation)(),
     isRuntimeClosing: () => closing,
     workflowDispatchAwaiter,

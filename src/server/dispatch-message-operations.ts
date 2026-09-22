@@ -7,7 +7,9 @@ import type { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createDispatchMessageOutbox } from './dispatch-message-outbox.js'
 import { authorizeDispatchMessage, dispatchRoot } from './dispatch-message-policy.js'
 import type { DispatchMessageStore } from './dispatch-message-store.js'
+import { createDispatchQuestionOperations } from './dispatch-question-operations.js'
 import { BadRequestError, ConflictError, ForbiddenError } from './http-errors.js'
+import { createMailboxStore } from './mailbox-store.js'
 import type { Database } from './sqlite.js'
 import type { WorkspaceStore } from './workspace-store.js'
 
@@ -42,11 +44,40 @@ export const createDispatchMessageOperations = (ports: {
           toAgentId: item.toAgentId,
           ownerName: names.get(item.toAgentId) ?? item.toAgentId,
           state: item.status,
+          outcome: item.outcome ?? null,
+          delegatedFromId: item.delegatedFromId ?? null,
           text: item.text,
         })),
     }
   }
   return {
+    ...createMailboxStore(ports.db),
+    listCollaborationPeers(workspaceId: string) {
+      return ports.workspace.listWorkers(workspaceId).map((worker) => ({
+        id: worker.id,
+        name: worker.name,
+        role: worker.role,
+        description: worker.description,
+        status: worker.status,
+        dispatches: (
+          ports.db
+            .prepare(`SELECT id, status, outcome FROM dispatches
+          WHERE workspace_id = ? AND to_agent_id = ? AND status != 'cancelled'
+          ORDER BY sequence DESC LIMIT 5`)
+            .all(workspaceId, worker.id) as { id: string; status: string; outcome: string | null }[]
+        ).map((dispatch) => ({
+          id: dispatch.id,
+          state: dispatch.status,
+          outcome: dispatch.outcome,
+        })),
+      }))
+    },
+    ...createDispatchQuestionOperations({
+      hasAgent: ports.workspace.hasAgent,
+      getDispatch: ports.ledger.getDispatch,
+      getAgent: ports.workspace.getAgent,
+      messages: ports.messages,
+    }),
     drainDispatchMessageOutbox,
     getDispatchCollaboration,
     listCollaborationMessageHistory(

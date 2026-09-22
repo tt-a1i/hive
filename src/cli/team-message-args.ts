@@ -10,7 +10,7 @@ export const parseSequence = (value: string, flag: string): number => {
   return Number(value)
 }
 
-const parseOptions = (args: string[], allowed: Set<string>) => {
+export const parseOptions = (args: string[], allowed: Set<string>) => {
   const options = new Map<string, string>()
   const positionals: string[] = []
   let positionalOnly = false
@@ -27,7 +27,7 @@ const parseOptions = (args: string[], allowed: Set<string>) => {
     }
     if (!allowed.has(arg)) throw new Error(`Unknown argument: ${arg}`)
     if (options.has(arg)) throw new Error(`Duplicate argument: ${arg}`)
-    if (arg === '--stdin') {
+    if (arg === '--stdin' || arg === '--list') {
       options.set(arg, 'true')
       continue
     }
@@ -79,10 +79,23 @@ export const parseMessageArgs = (args: string[]) => {
 }
 
 export const parseMessagesArgs = (args: string[]) => {
-  const { options, positionals } = parseOptions(args, new Set(['--dispatch', '--after']))
+  const { options, positionals } = parseOptions(args, new Set(['--dispatch', '--after', '--wait']))
   const dispatchId = options.get('--dispatch')
   if (!dispatchId || positionals.length)
-    throw new Error('Usage: team messages --dispatch <id> [--after <sequence>]')
+    throw new Error('Usage: team messages --dispatch <id> [--after <sequence>] [--wait <seconds>]')
   const after = options.get('--after')
-  return { dispatchId, afterSeq: after === undefined ? undefined : parseSequence(after, '--after') }
+  const waitSeconds = parseWaitSeconds(options.get('--wait'), 0)
+  if (waitSeconds > 0 && after === undefined)
+    throw new Error('--wait requires --after <last-inspected-sequence>')
+  return {
+    dispatchId,
+    afterSeq: after === undefined ? undefined : parseSequence(after, '--after'),
+    waitSeconds,
+  }
+}
+
+export const parseWaitSeconds = (value: string | undefined, fallback: number) => {
+  const seconds = value === undefined ? fallback : parseSequence(value, '--wait')
+  if (seconds > 60) throw new Error('--wait must be between 0 and 60 seconds')
+  return seconds
 }

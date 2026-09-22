@@ -33,6 +33,8 @@ export interface DispatchMessageRecord {
 }
 
 export interface RelatedDispatchSummary {
+  outcome?: 'success' | 'failed' | null
+  delegatedFromId?: string | null
   id: string
   parentDispatchId: string | null
   rootDispatchId: string

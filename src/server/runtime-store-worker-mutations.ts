@@ -1,5 +1,6 @@
 import type { AgentSummary } from '../shared/types.js'
 import { controllerReceiptPendingSql } from './controller-receipt-policy.js'
+import type { DispatchRecord } from './dispatch-ledger-store.js'
 import { ConflictError } from './http-errors.js'
 import type { RuntimeStore } from './runtime-store-contract.js'
 import type { RuntimeStoreServices } from './runtime-store-helpers.js'
@@ -65,6 +66,7 @@ export const createRuntimeStoreWorkerMutations = ({
     }
     const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
     const droppedNoticeTargets = new Set<string>()
+    let cancelledDelegations: DispatchRecord[] = []
     runDataMutation(() => {
       for (const dispatch of services.dispatchLedgerStore.listOpenWorkspaceDispatches(
         workspaceId
@@ -84,9 +86,13 @@ export const createRuntimeStoreWorkerMutations = ({
       )) {
         droppedNoticeTargets.add(targetAgentId)
       }
-      services.dispatchLedgerStore.deleteWorkerDispatches(workspaceId, workerId)
+      cancelledDelegations = services.dispatchLedgerStore.deleteWorkerDispatches(
+        workspaceId,
+        workerId
+      )
       services.workspaceStore.deleteWorker(workspaceId, workerId)
     })
+    services.teamOps.settleCancelledDelegations(cancelledDelegations)
     for (const targetAgentId of droppedNoticeTargets) {
       services.teamOps.drainReportOutbox(workspaceId, targetAgentId)
     }

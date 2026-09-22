@@ -169,11 +169,25 @@ export const createRuntimeStoreController = (
               dispatch_id: item.id,
               worker_id: item.toAgentId,
               status: item.status,
+              outcome: item.outcome ?? null,
+              delegated_from_id: item.delegatedFromId ?? null,
               text: item.text,
               parent_dispatch_id: item.parentDispatchId ?? null,
               root_dispatch_id: item.rootDispatchId ?? item.id,
             })),
         }
+      if (input.action === 'question') {
+        const result = getStore().getDispatchQuestion(
+          input.workspace_id,
+          `${input.workspace_id}:orchestrator`,
+          controllerString(input, 'question_id')
+        )
+        return {
+          status: result.status,
+          question: serializeDispatchMessage(result.question),
+          answers: result.answers.map(serializeDispatchMessage),
+        }
+      }
       if (input.action === 'messages')
         return serializeDispatchMessagesResult(
           getStore().listDispatchMessages(

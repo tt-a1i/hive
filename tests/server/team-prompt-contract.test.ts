@@ -184,12 +184,10 @@ describe('team prompt contract', () => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
       const output = run?.output.replace(/\r\n/g, '\n')
       expect(output).toContain('@Orchestrator')
-      expect(output).toContain(
-        `\`team report --dispatch ${dispatch.id} --seen <required_seen_seq> --stdin\``
-      )
+      expect(output).toContain(`\`team report --dispatch ${dispatch.id} --success --stdin\``)
       expect(output).toContain(`dispatch_id: ${dispatch.id}`)
-      expect(output).not.toContain('--success')
-      expect(output).not.toContain('--failed')
+      expect(output).toContain('--success')
+      expect(output).toContain('--failed')
       expect(output).toContain('实现登录')
       const taskEnvelope = output?.match(
         /<hive-message kind="dispatch"[^>]*>[\s\S]*?<\/hive-message>/
@@ -205,9 +203,7 @@ describe('team prompt contract', () => {
       // dispatch_id-bound report syntax — this is what re-anchors the worker
       // identity after an internal /compact.
       expect(output).toMatch(/实现登录[\s\S]*<hive-system-reminder>[\s\S]*<\/hive-system-reminder>/)
-      expect(output).toContain(
-        `team report --dispatch ${dispatch.id} --seen <required_seen_seq> --stdin`
-      )
+      expect(output).toContain(`team report --dispatch ${dispatch.id} --success --stdin`)
     })
   })
 

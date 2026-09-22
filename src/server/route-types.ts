@@ -70,6 +70,7 @@ export interface WorkflowScheduleBody {
 }
 
 export interface ReportTaskBody {
+  ack_batch_id?: string
   seen_seq?: number
   dispatch_id?: string
   project_id: string
