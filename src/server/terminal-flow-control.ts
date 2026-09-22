@@ -16,12 +16,14 @@ const RESUME_CHECK_INTERVAL_MS = 16
 
 interface TerminalOutputFlowOptions {
   onBackpressureChange: (backpressured: boolean) => void
+  renderEvents?: boolean
 }
 
 export interface TerminalOutputFlow {
   ack: (bytes: number) => void
   close: () => void
   enqueue: (chunk: string) => void
+  resize: (cols: number, rows: number) => void
 }
 
 const getTransportSocket = (ws: WebSocket): Socket | null => {
@@ -32,7 +34,7 @@ const byteLength = (chunk: string) => Buffer.byteLength(chunk, 'utf8')
 
 export const createTerminalOutputFlow = (
   ws: WebSocket,
-  { onBackpressureChange }: TerminalOutputFlowOptions
+  { onBackpressureChange, renderEvents = false }: TerminalOutputFlowOptions
 ): TerminalOutputFlow => {
   let closed = false
   let flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -95,7 +97,7 @@ export const createTerminalOutputFlow = (
 
   const sendChunk = (chunk: string) => {
     if (closed || ws.readyState !== ws.OPEN) return
-    ws.send(chunk)
+    ws.send(renderEvents ? JSON.stringify({ type: 'output', data: chunk }) : chunk)
     lastSentAt = Date.now()
     afterSend(byteLength(chunk))
   }
@@ -109,6 +111,12 @@ export const createTerminalOutputFlow = (
   }
 
   return {
+    resize(cols, rows) {
+      if (closed || !renderEvents || ws.readyState !== ws.OPEN) return
+      if (flushTimer) clearTimeout(flushTimer)
+      flush()
+      ws.send(JSON.stringify({ type: 'resize', cols, rows }))
+    },
     ack(bytes) {
       unackedBytes = Math.max(0, unackedBytes - Math.max(0, Math.floor(bytes)))
       checkResume()

@@ -134,6 +134,37 @@ const enterRawEditor = async (expectedInitialValue: string) => {
 }
 
 describe('tasks flow driven from the Task Graph drawer', () => {
+  test('renders, edits, saves, and reloads mixed Unicode Markdown without loss', async () => {
+    const initial = '- [ ] 中文，English 😀 `code` [链接](https://example.com/路径)\n'
+    const edited = `${initial}- [x] 保存后刷新 🎉\n`
+    await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: uiCookie },
+      body: JSON.stringify({ content: initial }),
+    })
+
+    renderTaskDrawer()
+    await screen.findByTestId('task-checkbox-0')
+    expect(screen.getByTestId('task-line-0')).toHaveTextContent(
+      '中文，English 😀 code [链接](https://example.com/路径)'
+    )
+    await enterRawEditor(initial)
+    fireEvent.change(screen.getByLabelText('Tasks Markdown'), { target: { value: edited } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save tasks' }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Tasks Markdown')).toHaveValue(edited)
+    })
+    const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      headers: { cookie: uiCookie },
+    })
+    await expect(saved.json()).resolves.toEqual({ content: edited })
+
+    cleanup()
+    renderTaskDrawer()
+    await enterRawEditor(edited)
+  })
+
   test('dormant task graph drawer still renders a readable summary and nested task tree', async () => {
     await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
       method: 'PUT',

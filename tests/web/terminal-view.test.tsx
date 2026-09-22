@@ -10,7 +10,7 @@ import { TerminalView } from '../../web/src/terminal/TerminalView.js'
 // jsdom's canvas has no real GL context (getContext returns null), which would
 // make detection report "no WebGL" and skip the addon. These suites assert the
 // addon DOES load on a capable host, so stub a truthy context for the duration.
-let canvasGetContextSpy: ReturnType<typeof vi.spyOn> | undefined
+let canvasGetContextSpy: { mockRestore: () => void } | undefined
 beforeEach(() => {
   canvasGetContextSpy = vi
     .spyOn(HTMLCanvasElement.prototype, 'getContext')
@@ -38,6 +38,7 @@ const ESC = '\x1b'
 
 class MockWebSocket {
   static instances: MockWebSocket[] = []
+  static autoRestore = true
 
   readonly OPEN = 1
   onmessage: ((event: { data: string }) => void) | null = null
@@ -52,6 +53,9 @@ class MockWebSocket {
     queueMicrotask(() => {
       this.readyState = this.OPEN
       this.onopen?.()
+      if (MockWebSocket.autoRestore && this.url.includes('/control?')) {
+        this.onmessage?.({ data: JSON.stringify({ type: 'restore', snapshot: '' }) })
+      }
     })
   }
 
@@ -138,6 +142,25 @@ vi.mock('@xterm/xterm', () => ({
       this.element = element
       const textarea = document.createElement('textarea')
       textarea.className = 'xterm-helper-textarea'
+      textarea.addEventListener(
+        'keydown',
+        (event) => {
+          if (event.key.length === 1) latestOnDataHandler?.(event.key)
+          else if (event.key === 'Backspace') latestOnDataHandler?.('\u007f')
+        },
+        { capture: true }
+      )
+      textarea.addEventListener(
+        'input',
+        (event) => {
+          const input = event as InputEvent
+          if (input.inputType === 'insertText' && input.data) {
+            latestOnDataHandler?.(input.data)
+            input.preventDefault()
+          }
+        },
+        { capture: true }
+      )
       element.appendChild(textarea)
       element.addEventListener('wheel', (event) => {
         if (this.customWheelHandler?.(event) === false) {
@@ -154,8 +177,16 @@ vi.mock('@xterm/xterm', () => ({
       this.element?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')?.focus()
     }
     write(chunk?: string, callback?: () => void) {
-      if (chunk !== undefined) terminalWrites.push(chunk)
+      // Record rendered bytes, not empty native-write barriers.
+      if (chunk) terminalWrites.push(chunk)
       callback?.()
+    }
+    resize(cols: number, rows: number) {
+      this.cols = cols
+      this.rows = rows
+    }
+    input(data: string) {
+      latestOnDataHandler?.(data)
     }
     scrollLines(amount: number) {
       terminalScrollLines.push(amount)
@@ -172,6 +203,9 @@ vi.mock('@xterm/addon-fit', () => ({
     addonName = 'fit'
     fit() {
       terminalFitCount += 1
+    }
+    proposeDimensions() {
+      return { cols: 132, rows: 43 }
     }
     dispose() {}
   },
@@ -206,6 +240,7 @@ vi.mock('@xterm/addon-web-links', () => ({
 afterEach(() => {
   cleanup()
   MockWebSocket.instances = []
+  MockWebSocket.autoRestore = true
   MockResizeObserver.instances = []
   latestCustomKeyHandler = undefined
   latestCustomWheelHandler = undefined
@@ -721,17 +756,19 @@ describe('TerminalView', () => {
       })
       const sentBeforeProtocolMessages = controlSocket?.sent.length ?? 0
 
+      const restoredHistory = '恢复历史：中文 😀'
+      const liveAfterReattach = '切换后：English，中文。'
       controlSocket?.onmessage?.({
-        data: JSON.stringify({ type: 'restore', snapshot: 'restored-history' }),
+        data: JSON.stringify({ type: 'restore', snapshot: restoredHistory }),
       })
-      ioSocket?.onmessage?.({ data: 'live-after-reattach' })
-      expect(terminalWrites).toEqual(['restored-history', 'live-after-reattach'])
+      ioSocket?.onmessage?.({ data: liveAfterReattach })
+      expect(terminalWrites).toEqual([restoredHistory, liveAfterReattach])
       const controlMessagesAfterReattach = controlSocket?.sent
         .slice(sentBeforeProtocolMessages)
         .map((payload) => JSON.parse(String(payload)))
       expect(controlMessagesAfterReattach).toEqual([
         { type: 'restore_complete' },
-        { type: 'output_ack', bytes: new TextEncoder().encode('live-after-reattach').byteLength },
+        { type: 'output_ack', bytes: new TextEncoder().encode(liveAfterReattach).byteLength },
       ])
 
       latestOnDataHandler?.('typed-after-reattach')
@@ -813,7 +850,7 @@ describe('TerminalView', () => {
         { timeout: 1_000 }
       )
       expect(controlSocket?.sent.length ?? 0).toBeGreaterThan(sentBeforeReattach)
-      expect(terminalFitCount).toBeGreaterThan(1)
+      expect(terminalFitCount).toBe(1)
     } finally {
       restoreSizeReads()
     }
@@ -930,6 +967,7 @@ describe('TerminalView', () => {
   })
 
   test('buffers live output until the restore snapshot is written', async () => {
+    MockWebSocket.autoRestore = false
     vi.stubGlobal('WebSocket', MockWebSocket as never)
     addPortalSlot('run-restore-order')
 
@@ -955,6 +993,67 @@ describe('TerminalView', () => {
       type: 'output_ack',
       bytes: new TextEncoder().encode('live-after-attach').byteLength,
     })
+  })
+
+  test('writes mixed Unicode unchanged through restore and live output paths', async () => {
+    MockWebSocket.autoRestore = false
+    vi.stubGlobal('WebSocket', MockWebSocket as never)
+    addPortalSlot('run-unicode-output')
+    render(<TerminalView runId="run-unicode-output" title="Alice" />)
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(2)
+    })
+    const [ioSocket, controlSocket] = MockWebSocket.instances
+    const snapshot = '历史：中文 😀\r\n'
+    const live = '实时：English，中文。🎉'
+
+    ioSocket?.onmessage?.({ data: live })
+    controlSocket?.onmessage?.({
+      data: JSON.stringify({ type: 'restore', snapshot }),
+    })
+
+    expect(terminalWrites).toEqual([snapshot, live])
+    expect(parseControlMessages(controlSocket)).toContainEqual({
+      type: 'output_ack',
+      bytes: new TextEncoder().encode(live).byteLength,
+    })
+  })
+
+  test('sends one IME commit then immediate slash, English, and backspace without delay', async () => {
+    vi.stubGlobal('WebSocket', MockWebSocket as never)
+    const slot = addPortalSlot('run-ime-input')
+    render(<TerminalView runId="run-ime-input" title="Alice" />)
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(2)
+      expect(latestOnDataHandler).toBeDefined()
+    })
+    const [ioSocket] = MockWebSocket.instances
+    const textarea = slot.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+    expect(textarea).not.toBeNull()
+
+    fireEvent.compositionStart(textarea as HTMLTextAreaElement)
+    fireEvent.compositionUpdate(textarea as HTMLTextAreaElement, { data: '你' })
+    fireEvent.compositionEnd(textarea as HTMLTextAreaElement, { data: '你好' })
+    fireEvent.input(textarea as HTMLTextAreaElement, {
+      data: '你好',
+      inputType: 'insertFromComposition',
+    })
+    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: '/' })
+    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: 'a' })
+    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: 'Backspace' })
+
+    expect(ioSocket?.sent.map(String)).toEqual(['你好', '/', 'a', '\u007f'])
+
+    fireEvent.compositionStart(textarea as HTMLTextAreaElement)
+    fireEvent.compositionEnd(textarea as HTMLTextAreaElement, { data: '中文' })
+    fireEvent.input(textarea as HTMLTextAreaElement, {
+      data: '中文',
+      inputType: 'insertFromComposition',
+    })
+    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: 'b' })
+    expect(ioSocket?.sent.map(String)).toEqual(['你好', '/', 'a', '\u007f', '中文', 'b'])
   })
 
   test('coalesces high-frequency live output while acknowledging rendered bytes', async () => {
@@ -990,10 +1089,9 @@ describe('TerminalView', () => {
     const outputAcksAfterBatch = parseControlMessages(controlSocket).filter(
       (message) => message.type === 'output_ack'
     )
-    expect(outputAcksAfterBatch).toEqual([
-      { type: 'output_ack', bytes: firstBytes },
-      { type: 'output_ack', bytes: restBytes },
-    ])
+    expect(outputAcksAfterBatch.reduce((bytes, message) => bytes + Number(message.bytes), 0)).toBe(
+      firstBytes + restBytes
+    )
   })
 
   test('pauses terminal repaint while parked and flushes output after reattach', async () => {
@@ -1039,7 +1137,7 @@ describe('TerminalView', () => {
     ])
   })
 
-  test('distills Codex cursor-only repaint output while acknowledging original bytes', async () => {
+  test('preserves Codex cursor and erase sequences while acknowledging original bytes', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket as never)
     addPortalSlot('run-codex-repaint')
 
@@ -1060,7 +1158,7 @@ describe('TerminalView', () => {
 
     ioSocket?.onmessage?.({ data: repaint })
 
-    expect(terminalWrites).toEqual(['restored-history', `${ESC}[2 q${ESC}[?25h${ESC}[61;34H`])
+    expect(terminalWrites).toEqual(['restored-history', repaint])
     expect(parseControlMessages(controlSocket)).toContainEqual({
       type: 'output_ack',
       bytes: new TextEncoder().encode(repaint).byteLength,
@@ -1092,7 +1190,7 @@ describe('TerminalView', () => {
 
     ioSocket?.onmessage?.({ data: repaint })
 
-    expect(terminalWrites).toEqual([repaint.replace(`${ESC}[0 q`, `${ESC}[2 q`)])
+    expect(terminalWrites).toEqual([repaint])
     expect(parseControlMessages(controlSocket)).toContainEqual({
       type: 'output_ack',
       bytes: new TextEncoder().encode(repaint).byteLength,

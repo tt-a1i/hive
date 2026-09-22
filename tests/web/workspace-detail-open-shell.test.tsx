@@ -63,7 +63,12 @@ const renderWorkspaceDetail = ({
   onShellRunStarted?: (workspaceId: string, run: TerminalRunSummary) => void
   selectedWorkspace?: WorkspaceSummary
   terminalRuns?: TerminalRunSummary[]
-} = {}) => renderWorkspaceDetailUi({ onShellRunStarted, selectedWorkspace, terminalRuns })
+} = {}) =>
+  renderWorkspaceDetailUi({
+    ...(onShellRunStarted ? { onShellRunStarted } : {}),
+    selectedWorkspace,
+    terminalRuns,
+  })
 
 const renderWorkspaceDetailUi = ({
   onShellRunStarted,
@@ -87,7 +92,7 @@ const renderWorkspaceDetailUi = ({
           onUpdateWorkerAvatar={vi.fn(async () => ({ error: null }))}
           onOrchestratorResult={vi.fn()}
           onRequestAddWorkspace={vi.fn()}
-          onShellRunStarted={onShellRunStarted}
+          {...(onShellRunStarted ? { onShellRunStarted } : {})}
           orchestratorAutostartError={null}
           terminalRuns={terminalRuns}
           workers={[worker]}
@@ -118,7 +123,7 @@ const workspaceDetailUi = ({
         onUpdateWorkerAvatar={vi.fn(async () => ({ error: null }))}
         onOrchestratorResult={vi.fn()}
         onRequestAddWorkspace={vi.fn()}
-        onShellRunStarted={onShellRunStarted}
+        {...(onShellRunStarted ? { onShellRunStarted } : {})}
         orchestratorAutostartError={null}
         terminalRuns={terminalRuns}
         workers={[worker]}

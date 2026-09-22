@@ -61,7 +61,9 @@ const setOrchVendor = (ctx: HiveContext, command: string, args: string[] = []) =
     commandPresetId: current?.commandPresetId ?? null,
     cwd: current?.cwd ?? null,
     interactiveCommand: current?.interactiveCommand ?? null,
-    presetAugmentationDisabled: current?.presetAugmentationDisabled,
+    ...(current?.presetAugmentationDisabled !== undefined
+      ? { presetAugmentationDisabled: current.presetAugmentationDisabled }
+      : {}),
     resumeArgsTemplate: current?.resumeArgsTemplate ?? null,
     sessionIdCapture: current?.sessionIdCapture ?? null,
   })
@@ -115,10 +117,14 @@ const setupHive = async (cliNames: readonly string[]): Promise<HiveContext> => {
     expect(startResponse.status).toBe(201)
   }
 
-  /* Wrappers use `#!/usr/bin/env sh`; they need /bin and /usr/bin, but not
-     the user's real claude/codex so auto-pick only sees the fakes. */
-  const posixPath = ['/usr/bin', '/bin'].join(delimiter)
-  prependPassiveWorkflowCliPath(dataDir, cliNames, posixPath)
+  // Keep platform shell tools, but exclude the user's installed agent CLIs.
+  let shellPath = ['/usr/bin', '/bin'].join(delimiter)
+  if (process.platform === 'win32') {
+    const systemRoot = process.env.SystemRoot
+    if (!systemRoot) throw new Error('Windows test fixture requires SystemRoot')
+    shellPath = join(systemRoot, 'System32')
+  }
+  prependPassiveWorkflowCliPath(dataDir, cliNames, shellPath)
   const presets = Object.fromEntries(cliNames.map((name) => [name, createPreset(hive.store, name)]))
   return { baseUrl, dataDir, hive, orchestratorId, presets, worker, workspaceId: workspace.id }
 }
@@ -216,10 +222,10 @@ describe('POST /api/team/review', () => {
     }
   }, 20_000)
 
-  test('omitted cli picks a different command than the orchestrator', async () => {
-    const ctx = await setupHive(['claude', 'bash'])
+  test('omitted cli picks a known different CLI family than the orchestrator', async () => {
+    const ctx = await setupHive(['codex', 'gemini'])
     try {
-      setOrchVendor(ctx, 'claude')
+      setOrchVendor(ctx, 'codex')
       const response = await fetch(`${ctx.baseUrl}/api/team/review`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -227,9 +233,8 @@ describe('POST /api/team/review', () => {
       })
       expect(response.status).toBe(201)
       const created = (await response.json()) as { cli: string; member_name: string }
-      const bashPreset = ctx.presets.bash
-      if (!bashPreset) throw new Error('expected bash preset')
-      expect(created.cli).toBe(bashPreset.id)
+      // Built-in presets precede custom presets with the same executable.
+      expect(created.cli).toBe('gemini')
 
       const member = ctx.hive.store
         .listWorkers(ctx.workspaceId)
@@ -239,10 +244,28 @@ describe('POST /api/team/review', () => {
         ctx.workspaceId,
         member.id
       )?.command
-      expect(memberCommand).toBe('bash')
-      expect(memberCommand).not.toBe('claude')
+      expect(memberCommand).toBe('gemini')
+      expect(memberCommand).not.toBe('codex')
       expect(member.role).toBe('reviewer')
       expect(member.ephemeral).toBe(true)
+    } finally {
+      await ctx.hive.close()
+    }
+  }, 20_000)
+
+  test('omitted cli rejects an unknown shell without creating a review member or dispatch', async () => {
+    const ctx = await setupHive(['codex', 'bash'])
+    try {
+      setOrchVendor(ctx, 'codex')
+      const before = ctx.hive.store.listWorkers(ctx.workspaceId).map((member) => member.id)
+      const response = await fetch(`${ctx.baseUrl}/api/team/review`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(reviewBody(ctx, { focus: 'uncommitted diff' })),
+      })
+      expect(response.status).toBe(409)
+      expect(ctx.hive.store.listWorkers(ctx.workspaceId).map((member) => member.id)).toEqual(before)
+      expect(ctx.hive.store.listOpenDispatches(ctx.workspaceId)).toEqual([])
     } finally {
       await ctx.hive.close()
     }

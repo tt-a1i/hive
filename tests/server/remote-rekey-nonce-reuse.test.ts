@@ -7,6 +7,7 @@ import type { RemoteConfigSource } from '../../src/server/remote-config-keys.js'
 import { InMemoryDeviceSessionProvider } from '../../src/server/remote-device-session.js'
 import { createFrameBridge, type FrameBridgeContext } from '../../src/server/remote-frame-bridge.js'
 import {
+  type BridgeContext,
   createRemoteTunnel,
   type FrameBridge,
   type RemoteTunnel,
@@ -421,7 +422,7 @@ describe('remote tunnel — M6.1 daemon per-connection rekey (no (key,nonce) reu
 
 // Build the real frame bridge but inject the daemon-side onSeal observation hook into its context. The
 // real sealNext still runs — this only forwards (key, header) to the recorder (invariant: NOT a mock).
-function createBridgeWithRecorder(ctx: FrameBridgeContext, recorder: SealRecorder): FrameBridge {
+function createBridgeWithRecorder(ctx: BridgeContext, recorder: SealRecorder): FrameBridge {
   const fctx: FrameBridgeContext = {
     loopbackPort: ctx.loopbackPort,
     loopbackSecret: ctx.loopbackSecret,

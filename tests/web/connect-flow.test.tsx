@@ -159,7 +159,7 @@ describe('connect-flow login + machines', () => {
   })
 
   test('loadMachines returns the daemon list with online status and selfDeviceId', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       expect(url).toContain('/pair/machines')
       return json({
@@ -196,7 +196,7 @@ describe('connect-flow selectDaemon', () => {
   test('selecting a PAIRED daemon keeps the machine list visible while silent reconnect is pending', async () => {
     const phases: string[] = []
     const connectCalls: string[] = []
-    let resolveTransport: ((result: ConnectResult) => void) | null = null
+    const transportCompletion: { resolve?: (result: ConnectResult) => void } = {}
     const fakePairing = makeFakePairing({ ok: true, deviceId: 'device-for-daemon-a' })
     const flow = createConnectFlow({
       gatewayBaseUrl: GATEWAY,
@@ -213,7 +213,7 @@ describe('connect-flow selectDaemon', () => {
       connectTransport: async ({ daemonId }) => {
         connectCalls.push(daemonId)
         return new Promise((resolve) => {
-          resolveTransport = resolve
+          transportCompletion.resolve = resolve
         })
       },
       onPhase: (p) => phases.push(p),
@@ -230,7 +230,8 @@ describe('connect-flow selectDaemon', () => {
     expect(phases).not.toContain('selecting')
     expect(fakePairing.createdWith).toEqual([])
 
-    resolveTransport?.({ ok: true })
+    if (!transportCompletion.resolve) throw new Error('Expected pending transport')
+    transportCompletion.resolve({ ok: true })
     const result = await pending
 
     expect(result.ok).toBe(true)
@@ -456,7 +457,7 @@ describe('connect-flow selectDaemon', () => {
 
   test('phase transitions through selecting -> pairing during an unpaired select', async () => {
     const phases: string[] = []
-    let resolvePairing: ((r: PairingResult) => void) | null = null
+    const pairingCompletion: { resolve?: (result: PairingResult) => void } = {}
     const create = (_qr: string, events: PairingClientEvents): PairingClient => ({
       phase: 'idle',
       sas: null,
@@ -464,7 +465,7 @@ describe('connect-flow selectDaemon', () => {
       start: () =>
         new Promise<PairingResult>((res) => {
           events.onPhase('connecting')
-          resolvePairing = res
+          pairingCompletion.resolve = res
         }),
       cancel: () => {},
       dispose: () => {},
@@ -483,7 +484,8 @@ describe('connect-flow selectDaemon', () => {
     // by now the flow has entered the pairing phase and exposed the client
     expect(flow.phase).toBe('pairing')
     expect(flow.pairingClient).not.toBeNull()
-    resolvePairing?.({ ok: true, deviceId: 'device-for-daemon-b' })
+    if (!pairingCompletion.resolve) throw new Error('Expected pending pairing')
+    pairingCompletion.resolve({ ok: true, deviceId: 'device-for-daemon-b' })
     await pending
 
     expect(phases).toContain('selecting')

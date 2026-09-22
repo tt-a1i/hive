@@ -295,19 +295,35 @@ describe('team spawn / dismiss', () => {
       })
       expect(spawnResponse.status).toBe(201)
       const spawned = (await spawnResponse.json()) as { worker_id: string }
-
       const first = await ctx.hive.store.dispatchTaskByWorkerName(
         ctx.workspaceId,
         'stacked',
         'task one',
         { fromAgentId: ctx.orchestratorId, hivePort: '0' }
       )
+      const started = ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, spawned.worker_id)
+      expect(started).toBeDefined()
+      await started?.postStartInputReady
+      expect(started?.startupReadyAt).toEqual(expect.any(Number))
       const second = await ctx.hive.store.dispatchTaskByWorkerName(
         ctx.workspaceId,
         'stacked',
         'task two',
         { fromAgentId: ctx.orchestratorId, hivePort: '0' }
       )
+      await waitFor(() => {
+        const run = ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, spawned.worker_id)
+        for (const dispatch of [first, second]) {
+          expect(run?.output).toContain(`DISPATCH:${dispatch.id}`)
+          expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
+            expect.objectContaining({
+              id: dispatch.id,
+              status: 'submitted',
+              deliveredAt: expect.any(Number),
+            })
+          )
+        }
+      }, 8000)
 
       // Reporting the FIRST dispatch must NOT dismiss the worker — the second
       // dispatch is still open and would otherwise be deleted un-reported.
@@ -315,10 +331,17 @@ describe('team spawn / dismiss', () => {
         text: 'one done',
         dispatchId: first.id,
       })
-      await new Promise((r) => setTimeout(r, 50))
+      // Allow the report's queued auto-dismiss callback to run.
+      await new Promise<void>((resolve) => setImmediate(resolve))
       expect(
         ctx.hive.store.listWorkers(ctx.workspaceId).some((w) => w.id === spawned.worker_id)
       ).toBe(true)
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
+        expect.objectContaining({ id: first.id, status: 'reported' })
+      )
+      expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
+        expect.objectContaining({ id: second.id, status: 'submitted' })
+      )
 
       // Reporting the LAST open dispatch triggers the auto-dismiss.
       ctx.hive.store.reportTask(ctx.workspaceId, spawned.worker_id, {

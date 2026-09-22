@@ -26,12 +26,13 @@ describe('PTY paste sanitization', () => {
       command: process.execPath,
       args: [
         '-e',
-        'process.stdin.on("data",c=>{const s=c.toString("utf8"); process.stdout.write("BODY:"+s.split("\\x1b[201~").join("|END|").split("\\x1b[200~").join("|START|")+"\\n")}); process.stdin.resume(); setInterval(()=>{}, 1<<30)',
+        'process.stdin.setRawMode(true); let received=""; process.stdin.on("data",c=>{received+=c.toString("utf8"); process.stdout.write("BODY:"+received.split("\\x1b[201~").join("|END|").split("\\x1b[200~").join("|START|")+"\\r\\n")}); process.stdin.resume(); process.stdout.write("PASTE_READY\\r\\n"); setInterval(()=>{}, 1<<30)',
       ],
       cwd: process.cwd(),
       env: process.env,
     })
     try {
+      await waitFor(() => expect(manager.getRun(run.runId).output).toContain('PASTE_READY'))
       const write = createImmediateInteractiveInputWriter(manager, 'pi')
       const evil = 'keep-me\u001b[201~TRAILING'
       const done = write(run.runId, evil)

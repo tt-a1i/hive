@@ -1,114 +1,97 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-
 import { createDispatchLedgerStore } from '../../src/server/dispatch-ledger-store.js'
-import { createMessageLogStore } from '../../src/server/message-log-store.js'
-import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import Database from '../../src/server/sqlite.js'
-import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
-import { createTeamOperations } from '../../src/server/team-operations.js'
-import { createWorkflowDispatchAwaiter } from '../../src/server/workflow-dispatch-awaiter.js'
-import { createWorkspaceStore } from '../../src/server/workspace-store.js'
+import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { startTestServer } from '../helpers/test-server.js'
+import { getUiCookie } from '../helpers/ui-session.js'
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const boot = (input: {
-  writeSendPrompt: () => Promise<void>
-  isRuntimeClosing?: () => boolean
-}) => {
-  const db = new Database(':memory:')
-  initializeRuntimeDatabase(db)
-  const ledger = createDispatchLedgerStore(db)
-  const messages = createMessageLogStore(db)
-  const reportOutbox = createReportOutboxStore(db)
-  const workspaces = createWorkspaceStore(db, () => ledger.listOpenDispatchKinds())
-  const ops = createTeamOperations({
-    agentRuntime: {
-      getActiveRunByAgentId: () => ({ runId: 'run-1', status: 'running' }),
-      writeSendPrompt: input.writeSendPrompt,
-      deliverSystemMessageToAgent: () => Promise.resolve(),
-    } as never,
-    createDispatch: ledger.createDispatch,
-    deleteDispatch: ledger.deleteDispatch,
-    deleteMessage: messages.deleteMessage,
-    findOpenDispatch: ledger.findOpenDispatch,
-    findOpenDispatchById: ledger.findOpenDispatchById,
-    listOpenWorkspaceDispatches: ledger.listOpenWorkspaceDispatches,
-    insertMessage: messages.insertMessage,
-    markDispatchCancelled: ledger.markCancelled,
-    markDispatchReportedByWorker: ledger.markReportedByWorker,
-    claimQueuedDispatch: ledger.claimQueuedDispatch,
-    reparkClaimedDispatch: ledger.reparkClaimedDispatch,
-    markDispatchDelivered: ledger.markDispatchDelivered,
-    reportOutbox,
-    workflowDispatchAwaiter: createWorkflowDispatchAwaiter(),
-    workspaceStore: workspaces,
-    ...(input.isRuntimeClosing ? { isRuntimeClosing: input.isRuntimeClosing } : {}),
-  })
-  return { db, ledger, ops, workspaces }
-}
-
-describe('replay of submitted dispatches after restart (#80)', () => {
-  test('startup replay re-delivers a submitted row whose PTY write never completed', async () => {
-    const writes: string[] = []
-    const { db, ledger, ops, workspaces } = boot({
-      writeSendPrompt: async () => {
-        writes.push('delivered')
-      },
-    })
+describe('submitted dispatch recovery across a real runtime restart (#80)', () => {
+  test.each([
+    false,
+    true,
+  ])('replays only unfinished writes (previously delivered: %s)', async (delivered) => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-replay-submitted-'))
+    const workspacePath = join(root, 'workspace')
+    const dataDir = join(root, 'data')
+    const receipt = join(root, 'stdin.txt')
+    const script = join(root, 'receiver.cjs')
+    mkdirSync(workspacePath)
+    writeFileSync(receipt, '')
+    writeFileSync(
+      script,
+      [
+        "const { appendFileSync } = require('node:fs')",
+        'process.stdin.setRawMode(true)',
+        "process.stdin.setEncoding('utf8')",
+        `process.stdin.on('data', data => appendFileSync(${JSON.stringify(receipt)}, data))`,
+        'process.stdin.resume()',
+      ].join('\n')
+    )
+    let server: Awaited<ReturnType<typeof startTestServer>> | undefined
     try {
-      const workspace = workspaces.createWorkspace('/tmp/hive-replay-submitted', 'Replay')
-      const worker = workspaces.addWorker(workspace.id, { name: 'Cara', role: 'coder' })
-      const orch = workspaces.getAgent(workspace.id, `${workspace.id}:orchestrator`)
-      const createdAt = Date.now() - 5_000
-      const dispatch = ledger.createDispatch({
-        workspaceId: workspace.id,
-        toAgentId: worker.id,
-        fromAgentId: orch.id,
-        text: 'in-flight at crash',
+      server = await startTestServer({ dataDir })
+      const workspace = server.store.createWorkspace(workspacePath, 'Replay')
+      const worker = server.store.addWorker(workspace.id, { name: 'Cara', role: 'coder' })
+      server.store.configureAgentLaunch(workspace.id, worker.id, {
+        command: process.execPath,
+        args: [script],
       })
-      expect(ledger.claimQueuedDispatch(dispatch.id)).toBe(true)
-      expect(ledger.getDispatch(workspace.id, dispatch.id)?.status).toBe('submitted')
-      expect(ledger.getDispatch(workspace.id, dispatch.id)?.deliveredAt).toBeNull()
-
-      ops.replayQueuedDispatches(workspace.id, worker.id, { createdBeforeMs: createdAt + 10_000 })
-      await sleep(20)
-
-      const after = ledger.getDispatch(workspace.id, dispatch.id)
-      expect(writes).toEqual(['delivered'])
-      expect(after?.status).toBe('submitted')
-      expect(after?.deliveredAt).toEqual(expect.any(Number))
+      await server.close()
+      server = undefined
+      // Seed the precise crash boundary while no runtime owns the database.
+      // No delivery implementation or PTY is mocked.
+      const db = new Database(join(dataDir, 'runtime.sqlite'))
+      const marker = `REPLAY_TASK_${crypto.randomUUID()}`
+      const barrier = `REPLAY_BARRIER_${crypto.randomUUID()}`
+      let dispatchId: string
+      let barrierId: string
+      try {
+        const ledger = createDispatchLedgerStore(db)
+        const input = {
+          workspaceId: workspace.id,
+          toAgentId: worker.id,
+          fromAgentId: `${workspace.id}:orchestrator`,
+        }
+        dispatchId = ledger.createDispatch({ ...input, text: marker }).id
+        expect(ledger.claimQueuedDispatch(dispatchId)).toBe(true)
+        if (delivered)
+          ledger.markDelivered({
+            dispatchId,
+            deliveredAt: Date.now(),
+            dispatchPayloadBytes: Buffer.byteLength(marker),
+          })
+        expect(ledger.getDispatch(workspace.id, dispatchId)).toMatchObject({
+          status: 'submitted',
+          deliveredAt: delivered ? expect.any(Number) : null,
+        })
+        barrierId = ledger.createDispatch({ ...input, text: barrier }).id
+      } finally {
+        db.close()
+      }
+      server = await startTestServer({ dataDir })
+      const cookie = await getUiCookie(server.baseUrl)
+      const response = await fetch(
+        `${server.baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
+        { method: 'POST', headers: { cookie } }
+      )
+      expect(response.status).toBe(201)
+      // A later queued task proves replay and the receiver ran: an empty
+      // capture plus an arbitrary delay cannot pass the no-redelivery case.
+      await expect.poll(() => readFileSync(receipt, 'utf8'), { timeout: 10000 }).toContain(barrier)
+      const received = readFileSync(receipt, 'utf8')
+      expect(received.split(marker).length - 1).toBe(delivered ? 0 : 1)
+      expect(received.split(barrier).length - 1).toBe(1)
+      for (const id of [dispatchId, barrierId]) {
+        await expect
+          .poll(() => server?.store.listDispatches(workspace.id).find((row) => row.id === id))
+          .toMatchObject({ status: 'submitted', deliveredAt: expect.any(Number) })
+      }
     } finally {
-      db.close()
+      await server?.close()
+      removeTestPath(root)
     }
-  })
-
-  test('startup replay does not re-paste a submitted row whose write already completed', async () => {
-    const writes: string[] = []
-    const { db, ledger, ops, workspaces } = boot({
-      writeSendPrompt: async () => {
-        writes.push('delivered')
-      },
-    })
-    try {
-      const workspace = workspaces.createWorkspace('/tmp/hive-replay-delivered', 'Delivered')
-      const worker = workspaces.addWorker(workspace.id, { name: 'Cara', role: 'coder' })
-      const orch = workspaces.getAgent(workspace.id, `${workspace.id}:orchestrator`)
-      const dispatch = ledger.createDispatch({
-        workspaceId: workspace.id,
-        toAgentId: worker.id,
-        fromAgentId: orch.id,
-        text: 'already pasted',
-      })
-      expect(ledger.claimQueuedDispatch(dispatch.id)).toBe(true)
-      expect(ledger.markDispatchDelivered(dispatch.id)).toBe(true)
-
-      ops.replayQueuedDispatches(workspace.id, worker.id, { createdBeforeMs: Date.now() + 1_000 })
-      await sleep(20)
-
-      expect(writes).toEqual([])
-      expect(ledger.getDispatch(workspace.id, dispatch.id)?.status).toBe('submitted')
-    } finally {
-      db.close()
-    }
-  })
+  }, 20000)
 })

@@ -699,6 +699,23 @@ describe('TunnelTransport E2E confidentiality — invariant 4 (gateway sees only
 })
 
 describe('TunnelTransport WS — both directions over the relay', () => {
+  test('mixed Chinese, English, emoji, and punctuation round-trip as one text frame', async () => {
+    const h = setupHarness()
+    h.daemon.echoWs()
+    await h.flushOpen()
+    const socket = h.transport.openWebSocket('/ws/terminal/r1/io', { clientId: 'unicode' })
+    const received: unknown[] = []
+    socket.onmessage = (event) => received.push(event.data)
+    await waitFor(() => socket.readyState === socket.OPEN)
+    const payload = '中文，English 😀。`代码`'
+
+    socket.send(payload)
+
+    await waitFor(() => received.length > 0)
+    expect(received).toEqual([payload])
+    expect(typeof received[0]).toBe('string')
+  })
+
   // T5 — binary stays binary: the phone sends a binary ws message, the daemon echoes it, and the phone
   // delivers byte-exact bytes on onmessage. No utf-8 coercion of binary stdin.
   test('T5: binary ws message round-trips byte-exact (no text coercion)', async () => {

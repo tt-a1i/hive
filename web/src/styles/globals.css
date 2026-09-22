@@ -4404,15 +4404,22 @@ html, body {
 .settings-switch[data-checked] .settings-switch__thumb {
   transform: translateX(16px);
 }
-/* Bigger touch target on mobile */
-@media (pointer: coarse) {
+/* Compact iOS-proportioned visual track on phone layouts. The row below owns
+   the >=44px touch target, so the thumb can stay visually balanced. */
+@media (max-width: 767px) {
   .settings-switch {
-    width: 44px;
-    height: 24px;
+    width: 50px;
+    height: 30px;
+  }
+  /* SettingsMenu stays in the mobile topbar's DOM even though its sheet is
+     position:fixed. Override the topbar-wide 44px button minimum here; the
+     surrounding settings row remains the >=44px touch target. */
+  .mobile-shell .mobile-topbar .settings-switch {
+    min-height: 30px;
   }
   .settings-switch__thumb {
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
   }
   .settings-switch[data-checked] .settings-switch__thumb {
     transform: translateX(20px);
@@ -4493,6 +4500,7 @@ html, body {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  min-height: 44px;
   padding: 8px;
   border: none;
   background: none;

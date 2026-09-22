@@ -209,7 +209,7 @@ describe('runtime http app', () => {
     await expect(response.json()).resolves.toEqual({
       id: expect.any(String),
       name: 'Beta',
-      path: realpathSync(workspacePath),
+      path: realpathSync.native(workspacePath),
       orchestrator_start: { ok: false, error: null, run_id: null },
     })
   })
@@ -234,7 +234,7 @@ describe('runtime http app', () => {
     await expect(response.json()).resolves.toEqual({
       id: expect.any(String),
       name: 'Quoted',
-      path: realpathSync(workspacePath),
+      path: realpathSync.native(workspacePath),
       orchestrator_start: { ok: false, error: null, run_id: null },
     })
   })

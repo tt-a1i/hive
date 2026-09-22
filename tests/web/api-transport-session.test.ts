@@ -43,7 +43,7 @@ describe('api transport UI session bootstrap', () => {
   })
 
   test('tunnel transports do not refresh desktop UI session tokens on 403', async () => {
-    const fetch = vi.fn(
+    const fetch = vi.fn<ApiTransport['fetch']>(
       async () =>
         new Response(JSON.stringify({ error: 'UI endpoint requires valid UI token' }), {
           headers: { 'content-type': 'application/json' },

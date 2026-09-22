@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { AgentSummary } from '../shared/types.js'
 import { normalizeWorkerAvatar } from '../shared/worker-avatar.js'
-import { ConflictError } from './http-errors.js'
+import { ConflictError, HttpError } from './http-errors.js'
 import { sameFilesystemPath } from './path-canonicalization.js'
 import { getDefaultRoleDescription } from './role-templates.js'
 import type { Database } from './sqlite.js'
@@ -62,7 +62,7 @@ export const createWorkspaceStore = (
   const getWorkspace = (workspaceId: string) => {
     hydrateWorkspaceFromDb(db, workspaces, listOpenDispatchKinds(), workspaceId)
     const workspace = workspaces.get(workspaceId)
-    if (!workspace) throw new Error(`Workspace not found: ${workspaceId}`)
+    if (!workspace) throw new HttpError(404, `Workspace not found: ${workspaceId}`)
     syncPendingFromDispatchLedger(workspace)
     return workspace
   }

@@ -54,13 +54,14 @@ describe('team cli help', () => {
     expect(output).toContain('## Guide: dispatch')
     expect(output).toContain('team send "<member-name>" "<task>"')
     expect(output).toContain('existing members from `team list` by name')
-    expect(output).toContain('preserve their selected CLI, model, and role constraints')
+    expect(output).toContain('Preserve configured CLI, model, and role constraints')
   })
 
   test('team guide prefers the generated protocol slice when present', async () => {
-    process.env = {}
     const dir = mkdtempSync(join(tmpdir(), 'hive-team-guide-'))
     tempDirs.push(dir)
+    // Resolve the Windows temp directory before removing the CLI environment.
+    process.env = {}
     mkdirSync(join(dir, '.hive'), { recursive: true })
     writeFileSync(
       join(dir, '.hive', 'PROTOCOL.md'),

@@ -12,19 +12,23 @@ const event: WebhookEvent = {
 
 describe('webhook notifier', () => {
   test('POSTs the event JSON to the configured URL', () => {
-    const fetchImpl = vi.fn(() => Promise.resolve(new Response(null, { status: 200 })))
+    const fetchImpl = vi.fn<typeof fetch>(() =>
+      Promise.resolve(new Response(null, { status: 200 }))
+    )
     const { notify } = createWebhookNotifier({
       getUrl: () => 'https://hooks.example.com/hive',
-      fetchImpl: fetchImpl as never,
+      fetchImpl,
     })
 
     notify(event)
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit]
+    const request = fetchImpl.mock.calls[0]
+    if (!request?.[1]) throw new Error('Expected webhook request with options')
+    const [url, init] = request
     expect(url).toBe('https://hooks.example.com/hive')
-    expect(init.method).toBe('POST')
-    expect(JSON.parse(String(init.body))).toEqual(event)
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual(event)
   })
 
   test('does nothing when no URL is configured', () => {

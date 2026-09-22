@@ -1,4 +1,5 @@
 import type { AgentSummary, WorkerRole } from '../shared/types.js'
+import { HttpError } from './http-errors.js'
 import type { WorkspaceRecord } from './workspace-store-contract.js'
 import { getStatusFromPendingCount, isWorkerAgent } from './workspace-store-support.js'
 
@@ -6,7 +7,7 @@ type WorkspaceMap = Map<string, WorkspaceRecord>
 
 const getWorkspaceRecord = (workspaces: WorkspaceMap, workspaceId: string) => {
   const workspace = workspaces.get(workspaceId)
-  if (!workspace) throw new Error(`Workspace not found: ${workspaceId}`)
+  if (!workspace) throw new HttpError(404, `Workspace not found: ${workspaceId}`)
   return workspace
 }
 

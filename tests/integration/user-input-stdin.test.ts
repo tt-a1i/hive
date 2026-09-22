@@ -11,6 +11,7 @@ import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
 const stores: Array<ReturnType<typeof createRuntimeStore>> = []
+const originalDataDir = process.env.HIVE_DATA_DIR
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -33,12 +34,23 @@ const waitFor = async (
   throw lastError
 }
 
-afterEach(() => {
-  for (const store of stores.splice(0)) {
-    store.close()
-  }
-  for (const dir of tempDirs.splice(0)) {
-    removeTestPath(dir)
+afterEach(async () => {
+  const paths = tempDirs.splice(0)
+  try {
+    const results = await Promise.allSettled(stores.splice(0).map((store) => store.close()))
+    const failures = results.filter((result) => result.status === 'rejected')
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((result) => result.reason),
+        'Test store cleanup failed'
+      )
+    }
+    for (const dir of paths) {
+      removeTestPath(dir)
+    }
+  } finally {
+    if (originalDataDir === undefined) delete process.env.HIVE_DATA_DIR
+    else process.env.HIVE_DATA_DIR = originalDataDir
   }
 })
 

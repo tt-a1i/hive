@@ -33,11 +33,14 @@ const makeRoot = () => {
   mkdirSync(join(dir, 'src', 'server'), { recursive: true })
   mkdirSync(join(dir, 'src', 'shared'), { recursive: true })
   mkdirSync(join(dir, 'vendor', 'marketplace', 'en'), { recursive: true })
+  mkdirSync(join(dir, 'vendor', 'node-pty-windows', 'lib'), { recursive: true })
   writeFileSync(join(dir, 'bin', 'team'), '#!/usr/bin/env node\n')
   writeFileSync(join(dir, 'bin', 'team.cmd'), '@echo off\r\n')
   writeFileSync(join(dir, 'src', 'server', 'workflow-vm-worker.cjs'), 'worker\n')
   writeFileSync(join(dir, 'src', 'shared', 'agent-names.json'), AGENT_NAMES_FIXTURE)
   writeFileSync(join(dir, 'vendor', 'marketplace', 'en', 'agent.md'), '# Agent\n')
+  writeFileSync(join(dir, 'vendor', 'node-pty-windows', 'lib', 'index.js'), 'fixture PTY JS\n')
+  writeFileSync(join(dir, 'vendor', 'node-pty-windows', 'LICENSE'), 'fixture license\n')
   return dir
 }
 
@@ -58,6 +61,12 @@ describe('prepare-build-artifacts', () => {
     expect(
       readFileSync(join(root, 'dist', 'vendor', 'marketplace', 'en', 'agent.md'), 'utf8')
     ).toBe('# Agent\n')
+    expect(
+      readFileSync(join(root, 'dist', 'vendor', 'node-pty-windows', 'lib', 'index.js'), 'utf8')
+    ).toBe('fixture PTY JS\n')
+    expect(readFileSync(join(root, 'dist', 'vendor', 'node-pty-windows', 'LICENSE'), 'utf8')).toBe(
+      'fixture license\n'
+    )
   })
 
   test('replaces a stale marketplace dist directory before copying', () => {

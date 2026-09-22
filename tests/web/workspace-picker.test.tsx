@@ -137,7 +137,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       throw new Error(`Unexpected fetch: ${url}`)
     })
 
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     const picking = await screen.findByTestId('add-workspace-picking')
     expect(picking).toHaveClass('fixed', 'inset-0', 'items-center', 'justify-center')
@@ -181,7 +181,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       supported: true,
     }))
     const onClose = vi.fn()
-    render(<AddWorkspaceDialog trigger={1} onClose={onClose} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={onClose} onCreate={() => undefined} />)
 
     await waitFor(() => {
       expect(screen.queryByTestId('confirm-workspace-dialog')).toBeNull()
@@ -200,7 +200,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       supported: true,
     }))
     const onClose = vi.fn()
-    render(<AddWorkspaceDialog trigger={1} onClose={onClose} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={onClose} onCreate={() => undefined} />)
 
     const err = await screen.findByTestId('add-workspace-error')
     expect(within(err).getByText(/timed out/)).toBeInTheDocument()
@@ -215,7 +215,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       probe: null,
       supported: false,
     }))
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     // Paste-path input is visible without having to toggle — this is the fallback.
@@ -230,7 +230,7 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
       probe: { ...sandboxProbe, ok: false, is_dir: false, path: '/outside' },
       supported: true,
     }))
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     const err = await screen.findByTestId('add-workspace-error')
     expect(within(err).getByText(/not a directory/)).toBeInTheDocument()
@@ -556,7 +556,7 @@ describe('AddWorkspaceDialog — server-browse Advanced mode', () => {
       throw new Error('Windows default should not call /api/fs/pick-folder')
     }, windowsDrivesBrowse)
 
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     await screen.findByTestId('add-workspace-dialog')
     expect(screen.queryByTestId('add-workspace-picking')).toBeNull()
@@ -573,7 +573,7 @@ describe('AddWorkspaceDialog — server-browse Advanced mode', () => {
       throw new Error('Windows default should not call /api/fs/pick-folder')
     }, windowsDrivesBrowse)
 
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     await screen.findByTestId('add-workspace-dialog')
     expect(screen.queryByTestId('add-workspace-picking')).toBeNull()
@@ -589,7 +589,7 @@ describe('AddWorkspaceDialog — server-browse Advanced mode', () => {
       probe: sandboxProbe,
       supported: true,
     }))
-    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => {}} />)
+    render(<AddWorkspaceDialog trigger={1} onClose={() => {}} onCreate={() => undefined} />)
 
     await screen.findByTestId('confirm-workspace-dialog')
     fireEvent.click(screen.getByTestId('confirm-workspace-browse-toggle'))

@@ -29,7 +29,7 @@ const sha384 = (s: string) =>
 // a source map) that ship to R2 but are NOT SRI-pinned.
 function writeFixture(dist: string) {
   mkdirSync(join(dist, 'assets'), { recursive: true })
-  const files: Record<string, string> = {
+  const files = {
     'assets/index-DfDCUk9m.js': 'export const app = true; import("./xterm-B-qIQCd3.js")\n',
     'assets/index-CfiKBH8o.css': 'body{margin:0}\n',
     'assets/xterm-B-qIQCd3.js': 'export const term = 1\n',

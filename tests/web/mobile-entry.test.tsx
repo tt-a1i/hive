@@ -266,7 +266,7 @@ describe('MobileEntry', () => {
   })
 
   test('canceling a pending pairing ignores its stale failure result', async () => {
-    let resolvePairing: ((result: ConnectResult) => void) | null = null
+    const pairingCompletion: { resolve?: (result: ConnectResult) => void } = {}
     const pendingFlow = (deps: ConnectFlowDeps): ConnectFlow => {
       let phase: ConnectFlow['phase'] = 'login'
       return {
@@ -293,7 +293,7 @@ describe('MobileEntry', () => {
           deps.onPhase?.('pairing')
           deps.onPairingPhase?.('connecting')
           return new Promise<ConnectResult>((resolve) => {
-            resolvePairing = resolve
+            pairingCompletion.resolve = resolve
           })
         },
       }
@@ -320,7 +320,8 @@ describe('MobileEntry', () => {
     fireEvent.click(screen.getByTestId('connect-pairing-cancel'))
     expect(await screen.findByTestId('connect-pair-guide')).toBeTruthy()
 
-    resolvePairing?.({
+    if (!pairingCompletion.resolve) throw new Error('Expected pending pairing')
+    pairingCompletion.resolve({
       ok: false,
       failure: { code: 'select_failed', message: 'late tunnel failure' },
     })

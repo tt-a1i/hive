@@ -64,7 +64,7 @@ const createContext = (overrides: {
       getLastSessionId:
         overrides.getLastSessionId ??
         vi.fn(() => overrides.startConfig?.resumedSessionId ?? undefined),
-      saveLastSessionId: vi.fn(),
+      setLastSessionId: vi.fn(),
     },
     ...(overrides.sessionCaptureDiscriminator
       ? { sessionCaptureDiscriminator: overrides.sessionCaptureDiscriminator }

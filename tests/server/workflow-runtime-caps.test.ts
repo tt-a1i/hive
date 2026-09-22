@@ -29,31 +29,24 @@ const replyToWorkflowDispatches = (
   text: string
 ) => {
   let stopped = false
-  void (async () => {
+  const finished = (async () => {
     while (!stopped) {
       await new Promise((r) => setTimeout(r, 20))
       if (stopped) return
-      try {
-        const submitted = store
-          .listDispatches(workspaceId, { status: 'submitted' })
-          .filter((d) => d.workflowRunId !== null)
-        for (const d of submitted) {
-          try {
-            store.reportTask(workspaceId, d.toAgentId, { text, dispatchId: d.id })
-          } catch {
-            /* worker may have already vanished */
-          }
-        }
-      } catch {
-        /* the store may have closed between the !stopped check and the
-           DB call (race on the test's afterEach); swallow and let the
-           next loop tick observe stopped=true */
-        return
+      const submitted = store
+        .listDispatches(workspaceId, { status: 'submitted' })
+        .filter((d) => d.workflowRunId !== null)
+      for (const d of submitted) {
+        store.reportTask(workspaceId, d.toAgentId, { text, dispatchId: d.id })
       }
     }
   })()
-  return () => {
-    stopped = true
+  return {
+    finished,
+    async stop() {
+      stopped = true
+      await finished
+    },
   }
 }
 
@@ -80,21 +73,20 @@ describe('workflow runtime caps (TIER 2 #2 + #11)', () => {
       ].join('\n')
     )
     const store = createRuntimeStore({ dataDir, agentManager: createAgentManager() })
-    const stopReply = replyToWorkflowDispatches(store, '<placeholder>', 'ok')
     try {
       const ws = store.createWorkspace(workspacePath, 'WS')
-      stopReply()
-      const stopReply2 = replyToWorkflowDispatches(store, ws.id, 'ok')
+      const replies = replyToWorkflowDispatches(store, ws.id, 'ok')
       try {
-        const run = await store.runWorkflow({
-          workspaceId: ws.id,
-          scriptPath,
-          hivePort: '0',
-        })
+        const run = await Promise.race([
+          store.runWorkflow({ workspaceId: ws.id, scriptPath, hivePort: '0' }),
+          replies.finished.then(() => {
+            throw new Error('Report loop ended before workflow completion')
+          }),
+        ])
         expect(run.status).toBe('failed')
         expect(run.error).toMatch(/Workflow agent cap exceeded: 3/)
       } finally {
-        stopReply2()
+        await replies.stop()
       }
     } finally {
       await store.close()

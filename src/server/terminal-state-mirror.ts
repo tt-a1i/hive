@@ -1,7 +1,9 @@
 import serializeAddonModule from '@xterm/addon-serialize'
+import unicode11AddonModule from '@xterm/addon-unicode11'
 import headlessTerminalModule from '@xterm/headless'
 
 const { SerializeAddon } = serializeAddonModule as typeof import('@xterm/addon-serialize')
+const { Unicode11Addon } = unicode11AddonModule as typeof import('@xterm/addon-unicode11')
 const { Terminal } = headlessTerminalModule as typeof import('@xterm/headless')
 
 export const TERMINAL_SCROLLBACK = 10_000
@@ -47,6 +49,8 @@ export class TerminalStateMirror {
       rows: normalized.rows,
       scrollback: TERMINAL_SCROLLBACK,
     })
+    this.terminal.loadAddon(new Unicode11Addon())
+    this.terminal.unicode.activeVersion = '11'
     this.terminal.loadAddon(this.serializeAddon)
     this.registerMouseEncodingObservers()
   }

@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@xterm/xterm@6.0.0':
+    hash: 84fb45aff7010312457198fc195bfb87ca5c547c199eea47016a589020741a21
+    path: patches/@xterm__xterm@6.0.0.patch
+
 importers:
 
   .:
@@ -55,7 +60,7 @@ importers:
         version: 6.0.0
       '@xterm/xterm':
         specifier: ^6.0.0
-        version: 6.0.0
+        version: 6.0.0(patch_hash=84fb45aff7010312457198fc195bfb87ca5c547c199eea47016a589020741a21)
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0
@@ -3202,7 +3207,7 @@ snapshots:
 
   '@xterm/headless@6.0.0': {}
 
-  '@xterm/xterm@6.0.0': {}
+  '@xterm/xterm@6.0.0(patch_hash=84fb45aff7010312457198fc195bfb87ca5c547c199eea47016a589020741a21)': {}
 
   agent-base@7.1.4: {}
 

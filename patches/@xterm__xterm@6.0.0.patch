@@ -1,0 +1,143 @@
+diff --git a/src/browser/services/Services.ts b/src/browser/services/Services.ts
+index 19a8fcb..6073935 100644
+--- a/src/browser/services/Services.ts
++++ b/src/browser/services/Services.ts
+@@ -59,6 +59,7 @@ export interface IMouseService {
+ 
+ export const IRenderService = createDecorator<IRenderService>('RenderService');
+ export interface IRenderService extends IDisposable {
++  readonly renderedCursor: { x: number; y: number; width: number; cellWidth: number; cellHeight: number; isInViewport: boolean } | undefined;
+   serviceBrand: undefined;
+ 
+   onDimensionsChange: Event<IRenderDimensions>;
+diff --git a/src/browser/services/RenderService.ts b/src/browser/services/RenderService.ts
+index e9acbeb..7445e0c 100644
+--- a/src/browser/services/RenderService.ts
++++ b/src/browser/services/RenderService.ts
+@@ -23,6 +23,8 @@ const enum Constants {
+ }
+ 
+ export class RenderService extends Disposable implements IRenderService {
++  public renderedCursor: { x: number; y: number; width: number; cellWidth: number; cellHeight: number; isInViewport: boolean } | undefined;
++  private readonly _bufferService: IBufferService;
+   public serviceBrand: undefined;
+ 
+   private _renderer: MutableDisposable<IRenderer> = this._register(new MutableDisposable());
+@@ -66,6 +68,7 @@ export class RenderService extends Disposable implements IRenderService {
+     @IThemeService themeService: IThemeService
+   ) {
+     super();
++    this._bufferService = bufferService;
+ 
+     this._renderDebouncer = new RenderDebouncer((start, end) => this._renderRows(start, end), this._coreBrowserService);
+     this._register(this._renderDebouncer);
+@@ -188,6 +191,16 @@ export class RenderService extends Disposable implements IRenderService {
+ 
+     // Render
+     this._renderer.value.renderRows(start, end);
++    const buffer = this._bufferService.buffer;
++    const x = Math.min(buffer.x, this._bufferService.cols - 1);
++    this.renderedCursor = {
++      x,
++      y: buffer.ybase + buffer.y - buffer.ydisp,
++      width: buffer.lines.get(buffer.ybase + buffer.y)?.getWidth(x) ?? 1,
++      cellWidth: this.dimensions.css.cell.width,
++      cellHeight: this.dimensions.css.cell.height,
++      isInViewport: buffer.isCursorInViewport
++    };
+ 
+     // Update selection if needed
+     if (this._needsSelectionRefresh) {
+diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
+index 38ad467..c3eec46 100644
+--- a/src/browser/CoreBrowserTerminal.ts
++++ b/src/browser/CoreBrowserTerminal.ts
+@@ -299,20 +299,19 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+   }
+ 
+   private _syncTextArea(): void {
+-    if (!this.textarea || !this.buffer.isCursorInViewport || this._compositionHelper!.isComposing || !this._renderService) {
++    if (!this.textarea || this._compositionHelper!.isComposing || !this._renderService) {
+       return;
+     }
+-    const cursorY = this.buffer.ybase + this.buffer.y;
+-    const bufferLine = this.buffer.lines.get(cursorY);
+-    if (!bufferLine) {
++    const cursor = this._renderService.renderedCursor;
++    if (!cursor?.isInViewport) {
+       return;
+     }
+-    const cursorX = Math.min(this.buffer.x, this.cols - 1);
+-    const cellHeight = this._renderService.dimensions.css.cell.height;
+-    const width = bufferLine.getWidth(cursorX);
+-    const cellWidth = this._renderService.dimensions.css.cell.width * width;
+-    const cursorTop = this.buffer.y * this._renderService.dimensions.css.cell.height;
+-    const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
++    const cursorX = cursor.x;
++    const cellHeight = cursor.cellHeight;
++    const width = cursor.width;
++    const cellWidth = cursor.cellWidth * width;
++    const cursorTop = cursor.y * cursor.cellHeight;
++    const cursorLeft = cursorX * cursor.cellWidth;
+ 
+     // Sync the textarea to the exact position of the composition view so the IME knows where the
+     // text is.
+@@ -382,7 +381,6 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+     this._register(addDisposableListener(this.textarea!, 'compositionupdate', (e: CompositionEvent) => this._compositionHelper!.compositionupdate(e)));
+     this._register(addDisposableListener(this.textarea!, 'compositionend', () => this._compositionHelper!.compositionend()));
+     this._register(addDisposableListener(this.textarea!, 'input', (ev: InputEvent) => this._inputEvent(ev), true));
+-    this._register(this.onRender(() => this._compositionHelper!.updateCompositionElements()));
+   }
+ 
+   /**
+@@ -478,6 +476,10 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+     this._renderService = this._register(this._instantiationService.createInstance(RenderService, this.rows, this.screenElement));
+     this._instantiationService.setService(IRenderService, this._renderService);
+     this._register(this._renderService.onRenderedViewportChange(e => this._onRender.fire(e)));
++    this._register(this._renderService.onRender(() => {
++      this._compositionHelper!.updateCompositionElements();
++      this._syncTextArea();
++    }));
+     this.onResize(e => this._renderService!.resize(e.cols, e.rows));
+ 
+     this._compositionView = this._document.createElement('div');
+diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
+index b87ebbe..230fbfe 100644
+--- a/src/browser/input/CompositionHelper.ts
++++ b/src/browser/input/CompositionHelper.ts
+@@ -4,7 +4,7 @@
+  */
+ 
+ import { IRenderService } from 'browser/services/Services';
+-import { IBufferService, ICoreService, IOptionsService } from 'common/services/Services';
++import { ICoreService, IOptionsService } from 'common/services/Services';
+ import { C0 } from 'common/data/EscapeSequences';
+ 
+ interface IPosition {
+@@ -44,7 +44,6 @@ export class CompositionHelper {
+   constructor(
+     private readonly _textarea: HTMLTextAreaElement,
+     private readonly _compositionView: HTMLElement,
+-    @IBufferService private readonly _bufferService: IBufferService,
+     @IOptionsService private readonly _optionsService: IOptionsService,
+     @ICoreService private readonly _coreService: ICoreService,
+     @IRenderService private readonly _renderService: IRenderService
+@@ -217,12 +216,13 @@ export class CompositionHelper {
+       return;
+     }
+ 
+-    if (this._bufferService.buffer.isCursorInViewport) {
+-      const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
++    const cursor = this._renderService.renderedCursor;
++    if (cursor?.isInViewport) {
++      const cursorX = cursor.x;
+ 
+-      const cellHeight = this._renderService.dimensions.css.cell.height;
+-      const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
+-      const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
++      const cellHeight = cursor.cellHeight;
++      const cursorTop = cursor.y * cursor.cellHeight;
++      const cursorLeft = cursorX * cursor.cellWidth;
+ 
+       this._compositionView.style.left = cursorLeft + 'px';
+       this._compositionView.style.top = cursorTop + 'px';

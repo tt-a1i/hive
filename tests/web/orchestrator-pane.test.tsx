@@ -23,7 +23,7 @@ const runningState = (
   ...overrides,
 })
 
-const renderPane = (state: OrchestratorPaneState, renderUi = render) => {
+const renderPane = (state: OrchestratorPaneState, renderUi: typeof renderMobile = render) => {
   const onStart = vi.fn()
   const onRestart = vi.fn()
   const onRemoveWorkspace = vi.fn()

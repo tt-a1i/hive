@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -19,6 +19,13 @@ const tempDirs: string[] = []
 let fetchCalls: Array<{ method: string; pathname: string }> = []
 
 beforeEach(async () => {
+  // Native-picker scenarios require an explicit client platform, independent
+  // of the host OS running jsdom. Windows has a separate server-browser route.
+  vi.stubGlobal('navigator', {
+    language: 'en-US',
+    platform: 'MacIntel',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  })
   window.localStorage.removeItem?.('hive.workspace-sidebar.width')
   window.localStorage.setItem('hive.first-run-seen', '1')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-app-shell-fs-'))
@@ -53,11 +60,30 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
+  vi.unstubAllGlobals()
   delete process.env.HIVE_FS_BROWSE_ROOT
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
 })
 
 describe('app shell with real server', () => {
+  test('Windows welcome CTA browses real server directories without a native picker', async () => {
+    vi.stubGlobal('navigator', {
+      language: 'en-US',
+      platform: 'Win32',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    })
+    render(<App />)
+    await screen.findByTestId('welcome-pane')
+    fireEvent.click(screen.getByRole('button', { name: /add your first workspace/i }))
+    const dialog = await screen.findByTestId('add-workspace-dialog')
+    expect(await within(dialog).findByTestId('fs-entry-placeholder')).toBeInTheDocument()
+    expect(within(dialog).getByTestId('fs-root-path')).toHaveTextContent(
+      realpathSync.native(sandboxRoot)
+    )
+    expect(screen.queryByTestId('confirm-workspace-dialog')).toBeNull()
+    expect(fetchCalls).not.toContainEqual({ method: 'POST', pathname: '/api/fs/pick-folder' })
+  })
+
   test('renders Linear dark shell without auto-opening the folder picker on empty state', async () => {
     render(<App />)
 

@@ -67,7 +67,7 @@ describe('team protocol end to end', () => {
     )
 
     process.env.HIVE_DATA_DIR = dataDir
-    const hive = await runHiveCommand(['--port', '0'])
+    const hive = await runHiveCommand(['--port', '0', '--no-open'])
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
@@ -79,7 +79,11 @@ describe('team protocol end to end', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'Alpha',
+          path: workspacePath,
+        }),
       })
       expect(workspaceResponse.status).toBe(201)
       const workspace = (await workspaceResponse.json()) as { id: string }

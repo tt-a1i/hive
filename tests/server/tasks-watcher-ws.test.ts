@@ -275,10 +275,11 @@ describe('tasks watcher websocket', () => {
       const messages: string[] = []
       socket.on('message', (chunk) => messages.push(chunk.toString()))
 
+      const content = '# 任务 🚀\n\n- [x] 中文，English `code` [链接](https://example.com/路径)\n'
       const updateResponse = await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/tasks`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', cookie },
-        body: JSON.stringify({ content: '- [x] saved through Hive\n' }),
+        body: JSON.stringify({ content }),
       })
       expect(updateResponse.status).toBe(200)
 
@@ -289,7 +290,7 @@ describe('tasks watcher websocket', () => {
           )
           expect(payload).toContainEqual({
             type: 'tasks-updated',
-            content: '- [x] saved through Hive\n',
+            content,
           })
         })
       } finally {

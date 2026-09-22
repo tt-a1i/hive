@@ -1,8 +1,24 @@
 import { describe, expect, test } from 'vitest'
 
-import { parseTerminalControlMessage } from '../../src/server/terminal-protocol.js'
+import {
+  parseTerminalControlMessage,
+  parseTerminalRenderInput,
+} from '../../src/server/terminal-protocol.js'
 
 describe('terminal control protocol', () => {
+  test.each([
+    [32768, 1],
+    [1, 32768],
+    [1001, 1000],
+    [2147483647, 2147483647],
+  ])('rejects oversized grid %i by %i on control and input paths', (cols, rows) => {
+    expect(() =>
+      parseTerminalControlMessage(JSON.stringify({ type: 'resize', cols, rows }))
+    ).toThrow(RangeError)
+    expect(() =>
+      parseTerminalRenderInput(JSON.stringify({ type: 'input', data: 'a', cols, rows }))
+    ).toThrow(RangeError)
+  })
   test('accepts positive resize dimensions', () => {
     expect(
       parseTerminalControlMessage(JSON.stringify({ type: 'resize', cols: 120, rows: 40 }))

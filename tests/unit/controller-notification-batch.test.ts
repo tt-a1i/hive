@@ -74,7 +74,8 @@ test.skipIf(process.platform === 'win32')(
           .trim()
           .split('\n')
           .map((line) => JSON.parse(line) as string[])
-      const notifiedIds = (args: string[]) => {
+      const notifiedIds = (args: string[] | undefined) => {
+        if (!args) throw new Error('Expected captured notification arguments')
         expect(args.slice(0, 4)).toEqual(['queue', '--thread', threadId, '--message'])
         const match = args[4]?.match(/report_ids=(\[[\d,]+\])/)
         expect(match).not.toBeNull()

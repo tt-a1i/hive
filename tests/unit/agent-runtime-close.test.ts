@@ -15,6 +15,7 @@ describe('closeAgentRuntime', () => {
       agentId: 'agent-1',
       exitCode: null,
       output: '',
+      pid: 4242,
       runId: 'run-1',
       startedAt: 1,
       status: 'running',
@@ -50,7 +51,7 @@ describe('closeAgentRuntime', () => {
         removeRun: (runId: string) => {
           managerRemoved.push(runId)
         },
-        stopRun: (runId) => {
+        stopRun: (runId: string) => {
           stopped.push(runId)
         },
         // biome-ignore lint/suspicious/noExplicitAny: closeAgentRuntime only uses stop/remove here.

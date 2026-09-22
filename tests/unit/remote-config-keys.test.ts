@@ -131,10 +131,6 @@ describe('createRemoteConfigSource', () => {
         async exchangeToken() {
           return { daemonId: 'daemon-x', daemonToken: 'hd_live' }
         },
-        async listDevices() {
-          return []
-        },
-        async revokeDevice() {},
       },
       log: () => {},
       error: () => {},

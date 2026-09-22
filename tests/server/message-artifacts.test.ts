@@ -1,19 +1,17 @@
 import { describe, expect, test } from 'vitest'
 
-import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { startReportWorker } from '../helpers/report-worker.js'
 
 describe('message artifacts', () => {
-  test('report messages persist artifacts for recovery/debugging', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+  test('report messages persist artifacts for recovery/debugging', async () => {
+    const { store, workspace, send, report } = await startReportWorker()
 
-    store.dispatchTask(workspace.id, worker.id, 'Implement login')
-    store.reportTask(workspace.id, worker.id, {
-      status: 'success',
-      text: '已完成登录接口',
-      artifacts: ['src/auth.ts'],
-    })
+    const dispatch = await send('Implement login')
+    const response = await report(dispatch.id, '已完成登录接口', ['src/auth.ts'])
+    expect(response.status).toBe(202)
+    expect(store.listDispatches(workspace.id)).toContainEqual(
+      expect.objectContaining({ id: dispatch.id, status: 'reported' })
+    )
 
     const messages = store.listMessagesForRecovery(workspace.id, 0)
     expect(messages).toContainEqual(

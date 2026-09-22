@@ -1,6 +1,11 @@
 import { describe, expect, test, vi } from 'vitest'
 
-import { createWorkflowAgentCallExecutor } from '../../src/server/workflow-agent-call-executor.js'
+import {
+  closeWorkflowAgentBudget,
+  createWorkflowAgentBudget,
+  createWorkflowAgentCallExecutor,
+  type WorkflowAgentBudget,
+} from '../../src/server/workflow-agent-call-executor.js'
 import { DEFAULT_WORKFLOW_CLI_POLICY } from '../../src/server/workflow-cli-policy.js'
 import {
   createWorkflowDispatchAwaiter,
@@ -24,6 +29,7 @@ const createExecutor = (
     awaiter?: WorkflowDispatchAwaiter
     cancelOpenDispatch?: ReturnType<typeof vi.fn>
     maxConcurrentAgents?: number
+    budget?: WorkflowAgentBudget
   } = {}
 ) => {
   const addWorkerWithLaunch = vi.fn(() => ({ id: 'worker-1', name: 'worker-1' }))
@@ -52,6 +58,7 @@ const createExecutor = (
     getCurrentPhaseTitle: () => null,
     hivePort: '0',
     isRunStopped: () => false,
+    ...(overrides.budget ? { budget: overrides.budget } : {}),
     ...(overrides.maxConcurrentAgents !== undefined
       ? { maxConcurrentAgents: overrides.maxConcurrentAgents }
       : {}),
@@ -83,6 +90,43 @@ const createExecutor = (
 }
 
 describe('createWorkflowAgentCallExecutor', () => {
+  test.each([
+    'own',
+    'parent',
+  ] as const)('closing the %s budget settles a call still waiting for startup readiness', async (scope) => {
+    const parent = createWorkflowAgentBudget({})
+    const budget = createWorkflowAgentBudget({}, parent)
+    const started = createGate()
+    const startup = createGate()
+    const { executor } = createExecutor({
+      budget,
+      startAgent: vi.fn(async () => ({
+        get postStartInputReady() {
+          started.release()
+          return startup.promise
+        },
+      })),
+    })
+    const outcome = executor.agent('cancel before ready').then(
+      (value) => ({ status: 'resolved', value }),
+      (error: unknown) => ({ status: 'rejected', error })
+    )
+    try {
+      await started.promise
+      closeWorkflowAgentBudget(scope === 'own' ? budget : parent, 'Stopped by user')
+      await expect(executor.waitForActiveCalls(100)).resolves.toEqual({
+        settled: true,
+        activeCount: 0,
+      })
+      expect(await outcome).toEqual({ status: 'rejected', error: expect.any(Error) })
+      expect(budget.inFlight).toBe(0)
+      expect(parent.inFlight).toBe(0)
+    } finally {
+      startup.release()
+      await outcome
+    }
+  })
+
   test('does not create a late dispatch after the run stops during worker startup', async () => {
     const startupGate = createGate()
     let active = true

@@ -133,7 +133,8 @@ describe('remote-device-store', () => {
     expect(fromList).toBeDefined()
     expect(fromGet).toBeDefined()
 
-    for (const rec of [fromList, fromGet] as Array<Record<string, unknown>>) {
+    for (const rec of [fromList, fromGet]) {
+      if (!rec) throw new Error('Expected stored device metadata')
       expect(Object.keys(rec).sort()).toEqual([
         'createdAt',
         'id',

@@ -61,6 +61,27 @@ const startServer = async () => {
 }
 
 describe('tasks api', () => {
+  test('preserves mixed Unicode and Markdown through PUT, disk, and GET', async () => {
+    const { baseUrl, workspace } = await startServer()
+    const cookie = await getUiCookie(baseUrl)
+    const content = '# 任务 🚀\n\n- [ ] 中文，English `code` [链接](https://example.com/路径)\n'
+
+    const updateResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ content }),
+    })
+    expect(updateResponse.status).toBe(200)
+    await expect(updateResponse.json()).resolves.toEqual({ content })
+    expect(readFileSync(join(workspace.path, '.hive', 'tasks.md'), 'utf8')).toBe(content)
+
+    const readResponse = await fetch(`${baseUrl}/api/workspaces/${workspace.id}/tasks`, {
+      headers: { cookie },
+    })
+    expect(readResponse.status).toBe(200)
+    await expect(readResponse.json()).resolves.toEqual({ content })
+  })
+
   test('GET returns current .hive/tasks.md content and PUT persists updates there', async () => {
     const { baseUrl, workspace } = await startServer()
     const cookie = await getUiCookie(baseUrl)

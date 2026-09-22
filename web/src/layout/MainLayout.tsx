@@ -51,11 +51,11 @@ export const MainLayout = ({
         actions={topbarActions}
         hideActions={hideTopbarActions}
         memoryOpen={memoryOpen}
-        onToggleMemory={onToggleMemory}
-        onToggleTaskGraph={onToggleTaskGraph}
+        {...(onToggleMemory ? { onToggleMemory } : {})}
+        {...(onToggleTaskGraph ? { onToggleTaskGraph } : {})}
         openTaskCount={openTaskCount}
         taskGraphOpen={taskGraphOpen}
-        onToggleWorkflows={onToggleWorkflows}
+        {...(onToggleWorkflows ? { onToggleWorkflows } : {})}
         versionInfo={versionInfo}
         workflowsOpen={workflowsOpen}
       />

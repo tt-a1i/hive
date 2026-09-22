@@ -189,7 +189,7 @@ export function createConnectFlow(deps: ConnectFlowDeps): ConnectFlow {
 
   // The pairing payload carries daemonId + gateway URL + the pairing secret. New mobile UI derives
   // that payload from a human pairing code; old deeplink/raw-payload inputs still feed this path.
-  const runPairing = (qrPayload: string): Promise<ConnectResult> => {
+  const runPairing = (qrPayload: string): ReturnType<PairingClient['start']> => {
     setPhase('pairing')
     const events: PairingClientEvents = {
       onPhase: (p) => deps.onPairingPhase?.(p),

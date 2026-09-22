@@ -85,7 +85,9 @@ describe('team memory store', () => {
     })
 
     expect(ids).toHaveLength(1)
-    const row = db.prepare('SELECT * FROM memory_injections WHERE id = ?').get(ids[0]) as
+    const injectionId = ids[0]
+    if (!injectionId) throw new Error('Expected a recorded memory injection')
+    const row = db.prepare('SELECT * FROM memory_injections WHERE id = ?').get(injectionId) as
       | {
           context_type: string
           memory_id: string

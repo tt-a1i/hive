@@ -13,7 +13,7 @@ const createScenarioStore = () => {
       startResolvers.push(resolve)
     }).then((run) => ({ ...run, agentId }))
   )
-  const deliverUserInput = vi.fn(async () => {})
+  const deliverUserInput = vi.fn<RuntimeStore['deliverUserInput']>(async () => {})
 
   const store = {
     settings: {

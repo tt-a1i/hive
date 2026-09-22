@@ -81,6 +81,13 @@ export const parseTaskMetadata = (text: string): { title: string; meta: TaskMeta
   if (!match) return { title: text, meta: [] }
   const [, titleRaw = '', body = ''] = match
   if (!body.trim()) return { title: text, meta: [] }
+  // A task ending in Markdown link syntax also matches META_TAIL_RE. Treat a
+  // URL following a closing `]` as part of the title, not as `(key: value)`
+  // metadata; otherwise `https:` is stripped into a chip and the DOM visibly
+  // corrupts the link even though the file bytes are intact.
+  if (/\[[^\]]+\]\s*$/.test(titleRaw) && /^(?:https?:\/\/|mailto:)/i.test(body.trim())) {
+    return { title: text, meta: [] }
+  }
 
   const parts = body.split(SEPARATOR_RE).filter(Boolean)
   const meta: TaskMetaItem[] = []

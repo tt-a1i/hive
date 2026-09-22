@@ -111,11 +111,31 @@ describe('team workflow show (TIER 1 #6)', () => {
       expect(runResp.status).toBe(202)
       const runBody = (await runResp.json()) as { run_id: string }
 
+      // Starting a real CLI and delivering its startup prompt precede dispatch creation.
+      const workerRun = await waitFor(() => {
+        const worker = ctx.hive.store.listWorkers(ctx.workspaceId)[0]
+        return worker ? ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, worker.id) : undefined
+      })
+      await workerRun.postStartInputReady
+      expect(workerRun.startupReadyAt).toEqual(expect.any(Number))
+
       const dispatch = await waitFor(() =>
         ctx.hive.store
           .listDispatches(ctx.workspaceId, { status: 'submitted' })
           .find((item) => item.workflowRunId === runBody.run_id)
       )
+      await waitFor(() => {
+        const delivered = ctx.hive.store
+          .listDispatches(ctx.workspaceId)
+          .find((item) => item.id === dispatch.id)
+        const output = ctx.hive.store.getActiveRunByAgentId(
+          ctx.workspaceId,
+          dispatch.toAgentId
+        )?.output
+        return delivered?.deliveredAt && output?.includes(`DISPATCH:${dispatch.id}`)
+          ? true
+          : undefined
+      })
       const workerToken = ctx.hive.store.peekAgentToken(dispatch.toAgentId)
       if (!workerToken) throw new Error('Expected workflow worker token')
       const reportResp = await fetch(`${ctx.baseUrl}/api/team/report`, {

@@ -1,7 +1,8 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { parseArgs, stripVTControlCharacters } from 'node:util'
 
@@ -154,6 +155,18 @@ try {
       : join(tempDir, 'lib', 'node_modules')
   const binRoot = process.platform === 'win32' ? tempDir : join(tempDir, 'bin')
   const packageRoot = join(modulesRoot, '@tt-a1i', 'hive')
+  const installedRequire = createRequire(join(packageRoot, 'package.json'))
+  const xtermLicense = join(
+    dirname(installedRequire.resolve('@xterm/xterm/package.json')),
+    'LICENSE'
+  )
+  if (
+    !readFileSync(join(packageRoot, 'web/dist/licenses/xterm-LICENSE.txt')).equals(
+      readFileSync(xtermLicense)
+    )
+  ) {
+    throw new Error('Packaged Web output must retain the complete xterm license')
+  }
   const hiveBin = join(binRoot, binLinkName('hive'))
   const teamBin = join(binRoot, 'team')
   const teamCmdBin = join(binRoot, 'team.cmd')
@@ -191,7 +204,7 @@ try {
       `
     import { createRequire } from 'node:module';
     const require = createRequire(${JSON.stringify(join(packageRoot, 'package.json'))});
-    const pty = require('@lydell/node-pty');
+    const pty = require(${JSON.stringify(join(packageRoot, 'dist/src/server/pty.js'))});
     let output = '';
     const terminal = pty.spawn(process.execPath, ['-e', 'console.log("hive-scriptless-pty-ok")'], {
       cwd: ${JSON.stringify(tempDir)}, env: process.env, cols: 80, rows: 24
@@ -200,7 +213,8 @@ try {
     terminal.onData(chunk => { output += chunk; });
     terminal.onExit(({ exitCode }) => {
       clearTimeout(timer);
-      if (process.platform === 'win32') terminal.kill();
+      // Natural exit must release its own pipes and worker. Calling kill here
+      // hides a dependency lifecycle leak in ordinary npm installations.
       if (exitCode !== 0 || !output.includes('hive-scriptless-pty-ok')) {
         console.error(output); process.exitCode = 1;
       }
@@ -213,8 +227,8 @@ try {
   const child = spawn(
     process.platform === 'win32' ? 'cmd.exe' : hiveBin,
     process.platform === 'win32'
-      ? ['/d', '/s', '/c', `"${buildCmdCommand(hiveBin, ['--port', '0'])}"`]
-      : ['--port', '0'],
+      ? ['/d', '/s', '/c', `"${buildCmdCommand(hiveBin, ['--port', '0', '--no-open'])}"`]
+      : ['--port', '0', '--no-open'],
     {
       env: {
         ...installEnv,

@@ -636,7 +636,7 @@ describe('preset-driven Layer A', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     input.env(homeDir)
     const fakeCli = input.writeCli(workspacePath)
 
@@ -682,7 +682,7 @@ describe('preset-driven Layer A', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     const codexHome = join(homeDir, '.codex')
     process.env.CODEX_HOME = codexHome
     const fakeCodex = writeFakeCodex(workspacePath)
@@ -729,7 +729,7 @@ describe('preset-driven Layer A', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     process.env.CODEX_HOME = join(homeDir, '.codex')
     writeFakeCodex(workspacePath)
     process.env.PATH = `${join(workspacePath, 'bin')}${delimiter}${originalPath ?? ''}`
@@ -771,7 +771,7 @@ describe('preset-driven Layer A', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     process.env.CODEX_HOME = join(homeDir, '.codex')
     const fakeCodex = writeFakeCodex(workspacePath)
 

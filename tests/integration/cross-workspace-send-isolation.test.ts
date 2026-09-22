@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -41,7 +41,7 @@ describe('cross workspace send isolation', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-send-isolation-'))
     tempDirs.push(dataDir)
     process.env.HIVE_DATA_DIR = dataDir
-    const hive = await runHiveCommand(['--port', '0'])
+    const hive = await runHiveCommand(['--port', '0', '--no-open'])
 
     try {
       const baseUrl = `http://127.0.0.1:${hive.port}`
@@ -57,26 +57,36 @@ describe('cross workspace send isolation', () => {
 
       const workerScriptA = join(workspaceAPath, 'echo-a.js')
       const workerScriptB = join(workspaceBPath, 'echo-b.js')
+      const receivedB = join(workspaceBPath, 'received.txt')
+      writeFileSync(receivedB, '')
       writeFileSync(
         workerScriptA,
         "process.stdin.setEncoding('utf8')\nprocess.stdin.on('data', c => process.stdout.write('A:' + c))\n"
       )
       writeFileSync(
         workerScriptB,
-        "process.stdin.setEncoding('utf8')\nprocess.stdin.on('data', c => process.stdout.write('B:' + c))\n"
+        [
+          "const { appendFileSync } = require('node:fs')",
+          'process.stdin.setRawMode(true)',
+          `process.stdin.on('data', c => appendFileSync(${JSON.stringify(receivedB)}, c))`,
+          "process.stdout.write('B_RECEIVER_READY\\r\\n')",
+        ].join('\n')
       )
 
       const createWorkspace = async (name: string, path: string) => {
         const response = await fetch(`${baseUrl}/api/workspaces`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', cookie: uiCookie },
-          body: JSON.stringify({ name, path }),
+          body: JSON.stringify({ autostart_orchestrator: false, name, path }),
         })
+        expect(response.status).toBe(201)
         return (await response.json()) as { id: string }
       }
 
       const a = await createWorkspace('A', workspaceAPath)
       const b = await createWorkspace('B', workspaceBPath)
+      expect(hive.store.listAgentRuns(`${a.id}:orchestrator`)).toEqual([])
+      expect(hive.store.listAgentRuns(`${b.id}:orchestrator`)).toEqual([])
 
       const addWorker = async (workspaceId: string) => {
         const response = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/workers`, {
@@ -121,8 +131,14 @@ describe('cross workspace send isolation', () => {
       const runA = await start(a.id, workerA.id)
       const runB = await start(b.id, workerB.id)
       await start(a.id, `${a.id}:orchestrator`)
+      await hive.store.getActiveRunByAgentId(b.id, workerB.id)?.postStartInputReady
+      await waitFor(() => {
+        expect(hive.store.getActiveRunByAgentId(b.id, workerB.id)?.output).toContain(
+          'B_RECEIVER_READY'
+        )
+      })
 
-      await fetch(`${baseUrl}/api/team/send`, {
+      const sent = await fetch(`${baseUrl}/api/team/send`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -133,6 +149,7 @@ describe('cross workspace send isolation', () => {
           text: '实现登录',
         }),
       })
+      expect(sent.ok).toBe(true)
 
       await waitFor(
         async () => {
@@ -153,6 +170,14 @@ describe('cross workspace send isolation', () => {
         2000,
         25
       )
+      // Only assert absence after B has consumed a subsequent input barrier.
+      // Raw child receipts are unaffected by terminal wrapping/repaints.
+      hive.store.writeRunInput(runB.runId, 'ISOLATION_BARRIER\r')
+      await waitFor(() => {
+        const received = readFileSync(receivedB, 'utf8')
+        expect(received).toContain('ISOLATION_BARRIER')
+        expect(received).not.toContain('实现登录')
+      })
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()

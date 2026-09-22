@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import type { DispatchRecord } from '../../src/server/dispatch-ledger-store.js'
 import { PromptReadinessTimeoutError } from '../../src/server/http-errors.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
-import { createTeamOperations } from '../../src/server/team-operations.js'
+import { createTeamOperations, type TeamOperationsInput } from '../../src/server/team-operations.js'
 
 const makeDispatch = (overrides: Partial<DispatchRecord>): DispatchRecord =>
   ({
@@ -212,8 +212,28 @@ describe('replay failure recovery (review findings)', () => {
       toAgentId: worker.id,
       workspaceId: workspace.id,
     })
-    const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const dispatches = [oldParked, newDuringStartup]
+    const claimQueuedDispatch = (id: string) => {
+      const item = dispatches.find((candidate) => candidate.id === id)
+      if (!item || item.status !== 'queued') return false
+      item.status = 'submitted'
+      return true
+    }
+    const received: Array<{ id: string; text: string; seen: number }> = []
+    const writeSendPrompt: TeamOperationsInput['agentRuntime']['writeSendPrompt'] = (
+      _workspaceId,
+      _workerId,
+      id,
+      _sender,
+      _description,
+      text,
+      seen,
+      options
+    ) => {
+      const allowed = options?.beforeWrite?.() ?? true
+      if (allowed) received.push({ id, text, seen: seen ?? 0 })
+      return { payloadBytes: Buffer.byteLength(text), write: Promise.resolve(allowed) }
+    }
     const inboundNotes = new Map<string, number>([[oldParked.id, 4]])
 
     const ops = createTeamOperations({
@@ -227,7 +247,8 @@ describe('replay failure recovery (review findings)', () => {
       deleteDispatch: vi.fn(),
       deleteMessage: vi.fn(),
       findOpenDispatch: vi.fn(),
-      findOpenDispatchById: vi.fn(),
+      findOpenDispatchById: (workspaceId, id) =>
+        dispatches.find((item) => item.workspaceId === workspaceId && item.id === id),
       insertMessage: vi.fn(),
       markDispatchCancelled: vi.fn(),
       claimQueuedDispatch,
@@ -246,17 +267,9 @@ describe('replay failure recovery (review findings)', () => {
 
     ops.replayQueuedDispatches(workspace.id, worker.id, { createdBeforeMs: 1_500 })
 
-    expect(claimQueuedDispatch).toHaveBeenCalledWith(oldParked.id)
-    expect(claimQueuedDispatch).not.toHaveBeenCalledWith(newDuringStartup.id)
-    expect(writeSendPrompt).toHaveBeenCalledWith(
-      workspace.id,
-      worker.id,
-      oldParked.id,
-      'Orchestrator',
-      worker.description,
-      oldParked.text,
-      4
-    )
+    expect(oldParked.status).toBe('submitted')
+    expect(newDuringStartup.status).toBe('queued')
+    expect(received).toEqual([{ id: oldParked.id, text: 'implement login', seen: 4 }])
   })
 
   test('late replay write failure does not mutate dispatch state after runtime close begins', async () => {

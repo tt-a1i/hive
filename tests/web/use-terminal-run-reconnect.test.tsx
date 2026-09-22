@@ -14,7 +14,7 @@ import { setApiTransport } from '../../web/src/api.js'
 import { useTerminalRun } from '../../web/src/terminal/useTerminalRun.js'
 import type { ApiTransport, TransportSocket } from '../../web/src/transport/api-transport.js'
 
-let canvasGetContextSpy: ReturnType<typeof vi.spyOn> | undefined
+let canvasGetContextSpy: { mockRestore: () => void } | undefined
 beforeEach(() => {
   canvasGetContextSpy = vi
     .spyOn(HTMLCanvasElement.prototype, 'getContext')

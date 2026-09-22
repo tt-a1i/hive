@@ -49,8 +49,10 @@ beforeEach(() => {
   vi.spyOn(api, 'listWorkflowRuns').mockResolvedValue([RUN])
   vi.spyOn(api, 'listWorkflowSchedules').mockResolvedValue([SCHEDULE])
   vi.spyOn(api, 'getWorkflowCliPolicy').mockResolvedValue({
-    mode: 'inherit',
-  } as Awaited<ReturnType<typeof api.getWorkflowCliPolicy>>)
+    default: 'claude',
+    allowed: ['claude'],
+    supported: ['claude'],
+  })
   vi.spyOn(api, 'listWorkflowRunDispatches').mockResolvedValue([])
   vi.spyOn(api, 'listWorkflowRunLogs').mockResolvedValue([])
 })

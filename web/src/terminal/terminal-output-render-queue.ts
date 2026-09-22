@@ -2,140 +2,118 @@ const TERMINAL_OUTPUT_MIN_RENDER_INTERVAL_MS = 50
 const TERMINAL_OUTPUT_WRITE_ACK_TIMEOUT_MS = 1000
 
 type AcknowledgeTerminalOutput = (bytes: number) => void
+type RenderItem =
+  | { kind: 'output'; chunk: string; bytes: number; acknowledge: AcknowledgeTerminalOutput }
+  | { kind: 'resize'; cols: number; rows: number }
 
 interface TerminalOutputRenderQueueOptions {
   canRender: () => boolean
   write: (chunk: string, callback: () => void) => void
+  resize?: (cols: number, rows: number, callback: () => void) => void
 }
 
 export interface TerminalOutputRenderQueue {
   dispose: () => void
   enqueue: (chunk: string, bytes: number, acknowledge: AcknowledgeTerminalOutput) => void
+  enqueueResize: (cols: number, rows: number) => void
   flush: () => void
 }
 
 export const createTerminalOutputRenderQueue = ({
   canRender,
   write,
+  resize,
 }: TerminalOutputRenderQueueOptions): TerminalOutputRenderQueue => {
   let disposed = false
-  let flushTimer: number | undefined
-  let lastFlushAt: number | null = null
-  let pendingAcknowledge: AcknowledgeTerminalOutput | undefined
-  let pendingAckBytes = 0
-  let pendingChunks: string[] = []
-  let writeTimer: number | undefined
-  let writeGeneration = 0
   let writing = false
+  let lastFlushAt: number | null = null
+  let flushTimer: number | undefined
+  let writeTimer: number | undefined
+  const pending: RenderItem[] = []
 
-  function hasPendingOutput() {
-    return pendingAckBytes > 0 || pendingChunks.length > 0
+  const ack = (items: RenderItem[]) => {
+    for (const item of items) {
+      if (item.kind === 'output' && item.bytes > 0) {
+        const bytes = item.bytes
+        item.bytes = 0
+        item.acknowledge(bytes)
+      }
+    }
   }
-
-  function clearFlushTimer() {
-    if (flushTimer === undefined) return
-    window.clearTimeout(flushTimer)
-    flushTimer = undefined
-  }
-
-  function clearWriteTimer() {
-    if (writeTimer === undefined) return
-    window.clearTimeout(writeTimer)
-    writeTimer = undefined
-  }
-
-  function acknowledge(acknowledgeOutput: AcknowledgeTerminalOutput | undefined, bytes: number) {
-    if (!acknowledgeOutput || bytes <= 0) return
-    acknowledgeOutput(bytes)
-  }
-
-  function acknowledgePendingBytes() {
-    const bytes = pendingAckBytes
-    const acknowledgeOutput = pendingAcknowledge
-    pendingAckBytes = 0
-    pendingAcknowledge = undefined
-    acknowledge(acknowledgeOutput, bytes)
-  }
-
-  function scheduleFlush() {
-    if (disposed || writing || flushTimer !== undefined || !hasPendingOutput()) return
+  const schedule = () => {
+    if (disposed || writing || flushTimer !== undefined || pending.length === 0) return
     const delay =
-      lastFlushAt === null
+      pending[0]?.kind === 'resize' || lastFlushAt === null
         ? 0
         : Math.max(0, TERMINAL_OUTPUT_MIN_RENDER_INTERVAL_MS - (Date.now() - lastFlushAt))
-    if (delay === 0) {
-      flushPendingOutput()
-      return
-    }
-    flushTimer = window.setTimeout(() => {
-      flushTimer = undefined
-      flushPendingOutput()
-    }, delay)
+    if (delay === 0) flush()
+    else
+      flushTimer = window.setTimeout(() => {
+        flushTimer = undefined
+        flush()
+      }, delay)
   }
-
-  function flushPendingOutput() {
-    clearFlushTimer()
-    if (disposed || writing || !hasPendingOutput()) return
+  function flush() {
+    if (flushTimer !== undefined) window.clearTimeout(flushTimer)
+    flushTimer = undefined
+    if (disposed || writing || pending.length === 0) return
     if (!canRender()) {
-      acknowledgePendingBytes()
+      ack(pending)
       return
     }
-
-    const chunk = pendingChunks.join('')
-    const bytes = pendingAckBytes
-    const acknowledgeOutput = pendingAcknowledge
-    pendingChunks = []
-    pendingAckBytes = 0
-    pendingAcknowledge = undefined
-    lastFlushAt = Date.now()
-
-    if (chunk.length === 0) {
-      acknowledge(acknowledgeOutput, bytes)
-      scheduleFlush()
-      return
+    const first = pending.shift()
+    if (!first) return
+    const batch = [first]
+    if (first.kind === 'output') {
+      while (pending[0]?.kind === 'output') batch.push(pending.shift() as RenderItem)
     }
-
     writing = true
-    const generation = ++writeGeneration
-    const completeWrite = () => {
-      if (!writing || generation !== writeGeneration) return
-      clearWriteTimer()
+    lastFlushAt = first.kind === 'resize' ? null : Date.now()
+    let completed = false
+    const complete = () => {
+      if (completed || disposed) return
+      completed = true
+      if (writeTimer !== undefined) window.clearTimeout(writeTimer)
+      writeTimer = undefined
       writing = false
-      acknowledge(acknowledgeOutput, bytes)
-      scheduleFlush()
+      ack(batch)
+      schedule()
     }
-    writeTimer = window.setTimeout(completeWrite, TERMINAL_OUTPUT_WRITE_ACK_TIMEOUT_MS)
-    try {
-      write(chunk, completeWrite)
-    } catch {
-      completeWrite()
+    if (first.kind === 'resize') {
+      // A geometry barrier drains xterm's native write queue and must never
+      // advance on a timeout, even when a preceding byte ACK has timed out.
+      if (resize) resize(first.cols, first.rows, complete)
+      else complete()
+    } else {
+      writeTimer = window.setTimeout(complete, TERMINAL_OUTPUT_WRITE_ACK_TIMEOUT_MS)
+      try {
+        write(batch.map((item) => (item.kind === 'output' ? item.chunk : '')).join(''), complete)
+      } catch (error) {
+        complete()
+        throw error
+      }
     }
   }
-
   return {
     dispose() {
       disposed = true
-      clearFlushTimer()
-      clearWriteTimer()
-      pendingChunks = []
-      pendingAckBytes = 0
-      pendingAcknowledge = undefined
+      if (flushTimer !== undefined) window.clearTimeout(flushTimer)
+      if (writeTimer !== undefined) window.clearTimeout(writeTimer)
+      pending.length = 0
     },
-    enqueue(chunk, bytes, acknowledgeOutput) {
+    enqueue(chunk, bytes, acknowledge) {
       if (disposed) return
-      if (chunk.length === 0) {
-        acknowledge(acknowledgeOutput, bytes)
-        return
-      }
-      if (chunk.length > 0) pendingChunks.push(chunk)
-      if (canRender()) {
-        pendingAckBytes += bytes
-        pendingAcknowledge = acknowledgeOutput
-      } else {
-        acknowledge(acknowledgeOutput, bytes)
-      }
-      scheduleFlush()
+      const item: RenderItem = { kind: 'output', chunk, bytes, acknowledge }
+      if (!canRender() || !chunk.length) ack([item])
+      if (!chunk.length) return
+      pending.push(item)
+      schedule()
     },
-    flush: flushPendingOutput,
+    enqueueResize(cols, rows) {
+      if (disposed) return
+      pending.push({ kind: 'resize', cols, rows })
+      schedule()
+    },
+    flush,
   }
 }

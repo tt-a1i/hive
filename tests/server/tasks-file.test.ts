@@ -15,6 +15,27 @@ afterEach(() => {
 })
 
 describe('tasks file service', () => {
+  test('round-trips Chinese, emoji, punctuation, links, backticks, and newlines as UTF-8', () => {
+    const workspacePath = join(tmpdir(), `hive-tasks-unicode-${Date.now()}`)
+    mkdirSync(workspacePath, { recursive: true })
+    tempDirs.push(workspacePath)
+    const content = [
+      '# 任务 🚀',
+      '',
+      '- [ ] 中文，标点。 English `code`',
+      '- [x] [链接](https://example.com/路径?q=测试)',
+      '',
+    ].join('\n')
+    const service = createTasksFileService()
+
+    service.writeTasks(workspacePath, content)
+
+    expect(service.readTasks(workspacePath)).toBe(content)
+    expect(readFileSync(join(workspacePath, '.hive', 'tasks.md'))).toEqual(
+      Buffer.from(content, 'utf8')
+    )
+  })
+
   test('creates .hive/tasks.md on first read and persists writes there', () => {
     const workspacePath = join(tmpdir(), `hive-tasks-${Date.now()}`)
     mkdirSync(workspacePath, { recursive: true })

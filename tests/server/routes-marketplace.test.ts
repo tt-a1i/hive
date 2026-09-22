@@ -149,7 +149,7 @@ describe('GET /api/marketplace/manifest', () => {
     const { status, body } = await getManifest('zh')
     expect(status).toBe(200)
     expect(body.language).toBe('zh')
-    expect((body.agents as Array<{ name: string }>)[0].name).toBe('代码审查员')
+    expect((body.agents as Array<{ name: string }>)[0]?.name).toBe('代码审查员')
   })
 
   test('rejects unknown language with 400', async () => {

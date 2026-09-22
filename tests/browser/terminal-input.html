@@ -1,0 +1,168 @@
+<!doctype html>
+<meta charset="utf-8">
+<div id="terminal" style="width:800px;height:400px"></div>
+<script type="module">
+import { Terminal } from '@xterm/xterm'
+import '@xterm/xterm/css/xterm.css'
+import { attachCompositionBridge } from '../../web/src/terminal/composition.ts'
+
+let terminal = new Terminal({cols:80,rows:20})
+terminal.open(document.getElementById('terminal'))
+let textarea = terminal.textarea
+let composing = false
+let output = ''
+const bridge = attachCompositionBridge(textarea, {
+  setComposing: value => { composing = value },
+  commit: text => { output += text },
+  input: text => terminal.input(text, true),
+})
+terminal.onData(text => {
+  const filtered = bridge.filterData(text)
+  if (!composing) output += filtered
+})
+window.probe = async () => {
+ terminal.focus()
+ output=''
+ const cases = []
+ const event = (type,data) => textarea.dispatchEvent(new CompositionEvent(type,{data,bubbles:true}))
+ const input = (data,isComposing=false) => {
+   textarea.value = data
+   textarea.dispatchEvent(new InputEvent('input',{data,isComposing,inputType:'insertText',composed:true,bubbles:true}))
+ }
+ event('compositionstart',''); input('t',true); event('compositionend','测试中文')
+ await new Promise(resolve=>setTimeout(resolve,20))
+ cases.push({name:'composition candidate is not committed',expected:'测试中文',actual:output})
+ output=''
+ event('compositionstart',''); event('compositionupdate','ce'); input('ce',true)
+ event('compositionupdate','测试中文'); event('compositionend','测试中文')
+ input('测试中文') // Browser completion replay must not submit the commit twice.
+ for(const character of 'hello/') {
+  textarea.dispatchEvent(new KeyboardEvent('keydown',{key:'Unidentified',keyCode:229,bubbles:true}))
+  input(character)
+  textarea.dispatchEvent(new KeyboardEvent('keyup',{key:'Unidentified',keyCode:229,bubbles:true}))
+ }
+ event('compositionstart',''); event('compositionupdate','zhong'); input('zhong',true)
+ event('compositionend','中文'); input('中文')
+ await new Promise(resolve=>setTimeout(resolve,20))
+ cases.push({name:'Chinese to English slash and back without waiting',expected:'测试中文hello/中文',actual:output})
+ output=''
+ event('compositionstart',''); event('compositionend','a')
+ const down = new KeyboardEvent('keydown',{key:'a',keyCode:65,bubbles:true,cancelable:true})
+ textarea.dispatchEvent(down)
+ if(!down.defaultPrevented) textarea.dispatchEvent(new KeyboardEvent('keypress',{key:'a',keyCode:97,charCode:97,bubbles:true,cancelable:true}))
+ textarea.dispatchEvent(new KeyboardEvent('keyup',{key:'a',keyCode:65,bubbles:true}))
+ await new Promise(resolve=>setTimeout(resolve,20))
+ cases.push({name:'new physical key equal to previous commit',expected:'aa',actual:output})
+ for(const keyCode of [229,0]) {
+  output='';textarea.value=''
+  for(const character of 'aAhello0123/\\.,:;-_@#!?\'"()[]') {
+   textarea.dispatchEvent(new KeyboardEvent('keydown',{key:'Unidentified',keyCode,bubbles:true}))
+   textarea.value += character
+   textarea.dispatchEvent(new InputEvent('input',{data:character,inputType:'insertText',composed:true,bubbles:true}))
+   await new Promise(resolve=>setTimeout(resolve,5))
+   textarea.dispatchEvent(new KeyboardEvent('keyup',{key:'Unidentified',keyCode,bubbles:true}))
+  }
+  cases.push({name:`input-only virtual keyboard keyCode=${keyCode}`,expected:'aAhello0123/\\.,:;-_@#!?\'"()[]',actual:output})
+ }
+ for(const [inputType,expected] of [['deleteContentBackward','\x7f'],['deleteContentForward','\x1b[3~'],['insertLineBreak','\r']]){
+  for(const cancelable of [true,false]){
+   output=''
+   textarea.dispatchEvent(new KeyboardEvent('keydown',{key:'Unidentified',keyCode:229,bubbles:true}))
+   const before = new InputEvent('beforeinput',{inputType,bubbles:true,cancelable})
+   textarea.dispatchEvent(before)
+   if(!before.defaultPrevented) textarea.dispatchEvent(new InputEvent('input',{inputType,bubbles:true}))
+   textarea.dispatchEvent(new KeyboardEvent('keyup',{key:'Unidentified',keyCode:229,bubbles:true}))
+   await new Promise(resolve=>setTimeout(resolve,5))
+   cases.push({name:`virtual ${inputType}, cancelable=${cancelable}`,expected,actual:output})
+  }
+ }
+ for(const [key,keyCode,ctrlKey,expected] of [['Backspace',8,false,'\x7f'],['Delete',46,false,'\x1b[3~'],['Enter',13,false,'\r'],[' ',32,false,' '],['ArrowLeft',37,false,'\x1b[D'],['ArrowRight',39,false,'\x1b[C'],['c',67,true,'\x03']]){
+  output=''
+  const down=new KeyboardEvent('keydown',{key,keyCode,ctrlKey,bubbles:true,cancelable:true})
+  textarea.dispatchEvent(down)
+  if(!down.defaultPrevented && key.length===1) textarea.dispatchEvent(new KeyboardEvent('keypress',{key,charCode:key.charCodeAt(0),keyCode:key.charCodeAt(0),ctrlKey,bubbles:true,cancelable:true}))
+  textarea.dispatchEvent(new KeyboardEvent('keyup',{key,keyCode,ctrlKey,bubbles:true}))
+  await new Promise(resolve=>setTimeout(resolve,5))
+  cases.push({name:`physical ${key}`,expected,actual:output})
+ }
+ return cases
+}
+window.ready=true
+window.mountRuntime = async (runId) => {
+ bridge.dispose();terminal.dispose()
+ const { createRoot } = await import('react-dom/client')
+ const { createElement } = await import('react')
+ const { useTerminalRun } = await import('../../web/src/terminal/useTerminalRun.ts')
+ const originalOpen = Terminal.prototype.open
+ const originalWrite = Terminal.prototype.write
+ const originalResize = Terminal.prototype.resize
+ window.resizeEvents=[]
+ Terminal.prototype.resize=function(cols,rows){
+   window.resizeEvents.push({cols,rows})
+   return originalResize.call(this,cols,rows)
+ }
+ window.runtimeWrites = ''
+ window.createdCount = 0
+ window.liveTerminals = []
+ Terminal.prototype.open = function (...args) {
+   window.createdCount++
+   window.liveTerminals.push(this)
+   const result = originalOpen.apply(this,args)
+   terminal=this;textarea=this.textarea
+   return result
+ }
+ Terminal.prototype.write = function (data, ...args) {
+   window.runtimeWrites += typeof data==='string' ? data : new TextDecoder().decode(data)
+   return originalWrite.call(this,data,...args)
+ }
+ const originalSend = WebSocket.prototype.send
+ WebSocket.prototype.send = function(data) {
+   if(this.url.includes('/io?')) {
+     let observed=data
+     if(typeof data==='string' && data.startsWith('{')) {
+       const event=JSON.parse(data)
+       if(event.type==='input') observed=event.data
+       if(event.type==='input' && event.user_input===false && event.data!=='\x1b[I' && event.data!=='\x1b[O') window.autoResponses?.push(event.data)
+     }
+     if(observed!=='\x1b[I' && observed!=='\x1b[O') output += observed
+   }
+   return originalSend.call(this,data)
+ }
+ function Probe({width=800}){
+   const state=useTerminalRun(runId,'codex')
+   window.runtimeStatus=state.status
+   return createElement('div',{ref:state.containerRef,style:{width,height:400}})
+ }
+ const root=createRoot(document.getElementById('terminal'))
+ root.render(createElement(Probe))
+ window.rerender=()=>root.render(createElement(Probe))
+ window.mountPeer=(width)=>{
+   const host=document.createElement('div')
+   document.body.appendChild(host)
+   createRoot(host).render(createElement(Probe,{width}))
+ }
+ window.sendFrom=(index,text)=>{
+   const data=new DataTransfer();data.setData('text/plain',text)
+   window.liveTerminals[index].textarea.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}))
+ }
+ window.readGrids=()=>window.liveTerminals.map(t=>({cols:t.cols,rows:t.rows}))
+ window.queryPeers=()=>{for(const t of window.liveTerminals)t.write('\x1b[6n\x1b[c')}
+ window.focusFrom=(index)=>window.liveTerminals[index].focus()
+ window.enableMouse=(index)=>new Promise(resolve=>window.liveTerminals[index].write('\x1b[?1000h\x1b[?1006h',resolve))
+ window.mousePoint=(index)=>{
+   const element=window.liveTerminals[index].element
+   element.scrollIntoView()
+   const rect=element.querySelector('.xterm-screen').getBoundingClientRect()
+   return {x:rect.left+10,y:rect.top+10}
+ }
+ window.resizeHost=(index,width)=>{window.liveTerminals[index].element.parentElement.style.width=`${width}px`}
+ window.readTerminal=(index)=>{
+   const t=window.liveTerminals[index], b=t.buffer.active
+   return {cols:t.cols,x:b.cursorX,y:b.cursorY,focused:document.activeElement===t.textarea,
+     selection:[t.textarea.selectionStart,t.textarea.selectionEnd],
+     lines:Array.from({length:t.rows},(_,row)=>b.getLine(b.baseY+row)?.translateToString(true))}
+ }
+ window.requestRepaint=()=>terminal.input('__REPAINT__',true)
+ window.readCursor=()=>({x:terminal.buffer.active.cursorX,y:terminal.buffer.active.cursorY,line:terminal.buffer.active.getLine(0).translateToString(true),focused:document.activeElement===textarea})
+}
+</script>

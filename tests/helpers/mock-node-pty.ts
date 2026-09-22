@@ -92,7 +92,7 @@ const emitScriptWrite = (
   }
 }
 
-vi.mock('@lydell/node-pty', () => ({
+vi.mock('../../src/server/pty.js', () => ({
   spawn: (_command: string, args: string[] = [], options: MockSpawnOptions = {}) => {
     const scriptPath = args[0] ?? ''
     const pid = 4242

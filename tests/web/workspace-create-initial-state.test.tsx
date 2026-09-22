@@ -11,18 +11,26 @@ import { App } from '../../web/src/app.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 let cleanupServer: (() => Promise<void>) | undefined
+let server: Awaited<ReturnType<typeof startTestServer>>
 let sandboxRoot = ''
 const nativeFetch = globalThis.fetch
 const tempDirs: string[] = []
 
 beforeEach(async () => {
+  // This scenario uses the native-picker service fixture. Windows clients
+  // deliberately use the server directory browser instead.
+  vi.stubGlobal('navigator', {
+    language: 'en-US',
+    platform: 'MacIntel',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  })
   window.localStorage.setItem('hive.first-run-seen', '1')
   sandboxRoot = mkdtempSync(join(tmpdir(), 'hive-fs-sandbox-'))
   mkdirSync(join(sandboxRoot, 'alpha-project'), { recursive: true })
   tempDirs.push(sandboxRoot)
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
 
-  const server = await startTestServer({
+  server = await startTestServer({
     pickFolderPath: join(sandboxRoot, 'alpha-project'),
   })
   cleanupServer = server.close
@@ -44,6 +52,7 @@ afterEach(async () => {
   cleanup()
   vi.restoreAllMocks()
   await cleanupServer?.()
+  vi.unstubAllGlobals()
   cleanupServer = undefined
   delete process.env.HIVE_FS_BROWSE_ROOT
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true })
@@ -95,7 +104,7 @@ describe('workspace create initial state', () => {
       .find((b) => b.classList.contains('ws-row'))
     expect(rowButton).toHaveAttribute(
       'data-workspace-path',
-      realpathSync(join(sandboxRoot, 'alpha-project'))
+      realpathSync.native(join(sandboxRoot, 'alpha-project'))
     )
     expect(screen.queryByRole('contentinfo')).toBeNull()
 
@@ -104,5 +113,14 @@ describe('workspace create initial state', () => {
     const drawer = await screen.findByTestId('task-graph-drawer')
     expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
     expect(within(drawer).getByText(/No tasks yet/i)).toBeInTheDocument()
+
+    // Creating the workspace also starts the configured real PTY. Verify its
+    // startup barrier before teardown, rather than killing a pending startup.
+    const created = server.store.listWorkspaces().find((item) => item.name === 'Alpha')
+    if (!created) throw new Error('Created workspace missing from runtime')
+    const run = server.store.getActiveRunByAgentId(created.id, `${created.id}:orchestrator`)
+    if (!run) throw new Error('Created workspace has no active orchestrator run')
+    await run.postStartInputReady
+    expect(run.startupReadyAt).toBeTypeOf('number')
   }, 20000)
 })

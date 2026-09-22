@@ -210,7 +210,7 @@ try {
 } finally {
   db.close();
 }
-const { spawn } = req('@lydell/node-pty');
+const { spawn } = req(join(packageRoot, 'dist/src/server/pty.js'));
 const sentinel = ${JSON.stringify(NATIVE_PTY_SENTINEL)};
 let output = '';
 const pty = spawn(process.execPath, ['-e', 'process.stdout.write(${JSON.stringify(NATIVE_PTY_SENTINEL)})'], {

@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { PassThrough } from 'node:stream'
 
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
@@ -48,6 +49,37 @@ afterEach(() => {
 })
 
 describe('attachAgentPty Windows stop', () => {
+  test('can retry termination after a synchronous PTY failure', () => {
+    vi.useFakeTimers()
+    const run = createRun()
+    const denied = Object.assign(new Error('termination denied'), { code: 'EPERM' })
+    let deniedOnce = true
+    let exit: (event: { exitCode: number }) => void = () => {}
+    const pty = {
+      ...createPty(),
+      pid: 0,
+      onExit(listener: typeof exit) {
+        exit = listener
+      },
+      kill() {
+        if (deniedOnce) {
+          deniedOnce = false
+          throw denied
+        }
+        exit({ exitCode: 0 })
+      },
+    }
+    attachAgentPty(run, pty as never, createPtyOutputBus(), 'win32')
+
+    expect(() => run.process.stop()).toThrow(denied)
+    expect(run.status).toBe('running')
+    run.process.stop()
+    expect(run.status).toBe('exited')
+    expect(run.exitCode).toBe(0)
+    expect(run.process.isStopped()).toBe(true)
+    vi.clearAllTimers()
+  })
+
   test('uses taskkill before the delayed pty cleanup fallback', async () => {
     vi.useFakeTimers()
     const run = createRun()
@@ -94,12 +126,11 @@ describe('attachAgentPty Windows stop', () => {
 
   test('silences node-pty conpty helper stderr when pty.kill runs after taskkill', () => {
     const originalFork = childProcess.fork
-    const stderrResume = vi.fn()
-    const stdoutResume = vi.fn()
-    const child = {
-      stderr: { resume: stderrResume },
-      stdout: { resume: stdoutResume },
-    } as ReturnType<typeof childProcess.fork>
+    const child = new childProcess.ChildProcess()
+    child.stderr = new PassThrough()
+    child.stdout = new PassThrough()
+    const stderrResume = vi.spyOn(child.stderr, 'resume')
+    const stdoutResume = vi.spyOn(child.stdout, 'resume')
     const fork = vi.fn(() => child)
     childProcess.fork = fork as unknown as typeof childProcess.fork
 

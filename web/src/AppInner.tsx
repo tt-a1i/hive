@@ -304,7 +304,7 @@ export const AppInner = () => {
     <Sidebar
       activeWorkspaceId={eff.effectiveActiveWorkspaceId}
       collapsed={sidebarResize.collapsed}
-      createDisabledReason={bootstrapError ?? undefined}
+      {...(bootstrapError !== null ? { createDisabledReason: bootstrapError } : {})}
       onCreateClick={triggerAddDialog}
       onDeleteWorkspace={deleteWorkspace}
       onSelectWorkspace={selectWorkspace}
@@ -398,14 +398,14 @@ export const AppInner = () => {
       <MainLayout
         hideTopbarActions={!eff.effectiveActiveWorkspace}
         memoryOpen={memoryOpen}
-        onToggleMemory={demoMode ? undefined : () => setMemoryOpen((value) => !value)}
+        {...(demoMode ? {} : { onToggleMemory: () => setMemoryOpen((value) => !value) })}
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
         openTaskCount={openTaskCount}
         topbarActions={topbarActions}
         taskGraphOpen={taskGraphOpen}
-        onToggleWorkflows={
-          demoMode || !workflowsEnabled ? undefined : () => setWorkflowsOpen((value) => !value)
-        }
+        {...(demoMode || !workflowsEnabled
+          ? {}
+          : { onToggleWorkflows: () => setWorkflowsOpen((value) => !value) })}
         workflowsOpen={workflowsOpen}
         sidebarResize={sidebarResize}
         sidebar={sidebar}

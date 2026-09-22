@@ -14,6 +14,7 @@ import {
 } from './agent-startup-instructions.js'
 import type { AgentTokenRegistry } from './agent-tokens.js'
 import { ensureClaudeDirectoryTrusted } from './claude-trust-store.js'
+import { codexTeamEnvironmentArgs } from './codex-team-environment.js'
 import { ensureCodexDirectoryTrusted } from './codex-trust-store.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
@@ -136,9 +137,10 @@ export const createAgentRunStarter =
 
     let run: Awaited<ReturnType<AgentManager['startAgent']>>
     try {
-      run = await agentManager.startAgent(
-        startConfig.args ? { ...startInput, args: startConfig.args } : startInput
-      )
+      run = await agentManager.startAgent({
+        ...startInput,
+        args: codexTeamEnvironmentArgs(commandBrand, startConfig.args),
+      })
     } catch (error) {
       tokenRegistry.revokeIfMatches(agentId, token)
       throw error

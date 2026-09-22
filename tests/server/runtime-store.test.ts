@@ -9,6 +9,7 @@ import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { startReportWorker } from '../helpers/report-worker.js'
 
 const tempDirs: string[] = []
 const tinyAvatar =
@@ -307,37 +308,28 @@ describe('runtime store', () => {
     expect(updatedWorker.pendingTaskCount).toBe(1)
   })
 
-  test('reportTask resets worker pending count and returns it to idle', () => {
-    const store = createRuntimeStore()
-
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, {
-      name: 'Alice',
-      role: 'coder',
-    })
-    // Simulate PTY already running so dispatchTask can promote to working.
-    store.getWorker(workspace.id, worker.id).status = 'idle'
-
-    store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })
+  test('reportTask resets worker pending count and returns it to idle', async () => {
+    const { store, workspace, worker, send, report } = await startReportWorker()
+    const dispatch = await send('Implement feature')
+    expect((await report(dispatch.id, 'Done')).status).toBe(202)
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
     expect(updatedWorker.pendingTaskCount).toBe(0)
     expect(updatedWorker.status).toBe('idle')
   })
 
-  test('reportTask keeps a stopped worker stopped while draining pending count', () => {
-    const store = createRuntimeStore()
-
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, {
-      name: 'Alice',
-      role: 'coder',
+  test('reportTask keeps a stopped worker stopped while draining pending count', async () => {
+    const { store, workspace, worker, send, runId } = await startReportWorker()
+    const dispatch = await send('Implement feature')
+    store.stopAgentRun(runId)
+    expect(await store.waitForRunExit(runId, 5000)).toBe(true)
+    expect(store.getWorker(workspace.id, worker.id).status).toBe('stopped')
+    // Exercise the internal store transition, not a revoked HTTP agent token.
+    store.reportTask(workspace.id, worker.id, {
+      dispatchId: dispatch.id,
+      status: 'success',
+      text: 'Done',
     })
-
-    store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.getWorker(workspace.id, worker.id).status = 'stopped'
-    store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
     expect(updatedWorker.pendingTaskCount).toBe(0)

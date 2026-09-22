@@ -215,7 +215,9 @@ describe('AddWorkerDialog marketplace integration', () => {
     await waitFor(() => {
       expect(submitCapture).toHaveBeenCalled()
     })
-    const snapshot = submitCapture.mock.calls[0][0] as {
+    const capturedSubmit = submitCapture.mock.calls[0]
+    if (!capturedSubmit) throw new Error('Expected submitted worker configuration')
+    const snapshot = capturedSubmit[0] as {
       workerName: string
       workerRole: string
       roleDescription: string

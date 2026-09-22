@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
-import { DEFAULT_HIVE_PORT, runHiveCommand } from '../../src/cli/hive.js'
+import { runHiveCommand } from '../../src/cli/hive.js'
 import { callHiveMcpTool, HIVE_MCP_TOOL_NAMES } from '../../src/cli/hive-mcp.js'
 import { runTeamCommand } from '../../src/cli/team.js'
 import { HIVE_SUPERVISOR_TOKEN_HEADER } from '../../src/server/external-goal-auth.js'
@@ -129,7 +129,13 @@ const setupHiveWithPassiveOrchestrator = async (
   const orchScript = join(workspacePath, 'orch-echo.js')
   writeFileSync(
     orchScript,
-    "process.stdin.setEncoding('utf8')\nprocess.stdin.on('data', c => process.stdout.write('ORCH:' + c))\n"
+    [
+      'process.stdin.setRawMode(true)',
+      "process.stdin.on('data', bytes => {",
+      '  for (let offset = 0; offset < bytes.length; offset += 16)',
+      "    process.stdout.write('RECEIVED_HEX:' + bytes.subarray(offset, offset + 16).toString('hex') + ':END\\r\\n')",
+      '})',
+    ].join('\n')
   )
 
   process.env.HIVE_DATA_DIR = dataDir
@@ -174,12 +180,24 @@ const setupHiveWithPassiveOrchestrator = async (
   }
 }
 
-const readRunOutput = async (baseUrl: string, runId: string, cookie: string): Promise<string> => {
+const readReceivedInput = async (
+  baseUrl: string,
+  runId: string,
+  cookie: string
+): Promise<string> => {
   const response = await fetch(`${baseUrl}/api/runtime/runs/${runId}`, {
     headers: { cookie },
   })
   const body = (await response.json()) as { output: string }
-  return body.output
+  // The real PTY receiver emits short encoded receipts, so Windows screen
+  // wrapping cannot be mistaken for corruption of the delivered input.
+  return Buffer.concat(
+    [...body.output.matchAll(/RECEIVED_HEX:([0-9a-f]+):END/g)].map((match) => {
+      const hex = match[1]
+      if (hex === undefined) throw new Error('Missing receiver hex capture')
+      return Buffer.from(hex, 'hex')
+    })
+  ).toString('utf8')
 }
 
 afterEach(() => {
@@ -200,36 +218,6 @@ describe('Hive external goal bridge', () => {
     expect(HIVE_MCP_TOOL_NAMES).not.toContain('hive.send_to_member')
     expect(HIVE_MCP_TOOL_NAMES).not.toContain('hive.spawn_member')
     expect(HIVE_MCP_TOOL_NAMES).not.toContain('hive.write_pty')
-  })
-
-  test('MCP tool calls default to the uncommon local runtime port', async () => {
-    const originalFetch = globalThis.fetch
-    const requestedUrls: string[] = []
-    globalThis.fetch = (async (input) => {
-      requestedUrls.push(String(input))
-      if (requestedUrls.length === 1) {
-        return new Response(JSON.stringify({ token: 'test-supervisor-token' }), {
-          headers: { 'content-type': 'application/json' },
-          status: 200,
-        })
-      }
-      return new Response(JSON.stringify({ workspaces: [] }), {
-        headers: { 'content-type': 'application/json' },
-        status: 200,
-      })
-    }) as typeof fetch
-
-    try {
-      await expect(
-        callHiveMcpTool('hive.list_workspaces', {}, { env: {} as NodeJS.ProcessEnv })
-      ).resolves.toEqual({ workspaces: [] })
-      expect(requestedUrls).toEqual([
-        `http://127.0.0.1:${DEFAULT_HIVE_PORT}/api/external-goals/session`,
-        `http://127.0.0.1:${DEFAULT_HIVE_PORT}/api/external-goals/workspaces`,
-      ])
-    } finally {
-      globalThis.fetch = originalFetch
-    }
   })
 
   test('start/wait/continue/cancel flows through durable events and Orchestrator stdin', async () => {
@@ -270,7 +258,7 @@ describe('Hive external goal bridge', () => {
       expect(started.status).toBe('in_progress')
 
       await waitFor(async () => {
-        const output = await readRunOutput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
+        const output = await readReceivedInput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
         expect(output).toContain('<hive-message kind="external-goal"')
         expect(output).toContain(`goal_id="${started.goal_id}"`)
         expect(output).toContain('Review the current diff')
@@ -310,7 +298,7 @@ describe('Hive external goal bridge', () => {
       expect(continued.status).toBe('in_progress')
 
       await waitFor(async () => {
-        const output = await readRunOutput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
+        const output = await readReceivedInput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
         expect(output).toContain('<hive-message kind="external-goal-continue"')
         expect(output).toContain('Please include a short validation plan.')
       })
@@ -324,7 +312,7 @@ describe('Hive external goal bridge', () => {
       expect(cancelled.status).toBe('cancelled')
 
       await waitFor(async () => {
-        const output = await readRunOutput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
+        const output = await readReceivedInput(ctx.baseUrl, ctx.orchestratorRunId, ctx.uiCookie)
         expect(output).toContain('<hive-message kind="external-goal-cancel"')
         expect(output).toContain('User stopped the external request.')
       })

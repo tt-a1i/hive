@@ -74,7 +74,7 @@ const createWorkspace = async (baseUrl: string, cookie: string, workspacePath: s
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({ name: 'Alpha', path: workspacePath, autostart_orchestrator: false }),
   })
   expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
@@ -178,7 +178,7 @@ describe('terminal flow control', () => {
         'process.stdin.resume()',
         // Deliberately split the startup line: its tail can be batched separately.
         "process.stdout.write('ready')",
-        "setTimeout(() => process.stdout.write('\\n'), 1)",
+        "setTimeout(() => process.stdout.write('\\nREADY_END\\n'), 1)",
         'setInterval(() => {}, 1000)',
       ].join('\n')
     )
@@ -195,9 +195,10 @@ describe('terminal flow control', () => {
       const viewer = await openViewer(server.baseUrl, cookie, run.runId, 'viewer-a')
 
       await waitFor(() => {
-        // Start the latency measurement only after the complete startup frame
-        // reaches the viewer, so tiny cannot join its outstanding batch.
-        expect(viewer.outputs.join('').replaceAll('\r', '')).toContain('ready\n')
+        // A separate completion marker avoids assuming that ConPTY emits text,
+        // title controls and the delayed newline as one contiguous substring.
+        // Wait for the delayed startup write before measuring the input echo.
+        expect(viewer.outputs.join('')).toContain('READY_END')
       })
 
       await new Promise((resolve) => setTimeout(resolve, 20))

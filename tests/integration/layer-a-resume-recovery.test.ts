@@ -186,7 +186,7 @@ const createWorkspaceViaHttp = async (baseUrl: string, cookie: string, workspace
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path: workspacePath }),
   })
   return (await response.json()) as { id: string }
 }
@@ -245,7 +245,7 @@ describe('Layer A resume recovery integration', () => {
     tempDirs.push(homeDir)
     const workspacePathRaw = join(homeDir, 'workspace')
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     const codexHome = join(homeDir, '.codex')
     process.env.CODEX_HOME = codexHome
     const previousDataDir = process.env.HIVE_DATA_DIR
@@ -574,7 +574,7 @@ describe('Layer A resume recovery integration', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     process.env.CODEX_HOME = join(homeDir, '.codex')
 
     const server = await startTestServer()
@@ -637,7 +637,7 @@ describe('Layer A resume recovery integration', () => {
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
     mkdirSync(workspacePathRaw, { recursive: true })
-    const workspacePath = realpathSync(workspacePathRaw)
+    const workspacePath = realpathSync.native(workspacePathRaw)
     const codexHome = join(homeDir, '.codex')
     process.env.CODEX_HOME = codexHome
 

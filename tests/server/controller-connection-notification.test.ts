@@ -327,7 +327,7 @@ const timer = setInterval(() => {
         await new Promise((resolve) => setTimeout(resolve, 100))
         expect(closed).toBe(false)
         writeFileSync(release, 'finish capability check')
-        expect((await pending[0]).status).toBe(409)
+        expect((await pending[0])?.status).toBe(409)
         await closing
         server = undefined
         expect(calls()).toEqual([['queue', '--help']])
@@ -357,8 +357,8 @@ const timer = setInterval(() => {
         )
         expect(calls().filter((args) => args.includes('--thread'))).toHaveLength(1)
         writeFileSync(release, 'finish first queue')
-        expect((await pending[0]).status).toBe(500)
-        expect((await pending[1]).status).toBe(200)
+        expect((await pending[0])?.status).toBe(500)
+        expect((await pending[1])?.status).toBe(200)
         expect(
           calls()
             .filter((args) => args.includes('--thread'))

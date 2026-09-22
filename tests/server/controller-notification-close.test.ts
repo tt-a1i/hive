@@ -48,11 +48,13 @@ test.skipIf(process.platform === 'win32')(
       expect(created.status).toBe(201)
       const workspaceId = created.data.id as string
       const threadId = randomUUID()
-      const mcp = (name: string, args: Record<string, unknown>) =>
-        callHiveMcpTool(name, args, {
-          baseUrl: server?.baseUrl,
+      const mcp = (name: string, args: Record<string, unknown>) => {
+        if (!server) throw new Error('Controller test server is not running')
+        return callHiveMcpTool(name, args, {
+          baseUrl: server.baseUrl,
           metadata: { threadId },
         })
+      }
       const action = (name: string, args: Record<string, unknown> = {}) =>
         mcp('hive.controller_action', { workspace_id: workspaceId, action: name, ...args })
       const connected = (await mcp('hive.controller_connect', {

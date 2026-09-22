@@ -74,7 +74,21 @@ const readStatusAndError = async (response: Response) => {
 describe('/api/team/recall', () => {
   test('returns message and dispatch evidence through the real HTTP route', async () => {
     if (!server) throw new Error('Expected test server')
+    const runtime = server
     const worker = server.store.addWorker(workspaceId, { name: 'Alice', role: 'coder' })
+    runtime.store.configureAgentLaunch(workspaceId, worker.id, {
+      command: process.execPath,
+      args: [
+        '-e',
+        "process.stdin.setRawMode(true); process.stdin.on('data', data => process.stdout.write(data)); process.stdout.write('RECALL_READY'); process.stdin.resume()",
+      ],
+    })
+    await runtime.store.startAgent(workspaceId, worker.id, {
+      hivePort: new URL(runtime.baseUrl).port,
+    })
+    await expect
+      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .toContain('RECALL_READY')
     server.store.recordUserInput(
       workspaceId,
       orchestratorId,
@@ -89,6 +103,12 @@ describe('/api/team/recall', () => {
         fromAgentId: orchestratorId,
       }
     )
+    await expect
+      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .toContain('Investigate relay recall smoke.')
+    await expect
+      .poll(() => runtime.store.listDispatches(workspaceId).find((item) => item.id === dispatch.id))
+      .toMatchObject({ status: 'submitted', deliveredAt: expect.any(Number) })
     server.store.reportTask(workspaceId, worker.id, {
       dispatchId: dispatch.id,
       status: 'success',

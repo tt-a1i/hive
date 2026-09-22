@@ -103,8 +103,13 @@ describe.skipIf(process.platform === 'win32')(
       expect(created.status).toBe(201)
       const workspaceId = created.data.id as string
       const statusPath = `/api/workspaces/${workspaceId}/controller`
-      const mcp = (name: string, args: Record<string, unknown>, identity = threadId) =>
-        callHiveMcpTool(name, args, { baseUrl: server?.baseUrl, metadata: { threadId: identity } })
+      const mcp = (name: string, args: Record<string, unknown>, identity = threadId) => {
+        if (!server) throw new Error('Controller test server is not running')
+        return callHiveMcpTool(name, args, {
+          baseUrl: server.baseUrl,
+          metadata: { threadId: identity },
+        })
+      }
       const action = (name: string, args: Record<string, unknown> = {}, identity = threadId) =>
         mcp(
           'hive.controller_action',
@@ -163,7 +168,9 @@ describe.skipIf(process.platform === 'win32')(
         (result): result is PromiseFulfilledResult<unknown> => result.status === 'fulfilled'
       )
       expect(successful.length).toBeGreaterThan(0)
-      const first = successful[0].value as { dispatch_id: string }
+      const successfulSend = successful[0]
+      if (!successfulSend) throw new Error('Expected a successful dispatch')
+      const first = successfulSend.value as { dispatch_id: string }
       // Either request may win; pending/409 is valid, a second dispatch is not.
       for (const result of successful) expect(result.value).toEqual(first)
       expect(server.store.listRecentDispatches(workspaceId)).toHaveLength(1)

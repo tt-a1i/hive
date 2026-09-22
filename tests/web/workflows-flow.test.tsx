@@ -34,7 +34,6 @@ vi.mock('@xterm/addon-fit', () => ({
     dispose() {}
   },
 }))
-vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class {} }))
 vi.mock('@xterm/addon-webgl', () => ({
   WebglAddon: class {
     onContextLoss() {}

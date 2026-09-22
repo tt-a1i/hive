@@ -67,14 +67,16 @@ const replyToFirstWorkflowDispatch = async (
    workflow-spawned worker before its dispatch reports back, then auto-
    replies so the run completes. Without this the spawn-then-dismiss
    window can be too tight for a polling observer to catch. */
+type CapturedLaunch = ReturnType<ReturnType<typeof createRuntimeStore>['peekAgentLaunchConfig']>
+
 const captureLaunchAndReply = (
   store: ReturnType<typeof createRuntimeStore>,
   workspaceId: string,
   text: string
-): { captured: Promise<{ command: string; args?: string[] } | undefined>; stop: () => void } => {
+): { captured: Promise<CapturedLaunch>; stop: () => void } => {
   let stopped = false
-  let resolveCaptured!: (value: { command: string; args?: string[] } | undefined) => void
-  const captured = new Promise<{ command: string; args?: string[] } | undefined>((res) => {
+  let resolveCaptured!: (value: CapturedLaunch) => void
+  const captured = new Promise<CapturedLaunch>((res) => {
     resolveCaptured = res
   })
   let alreadyCaptured = false
@@ -362,6 +364,7 @@ describe('workflow runner — single agent() call', () => {
       echoScript,
       [
         "process.stdin.setEncoding('utf8')",
+        'process.stdin.setRawMode(true)',
         "process.stdout.write('› ')",
         "const PASTE_END = '\\u001b[201~'",
         'let sawPaste = false',

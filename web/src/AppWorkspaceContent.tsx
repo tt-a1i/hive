@@ -63,7 +63,7 @@ export const AppWorkspaceContent = ({
 
   return (
     <WorkspaceDetail
-      activeWorkerId={activeWorkerId}
+      {...(activeWorkerId !== undefined ? { activeWorkerId } : {})}
       onCreateWorker={workerActions.createWorker}
       onDeleteWorker={workerActions.deleteWorker}
       onDeleteWorkspace={onDeleteWorkspace}
@@ -77,13 +77,13 @@ export const AppWorkspaceContent = ({
       onShellRunClosed={onShellRunClosed}
       onShellRunStarted={onShellRunStarted}
       onTryDemo={onTryDemo}
-      onActiveWorkerChange={onActiveWorkerChange}
-      welcomeDisabledReason={bootstrapError ?? undefined}
+      {...(onActiveWorkerChange ? { onActiveWorkerChange } : {})}
+      {...(bootstrapError !== null ? { welcomeDisabledReason: bootstrapError } : {})}
       orchestratorAutostartError={activeId ? (orchestratorAutostartErrors[activeId] ?? null) : null}
       terminalRuns={terminalRuns}
       workers={workers}
       workspace={activeWorkspace}
-      showInlineActionCenter={showInlineActionCenter}
+      {...(showInlineActionCenter !== undefined ? { showInlineActionCenter } : {})}
     />
   )
 }

@@ -62,13 +62,12 @@ const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number }
       'const SUBMIT_READY_DELAY_MS = 150',
       `const EXIT_ON_PASTE_NUMBER = ${input.exitOnPasteNumber ?? 0}`,
       "const PASTE_END = '\\u001b[201~'",
+      "const PASTE_START = '\\u001b[200~'",
       "const WINDOWS_CONPTY_STRIPS_PASTE_BOUNDARIES = process.platform === 'win32'",
-      "const WINDOWS_PASTE_SETTLE_MS = Number(process.env.HIVE_FAKE_CODEX_WINDOWS_PASTE_SETTLE_MS || '300')",
       'let pasteCount = 0',
       'let submitReadyAt = 0',
       'let submissions = 0',
-      'let windowsPasteTimer = null',
-      'let windowsPastedChars = 0',
+      "let inputBuffer = ''",
       "process.stdout.write('› ')",
       'const handlePaste = (pastedChars) => {',
       '  pasteCount += 1',
@@ -89,7 +88,6 @@ const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number }
       '  }, ACK_DELAY_MS)',
       '}',
       "process.stdin.on('data', (chunk) => {",
-      "  process.stdout.write('CODEX_IN:' + chunk)",
       "  const isEnter = chunk === '\\r' || chunk === '\\n' || chunk === '\\r\\n'",
       '  if (isEnter) {',
       '    if (submitReadyAt > 0 && Date.now() >= submitReadyAt) {',
@@ -100,19 +98,19 @@ const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number }
       '    }',
       '    return',
       '  }',
-      '  if (chunk.includes(PASTE_END)) {',
-      '    handlePaste(chunk.length)',
-      '    return',
-      '  }',
-      '  if (WINDOWS_CONPTY_STRIPS_PASTE_BOUNDARIES && chunk.length >= ACK_MIN_CHARS) {',
-      '    windowsPastedChars += chunk.length',
-      '    if (windowsPasteTimer) clearTimeout(windowsPasteTimer)',
-      '    windowsPasteTimer = setTimeout(() => {',
-      '      const pastedChars = windowsPastedChars',
-      '      windowsPastedChars = 0',
-      '      windowsPasteTimer = null',
-      '      handlePaste(pastedChars)',
-      '    }, WINDOWS_PASTE_SETTLE_MS)',
+      '  inputBuffer += chunk',
+      '  while (inputBuffer.length) {',
+      '    const terminators = WINDOWS_CONPTY_STRIPS_PASTE_BOUNDARIES && !inputBuffer.includes(PASTE_START)',
+      "      ? [PASTE_END, '</hive-message>', '</hive-system-message>'] : [PASTE_END]",
+      '    const boundary = terminators.map(marker => ({ marker, index: inputBuffer.indexOf(marker) }))',
+      '      .filter(item => item.index >= 0).sort((a, b) => a.index - b.index)[0]',
+      '    if (!boundary) break',
+      '    const end = boundary.index + boundary.marker.length',
+      '    const message = inputBuffer.slice(0, end)',
+      '    inputBuffer = inputBuffer.slice(end)',
+      '    if (boundary.marker === PASTE_END && !message.slice(0, -PASTE_END.length).trim()) continue',
+      "    process.stdout.write('CODEX_IN:' + message)",
+      '    handlePaste(message.length)',
       '  }',
       '})',
       'process.stdin.resume()',
@@ -161,7 +159,11 @@ describe('team send Codex pasted-content submit regression', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'CodexAck', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'CodexAck',
+          path: workspacePath,
+        }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
       const orchestratorId = `${workspace.id}:orchestrator`
@@ -385,7 +387,11 @@ describe('team send Codex pasted-content submit regression', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'CodexExit', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'CodexExit',
+          path: workspacePath,
+        }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
       const orchestratorId = `${workspace.id}:orchestrator`
@@ -440,6 +446,7 @@ describe('team send Codex pasted-content submit regression', () => {
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         expect(run).toBeDefined()
+        expect(countSubmitted(run?.output)).toBe(1)
         expect(readCounter(pasteFile)).toBeGreaterThanOrEqual(1)
       }, 7000)
 

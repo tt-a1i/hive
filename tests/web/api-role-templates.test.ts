@@ -47,7 +47,7 @@ describe('role-templates api client', () => {
   })
 
   test('createRoleTemplate POSTs JSON and returns the new template', async () => {
-    const fetchMock = vi.fn(
+    const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(JSON.stringify(makePayload({ id: 'tpl-new', name: 'Doc Writer' })), {
           headers: { 'content-type': 'application/json' },
@@ -85,7 +85,7 @@ describe('role-templates api client', () => {
   })
 
   test('updateRoleTemplate PATCHes the id-specific path', async () => {
-    const fetchMock = vi.fn(
+    const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(JSON.stringify(makePayload({ id: 'tpl-1', name: 'Renamed' })), {
           headers: { 'content-type': 'application/json' },
@@ -110,7 +110,7 @@ describe('role-templates api client', () => {
   })
 
   test('deleteRoleTemplate DELETEs and resolves on 204', async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(deleteRoleTemplate('tpl-1')).resolves.toBeUndefined()

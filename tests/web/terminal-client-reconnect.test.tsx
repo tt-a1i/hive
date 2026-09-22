@@ -91,7 +91,7 @@ describe('terminal-client — tunnel reconnect surfacing (VULN-RELIABILITY-2)', 
     const transport = makeFakeTransport()
     setApiTransport(transport)
 
-    let completeRestore: (() => void) | null = null
+    const restoreCompletion: { complete?: () => void } = {}
     let restored: string | null = null
     const output: string[] = []
     const client = createTerminalClient({
@@ -103,7 +103,7 @@ describe('terminal-client — tunnel reconnect surfacing (VULN-RELIABILITY-2)', 
       },
       onRestore: (snapshot, onComplete) => {
         restored = snapshot
-        completeRestore = onComplete
+        restoreCompletion.complete = onComplete
       },
       onClose: () => {},
     })
@@ -122,7 +122,8 @@ describe('terminal-client — tunnel reconnect surfacing (VULN-RELIABILITY-2)', 
     expect(output).toEqual([])
     expect(control?.sent.map(String)).not.toContain(JSON.stringify({ type: 'restore_complete' }))
 
-    completeRestore?.()
+    if (!restoreCompletion.complete) throw new Error('Expected restore completion callback')
+    restoreCompletion.complete()
 
     expect(control?.sent.map(String)).toContain(JSON.stringify({ type: 'restore_complete' }))
     expect(output).toEqual(['live-before-restore', 'live-during-restore'])

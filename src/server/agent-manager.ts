@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { type IWindowsPtyForkOptions, spawn } from '@lydell/node-pty'
+import type { IWindowsPtyForkOptions } from '@lydell/node-pty'
 import { resolveSpawnCommand } from './agent-command-resolver.js'
 import { attachAgentPty, toAgentRunSnapshot } from './agent-manager-support.js'
 import { logAgentStartupFailure } from './agent-startup-diagnostics.js'
+import { spawn } from './pty.js'
 import { createPtyOutputBus, type PtyOutputBus } from './pty-output-bus.js'
 
 type RunStatus = 'starting' | 'running' | 'exited' | 'error'

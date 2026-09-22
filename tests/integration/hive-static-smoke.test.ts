@@ -47,10 +47,14 @@ describe('hive static smoke', () => {
 
     const modulePath = fileURLToPath(new URL('../../src/cli/hive.ts', import.meta.url))
     const { execFile, spawn } = await import('node:child_process')
-    const processHandle = spawn(process.execPath, ['--import', 'tsx', modulePath, '--port', '0'], {
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const processHandle = spawn(
+      process.execPath,
+      ['--import', 'tsx', modulePath, '--port', '0', '--no-open'],
+      {
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
     let stdout = ''
     processHandle.stdout.on('data', (chunk) => {
       stdout += chunk.toString()

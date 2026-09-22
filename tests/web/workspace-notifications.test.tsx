@@ -40,8 +40,21 @@ const tree = (workers: TeamListItem[]) => (
 )
 const currentWorkers = () => server.store.listWorkers(workspace.id)
 const dispatch = () =>
-  server.store.dispatchTask(workspace.id, workerId, 'Notification contract fixture')
+  server.store.dispatchTask(workspace.id, workerId, 'Notification contract fixture', {
+    fromAgentId: `${workspace.id}:orchestrator`,
+    autoStartWorker: false,
+    hivePort: new URL(server.baseUrl).port,
+  })
 const report = async (dispatchId: string) => {
+  // Wait until delivery claims the responsibility; queued work cannot report.
+  // This status alone does not prove that the child consumed the input.
+  await expect
+    .poll(
+      () =>
+        server.store.listDispatches(workspace.id).find((item) => item.id === dispatchId)?.status,
+      { timeout: 10000 }
+    )
+    .toBe('submitted')
   const response = await fetch(`${server.baseUrl}/api/team/report`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

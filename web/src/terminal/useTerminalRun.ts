@@ -5,8 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isRuntimeRunActive, RuntimeRunProbeError } from '../api.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
 import { wrapBracketedPaste } from './bracketed-paste.js'
-import { isCodexPromptEraseInput, smoothCodexTerminalOutput } from './codex-output-smoothing.js'
-import { attachCompositionBridge } from './composition.js'
+import { attachCompositionBridge, type CompositionBridge } from './composition.js'
 import { resolveControlBytes, type TerminalKeyName } from './control-bytes.js'
 import { resolveTerminalShortcut } from './shortcuts.js'
 import type { TerminalClient } from './terminal-client.js'
@@ -139,7 +138,6 @@ export const useTerminalRun = (
   // gates xterm's onData (desktop) and the keybar/composer (mobile) so input
   // during IME composition is suppressed everywhere.
   const isComposingRef = useRef(false)
-  const preserveNextCodexPromptEditFrameRef = useRef(false)
   const [renderer, setRenderer] = useState<TerminalRenderer>('canvas')
   const [isScrolledUp, setIsScrolledUp] = useState(false)
   const isScrolledUpRef = useRef(false)
@@ -197,16 +195,10 @@ export const useTerminalRun = (
     if (node) node.dataset.renderer = next
   }, [])
 
-  const sendInput = useCallback(
-    (chunk: string) => {
-      if (isComposingRef.current) return
-      if (inputProfile === 'codex' && isCodexPromptEraseInput(chunk)) {
-        preserveNextCodexPromptEditFrameRef.current = true
-      }
-      clientRef.current?.sendInput(chunk)
-    },
-    [inputProfile]
-  )
+  const sendInput = useCallback((chunk: string) => {
+    if (isComposingRef.current) return
+    clientRef.current?.sendInput(chunk)
+  }, [])
   const sendKey = useCallback(
     (key: TerminalKeyName) => {
       const applicationCursorKeys = terminalRef.current?.modes?.applicationCursorKeysMode
@@ -261,8 +253,9 @@ export const useTerminalRun = (
     let connectRetryTimer: number | undefined
     let wheelFallbackDispose: (() => void) | undefined
     let touchScrollDispose: (() => void) | undefined
-    let helperTextarea: HTMLTextAreaElement | null = null
-    let disposeComposition: (() => void) | undefined
+    let compositionBridge: CompositionBridge | undefined
+    let detachUserInputEvents: (() => void) | undefined
+    let userInputEvent: Event | undefined
     let scrollSubscription: { dispose: () => void } | undefined
     let bufferChangeSubscription: { dispose: () => void } | undefined
     let scrollStateFrame: number | undefined
@@ -384,9 +377,6 @@ export const useTerminalRun = (
         // so the jump-to-latest button doesn't stay stuck.
         bufferChangeSubscription = nextTerminal.buffer.onBufferChange(scheduleScrolledUpUpdate)
         const sendTerminalInput = (chunk: string) => {
-          if (inputProfile === 'codex' && isCodexPromptEraseInput(chunk)) {
-            preserveNextCodexPromptEditFrameRef.current = true
-          }
           client?.sendInput(chunk)
         }
         wheelFallbackDispose = attachAlternateScreenWheelFallback({
@@ -411,14 +401,47 @@ export const useTerminalRun = (
         // typing CJK in Claude Code's TUI prompt would commit the CJK chars
         // and then send a growing run of DELs that erased surrounding text. The
         // same flag gates onData below, so input during composition is suppressed.
-        helperTextarea =
+        const helperTextarea =
           containerRef.current.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
         if (helperTextarea) {
-          disposeComposition = attachCompositionBridge(helperTextarea, {
+          const mouseEvents = [
+            'mousedown',
+            'mouseup',
+            'mousemove',
+            'wheel',
+            'touchstart',
+            'touchmove',
+            'touchend',
+          ]
+          const events = [
+            'keydown',
+            'keypress',
+            'beforeinput',
+            'input',
+            'paste',
+            'compositionend',
+            ...mouseEvents,
+          ]
+          const markInput = (event: Event) => {
+            const terminalPointer =
+              mouseEvents.includes(event.type) &&
+              event.target instanceof Node &&
+              nextTerminal.element?.contains(event.target)
+            if (event.target !== helperTextarea && !terminalPointer) return
+            // Native events may run microtasks between capture and target
+            // listeners. eventPhase tracks dispatch itself, not JS stack timing.
+            userInputEvent = event
+          }
+          for (const event of events) document.addEventListener(event, markInput, true)
+          detachUserInputEvents = () => {
+            for (const event of events) document.removeEventListener(event, markInput, true)
+          }
+          compositionBridge = attachCompositionBridge(helperTextarea, {
             setComposing: (composing) => {
               isComposingRef.current = composing
             },
             commit: sendTerminalInput,
+            input: (text) => nextTerminal.input(text, true),
           })
         }
 
@@ -470,6 +493,13 @@ export const useTerminalRun = (
         outputRenderQueue = createTerminalOutputRenderQueue({
           canRender: isContainerResizable,
           write: (chunk, callback) => nextTerminal.write(chunk, callback),
+          resize: (cols, rows, callback) =>
+            nextTerminal.write('', () => {
+              if (disposed) return
+              if (nextTerminal.cols !== cols || nextTerminal.rows !== rows)
+                nextTerminal.resize(cols, rows)
+              callback()
+            }),
         })
         const getContainerPixels = (): { pixelHeight?: number; pixelWidth?: number } => {
           if (!containerRef.current) return {}
@@ -491,10 +521,10 @@ export const useTerminalRun = (
           ) {
             return
           }
-          fitAddon?.fit()
+          const proposed = fitAddon?.proposeDimensions()
           const nextResize = {
-            cols: terminal?.cols ?? 80,
-            rows: terminal?.rows ?? 24,
+            cols: proposed?.cols ?? terminal?.cols ?? 80,
+            rows: proposed?.rows ?? terminal?.rows ?? 24,
             ...getContainerPixels(),
           }
           if (
@@ -576,31 +606,20 @@ export const useTerminalRun = (
           onOutput(chunk, acknowledge) {
             setTerminalStatus('running')
             const bytes = terminalOutputEncoder.encode(chunk).byteLength
-            if (inputProfile === 'codex') {
-              const smoothed = smoothCodexTerminalOutput(chunk, {
-                preservePromptEditFrame: preserveNextCodexPromptEditFrameRef.current,
-              })
-              if (smoothed.consumedPromptEraseInput) {
-                preserveNextCodexPromptEditFrameRef.current = false
-              }
-              if (smoothed.suppress) {
-                outputRenderQueue?.enqueue('', bytes, acknowledge)
-                return
-              }
-              outputRenderQueue?.enqueue(smoothed.chunk, bytes, acknowledge)
-              return
-            }
             outputRenderQueue?.enqueue(chunk, bytes, acknowledge)
           },
-          onRestore(snapshot, onComplete) {
+          onResize(cols, rows) {
+            outputRenderQueue?.enqueueResize(cols, rows)
+          },
+          onRestore(snapshot, onComplete, size) {
             setTerminalStatus('running')
-            const restoredSnapshot =
-              inputProfile === 'codex' ? smoothCodexTerminalOutput(snapshot).chunk : snapshot
-            if (restoredSnapshot.length === 0) {
+            if (size && (nextTerminal.cols !== size.cols || nextTerminal.rows !== size.rows))
+              nextTerminal.resize(size.cols, size.rows)
+            if (snapshot.length === 0) {
               onComplete()
               return
             }
-            nextTerminal.write(restoredSnapshot, onComplete)
+            nextTerminal.write(snapshot, onComplete)
           },
           onClose() {
             // A tunnel reconnect (or a dropped ws) closed the stream while this effect is still mounted.
@@ -619,8 +638,12 @@ export const useTerminalRun = (
         }, TERMINAL_CONNECT_RETRY_MS)
         clientRef.current = client
         inputSubscription = nextTerminal.onData((chunk) => {
-          if (isComposingRef.current) return
-          sendTerminalInput(chunk)
+          const filtered = compositionBridge?.filterData(chunk) ?? chunk
+          if (isComposingRef.current || !filtered) return
+          client?.sendInput(
+            filtered,
+            userInputEvent !== undefined && userInputEvent.eventPhase !== Event.NONE
+          )
         })
         if (typeof nextTerminal.onBinary === 'function') {
           binaryInputSubscription = nextTerminal.onBinary((chunk) => {
@@ -660,7 +683,8 @@ export const useTerminalRun = (
       if (connectRetryTimer) window.clearTimeout(connectRetryTimer)
       wheelFallbackDispose?.()
       touchScrollDispose?.()
-      disposeComposition?.()
+      compositionBridge?.dispose()
+      detachUserInputEvents?.()
       outputRenderQueue?.dispose()
       if (scrollStateFrame !== undefined) window.cancelAnimationFrame(scrollStateFrame)
       scrollSubscription?.dispose()

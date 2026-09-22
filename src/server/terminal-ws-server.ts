@@ -116,8 +116,10 @@ export const createTerminalWebSocketServer = (
     wss.handleUpgrade(request, socket, head, (ws) => {
       detachRawSocketErrorHandler()
       const clientId = getClientId(url)
-      if (match.channel === 'io') hub.attachIo(match.runId, clientId, ws, getInitialSize(url))
-      else hub.attachControl(match.runId, clientId, ws, getInitialSize(url))
+      const renderEvents = url.searchParams.get('render_events') === '1'
+      if (match.channel === 'io')
+        hub.attachIo(match.runId, clientId, ws, getInitialSize(url), renderEvents)
+      else hub.attachControl(match.runId, clientId, ws, getInitialSize(url), renderEvents)
     })
   })
 

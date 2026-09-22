@@ -4,6 +4,7 @@ import type { RuntimeStore } from './runtime-store.js'
 import { createTerminalOutputFlow } from './terminal-flow-control.js'
 import {
   parseTerminalControlMessage,
+  parseTerminalRenderInput,
   serializeTerminalError,
   serializeTerminalExit,
   serializeTerminalRestore,
@@ -16,6 +17,8 @@ interface ViewerState {
   controlSocket: WebSocket | null
   flowState: ReturnType<typeof createTerminalOutputFlow> | null
   ioSocket: WebSocket | null
+  snapshotStarted: boolean
+  renderEvents: boolean
 }
 
 interface RunState {
@@ -25,6 +28,8 @@ interface RunState {
   mirror: TerminalStateMirror
   outputUnsubscribe: (() => void) | null
   viewers: Map<string, ViewerState>
+  size: TerminalMirrorSize
+  inputOwner: string | null
 }
 
 const normalizeTerminalInput = (
@@ -44,19 +49,53 @@ export interface TerminalStreamHub {
     runId: string,
     clientId: string,
     socket: WebSocket,
-    initialSize?: TerminalMirrorSize
+    initialSize?: TerminalMirrorSize,
+    renderEvents?: boolean
   ) => void
   attachIo: (
     runId: string,
     clientId: string,
     socket: WebSocket,
-    initialSize?: TerminalMirrorSize
+    initialSize?: TerminalMirrorSize,
+    renderEvents?: boolean
   ) => void
   close: () => void
 }
 
 export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub => {
   const runStates = new Map<string, RunState>()
+
+  const interactiveOwner = (state: RunState) => {
+    const viewers = [...state.viewers.values()]
+    const modern = viewers.some((viewer) => viewer.renderEvents)
+    const eligible = viewers.filter(
+      (viewer) => viewer.ioSocket?.readyState === 1 && (!modern || viewer.renderEvents)
+    )
+    // A legacy or disconnected owner cannot answer queries. Elect one live
+    // viewer without letting an automatic reply change the shared PTY grid.
+    return (
+      eligible.find((viewer) => viewer.clientId === state.inputOwner)?.clientId ??
+      eligible[0]?.clientId
+    )
+  }
+
+  const rejectLegacyInteraction = (state: RunState, viewer: ViewerState) => {
+    if (viewer.renderEvents || ![...state.viewers.values()].some((peer) => peer.renderEvents))
+      return false
+    // Raw legacy input cannot distinguish a keystroke from an automatic reply.
+    // Keep its stream open so the old client shows the error instead of entering
+    // its automatic reconnect loop. Refresh negotiates ordered input/resize.
+    if (viewer.controlSocket)
+      sendWebSocketMessage(
+        viewer.controlSocket,
+        serializeTerminalError(
+          'Hive terminal was updated. Refresh this page before typing or resizing. 终端已更新，请刷新页面后继续输入。',
+          'terminal_refresh_required'
+        ),
+        'terminal refresh required'
+      )
+    return true
+  }
 
   const maybeResumeRun = (runId: string, state: RunState, clientId: string) => {
     if (!state.backpressuredViewerIds.delete(clientId)) return
@@ -75,13 +114,20 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   const getOrCreateViewer = (state: RunState, clientId: string) => {
     let viewer = state.viewers.get(clientId)
     if (!viewer) {
-      viewer = { clientId, controlSocket: null, flowState: null, ioSocket: null }
+      viewer = {
+        clientId,
+        controlSocket: null,
+        flowState: null,
+        ioSocket: null,
+        snapshotStarted: false,
+        renderEvents: false,
+      }
       state.viewers.set(clientId, viewer)
     }
     return viewer
   }
 
-  const getOrCreateState = (runId: string, initialSize?: TerminalMirrorSize) => {
+  const getOrCreateState = (runId: string) => {
     let state = runStates.get(runId)
     if (!state) {
       state = {
@@ -89,9 +135,13 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         exited: false,
         exitInterval: null,
         // runId is globally unique, so it is semantically equivalent to workspaceId:runId.
-        mirror: new TerminalStateMirror(initialSize),
+        // PTYs start at the default grid. A viewer's viewport must not be used
+        // to reinterpret bytes already emitted at the PTY's original size.
+        mirror: new TerminalStateMirror(),
         outputUnsubscribe: null,
         viewers: new Map(),
+        size: { cols: 80, rows: 24 },
+        inputOwner: null,
       }
       runStates.set(runId, state)
       const liveRun = store.getLiveRun(runId)
@@ -99,10 +149,13 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       const nextState = state
       nextState.outputUnsubscribe = store.getPtyOutputBus().subscribe(runId, (chunk) => {
         nextState.mirror.write(chunk)
-        for (const viewer of nextState.viewers.values()) viewer.flowState?.enqueue(chunk)
+        for (const viewer of nextState.viewers.values()) {
+          // Unpaired legacy IO consumers have no control/restore handshake.
+          if (viewer.snapshotStarted || (!viewer.renderEvents && viewer.clientId === 'legacy')) {
+            viewer.flowState?.enqueue(chunk)
+          }
+        }
       })
-    } else if (initialSize) {
-      state.mirror.resize(initialSize.cols, initialSize.rows)
     }
     return state
   }
@@ -111,8 +164,54 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     const viewer = state.viewers.get(clientId)
     if (!viewer || viewer.controlSocket || viewer.ioSocket) return
     state.viewers.delete(clientId)
+    if (state.inputOwner === clientId) state.inputOwner = null
     maybeResumeRun(runId, state, clientId)
     cleanupRun(runId)
+  }
+
+  const startSnapshot = (runId: string, state: RunState, viewer: ViewerState) => {
+    const socket = viewer.controlSocket
+    if (
+      !socket ||
+      (!viewer.ioSocket && (viewer.renderEvents || viewer.clientId !== 'legacy')) ||
+      viewer.snapshotStarted
+    )
+      return
+    // Paired viewers attach both channels before taking the snapshot. Output before
+    // this boundary belongs only to the snapshot; output after it belongs only
+    // to the live stream, which the client buffers until restore completes.
+    viewer.snapshotStarted = true
+    const size = { ...state.size, render_events: viewer.renderEvents }
+    void state.mirror
+      .getSnapshot()
+      .then((snapshot) => {
+        sendWebSocketMessage(
+          socket,
+          serializeTerminalRestore(snapshot, size),
+          `terminal ${runId} restore`
+        )
+      })
+      .catch((error: unknown) => {
+        sendWebSocketMessage(
+          socket,
+          serializeTerminalError(
+            error instanceof Error ? error.message : 'Failed to restore terminal'
+          ),
+          `terminal ${runId} restore error`
+        )
+      })
+  }
+
+  const resizeRun = (runId: string, state: RunState, cols: number, rows: number) => {
+    if (state.size.cols === cols && state.size.rows === rows) return
+    // Only publish a new grid after the real PTY accepts it. Flush old output
+    // before the resize event on the same IO channel, never across two sockets.
+    store.resizeAgentRun(runId, cols, rows)
+    state.size = { cols, rows }
+    state.mirror.resize(cols, rows)
+    for (const viewer of state.viewers.values()) {
+      if (viewer.snapshotStarted) viewer.flowState?.resize(cols, rows)
+    }
   }
 
   const startExitWatcher = (runId: string, state: RunState) => {
@@ -140,31 +239,27 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
   }
 
   return {
-    attachControl(runId, clientId, socket, initialSize) {
-      const state = getOrCreateState(runId, initialSize)
+    attachControl(runId, clientId, socket, _initialSize, renderEvents = false) {
+      const state = getOrCreateState(runId)
       attachWebSocketErrorHandler(socket, `terminal ${runId} control`)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.controlSocket = socket
+      viewer.renderEvents = renderEvents
+      // Legacy control-only observers restore on every connection; they do not
+      // participate in the paired client's one-time stream boundary.
+      if (!renderEvents && clientId === 'legacy') viewer.snapshotStarted = false
       startExitWatcher(runId, state)
-      void state.mirror
-        .getSnapshot()
-        .then((snapshot) => {
-          sendWebSocketMessage(
-            socket,
-            serializeTerminalRestore(snapshot),
-            `terminal ${runId} restore`
-          )
-        })
-        .catch(() => {
-          sendWebSocketMessage(socket, serializeTerminalRestore(''), `terminal ${runId} restore`)
-        })
+      startSnapshot(runId, state, viewer)
       socket.on('message', (raw) => {
         try {
           const message = parseTerminalControlMessage(raw as Buffer | string)
           if (message.type === 'output_ack') viewer.flowState?.ack(message.bytes)
           if (message.type === 'resize') {
-            state.mirror.resize(message.cols, message.rows)
-            store.resizeAgentRun(runId, message.cols, message.rows)
+            if (rejectLegacyInteraction(state, viewer)) return
+            if (!interactiveOwner(state) || interactiveOwner(state) === clientId) {
+              resizeRun(runId, state, message.cols, message.rows)
+              state.inputOwner = clientId
+            }
           }
           if (message.type === 'stop') store.stopAgentRun(runId)
           if (message.type === 'restore_complete') return
@@ -183,13 +278,15 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         cleanupViewer(runId, state, clientId)
       })
     },
-    attachIo(runId, clientId, socket, initialSize) {
-      const state = getOrCreateState(runId, initialSize)
+    attachIo(runId, clientId, socket, _initialSize, renderEvents = false) {
+      const state = getOrCreateState(runId)
       attachWebSocketErrorHandler(socket, `terminal ${runId} io`)
       const viewer = getOrCreateViewer(state, clientId)
       viewer.ioSocket = socket
+      viewer.renderEvents = renderEvents
       viewer.flowState?.close()
       viewer.flowState = createTerminalOutputFlow(socket, {
+        renderEvents,
         onBackpressureChange(backpressured) {
           if (backpressured) {
             const wasEmpty = state.backpressuredViewerIds.size === 0
@@ -200,9 +297,23 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
           maybeResumeRun(runId, state, clientId)
         },
       })
+      startSnapshot(runId, state, viewer)
       socket.on('message', (raw, isBinary) => {
         try {
-          store.writeRunInput(runId, normalizeTerminalInput(raw, isBinary))
+          if (rejectLegacyInteraction(state, viewer)) return
+          let input = normalizeTerminalInput(raw, isBinary)
+          if (renderEvents) {
+            const event = parseTerminalRenderInput(input.toString())
+            input = event.data
+            if (!event.userInput) {
+              const replyOwner = interactiveOwner(state)
+              if (replyOwner !== clientId) return
+            } else if (input !== '\x1b[I' && input !== '\x1b[O') {
+              resizeRun(runId, state, event.cols, event.rows)
+              state.inputOwner = clientId
+            }
+          }
+          store.writeRunInput(runId, input)
         } catch (error) {
           sendWebSocketMessage(
             socket,
@@ -214,7 +325,9 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         }
       })
       socket.on('close', () => {
-        if (viewer.ioSocket === socket) viewer.ioSocket = null
+        // A replaced socket must not tear down its successor's output flow.
+        if (viewer.ioSocket !== socket) return
+        viewer.ioSocket = null
         viewer.flowState?.close()
         viewer.flowState = null
         cleanupViewer(runId, state, clientId)

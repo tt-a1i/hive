@@ -32,6 +32,7 @@ export interface WorkflowAgentBudget {
   maxConcurrent: number
   inFlight: number
   closed: string | null
+  abortController: AbortController
   queue: WorkflowSlotWaiter[]
 }
 
@@ -51,6 +52,7 @@ export const createWorkflowAgentBudget = (
   calls: 0,
   inFlight: 0,
   closed: null,
+  abortController: new AbortController(),
   queue: parent?.queue ?? [],
 })
 
@@ -100,6 +102,7 @@ const drainBudgetQueue = (queue: WorkflowSlotWaiter[]) => {
 
 export const closeWorkflowAgentBudget = (scope: WorkflowAgentBudget, reason: string) => {
   scope.closed ??= reason
+  scope.abortController.abort(new Error(scope.closed))
   drainBudgetQueue(scope.queue)
 }
 
@@ -365,7 +368,20 @@ export const createWorkflowAgentCallExecutor = ({
         assertRunActive()
         assertWorkflowBudgetActive(budget)
         const liveRun = await store.startAgent(workspaceId, worker.id, { hivePort })
-        await liveRun.postStartInputReady
+        const signal = AbortSignal.any(
+          budgetAncestors(budget).map((scope) => scope.abortController.signal)
+        )
+        signal.throwIfAborted()
+        let onAbort: () => void = () => {}
+        try {
+          await new Promise<void>((resolve, reject) => {
+            onAbort = () => reject(signal.reason)
+            signal.addEventListener('abort', onAbort, { once: true })
+            Promise.resolve(liveRun.postStartInputReady).then(resolve, reject)
+          })
+        } finally {
+          signal.removeEventListener('abort', onAbort)
+        }
         assertRunActive()
         assertWorkflowBudgetActive(budget)
         const schemaTail = opts.outputSchema ? buildSchemaInstruction(opts.outputSchema) : ''

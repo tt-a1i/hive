@@ -19,6 +19,13 @@ afterEach(() => {
 
 const withI18n = (ui: React.ReactElement) => <I18nProvider>{ui}</I18nProvider>
 
+const runningState: OrchestratorPaneState = {
+  hasUserInputSinceStart: true,
+  kind: 'running',
+  runId: 'run-orch-1',
+  startupBlockedReason: null,
+}
+
 const renderPane = (variant: 'mobile' | 'wide', state: OrchestratorPaneState) => {
   const onStart = vi.fn()
   const onRestart = vi.fn()
@@ -39,24 +46,24 @@ const renderPane = (variant: 'mobile' | 'wide', state: OrchestratorPaneState) =>
 
 describe('mobile OrchestratorPane', () => {
   test('running: the PTY slot mounts so the live xterm re-parks there', () => {
-    renderPane('mobile', { kind: 'running', runId: 'run-orch-1' })
+    renderPane('mobile', runningState)
     const slot = document.getElementById('orch-pty-run-orch-1')
     expect(slot).not.toBeNull()
     expect(slot?.getAttribute('data-pty-slot')).toBe('orchestrator')
   })
 
   test('running: Stop is hidden on mobile', () => {
-    renderPane('mobile', { kind: 'running', runId: 'run-orch-1' })
+    renderPane('mobile', runningState)
     expect(screen.queryByTestId('orchestrator-stop')).toBeNull()
   })
 
   test('desktop: Stop is also hidden', () => {
-    renderPane('wide', { kind: 'running', runId: 'run-orch-1' })
+    renderPane('wide', runningState)
     expect(screen.queryByTestId('orchestrator-stop')).toBeNull()
   })
 
   test('running: mobile does not expose the desktop Stop tap target', () => {
-    renderPane('mobile', { kind: 'running', runId: 'run-orch-1' })
+    renderPane('mobile', runningState)
     expect(screen.queryByTestId('orchestrator-stop')).toBeNull()
   })
 

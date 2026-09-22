@@ -72,6 +72,9 @@ export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefin
   const runIdsByWorkspaceId = new Map<string, string[]>()
   const startedAtByRunId = new Map<string, number>()
   const exitCleanupTimersByRunId = new Map<string, ReturnType<typeof setTimeout>>()
+  // Keep exit promises after a shell is detached from the UI, until its PTY exits.
+  const pendingExits = new Set<Promise<void>>()
+  let closing = false
 
   const requireManager = () => {
     if (!agentManager) throw new Error('Agent manager is required for workspace shell terminals')
@@ -140,22 +143,41 @@ export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefin
   }
 
   const closeRun = (runId: string) => {
-    try {
-      stopPtyRun(runId)
-    } catch {
-      // The shell may have already exited or been removed by the PTY manager.
-    }
-    try {
-      requireManager().removeRun(runId)
-    } catch {
-      // The PTY manager may have already dropped the run.
-    }
+    stopPtyRun(runId)
+    requireManager().removeRun(runId)
     detachRun(runId)
   }
 
+  const closeRuns = (runIds: string[]) => {
+    const errors: unknown[] = []
+    for (const runId of runIds) {
+      try {
+        closeRun(runId)
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Failed to stop workspace shells')
+  }
+
   return {
-    close() {
-      for (const runId of Array.from(workspaceIdsByRunId.keys())) closeRun(runId)
+    async close() {
+      closing = true
+      closeRuns(Array.from(workspaceIdsByRunId.keys()))
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          Promise.all(pendingExits),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error('Workspace shell shutdown timed out')),
+              5000
+            )
+          }),
+        ])
+      } finally {
+        if (timeout) clearTimeout(timeout)
+      }
       runIdsByWorkspaceId.clear()
       workspaceIdsByRunId.clear()
       startedAtByRunId.clear()
@@ -169,13 +191,7 @@ export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefin
       return true
     },
     deleteWorkspace(workspaceId: string) {
-      for (const runId of Array.from(runIdsByWorkspaceId.get(workspaceId) ?? [])) {
-        try {
-          closeRun(runId)
-        } catch {
-          // Workspace deletion should not fail because the shell already exited.
-        }
-      }
+      closeRuns(Array.from(runIdsByWorkspaceId.get(workspaceId) ?? []))
       runIdsByWorkspaceId.delete(workspaceId)
     },
     getLiveRun(runId: string): LiveAgentRun | undefined {
@@ -212,23 +228,48 @@ export const createWorkspaceShellRuntime = (agentManager: AgentManager | undefin
       if (hasRun(runId)) requireManager().resumeRun(runId)
     },
     async start(workspace: WorkspaceSummary): Promise<LiveAgentRun> {
+      if (closing) throw new Error('Workspace shell runtime is closing')
       const startedAt = Date.now()
       const launch = resolveWorkspaceShellStart(workspace.path)
-      const run = await requireManager().startAgent({
-        agentId: getWorkspaceShellAgentId(workspace.id),
-        args: launch.args,
-        command: launch.command,
-        cwd: launch.cwd,
-        env: {
-          COLORTERM: 'truecolor',
-          FORCE_COLOR: '1',
-          NO_COLOR: undefined,
-          TERM: 'xterm-256color',
-          TERM_PROGRAM: 'hive-shell',
-        },
-        onExit: ({ runId }) => handleShellExit(runId),
+      let resolveExit!: () => void
+      const exit = new Promise<void>((resolve) => {
+        resolveExit = resolve
       })
+      pendingExits.add(exit)
+      void exit.then(() => pendingExits.delete(exit))
+      let run: Awaited<ReturnType<AgentManager['startAgent']>>
+      try {
+        run = await requireManager().startAgent({
+          agentId: getWorkspaceShellAgentId(workspace.id),
+          args: launch.args,
+          command: launch.command,
+          cwd: launch.cwd,
+          env: {
+            COLORTERM: 'truecolor',
+            FORCE_COLOR: '1',
+            NO_COLOR: undefined,
+            TERM: 'xterm-256color',
+            TERM_PROGRAM: 'hive-shell',
+          },
+          onExit: ({ runId }) => {
+            resolveExit()
+            handleShellExit(runId)
+          },
+        })
+      } catch (error) {
+        resolveExit()
+        throw error
+      }
+      // Retain ownership even if stopping an in-flight start throws, so callers
+      // can explicitly retry rather than losing the live process from the runtime.
       attachRun(workspace.id, run.runId, WORKSPACE_SHELL_LABEL, startedAt)
+      if (closing) {
+        stopPtyRun(run.runId)
+        await exit
+        requireManager().removeRun(run.runId)
+        detachRun(run.runId)
+        throw new Error('Workspace shell runtime is closing')
+      }
       return { ...run, startedAt }
     },
     stopRun(runId: string) {

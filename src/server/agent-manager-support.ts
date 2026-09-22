@@ -170,6 +170,7 @@ export const attachAgentPty = (
   execRunner: ExecRunner = defaultExecRunner
 ) => {
   let stdinClosed = false
+  let stopRequested = false
   let forceKillTimer: ReturnType<typeof setTimeout> | undefined
   let ptyReadEofTimer: ReturnType<typeof setTimeout> | undefined
   const resolveProcessGroupId = () => {
@@ -311,8 +312,18 @@ export const attachAgentPty = (
         cleanupProcessGroup()
         return
       }
+      // Workspace deletion and runtime shutdown can overlap before onExit.
+      // Start termination once; the existing timer owns any escalation.
+      if (stopRequested) return
+      stopRequested = true
       clearPtyReadEofTimer()
-      killPty('SIGTERM')
+      try {
+        killPty('SIGTERM')
+      } catch (error) {
+        // A failed termination attempt must not suppress an explicit retry.
+        stopRequested = false
+        throw error
+      }
       stdinClosed = true
       scheduleForceKill()
     },

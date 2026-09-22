@@ -13,7 +13,7 @@ interface CategoryTreeProps {
 
 interface RowProps {
   label: string
-  count?: number
+  count: number | undefined
   active: boolean
   onClick: () => void
 }

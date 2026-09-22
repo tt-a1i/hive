@@ -94,7 +94,7 @@ const insertPendingOutboxRow = (
   }
 }
 
-const setupOfflineReportHarness = async (options: { dispatchFromOrchestrator?: boolean } = {}) => {
+const setupOfflineReportHarness = async () => {
   const dataDir = mkdtempSync(join(tmpdir(), 'hive-report-outbox-route-'))
   const workspacePath = join(dataDir, 'workspace')
   mkdirSync(workspacePath, { recursive: true })
@@ -104,7 +104,10 @@ const setupOfflineReportHarness = async (options: { dispatchFromOrchestrator?: b
   servers.push(server)
   const cookie = await getUiCookie(server.baseUrl)
   const workerScript = join(workspacePath, 'passive-worker.js')
-  writeFileSync(workerScript, 'process.stdin.resume()\nsetInterval(() => {}, 1000)\n')
+  writeFileSync(
+    workerScript,
+    "process.stdin.setRawMode(true); process.stdin.setEncoding('utf8'); process.stdin.on('data', data => process.stdout.write(data)); process.stdout.write('OUTBOX_WORKER_READY'); process.stdin.resume()\n"
+  )
   writeFileSync(join(workspacePath, 'login-result.txt'), 'Login implementation verified\n')
 
   const workspaceResponse = await fetch(`${server.baseUrl}/api/workspaces`, {
@@ -141,15 +144,21 @@ const setupOfflineReportHarness = async (options: { dispatchFromOrchestrator?: b
     }
   )
   expect(startResponse.status).toBe(201)
+  await expect
+    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .toContain('OUTBOX_WORKER_READY')
   const workerToken = requireAgentToken(server.store, worker.id)
   expect(server.store.validateAgentToken(worker.id, workerToken)).toBe(true)
 
-  const dispatch = await server.store.dispatchTask(
-    workspace.id,
-    worker.id,
-    'Implement login',
-    options.dispatchFromOrchestrator ? { fromAgentId: `${workspace.id}:orchestrator` } : undefined
-  )
+  const dispatch = await server.store.dispatchTask(workspace.id, worker.id, 'Implement login', {
+    fromAgentId: `${workspace.id}:orchestrator`,
+  })
+  await expect
+    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .toContain('Implement login')
+  await expect
+    .poll(() => server.store.listDispatches(workspace.id).find((item) => item.id === dispatch.id))
+    .toMatchObject({ status: 'submitted', deliveredAt: expect.any(Number) })
   expect(server.store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(1)
 
   return { cookie, dataDir, dispatch, server, worker, workerToken, workspace, workspacePath }
@@ -186,7 +195,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
       expect.objectContaining({
         id: harness.dispatch.id,
         reportText: null,
-        status: 'queued',
+        status: 'submitted',
       }),
     ])
     expect(
@@ -211,7 +220,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
       expect.objectContaining({
         id: harness.dispatch.id,
         reportText: null,
-        status: 'queued',
+        status: 'submitted',
       }),
     ])
     expect(
@@ -303,7 +312,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
   })
 
   test('deleting a worker replaces stale pending redelivery with a dropped-dispatch notice', async () => {
-    const harness = await setupOfflineReportHarness({ dispatchFromOrchestrator: true })
+    const harness = await setupOfflineReportHarness()
     const orchestratorId = `${harness.workspace.id}:orchestrator`
     insertPendingOutboxRow(harness.dataDir, {
       workspaceId: harness.workspace.id,

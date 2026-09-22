@@ -174,6 +174,44 @@ const writeDreamOutput = (value: unknown) => {
   writeFileSync(outputFile, typeof value === 'string' ? value : JSON.stringify(value))
 }
 
+const dispatchToReportWorker = async (workspaceId: string, name: string, text: string) => {
+  if (!server) throw new Error('Expected test server')
+  const runtime = server
+  const directory = mkdtempSync(join(tmpdir(), 'hive-dream-report-'))
+  tempDirs.push(directory)
+  const script = join(directory, 'receiver.cjs')
+  writeFileSync(
+    script,
+    "process.stdin.setRawMode(true); process.stdin.on('data', data => process.stdout.write(data)); console.log('DREAM_REPORT_READY'); process.stdin.resume()\n"
+  )
+  const worker = runtime.store.addWorker(workspaceId, { name, role: 'tester' })
+  runtime.store.configureAgentLaunch(workspaceId, worker.id, {
+    command: process.execPath,
+    args: [script],
+  })
+  await runtime.store.startAgent(workspaceId, worker.id, {
+    hivePort: new URL(runtime.baseUrl).port,
+  })
+  await expect
+    .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+    .toContain('DREAM_REPORT_READY')
+  const dispatch = await runtime.store.dispatchTask(workspaceId, worker.id, text, {
+    autoStartWorker: false,
+    fromAgentId: `${workspaceId}:orchestrator`,
+  })
+  await expect
+    .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+    .toContain(text)
+  await expect
+    .poll(
+      () =>
+        runtime.store.listDispatches(workspaceId).find((item) => item.id === dispatch.id)
+          ?.deliveredAt
+    )
+    .toEqual(expect.any(Number))
+  return { worker, dispatch }
+}
+
 const openRuntimeDb = () => {
   if (!server) throw new Error('Expected test server')
   return new Database(join(server.dataDir, 'runtime.sqlite'))
@@ -537,12 +575,10 @@ describe('memory dream manual runner', () => {
       'Remote mobile access proxies direct /api calls through the gateway.',
       'pitfall'
     )
-    const worker = server.store.addWorker(workspace.id, { name: 'Relay Reviewer', role: 'tester' })
-    const dispatch = await server.store.dispatchTask(
+    const { worker, dispatch } = await dispatchToReportWorker(
       workspace.id,
-      worker.id,
-      'Verify the mobile remote access path.',
-      { autoStartWorker: false }
+      'Relay Reviewer',
+      'Verify the mobile remote access path.'
     )
     server.store.reportTask(workspace.id, worker.id, {
       dispatchId: dispatch.id,
@@ -872,12 +908,10 @@ describe('memory dream manual runner', () => {
   test('scheduled tick runs after idle debounce when a worker report creates new evidence', async () => {
     if (!server) throw new Error('Expected test server')
     const workspace = createWorkspace()
-    const worker = server.store.addWorker(workspace.id, { name: 'Reporter', role: 'coder' })
-    const dispatch = await server.store.dispatchTask(
+    const { worker, dispatch } = await dispatchToReportWorker(
       workspace.id,
-      worker.id,
-      'Find the mobile relay pitfall.',
-      { autoStartWorker: false }
+      'Reporter',
+      'Find the mobile relay pitfall.'
     )
     server.store.reportTask(workspace.id, worker.id, {
       dispatchId: dispatch.id,

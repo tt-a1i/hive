@@ -85,6 +85,7 @@ export const prepareBuildArtifacts = ({ root = process.cwd() } = {}) => {
 
   withWindowsFsRetry(`create ${distVendor}`, () => mkdirSync(distVendor, { recursive: true }))
   copyDirRequired(root, 'vendor/marketplace', 'dist/vendor/marketplace')
+  copyDirRequired(root, 'vendor/node-pty-windows', 'dist/vendor/node-pty-windows')
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

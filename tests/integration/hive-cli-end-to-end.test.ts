@@ -267,16 +267,20 @@ describe('hive cli end to end', () => {
     const modulePath = fileURLToPath(new URL('../../src/cli/hive.ts', import.meta.url))
     const appDataDir = join(homeDir, 'AppData', 'Roaming')
     const xdgConfigDir = join(homeDir, '.config')
-    const processHandle = spawn(process.execPath, ['--import', 'tsx', modulePath, '--port', '0'], {
-      env: {
-        ...childEnv,
-        APPDATA: appDataDir,
-        HOME: homeDir,
-        USERPROFILE: homeDir,
-        XDG_CONFIG_HOME: xdgConfigDir,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const processHandle = spawn(
+      process.execPath,
+      ['--import', 'tsx', modulePath, '--port', '0', '--no-open'],
+      {
+        env: {
+          ...childEnv,
+          APPDATA: appDataDir,
+          HOME: homeDir,
+          USERPROFILE: homeDir,
+          XDG_CONFIG_HOME: xdgConfigDir,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    )
     let stdout = ''
     processHandle.stdout.on('data', (chunk) => {
       stdout += chunk.toString()

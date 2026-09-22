@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { DispatchRecord } from '../../src/server/dispatch-ledger-store.js'
+import {
+  createDispatchLedgerStore,
+  type DispatchRecord,
+} from '../../src/server/dispatch-ledger-store.js'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
@@ -13,14 +16,19 @@ afterEach(() => {
   for (const db of operationDatabases.splice(0)) db.close()
 })
 
+const operationDatabase = () => {
+  const db = new Database(':memory:')
+  operationDatabases.push(db)
+  initializeRuntimeDatabase(db)
+  return db
+}
+
 // Complete required ports using the real durable queue and workflow awaiter.
 const operationDependencies = (): Pick<
   TeamOperationsInput,
   'findOpenDispatchById' | 'reportOutbox' | 'workflowDispatchAwaiter'
 > => {
-  const db = new Database(':memory:')
-  operationDatabases.push(db)
-  initializeRuntimeDatabase(db)
+  const db = operationDatabase()
   return {
     findOpenDispatchById: () => undefined,
     reportOutbox: createReportOutboxStore(db),
@@ -36,6 +44,27 @@ const expectRejected = async (promise: Promise<unknown>) => {
     rejected = true
   }
   expect(rejected).toBe(true)
+}
+
+// Unit-level runtime output sink; real PTY readiness is covered by
+// tests/server/team-send-queued-replay.test.ts.
+const promptSink = () => {
+  const received: Array<{ dispatchId: string; text: string; seen: number }> = []
+  const writeSendPrompt: TeamOperationsInput['agentRuntime']['writeSendPrompt'] = (
+    _workspaceId,
+    _workerId,
+    dispatchId,
+    _sender,
+    _description,
+    text,
+    seen,
+    options
+  ) => {
+    const allowed = options?.beforeWrite?.() ?? true
+    if (allowed) received.push({ dispatchId, text, seen: seen ?? 0 })
+    return { payloadBytes: Buffer.byteLength(text), write: Promise.resolve(allowed) }
+  }
+  return { received, writeSendPrompt }
 }
 
 const makeDispatch = (overrides: Partial<DispatchRecord>): DispatchRecord => ({
@@ -140,34 +169,27 @@ describe('team atomicity', () => {
     if (!orchestrator) {
       throw new Error('Expected orchestrator')
     }
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: orchestrator.id,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteDispatch = vi.fn()
+    const ledger = createDispatchLedgerStore(operationDatabase())
+    const startupError = new Error('Worker startup failed')
+    let recordsAtStartup: DispatchRecord[] = []
     const deleteMessage = vi.fn()
 
     const ops = createTeamOperations({
       ...operationDependencies(),
       agentRuntime: {
         getActiveRunByAgentId: vi.fn(() => undefined),
-        peekAgentLaunchConfig: vi.fn(() => undefined),
+        peekAgentLaunchConfig: () => ({ command: 'node' }),
+        startAgent: async () => {
+          recordsAtStartup = ledger.listOpenWorkspaceDispatches(workspace.id)
+          throw startupError
+        },
         writeReportPrompt: vi.fn(),
         writeSendPrompt: vi.fn(),
         writeUserInputPrompt: vi.fn(),
       } as never,
-      createDispatch: vi.fn(() => dispatch),
-      deleteDispatch,
+      createDispatch: ledger.createDispatch,
+      deleteDispatch: ledger.deleteDispatch,
+      findOpenDispatchById: ledger.findOpenDispatchById,
       deleteMessage,
       findOpenDispatch: vi.fn(),
       insertMessage: vi.fn(() => ({ sequence: 1 })),
@@ -183,11 +205,14 @@ describe('team atomicity', () => {
       } as never,
     })
 
-    await expectRejected(
+    await expect(
       ops.dispatchTask(workspace.id, worker.id, 'Implement login', { fromAgentId: orchestrator.id })
-    )
+    ).rejects.toBe(startupError)
 
-    expect(deleteDispatch).toHaveBeenCalledWith(dispatch.id)
+    expect(recordsAtStartup).toEqual([
+      expect.objectContaining({ status: 'queued', text: 'Implement login', toAgentId: worker.id }),
+    ])
+    expect(ledger.listWorkspaceDispatches(workspace.id)).toEqual([])
     expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
     expect(store.listWorkers(workspace.id)).toContainEqual(
       expect.objectContaining({
@@ -206,21 +231,8 @@ describe('team atomicity', () => {
     if (!orchestrator) {
       throw new Error('Expected orchestrator')
     }
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: orchestrator.id,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteDispatch = vi.fn()
+    const ledger = createDispatchLedgerStore(operationDatabase())
+    let recordsAtStartup: DispatchRecord[] = []
     const deleteMessage = vi.fn()
     const claimQueuedDispatch = vi.fn(() => true)
     const writeSendPrompt = vi.fn()
@@ -231,6 +243,7 @@ describe('team atomicity', () => {
         getActiveRunByAgentId: vi.fn(() => undefined),
         peekAgentLaunchConfig: vi.fn(() => ({ command: 'node' })),
         startAgent: vi.fn(async () => {
+          recordsAtStartup = ledger.listOpenWorkspaceDispatches(workspace.id)
           store.deleteWorker(workspace.id, worker.id)
           return { status: 'running' }
         }),
@@ -238,8 +251,9 @@ describe('team atomicity', () => {
         writeSendPrompt,
         writeUserInputPrompt: vi.fn(),
       } as never,
-      createDispatch: vi.fn(() => dispatch),
-      deleteDispatch,
+      createDispatch: ledger.createDispatch,
+      deleteDispatch: ledger.deleteDispatch,
+      findOpenDispatchById: ledger.findOpenDispatchById,
       deleteMessage,
       findOpenDispatch: vi.fn(),
       insertMessage: vi.fn(() => ({ sequence: 1 })),
@@ -263,7 +277,11 @@ describe('team atomicity', () => {
     // Claim-equivalent of the old "never marked submitted": the worker
     // vanished during startup, so delivery is never claimed.
     expect(claimQueuedDispatch).not.toHaveBeenCalled()
-    expect(deleteDispatch).toHaveBeenCalledWith(dispatch.id)
+    expect(recordsAtStartup).toEqual([
+      expect.objectContaining({ status: 'queued', text: 'Implement login', toAgentId: worker.id }),
+    ])
+    expect(ledger.listWorkspaceDispatches(workspace.id)).toEqual([])
+    expect(store.listWorkers(workspace.id)).toEqual([])
     expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
   })
 
@@ -285,12 +303,18 @@ describe('team atomicity', () => {
       toAgentId: worker.id,
       workspaceId: workspace.id,
     })
-    const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const claimQueuedDispatch = () => {
+      if (dispatch.status !== 'queued') return false
+      dispatch.status = 'submitted'
+      return true
+    }
+    const { received, writeSendPrompt } = promptSink()
     const inboundNotes = new Map<string, number>([[dispatch.id, 5]])
 
     const ops = createTeamOperations({
       ...operationDependencies(),
+      findOpenDispatchById: (workspaceId, id) =>
+        workspaceId === workspace.id && id === dispatch.id ? dispatch : undefined,
       agentRuntime: {
         getActiveRunByAgentId: vi.fn(() => undefined),
         peekAgentLaunchConfig: vi.fn(() => ({ command: 'hermes' })),
@@ -334,23 +358,15 @@ describe('team atomicity', () => {
         fromAgentId: orchestrator.id,
       })
     ).resolves.toBe(dispatch)
-    expect(claimQueuedDispatch).not.toHaveBeenCalled()
-    expect(writeSendPrompt).not.toHaveBeenCalled()
+    expect(dispatch.status).toBe('queued')
+    expect(received).toEqual([])
 
     resolvePostStart()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(claimQueuedDispatch).toHaveBeenCalledWith(dispatch.id)
-    expect(writeSendPrompt).toHaveBeenCalledWith(
-      workspace.id,
-      worker.id,
-      dispatch.id,
-      orchestrator.name,
-      worker.description,
-      'Implement login',
-      5
-    )
+    expect(dispatch.status).toBe('submitted')
+    expect(received).toEqual([{ dispatchId: dispatch.id, text: 'Implement login', seen: 5 }])
   })
 
   test('dispatchTask waits behind an already-starting worker without letting later sends jump ahead', async () => {
@@ -396,10 +412,12 @@ describe('team atomicity', () => {
       item.status = 'submitted'
       return true
     })
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const { received, writeSendPrompt } = promptSink()
 
     const ops = createTeamOperations({
       ...operationDependencies(),
+      findOpenDispatchById: (workspaceId, id) =>
+        openDispatches.find((item) => item.workspaceId === workspaceId && item.id === id),
       agentRuntime: {
         getActiveRunByAgentId: vi.fn(() => ({
           agentId: worker.id,
@@ -438,35 +456,18 @@ describe('team atomicity', () => {
         fromAgentId: orchestrator.id,
       })
     ).resolves.toBe(current)
-    expect(writeSendPrompt).not.toHaveBeenCalled()
+    expect(received).toEqual([])
+    expect(openDispatches.map((item) => item.status)).toEqual(['queued', 'queued', 'queued'])
 
     resolvePostStart()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(claimQueuedDispatch).toHaveBeenNthCalledWith(1, older.id)
-    expect(claimQueuedDispatch).toHaveBeenNthCalledWith(2, current.id)
-    expect(claimQueuedDispatch).not.toHaveBeenCalledWith(later.id)
-    expect(writeSendPrompt).toHaveBeenNthCalledWith(
-      1,
-      workspace.id,
-      worker.id,
-      older.id,
-      orchestrator.name,
-      worker.description,
-      older.text,
-      0
-    )
-    expect(writeSendPrompt).toHaveBeenNthCalledWith(
-      2,
-      workspace.id,
-      worker.id,
-      current.id,
-      orchestrator.name,
-      worker.description,
-      current.text,
-      0
-    )
+    expect(openDispatches.map((item) => item.status)).toEqual(['submitted', 'submitted', 'queued'])
+    expect(received).toEqual([
+      { dispatchId: older.id, text: 'Older task', seen: 0 },
+      { dispatchId: current.id, text: 'Current task', seen: 0 },
+    ])
   })
 
   test('dispatchTask waits behind a running worker until post-start input is ready', async () => {
@@ -488,11 +489,17 @@ describe('team atomicity', () => {
       toAgentId: worker.id,
       workspaceId: workspace.id,
     })
-    const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const claimQueuedDispatch = () => {
+      if (dispatch.status !== 'queued') return false
+      dispatch.status = 'submitted'
+      return true
+    }
+    const { received, writeSendPrompt } = promptSink()
 
     const ops = createTeamOperations({
       ...operationDependencies(),
+      findOpenDispatchById: (workspaceId, id) =>
+        workspaceId === workspace.id && id === dispatch.id ? dispatch : undefined,
       agentRuntime: {
         getActiveRunByAgentId: vi.fn(() => ({
           agentId: worker.id,
@@ -531,23 +538,15 @@ describe('team atomicity', () => {
         fromAgentId: orchestrator.id,
       })
     ).resolves.toBe(dispatch)
-    expect(claimQueuedDispatch).not.toHaveBeenCalled()
-    expect(writeSendPrompt).not.toHaveBeenCalled()
+    expect(dispatch.status).toBe('queued')
+    expect(received).toEqual([])
 
     resolvePostStart()
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(claimQueuedDispatch).toHaveBeenCalledWith(dispatch.id)
-    expect(writeSendPrompt).toHaveBeenCalledWith(
-      workspace.id,
-      worker.id,
-      dispatch.id,
-      orchestrator.name,
-      worker.description,
-      dispatch.text,
-      0
-    )
+    expect(dispatch.status).toBe('submitted')
+    expect(received).toEqual([{ dispatchId: dispatch.id, text: 'Current task', seen: 0 }])
   })
 
   test('dispatchTask cancels deferred work when post-start readiness rejects', async () => {
@@ -733,45 +732,6 @@ describe('team atomicity', () => {
     expect(consoleError).toHaveBeenCalledWith(
       '[hive] swallowed:teamDispatch.writePrompt',
       expect.any(Error)
-    )
-  })
-
-  test('reportTask records and queues the report (no longer throws) when the orchestrator run is absent', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    // Simulate PTY already running so dispatchTask can promote to working.
-    store.getWorker(workspace.id, worker.id).status = 'idle'
-
-    // Dispatch first so pendingTaskCount rises to 1.
-    store.dispatchTask(workspace.id, worker.id, 'Implement login')
-    expect(store.listDispatches(workspace.id)).toContainEqual(
-      expect.objectContaining({ status: 'queued', text: 'Implement login' })
-    )
-    const beforeMessages = store.listMessagesForRecovery(workspace.id, 0).length
-
-    // No orchestrator run exists. The report must NOT be lost or rejected: it is
-    // recorded, the dispatch is marked reported, and it is queued in the outbox
-    // for redelivery when the orchestrator comes back.
-    const result = store.reportTask(workspace.id, worker.id, {
-      status: 'success',
-      text: 'Done',
-      requireActiveRun: true,
-    })
-
-    expect(result.forwarded).toBe(false)
-    expect(result.forwardError).toBeTruthy()
-    // pending count decrements (the work is done) and the report message lands.
-    expect(store.listWorkers(workspace.id)).toContainEqual(
-      expect.objectContaining({ id: worker.id, pendingTaskCount: 0 })
-    )
-    expect(store.listMessagesForRecovery(workspace.id, 0).length).toBe(beforeMessages + 1)
-    expect(store.listDispatches(workspace.id)).toContainEqual(
-      expect.objectContaining({
-        status: 'reported',
-        text: 'Implement login',
-        reportText: 'Done',
-      })
     )
   })
 

@@ -74,8 +74,10 @@ describe('tasks file watcher hardening', () => {
     await watcher.start('ws-1', workspacePath)
     expect(vi.mocked(chokidar.watch).mock.calls[0]?.[0]).toBe(join(workspacePath, '.hive'))
 
-    fakeWatchers[0].emit('change', join(workspacePath, '.hive', 'PROTOCOL.md'))
-    fakeWatchers[0].emit('change', join(workspacePath, '.hive', 'tasks.md'))
+    const fake = fakeWatchers[0]
+    if (!fake) throw new Error('Expected a started watcher')
+    fake.emit('change', join(workspacePath, '.hive', 'PROTOCOL.md'))
+    fake.emit('change', join(workspacePath, '.hive', 'tasks.md'))
 
     await waitFor(() => {
       expect(updates).toEqual([''])
@@ -93,6 +95,7 @@ describe('tasks file watcher hardening', () => {
 
     await watcher.start('ws-1', workspacePath)
     const [fake] = fakeWatchers
+    if (!fake) throw new Error('Expected a started watcher')
     fake.emit('error', new Error('permission denied'))
     await Promise.resolve()
 
@@ -124,7 +127,7 @@ describe('tasks file watcher hardening', () => {
       `Timed out waiting for tasks watcher ready after ${expectedTimeoutMs}ms`
     )
 
-    expect(fakeWatchers[0].closeCalls).toBe(1)
+    expect(fakeWatchers[0]?.closeCalls).toBe(1)
     await watcher.close()
   })
 
@@ -141,6 +144,7 @@ describe('tasks file watcher hardening', () => {
     await vi.runOnlyPendingTimersAsync()
     await start
     const [failedWatcher] = fakeWatchers
+    if (!failedWatcher) throw new Error('Expected a started watcher')
 
     failedWatcher.emit('error', new Error('read handle closed'))
     await Promise.resolve()
@@ -152,7 +156,7 @@ describe('tasks file watcher hardening', () => {
     await vi.runOnlyPendingTimersAsync()
 
     expect(fakeWatchers).toHaveLength(2)
-    expect(fakeWatchers[1].closeCalls).toBe(0)
+    expect(fakeWatchers[1]?.closeCalls).toBe(0)
     expect(consoleError).toHaveBeenCalledWith(
       expect.stringContaining('tasks watcher error for workspace ws-1'),
       expect.any(Error)
@@ -191,7 +195,9 @@ describe('tasks file watcher hardening', () => {
     await watcher.start('ws-1', workspacePath)
     rmSync(tasksPath)
     mkdirSync(tasksPath)
-    fakeWatchers[0].emit('change')
+    const fake = fakeWatchers[0]
+    if (!fake) throw new Error('Expected a started watcher')
+    fake.emit('change')
 
     await waitFor(() => {
       expect(updates).toEqual([])

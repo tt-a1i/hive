@@ -601,13 +601,22 @@ export const createRuntimeStoreLifecycle = ({
         // instead of hanging on a Promise that can never resolve.
         await services.teamMemoryDreamScheduler.close()
         services.workflowDispatchAwaiter.cancelAll('runtime closing')
-        services.shellRuntime.close()
-        await services.teamMemoryExport.close()
-        await services.agentRuntime.close()
-        await services.tasksFileWatcher.close()
-        services.workerOutputTracker?.closeAll()
-        services.agentRunStore.close?.()
-        services.db.close()
+        // Shells do not use SQLite. Their exit failure must not bypass cleanup
+        // of the independent agents/watchers that do; keep the database last.
+        const [shellClose] = await Promise.allSettled([services.shellRuntime.close()])
+        try {
+          await services.teamMemoryExport.close()
+          await services.agentRuntime.close()
+          await services.tasksFileWatcher.close()
+          services.workerOutputTracker?.closeAll()
+          services.agentRunStore.close?.()
+          services.db.close()
+        } catch (error) {
+          if (shellClose.status === 'rejected')
+            throw new AggregateError([shellClose.reason, error], 'Runtime shutdown failed')
+          throw error
+        }
+        if (shellClose.status === 'rejected') throw shellClose.reason
       } finally {
         services.workspaceUploadStorageCleanup()
       }

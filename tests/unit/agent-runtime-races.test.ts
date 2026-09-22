@@ -126,7 +126,7 @@ describe('agent runtime races (unit)', () => {
   })
 
   test('failed stdin write surfaces PtyInactiveError so callers can skip message recording', async () => {
-    const writes: string[] = []
+    const writes: (string | Buffer)[] = []
 
     const runtime = createAgentRuntime(
       {

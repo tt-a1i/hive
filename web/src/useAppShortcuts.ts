@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 
 import type { WorkspaceSummary } from '../../src/shared/types.js'
 import { isStandalonePwa } from './pwa/is-standalone.js'
-import { useGlobalShortcuts } from './useGlobalShortcuts.js'
+import { type Shortcut, useGlobalShortcuts } from './useGlobalShortcuts.js'
 
 type UseAppShortcutsOptions = {
   bootstrapError: string | null
@@ -17,7 +17,7 @@ export const useAppShortcuts = ({
   onTriggerAddDialog,
   workspaces,
 }: UseAppShortcutsOptions) => {
-  const shortcuts = useMemo(() => {
+  const shortcuts = useMemo<Shortcut[]>(() => {
     // These bindings collide with OS-reserved browser shortcuts in a
     // regular tab — Ctrl+Shift+N opens an incognito window, Ctrl+1..9
     // switches the browser's own tabs — and the page cannot reliably
@@ -27,10 +27,13 @@ export const useAppShortcuts = ({
     // half-working override that varies by platform and browser.
     if (!isStandalonePwa()) return []
 
-    const indexShortcuts = (workspaces ?? []).slice(0, 9).map((ws, idx) => ({
+    const indexShortcuts = (workspaces ?? []).slice(0, 9).map<Shortcut>((ws, idx) => ({
       key: String(idx + 1),
       mod: true,
-      handler: () => onSelectWorkspace(ws.id),
+      handler: () => {
+        onSelectWorkspace(ws.id)
+        return undefined
+      },
     }))
 
     return [
@@ -40,6 +43,7 @@ export const useAppShortcuts = ({
         shift: true,
         handler: () => {
           if (!bootstrapError) onTriggerAddDialog()
+          return undefined
         },
       },
       ...indexShortcuts,

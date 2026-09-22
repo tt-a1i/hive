@@ -40,8 +40,8 @@ export const startTestServer = async (
         })
       : undefined)
   const app = createApp({
-    openWorkspaceService: input.openWorkspaceService,
-    pickFolderService,
+    ...(input.openWorkspaceService ? { openWorkspaceService: input.openWorkspaceService } : {}),
+    ...(pickFolderService ? { pickFolderService } : {}),
     store,
   })
 

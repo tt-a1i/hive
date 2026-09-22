@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -33,21 +33,8 @@ const waitFor = async (
   throw lastError
 }
 
-const ESCAPE = String.fromCharCode(27)
-const BELL = String.fromCharCode(7)
-const TERMINAL_CONTROL_PATTERN = new RegExp(
-  `${ESCAPE}\\[[0-?]*[ -/]*[@-~]|${ESCAPE}\\][^${BELL}${ESCAPE}]*(?:${BELL}|${ESCAPE}\\\\)`,
-  'gu'
-)
-
-const compactTerminalText = (text: string) =>
-  text
-    .replace(TERMINAL_CONTROL_PATTERN, '')
-    .replace(/\s+/gu, '')
-    .replace(/(.)\1+/gsu, '$1')
-
-const expectOutputToContainTerminalText = (output: string, text: string) => {
-  expect(compactTerminalText(output)).toContain(compactTerminalText(text))
+const expectReceivedText = (received: string, text: string) => {
+  expect(received).toContain(text)
 }
 
 const listMemoryInjections = (dataDir: string) => {
@@ -88,6 +75,8 @@ describe('agent startup instructions', () => {
       fakeClaude,
       [
         '#!/usr/bin/env node',
+        "const { appendFileSync } = require('node:fs')",
+        `const receiptPath = ${JSON.stringify(dataDir)} + '/' + encodeURIComponent(process.env.HIVE_AGENT_ID) + '.stdin.txt'`,
         "process.stdin.setEncoding('utf8')",
         'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
         "const PASTE_OPEN = '\\u001b[200~'",
@@ -103,6 +92,7 @@ describe('agent startup instructions', () => {
         '}',
         "process.stdout.write('❯ ')",
         "process.stdin.on('data', (chunk) => {",
+        '  appendFileSync(receiptPath, chunk)',
         "  process.stdout.write('IN:' + chunk)",
         "  if (chunk.includes(PASTE_OPEN) || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteSeen = true",
         '  if (chunk.includes(PASTE_END)) acknowledgePaste()',
@@ -205,18 +195,31 @@ describe('agent startup instructions', () => {
       const orchestratorRun = await start(orchestratorId)
       const workerRun = await start(worker.id)
 
+      // HTTP start returns before startup guidance is submitted. Synchronize on
+      // actual delivery before checking child receipts; retain the overall test
+      // deadline and the independent SUBMITTED assertion below.
+      for (const agentId of [orchestratorId, worker.id]) {
+        const live = hive.store.getActiveRunByAgentId(workspace.id, agentId)
+        if (!live) throw new Error('Started agent has no live run')
+        await live.postStartInputReady
+        expect(live.startupReadyAt).toBeTypeOf('number')
+      }
+
       await waitFor(async () => {
         const response = await fetch(`${baseUrl}/api/runtime/runs/${orchestratorRun.runId}`, {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        const output = body.output.replaceAll('IN:', '')
+        const output = readFileSync(
+          join(dataDir, `${encodeURIComponent(orchestratorId)}.stdin.txt`),
+          'utf8'
+        )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('<hive-memory context="startup">')
-        expectOutputToContainTerminalText(output, 'Pinned startup memory')
-        expectOutputToContainTerminalText(output, 'present for every fresh agent')
-        expectOutputToContainTerminalText(output, 'Digest startup memory')
-        expectOutputToContainTerminalText(output, 'reusable')
+        expectReceivedText(output, 'Pinned startup memory')
+        expectReceivedText(output, 'present for every fresh agent')
+        expectReceivedText(output, 'Digest startup memory')
+        expectReceivedText(output, 'reusable')
         expect(output).toContain('You are Orchestrator (orchestrator) in workspace Alpha.')
         expect(output).toContain('team send "<member-name>" "<task>"')
         expect(output).toContain('team list')
@@ -243,7 +246,7 @@ describe('agent startup instructions', () => {
         // command marker indicating the orchestrator should call it.
         expect(output).not.toContain('"team report')
         expect(output).not.toMatch(/team report\s+"</)
-        expect(output).toContain('SUBMITTED')
+        expect(body.output).toContain('SUBMITTED')
       }, 6000)
 
       await waitFor(async () => {
@@ -251,30 +254,28 @@ describe('agent startup instructions', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        const output = body.output.replaceAll('IN:', '')
+        const output = readFileSync(
+          join(dataDir, `${encodeURIComponent(worker.id)}.stdin.txt`),
+          'utf8'
+        )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('<hive-memory context="startup">')
-        expectOutputToContainTerminalText(output, 'Pinned startup memory')
-        expectOutputToContainTerminalText(output, 'present for every fresh agent')
-        expectOutputToContainTerminalText(output, 'Digest startup memory')
-        expectOutputToContainTerminalText(output, 'reusable')
+        expectReceivedText(output, 'Pinned startup memory')
+        expectReceivedText(output, 'present for every fresh agent')
+        expectReceivedText(output, 'Digest startup memory')
+        expectReceivedText(output, 'reusable')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')
-        expectOutputToContainTerminalText(
+        expectReceivedText(output, 'Report only when ending this round of responsibility')
+        expectReceivedText(
           output,
-          'Report only when ending this round of responsibility'
+          'Stay quiet for routine readiness or standby. Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch.'
         )
-        expectOutputToContainTerminalText(
+        expect(output).not.toContain('Startup handshake:')
+        expect(output).not.toContain('Run once:')
+        expect(output).not.toContain('records readiness, not task completion')
+        expectReceivedText(
           output,
-          'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
-        )
-        expect(compactTerminalText(output)).not.toContain(compactTerminalText('Startup handshake:'))
-        expect(compactTerminalText(output)).not.toContain(compactTerminalText('Run once:'))
-        expect(compactTerminalText(output)).not.toContain(
-          compactTerminalText('records readiness, not task completion')
-        )
-        expectOutputToContainTerminalText(
-          output,
-          'Await a dispatch; do not report readiness as an outcome'
+          'If no dispatch has been assigned in this conversation, end this turn quietly and wait for a later task message.'
         )
         // Members are not authorized for `team list` (403) — the startup
         // command list must not advertise it.
@@ -282,7 +283,7 @@ describe('agent startup instructions', () => {
         expect(output).not.toContain('--success')
         expect(output).not.toContain('--failed')
         expect(output).not.toContain('team send <member-name>')
-        expect(output).toContain('SUBMITTED')
+        expect(body.output).toContain('SUBMITTED')
       }, 6000)
 
       await waitFor(() => {
@@ -333,11 +334,14 @@ describe('agent startup instructions', () => {
       fakeClaude,
       [
         '#!/usr/bin/env node',
+        "const { appendFileSync } = require('node:fs')",
+        `const receiptPath = ${JSON.stringify(dataDir)} + '/' + encodeURIComponent(process.env.HIVE_AGENT_ID) + '.stdin.txt'`,
         "process.stdin.setEncoding('utf8')",
         'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
         "process.stdin.on('data', (chunk) => {",
+        '  appendFileSync(receiptPath, chunk)',
         "  process.stdout.write('IN:' + chunk)",
-        "  if (chunk.includes('</hive-message>')) process.stdout.write('\\nSUBMITTED\\n')",
+        "  if (chunk.includes('</hive-message>')) process.stdout.write('\\nRECEIVED\\n')",
         '})',
         'process.stdin.resume()',
       ].join('\n')
@@ -399,16 +403,23 @@ describe('agent startup instructions', () => {
       )
       expect(startResponse.status).toBe(201)
       const run = (await startResponse.json()) as { run_id: string }
+      const live = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
+      if (!live) throw new Error('Started agent has no live run')
+      await live.postStartInputReady
 
       await waitFor(async () => {
         const response = await fetch(`${baseUrl}/api/runtime/runs/${run.run_id}`, {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        const output = body.output.replaceAll('IN:', '')
+        const output = readFileSync(
+          join(dataDir, `${encodeURIComponent(orchestratorId)}.stdin.txt`),
+          'utf8'
+        )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).not.toContain('<hive-memory context="startup">')
         expect(output).not.toContain('This startup memory must stay out while disabled.')
+        expect(body.output).toContain('RECEIVED')
       }, 6000)
       expect(listMemoryInjections(dataDir)).toEqual([])
     } finally {

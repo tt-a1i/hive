@@ -24,9 +24,7 @@ export const openWorkspaceRoutes: RouteDefinition[] = [
         return
       }
 
-      // store.getWorkspaceSnapshot throws raw Error("Workspace not found: ...")
-      // for missing workspaces — translate that to 404 here rather than letting
-      // app.ts catch it as a generic 500.
+      // Preserve this endpoint's existing missing-workspace response body.
       let workspacePath: string
       try {
         workspacePath = store.getWorkspaceSnapshot(workspaceId).summary.path

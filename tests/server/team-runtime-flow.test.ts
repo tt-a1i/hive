@@ -1,4 +1,3 @@
-import '../helpers/mock-node-pty.ts'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,7 +48,7 @@ afterEach(async () => {
   }
 })
 
-describe('team runtime flow (unit)', () => {
+describe('team runtime flow with real PTYs', () => {
   test('team send injects prompt into active worker run and records a real message', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-send-'))
     const workspacePath = join(dataDir, 'workspace')
@@ -61,9 +60,11 @@ describe('team runtime flow (unit)', () => {
       workerScript,
       [
         "process.stdin.setEncoding('utf8')",
+        'process.stdin.setRawMode(true)',
         "process.stdin.on('data', (chunk) => {",
         "  process.stdout.write('PROMPT:' + chunk)",
         '})',
+        "process.stdout.write('FLOW_READY')",
       ].join('\n')
     )
 
@@ -93,6 +94,9 @@ describe('team runtime flow (unit)', () => {
     })
     await store.startAgent(workspace.id, orchestrator.id, {
       hivePort: '4010',
+    })
+    await waitFor(() => {
+      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain('FLOW_READY')
     })
 
     const app = createApp({ store })
@@ -150,9 +154,11 @@ describe('team runtime flow (unit)', () => {
       orchestratorScript,
       [
         "process.stdin.setEncoding('utf8')",
+        'process.stdin.setRawMode(true)',
         "process.stdin.on('data', (chunk) => {",
         "  process.stdout.write('ORCH:' + chunk)",
         '})',
+        "process.stdout.write('FLOW_READY')",
       ].join('\n')
     )
 
@@ -174,7 +180,7 @@ describe('team runtime flow (unit)', () => {
     })
     store.configureAgentLaunch(workspace.id, worker.id, {
       command: process.execPath,
-      args: ['-e', 'process.stdin.resume()'],
+      args: [orchestratorScript],
     })
 
     await store.startAgent(workspace.id, orchestrator.id, {
@@ -183,7 +189,26 @@ describe('team runtime flow (unit)', () => {
     await store.startAgent(workspace.id, worker.id, {
       hivePort: '4010',
     })
-    await store.dispatchTask(workspace.id, worker.id, 'Report this task')
+    await waitFor(() => {
+      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain('FLOW_READY')
+      expect(store.getActiveRunByAgentId(workspace.id, orchestrator.id)?.output).toContain(
+        'FLOW_READY'
+      )
+    })
+    const dispatch = await store.dispatchTask(workspace.id, worker.id, 'Report this task', {
+      fromAgentId: orchestrator.id,
+    })
+    await waitFor(() => {
+      expect(
+        store.listDispatches(workspace.id).find((item) => item.id === dispatch.id)
+      ).toMatchObject({
+        status: 'submitted',
+        deliveredAt: expect.any(Number),
+      })
+      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain(
+        'Report this task'
+      )
+    })
 
     const app = createApp({ store })
     await new Promise<void>((resolve) => {
@@ -206,6 +231,7 @@ describe('team runtime flow (unit)', () => {
         from_agent_id: worker.id,
         token: store.peekAgentToken(worker.id),
         result: '登录接口已完成',
+        dispatch_id: dispatch.id,
         status: 'success',
         artifacts: ['src/auth.ts'],
       }),

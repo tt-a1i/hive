@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { APP_VERSION } from '../version.js'
-import { type ChangelogEntry, selectWhatsNew } from './changelog.js'
+import { type ChangelogEntry, selectWhatsNew, type WhatsNewSelection } from './changelog.js'
 
 const KEY = 'hive.last-seen-version'
 const LEGACY_EXISTING_USER_BASELINE = '1.7.0'
@@ -61,10 +61,10 @@ export const useWhatsNew = ({
     if (lastSeen !== undefined || hasExistingWorkspace === null) return
     setLastSeen(readLastSeen(current, hasExistingWorkspace))
   }, [hasExistingWorkspace, lastSeen])
-  const selection = useMemo(
+  const selection = useMemo<WhatsNewSelection>(
     () =>
       lastSeen === undefined
-        ? ({ show: false, entries: [], seedOnly: false } as const)
+        ? { show: false, entries: [], seedOnly: false }
         : selectWhatsNew(current, lastSeen),
     [lastSeen]
   )

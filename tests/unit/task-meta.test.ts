@@ -9,6 +9,11 @@ describe('parseTaskMetadata', () => {
     expect(meta).toEqual([])
   })
 
+  test('does not mistake a trailing Markdown link for metadata', () => {
+    const text = '阅读 [链接](https://example.com/路径)'
+    expect(parseTaskMetadata(text)).toEqual({ title: text, meta: [] })
+  })
+
   test('splits a single owner + status block on the typical orchestrator format', () => {
     const { title, meta } = parseTaskMetadata(
       '**T1 项目评估** (owner: pixel-beacon-10, status: done · 报告: docs/eval-report.md · 129 tests passed)'

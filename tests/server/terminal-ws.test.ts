@@ -71,8 +71,13 @@ const createWorkspace = async (baseUrl: string, cookie: string, workspacePath: s
   const response = await fetch(`${baseUrl}/api/workspaces`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name: 'Alpha', path: workspacePath }),
+    body: JSON.stringify({
+      name: 'Alpha',
+      path: workspacePath,
+      autostart_orchestrator: false,
+    }),
   })
+  expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
 }
 

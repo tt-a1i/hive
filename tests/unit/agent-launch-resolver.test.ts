@@ -40,6 +40,7 @@ const createBuiltinPresetSettingsStub = (): SettingsStore => {
     createRoleTemplate: notImplemented,
     deleteCommandPreset: notImplemented,
     deleteRoleTemplate: notImplemented,
+    findRoleTemplateByName: notImplemented,
     getAppState: () => undefined,
     getCommandPreset: presetRecord,
     listCommandPresets: () => [],

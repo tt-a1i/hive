@@ -67,6 +67,8 @@
     "stress:throughput": "tsx --expose-gc scripts/remote-stress-throughput.ts",
     "sync:marketplace": "node scripts/sync-marketplace.mjs",
     "test": "node scripts/run-tests.mjs",
+    "test:mobile-e2e": "node scripts/validate-mobile-runtime-e2e.mjs",
+    "test:switch-layout": "node scripts/validate-settings-switch-layout.mjs",
     "test:windows": "node scripts/run-windows-tests.mjs",
     "test:watch": "vitest",
     "prototype:desktop": "vite --config web/vite.config.ts --open '/prototype-hive-desktop.html?variant=A'"
@@ -127,6 +129,9 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "@xterm/xterm@6.0.0": "patches/@xterm__xterm@6.0.0.patch"
+    }
   }
 }

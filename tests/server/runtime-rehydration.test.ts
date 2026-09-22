@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
+import { startReportWorker } from '../helpers/report-worker.js'
 
 const tempDirs: string[] = []
 const originalPath = process.env.PATH
@@ -38,32 +39,36 @@ afterEach(async () => {
 })
 
 describe('runtime rehydration', () => {
-  test('restores workers and pending task counts from sqlite state', () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-'))
-    tempDirs.push(dataDir)
-
-    const firstStore = createRuntimeStore({ dataDir })
-    stores.push(firstStore)
-    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+  test('restores workers and pending task counts from sqlite state', async () => {
+    const {
+      store: firstStore,
+      workspace,
+      worker: bob,
+      send,
+      report,
+      dataDir,
+      close,
+    } = await startReportWorker({
+      name: 'Bob',
+      role: 'tester',
+      description: 'User chosen validation scope',
+    })
     const alice = firstStore.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
       description: 'User chosen implementation scope',
     })
-    const bob = firstStore.addWorker(workspace.id, {
-      name: 'Bob',
-      role: 'tester',
-      description: 'User chosen validation scope',
-    })
-
-    firstStore.dispatchTask(workspace.id, alice.id, 'Implement login')
-    firstStore.dispatchTask(workspace.id, bob.id, 'Write tests')
-    firstStore.reportTask(workspace.id, bob.id)
+    await firstStore.dispatchTask(workspace.id, alice.id, 'Implement login')
+    const dispatch = await send('Write tests')
+    expect((await report(dispatch.id, 'Tests written')).status).toBe(202)
+    await close()
 
     const secondStore = createRuntimeStore({ dataDir })
     stores.push(secondStore)
 
-    expect(secondStore.listWorkers(workspace.id)).toEqual([
+    expect(
+      secondStore.listWorkers(workspace.id).sort((a, b) => a.name.localeCompare(b.name))
+    ).toEqual([
       {
         id: alice.id,
         name: 'Alice',
@@ -83,18 +88,12 @@ describe('runtime rehydration', () => {
     ])
   })
 
-  test('restores pending task counts from dispatches instead of legacy message replay', () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-dispatch-pending-'))
-    tempDirs.push(dataDir)
-
-    const firstStore = createRuntimeStore({ dataDir })
-    stores.push(firstStore)
-    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-
-    firstStore.dispatchTask(workspace.id, alice.id, 'First')
-    firstStore.dispatchTask(workspace.id, alice.id, 'Second')
-    firstStore.reportTask(workspace.id, alice.id)
+  test('restores pending task counts from dispatches instead of legacy message replay', async () => {
+    const { workspace, worker: alice, send, report, dataDir, close } = await startReportWorker()
+    const first = await send('First')
+    await send('Second')
+    expect((await report(first.id, 'First completed')).status).toBe(202)
+    await close()
 
     const db = new Database(join(dataDir, 'runtime.sqlite'))
     db.prepare(

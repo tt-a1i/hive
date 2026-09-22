@@ -110,10 +110,17 @@ describe('built-in SQLite storage contract', () => {
             toAgentId: worker.id,
             text: 'existing dispatch task',
           })
-          ledger.markReportedByWorker({
+          expect(ledger.claimQueuedDispatch(dispatch.id)).toBe(true)
+          const reported = ledger.markReportedByWorker({
             workspaceId: workspace.id,
             toAgentId: worker.id,
             dispatchId: dispatch.id,
+            reportText,
+            artifacts: ['result.md'],
+          })
+          expect(reported).toMatchObject({
+            id: dispatch.id,
+            status: 'reported',
             reportText,
             artifacts: ['result.md'],
           })

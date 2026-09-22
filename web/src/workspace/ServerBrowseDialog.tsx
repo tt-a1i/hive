@@ -69,6 +69,8 @@ export const ServerBrowseDialog = ({
   const externalController = controllerMode === 'codex_app'
   const sanitizedManualPath = sanitizePastedPath(manualPath)
   const manualSuggestedName = basenameOfPath(sanitizedManualPath)
+  const suggestedName =
+    advanced && sanitizedManualPath.length > 0 ? manualSuggestedName : probe?.suggested_name
 
   useEffect(() => {
     if (!open) {
@@ -81,14 +83,8 @@ export const ServerBrowseDialog = ({
   }, [open, initialAdvanced])
 
   useEffect(() => {
-    if (probe?.suggested_name) setName(probe.suggested_name)
-  }, [probe?.suggested_name])
-
-  useEffect(() => {
-    if (advanced && sanitizedManualPath.length > 0) {
-      setName(manualSuggestedName)
-    }
-  }, [advanced, manualSuggestedName, sanitizedManualPath])
+    if (suggestedName) setName(suggestedName)
+  }, [suggestedName])
 
   if (!open) return null
 

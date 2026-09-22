@@ -344,7 +344,7 @@ export const TerminalView = ({
     <TerminalPtyView
       autoFocusTarget={autoFocusTarget}
       inputProfile={inputProfile}
-      onRunExited={onRunExited}
+      {...(onRunExited ? { onRunExited } : {})}
       runId={runId}
       startupBlockedReason={startupBlockedReason ?? null}
       title={title}
@@ -410,7 +410,7 @@ const TerminalPtyView = ({
         <div
           data-testid={`terminal-${runId}`}
           ref={containerRef}
-          className="bg-crust h-full min-h-0 w-full min-w-0 overflow-hidden"
+          className="bg-crust h-full min-h-0 w-full min-w-0 overflow-auto"
         />
         {!error && status === 'connecting' ? (
           <div

@@ -132,7 +132,7 @@ export const WorkspaceDetail = ({
     onAfterStart: (result) => {
       if (workspace) onOrchestratorResult(workspace.id, result)
     },
-    onRunClosed: onOrchestratorRunClosed,
+    ...(onOrchestratorRunClosed ? { onRunClosed: onOrchestratorRunClosed } : {}),
   })
   const split = usePaneSplit()
   const activeWorker: TeamListItem | null =
@@ -153,8 +153,8 @@ export const WorkspaceDetail = ({
     useWorkspaceShellLauncher({
       onCloseFailed: (message) =>
         toast.show({ kind: 'error', message: t('shellTerminal.closeFailed', { message }) }),
-      onShellRunClosed,
-      onShellRunStarted,
+      ...(onShellRunClosed ? { onShellRunClosed } : {}),
+      ...(onShellRunStarted ? { onShellRunStarted } : {}),
       panelTabs,
       shellRuns,
       workspaceId: workspace?.id ?? null,
@@ -318,7 +318,6 @@ export const WorkspaceDetail = ({
         <TerminalBottomPanel
           tabs={shellPanelTabs}
           activeId={panelTabs.activeId}
-          scopeKey={workspace.id}
           onSelect={panelTabs.setActive}
           onClose={(tabId) => {
             if (tabId.startsWith('shell:')) {

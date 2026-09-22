@@ -112,7 +112,7 @@ describe('remote tunnel — E2E bridge over a real runtime', () => {
     const res = await fetch(`${h.server.baseUrl}/api/workspaces`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: h.cookie },
-      body: JSON.stringify({ name: 'Alpha', path }),
+      body: JSON.stringify({ autostart_orchestrator: false, name: 'Alpha', path }),
     })
     return (await res.json()) as { id: string }
   }

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { startAgentRun } from '../../web/src/api.js'
 import { directTransport } from '../../web/src/transport/direct-transport.js'
-import { isGatewayServedBundle } from '../../web/src/transport/select-transport.js'
+import {
+  isGatewayServedBundle,
+  shouldUseGatewayBundle,
+} from '../../web/src/transport/select-transport.js'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -138,5 +141,18 @@ describe('select-transport boot selection', () => {
   // so DirectTransport stays the default with zero boot wiring.
   test('loopback hosts are never the gateway bundle', () => {
     expect(isGatewayServedBundle()).toBe(false)
+  })
+
+  test('an explicit direct bundle stays direct on a LAN address', () => {
+    expect(shouldUseGatewayBundle('192.0.2.10', '0')).toBe(false)
+  })
+
+  test('an explicit gateway bundle stays gateway on a LAN address', () => {
+    expect(shouldUseGatewayBundle('192.0.2.10', '1')).toBe(true)
+  })
+
+  test('an unmarked bundle keeps the safe host fallback', () => {
+    expect(shouldUseGatewayBundle('192.0.2.10', undefined)).toBe(true)
+    expect(shouldUseGatewayBundle('localhost', undefined)).toBe(false)
   })
 })

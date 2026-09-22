@@ -29,7 +29,7 @@ const parseWindowsUncPath = (path: string) => {
     path
   )
   if (!match?.groups) return null
-  const { server, share, rest } = match.groups
+  const { server, share, rest = '' } = match.groups
   const root = `\\\\${server}\\${share}\\`
   return { label: `\\\\${server}\\${share}`, rest, root }
 }

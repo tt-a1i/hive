@@ -64,22 +64,27 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).toContain('safely quoted shell input')
   })
 
-  test('worker startup treats team status as optional and does not require a handshake turn', () => {
+  test('worker startup stays quiet for readiness and reserves status for explicit need', () => {
     const out = buildAgentStartupInstructions({ agent: worker, workspace })
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
     expect(out).toContain(
-      'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
+      'Stay quiet for routine readiness or standby. Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch.'
     )
-    expect(out).toContain('Await a dispatch; do not report readiness as an outcome')
+    expect(out).toContain(
+      'If no dispatch has been assigned in this conversation, end this turn quietly'
+    )
+    expect(out).toContain(
+      'Do not search for work, call tools to announce readiness, poll, sleep, or exit the CLI.'
+    )
   })
 
-  test('reviewer startup uses the same optional status note and does not impose a handshake', () => {
+  test('reviewer startup uses the same quiet readiness rule and does not impose a handshake', () => {
     const out = buildAgentStartupInstructions({ agent: reviewer, workspace })
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
     expect(out).toContain(
-      'You may send `team status` for a readiness or standby note; it is not required and never closes a dispatch.'
+      'Stay quiet for routine readiness or standby. Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch.'
     )
     expect(out).not.toContain('final review gate')
   })
@@ -122,7 +127,9 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).toContain('team report --dispatch <id> --seen <required_seen_seq> --stdin')
     expect(out).toContain('Members share the filesystem')
     expect(out).toContain('assigned scope')
-    expect(out).toContain('team message --dispatch <own-id> --to orchestrator --kind question')
+    expect(out).toContain(
+      'team message --dispatch <own-dispatch-id> --to orchestrator --kind question'
+    )
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
     expect(out).not.toContain('Available team commands:')
