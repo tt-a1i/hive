@@ -46,11 +46,12 @@ const tempRoots: string[] = []
 const createNpmGlobalInstallModuleUrl = () => {
   const root = mkdtempSync(join(tmpdir(), 'hive-update-npm-global-'))
   tempRoots.push(root)
-  const packageRoot = join(root, 'node_modules/@tt-a1i/hive')
+  const prefix = join(root, 'custom prefix')
+  const packageRoot = join(prefix, 'node_modules/@tt-a1i/hive')
   const cliDir = join(packageRoot, 'dist/src/cli')
   mkdirSync(cliDir, { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ name: '@tt-a1i/hive' }))
-  return { moduleUrl: pathToFileURL(join(cliDir, 'hive-update.js')).href, prefix: root }
+  return { moduleUrl: pathToFileURL(join(cliDir, 'hive-update.js')).href, prefix }
 }
 
 beforeEach(() => {
