@@ -87,11 +87,12 @@ describe('update install planner', () => {
     expect(plan.manualCommand).toBe(command)
   })
 
-  test('keeps npm prefix installs on the hive update path', () => {
-    const prefix = createTempRoot('hive-update-npm-prefix-')
+  test('keeps Windows npm prefix installs with spaces on the hive update path', () => {
+    const root = createTempRoot('hive-update-npm-prefix-')
+    const prefix = join(root, 'custom prefix')
     const moduleUrl = writeHivePackage(join(prefix, 'lib/node_modules/@tt-a1i/hive'))
 
-    const plan = createUpdateInstallPlan({ env: {}, moduleUrl })
+    const plan = createUpdateInstallPlan({ env: {}, moduleUrl, platform: 'win32' })
 
     expect(plan.installSource).toBe('npm-prefix')
     expect(plan.canRunHiveUpdate).toBe(true)
@@ -105,10 +106,10 @@ describe('update install planner', () => {
       prefix,
     ])
     expect(plan.manualCommand).toBe(
-      `npm install -g @tt-a1i/hive@latest --ignore-scripts --prefix ${process.platform === 'win32' ? `"${prefix}"` : prefix}`
+      `npm install -g @tt-a1i/hive@latest --ignore-scripts --prefix "${prefix}"`
     )
-    expect(buildVersionLockedInstallCommand('2.1.19', plan)).toBe(
-      `npm install -g @tt-a1i/hive@2.1.19 --ignore-scripts --prefix ${process.platform === 'win32' ? `"${prefix}"` : prefix}`
+    expect(buildVersionLockedInstallCommand('2.1.19', plan, 'win32')).toBe(
+      `npm install -g @tt-a1i/hive@2.1.19 --ignore-scripts --prefix "${prefix}"`
     )
   })
 
