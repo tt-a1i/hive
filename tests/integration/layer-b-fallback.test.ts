@@ -215,12 +215,13 @@ const createWorkerViaHttp = async (
   cookie: string,
   workspaceId: string,
   name: string,
-  role: 'coder' | 'tester' = 'coder'
+  role: 'coder' | 'tester' = 'coder',
+  startupCommand?: string
 ) => {
   const response = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/workers`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name, role }),
+    body: JSON.stringify({ name, role, startup_command: startupCommand }),
   })
   expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
@@ -503,6 +504,52 @@ describe('Layer B fallback integration', () => {
         expect((await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)).status).toBe('exited')
       })
       await stopRunViaHttp(server.baseUrl, cookie, bobRun.runId)
+    } finally {
+      await server.close()
+    }
+  }, 15_000)
+
+  test('explicit resume startup command receives native session synchronization', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-explicit-resume-home-'))
+    const workspacePathRaw = join(root, 'workspace')
+    tempDirs.push(root)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    const aliceScript = writeEchoAgent(workspacePath, 'alice-explicit-resume.js')
+    const startupCommand = `node ${JSON.stringify(aliceScript)} --resume explicit-session`
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const alice = await createWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        'Alice',
+        'coder',
+        startupCommand
+      )
+
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
+      await waitForRunOutput(server.baseUrl, cookie, firstRun.runId, 'ARGS:')
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\r')
+      await waitFor(async () => {
+        expect((await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)).status).toBe('exited')
+      })
+
+      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(state.output).toContain('Your native session resumed')
+        expect(state.output).not.toContain('These are current responsibility facts')
+      })
+
+      const recoverySummaries = listSystemMessages(server.dataDir, 'system_recovery_summary')
+      expect(recoverySummaries).toHaveLength(1)
+      expect(recoverySummaries[0]?.text).toContain('Your native session resumed')
+      await stopRunViaHttp(server.baseUrl, cookie, secondRun.runId)
     } finally {
       await server.close()
     }
