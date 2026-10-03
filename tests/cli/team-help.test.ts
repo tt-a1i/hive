@@ -40,8 +40,8 @@ describe('team cli help', () => {
     expect(output).toContain('team report "<result>"')
     expect(output).toContain('team status "<current status>"')
     expect(output).not.toContain('team workflow run')
-    expect(output).not.toContain('--success')
-    expect(output).not.toContain('--failed')
+    expect(output).toContain('--success')
+    expect(output).toContain('--failed')
   })
 
   test('team guide prints focused runtime guidance without requiring Hive env', async () => {
@@ -54,12 +54,14 @@ describe('team cli help', () => {
     expect(output).toContain('## Guide: dispatch')
     expect(output).toContain('team send "<member-name>" "<task>"')
     expect(output).toContain('existing members from `team list` by name')
-    expect(output).toContain('preserve their selected CLI, model, and role constraints')
+    expect(output).toContain('Preserve configured CLI, model, and role constraints')
   })
 
   test('team guide prefers the generated protocol slice when present', async () => {
     process.env = {}
-    const dir = mkdtempSync(join(tmpdir(), 'hive-team-guide-'))
+    const dir = mkdtempSync(
+      join(originalEnv.TEMP ?? originalEnv.TMP ?? tmpdir(), 'hive-team-guide-')
+    )
     tempDirs.push(dir)
     mkdirSync(join(dir, '.hive'), { recursive: true })
     writeFileSync(

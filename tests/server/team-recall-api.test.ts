@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-
+import { startPassiveTestWorker, waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
@@ -75,6 +75,7 @@ describe('/api/team/recall', () => {
   test('returns message and dispatch evidence through the real HTTP route', async () => {
     if (!server) throw new Error('Expected test server')
     const worker = server.store.addWorker(workspaceId, { name: 'Alice', role: 'coder' })
+    await startPassiveTestWorker(server.store, workspaceId, worker.id)
     server.store.recordUserInput(
       workspaceId,
       orchestratorId,
@@ -89,6 +90,7 @@ describe('/api/team/recall', () => {
         fromAgentId: orchestratorId,
       }
     )
+    await waitForDispatchDelivery(server.store, workspaceId, dispatch.id)
     server.store.reportTask(workspaceId, worker.id, {
       dispatchId: dispatch.id,
       status: 'success',

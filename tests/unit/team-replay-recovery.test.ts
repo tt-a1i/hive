@@ -213,7 +213,7 @@ describe('replay failure recovery (review findings)', () => {
       workspaceId: workspace.id,
     })
     const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const writeSendPrompt = vi.fn(() => ({ payloadBytes: 0, write: Promise.resolve() }))
     const inboundNotes = new Map<string, number>([[oldParked.id, 4]])
 
     const ops = createTeamOperations({
@@ -255,7 +255,8 @@ describe('replay failure recovery (review findings)', () => {
       'Orchestrator',
       worker.description,
       oldParked.text,
-      4
+      4,
+      { beforeWrite: expect.any(Function) }
     )
   })
 

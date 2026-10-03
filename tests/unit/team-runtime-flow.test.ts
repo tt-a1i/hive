@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
@@ -183,7 +184,10 @@ describe('team runtime flow (unit)', () => {
     await store.startAgent(workspace.id, worker.id, {
       hivePort: '4010',
     })
-    await store.dispatchTask(workspace.id, worker.id, 'Report this task')
+    const dispatch = await store.dispatchTask(workspace.id, worker.id, 'Report this task', {
+      fromAgentId: orchestrator.id,
+    })
+    await waitForDispatchDelivery(store, workspace.id, dispatch.id)
 
     const app = createApp({ store })
     await new Promise<void>((resolve) => {

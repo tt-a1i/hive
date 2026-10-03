@@ -17,6 +17,7 @@ import { WorkspaceNotifications } from '../../web/src/notifications/WorkspaceNot
 import { Toaster } from '../../web/src/ui/toast.js'
 import { ToastProvider } from '../../web/src/ui/useToast.js'
 import { requireAgentToken } from '../helpers/auth.js'
+import { waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
@@ -40,8 +41,11 @@ const tree = (workers: TeamListItem[]) => (
 )
 const currentWorkers = () => server.store.listWorkers(workspace.id)
 const dispatch = () =>
-  server.store.dispatchTask(workspace.id, workerId, 'Notification contract fixture')
+  server.store.dispatchTask(workspace.id, workerId, 'Notification contract fixture', {
+    fromAgentId: `${workspace.id}:orchestrator`,
+  })
 const report = async (dispatchId: string) => {
+  await waitForDispatchDelivery(server.store, workspace.id, dispatchId)
   const response = await fetch(`${server.baseUrl}/api/team/report`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

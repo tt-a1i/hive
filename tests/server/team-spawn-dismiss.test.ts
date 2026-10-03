@@ -311,6 +311,15 @@ describe('team spawn / dismiss', () => {
 
       // Reporting the FIRST dispatch must NOT dismiss the worker — the second
       // dispatch is still open and would otherwise be deleted un-reported.
+      await waitFor(() => {
+        const dispatches = ctx.hive.store.listDispatches(ctx.workspaceId)
+        expect(dispatches.find((item) => item.id === first.id)?.deliveredAt).toEqual(
+          expect.any(Number)
+        )
+        expect(dispatches.find((item) => item.id === second.id)?.deliveredAt).toEqual(
+          expect.any(Number)
+        )
+      }, 8000)
       ctx.hive.store.reportTask(ctx.workspaceId, spawned.worker_id, {
         text: 'one done',
         dispatchId: first.id,

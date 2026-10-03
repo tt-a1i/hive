@@ -110,6 +110,7 @@ describe('built-in SQLite storage contract', () => {
             toAgentId: worker.id,
             text: 'existing dispatch task',
           })
+          expect(ledger.claimQueuedDispatch(dispatch.id)).toBe(true)
           ledger.markReportedByWorker({
             workspaceId: workspace.id,
             toAgentId: worker.id,
@@ -181,7 +182,7 @@ describe('built-in SQLite storage contract', () => {
         ).toEqual({ text: reportText })
         expect(
           migrated.prepare('SELECT MAX(version) AS version FROM schema_version').get()
-        ).toEqual({ version: 45 })
+        ).toEqual({ version: 46 })
         expect(migrated.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
         migrated.transaction(() => {
           restored.updateWorkerProfile(workspace.id, worker.id, { name: 'new driver worker' })

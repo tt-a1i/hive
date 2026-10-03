@@ -61,7 +61,9 @@ const setOrchVendor = (ctx: HiveContext, command: string, args: string[] = []) =
     commandPresetId: current?.commandPresetId ?? null,
     cwd: current?.cwd ?? null,
     interactiveCommand: current?.interactiveCommand ?? null,
-    presetAugmentationDisabled: current?.presetAugmentationDisabled,
+    ...(current?.presetAugmentationDisabled !== undefined
+      ? { presetAugmentationDisabled: current.presetAugmentationDisabled }
+      : {}),
     resumeArgsTemplate: current?.resumeArgsTemplate ?? null,
     sessionIdCapture: current?.sessionIdCapture ?? null,
   })
@@ -117,8 +119,11 @@ const setupHive = async (cliNames: readonly string[]): Promise<HiveContext> => {
 
   /* Wrappers use `#!/usr/bin/env sh`; they need /bin and /usr/bin, but not
      the user's real claude/codex so auto-pick only sees the fakes. */
-  const posixPath = ['/usr/bin', '/bin'].join(delimiter)
-  prependPassiveWorkflowCliPath(dataDir, cliNames, posixPath)
+  const systemPath =
+    process.platform === 'win32'
+      ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+      : ['/usr/bin', '/bin'].join(delimiter)
+  prependPassiveWorkflowCliPath(dataDir, cliNames, systemPath)
   const presets = Object.fromEntries(cliNames.map((name) => [name, createPreset(hive.store, name)]))
   return { baseUrl, dataDir, hive, orchestratorId, presets, worker, workspaceId: workspace.id }
 }
@@ -217,7 +222,7 @@ describe('POST /api/team/review', () => {
   }, 20_000)
 
   test('omitted cli picks a different command than the orchestrator', async () => {
-    const ctx = await setupHive(['claude', 'bash'])
+    const ctx = await setupHive(['claude', 'codex'])
     try {
       setOrchVendor(ctx, 'claude')
       const response = await fetch(`${ctx.baseUrl}/api/team/review`, {
@@ -227,9 +232,7 @@ describe('POST /api/team/review', () => {
       })
       expect(response.status).toBe(201)
       const created = (await response.json()) as { cli: string; member_name: string }
-      const bashPreset = ctx.presets.bash
-      if (!bashPreset) throw new Error('expected bash preset')
-      expect(created.cli).toBe(bashPreset.id)
+      expect(ctx.hive.store.settings.getCommandPreset(created.cli)?.command).toBe('codex')
 
       const member = ctx.hive.store
         .listWorkers(ctx.workspaceId)
@@ -239,7 +242,7 @@ describe('POST /api/team/review', () => {
         ctx.workspaceId,
         member.id
       )?.command
-      expect(memberCommand).toBe('bash')
+      expect(memberCommand).toBe('codex')
       expect(memberCommand).not.toBe('claude')
       expect(member.role).toBe('reviewer')
       expect(member.ephemeral).toBe(true)

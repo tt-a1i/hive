@@ -22,6 +22,7 @@ import {
   workspaceMemoryEnabledKey,
 } from '../../src/server/team-memory-feature.js'
 import type { MemoryEntryWithSources } from '../../src/server/team-memory-store.js'
+import { startPassiveTestWorker, waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
@@ -538,12 +539,14 @@ describe('memory dream manual runner', () => {
       'pitfall'
     )
     const worker = server.store.addWorker(workspace.id, { name: 'Relay Reviewer', role: 'tester' })
+    await startPassiveTestWorker(server.store, workspace.id, worker.id)
     const dispatch = await server.store.dispatchTask(
       workspace.id,
       worker.id,
       'Verify the mobile remote access path.',
-      { autoStartWorker: false }
+      { autoStartWorker: false, fromAgentId: `${workspace.id}:orchestrator` }
     )
+    await waitForDispatchDelivery(server.store, workspace.id, dispatch.id)
     server.store.reportTask(workspace.id, worker.id, {
       dispatchId: dispatch.id,
       status: 'success',
@@ -873,12 +876,14 @@ describe('memory dream manual runner', () => {
     if (!server) throw new Error('Expected test server')
     const workspace = createWorkspace()
     const worker = server.store.addWorker(workspace.id, { name: 'Reporter', role: 'coder' })
+    await startPassiveTestWorker(server.store, workspace.id, worker.id)
     const dispatch = await server.store.dispatchTask(
       workspace.id,
       worker.id,
       'Find the mobile relay pitfall.',
-      { autoStartWorker: false }
+      { autoStartWorker: false, fromAgentId: `${workspace.id}:orchestrator` }
     )
+    await waitForDispatchDelivery(server.store, workspace.id, dispatch.id)
     server.store.reportTask(workspace.id, worker.id, {
       dispatchId: dispatch.id,
       status: 'success',

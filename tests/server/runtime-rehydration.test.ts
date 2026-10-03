@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
+import { startPassiveTestWorker, waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 
 const tempDirs: string[] = []
 const originalPath = process.env.PATH
@@ -38,13 +39,13 @@ afterEach(async () => {
 })
 
 describe('runtime rehydration', () => {
-  test('restores workers and pending task counts from sqlite state', () => {
+  test('restores workers and pending task counts from sqlite state', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-'))
     tempDirs.push(dataDir)
 
-    const firstStore = createRuntimeStore({ dataDir })
+    const firstStore = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
     stores.push(firstStore)
-    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const workspace = firstStore.createWorkspace(dataDir, 'Alpha')
     const alice = firstStore.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
@@ -56,9 +57,15 @@ describe('runtime rehydration', () => {
       description: 'User chosen validation scope',
     })
 
-    firstStore.dispatchTask(workspace.id, alice.id, 'Implement login')
-    firstStore.dispatchTask(workspace.id, bob.id, 'Write tests')
+    await firstStore.dispatchTask(workspace.id, alice.id, 'Implement login')
+    await startPassiveTestWorker(firstStore, workspace.id, bob.id)
+    const dispatch = await firstStore.dispatchTask(workspace.id, bob.id, 'Write tests', {
+      fromAgentId: `${workspace.id}:orchestrator`,
+    })
+    await waitForDispatchDelivery(firstStore, workspace.id, dispatch.id)
     firstStore.reportTask(workspace.id, bob.id)
+    stores.pop()
+    await firstStore.close()
 
     const secondStore = createRuntimeStore({ dataDir })
     stores.push(secondStore)
@@ -83,18 +90,24 @@ describe('runtime rehydration', () => {
     ])
   })
 
-  test('restores pending task counts from dispatches instead of legacy message replay', () => {
+  test('restores pending task counts from dispatches instead of legacy message replay', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-runtime-dispatch-pending-'))
     tempDirs.push(dataDir)
 
-    const firstStore = createRuntimeStore({ dataDir })
+    const firstStore = createRuntimeStore({ agentManager: createAgentManager(), dataDir })
     stores.push(firstStore)
-    const workspace = firstStore.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const workspace = firstStore.createWorkspace(dataDir, 'Alpha')
     const alice = firstStore.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
 
-    firstStore.dispatchTask(workspace.id, alice.id, 'First')
-    firstStore.dispatchTask(workspace.id, alice.id, 'Second')
-    firstStore.reportTask(workspace.id, alice.id)
+    await startPassiveTestWorker(firstStore, workspace.id, alice.id)
+    const first = await firstStore.dispatchTask(workspace.id, alice.id, 'First', {
+      fromAgentId: `${workspace.id}:orchestrator`,
+    })
+    await firstStore.dispatchTask(workspace.id, alice.id, 'Second', {
+      fromAgentId: `${workspace.id}:orchestrator`,
+    })
+    await waitForDispatchDelivery(firstStore, workspace.id, first.id)
+    firstStore.reportTask(workspace.id, alice.id, { dispatchId: first.id })
 
     const db = new Database(join(dataDir, 'runtime.sqlite'))
     db.prepare(
@@ -121,6 +134,8 @@ describe('runtime rehydration', () => {
       Date.now()
     )
     db.close()
+    stores.pop()
+    await firstStore.close()
 
     const secondStore = createRuntimeStore({ dataDir })
     stores.push(secondStore)

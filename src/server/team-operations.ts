@@ -8,7 +8,12 @@ import {
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
-import { ConflictError, ForbiddenError, PromptReadinessTimeoutError } from './http-errors.js'
+import {
+  ConflictError,
+  ForbiddenError,
+  PromptReadinessTimeoutError,
+  PtyInactiveError,
+} from './http-errors.js'
 import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
 import type { ReportOutboxStore } from './report-outbox-store.js'
 import {
@@ -270,7 +275,16 @@ export const createTeamOperations = ({
             { requireActiveRun: true }
           )
         })
-        .catch((error) => console.error('[hive] delegated cancellation delivery failed', error))
+        .catch((error) => {
+          // Cancellation is already durable. An exited worker has no active
+          // process to receive the best-effort prompt; live failures stay visible.
+          if (
+            error instanceof PtyInactiveError &&
+            !agentRuntime.getActiveRunByAgentId(record.workspaceId, record.toAgentId)
+          )
+            return
+          console.error('[hive] delegated cancellation delivery failed', error)
+        })
     }
   }
   const recordDispatchDelivery = (dispatchId: string, { payloadBytes, write }: SendPromptWrite) => {

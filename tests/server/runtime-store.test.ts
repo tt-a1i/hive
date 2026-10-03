@@ -3,14 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { AgentManager, AgentRunSnapshot } from '../../src/server/agent-manager.js'
+import { createAgentManager } from '../../src/server/agent-manager.js'
 import { CODER_ROLE_DESCRIPTION, TESTER_ROLE_DESCRIPTION } from '../../src/server/role-templates.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
+import { startPassiveTestWorker, waitForDispatchDelivery } from '../helpers/dispatch-delivery.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 
 const tempDirs: string[] = []
+const liveStores: ReturnType<typeof createRuntimeStore>[] = []
 const tinyAvatar =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
 const outputBus = {
@@ -56,8 +59,9 @@ const createFakeAgentManager = (): AgentManager => {
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
+  for (const store of liveStores.splice(0)) await store.close()
   for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
@@ -307,18 +311,21 @@ describe('runtime store', () => {
     expect(updatedWorker.pendingTaskCount).toBe(1)
   })
 
-  test('reportTask resets worker pending count and returns it to idle', () => {
-    const store = createRuntimeStore()
-
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+  test('reportTask resets worker pending count and returns it to idle', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-report-idle-'))
+    tempDirs.push(root)
+    const store = createRuntimeStore({ agentManager: createAgentManager() })
+    liveStores.push(store)
+    const workspace = store.createWorkspace(root, 'Alpha')
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
     })
-    // Simulate PTY already running so dispatchTask can promote to working.
-    store.getWorker(workspace.id, worker.id).status = 'idle'
-
-    store.dispatchTask(workspace.id, worker.id, 'Implement feature')
+    await startPassiveTestWorker(store, workspace.id, worker.id)
+    const dispatch = await store.dispatchTask(workspace.id, worker.id, 'Implement feature', {
+      fromAgentId: `${workspace.id}:orchestrator`,
+    })
+    await waitForDispatchDelivery(store, workspace.id, dispatch.id)
     store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)
@@ -326,17 +333,29 @@ describe('runtime store', () => {
     expect(updatedWorker.status).toBe('idle')
   })
 
-  test('reportTask keeps a stopped worker stopped while draining pending count', () => {
-    const store = createRuntimeStore()
-
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+  test('reportTask keeps a stopped worker stopped while draining pending count', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-report-stopped-'))
+    tempDirs.push(root)
+    const store = createRuntimeStore({ agentManager: createAgentManager() })
+    liveStores.push(store)
+    const workspace = store.createWorkspace(root, 'Alpha')
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
     })
 
-    store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.getWorker(workspace.id, worker.id).status = 'stopped'
+    await startPassiveTestWorker(store, workspace.id, worker.id)
+    const dispatch = await store.dispatchTask(workspace.id, worker.id, 'Implement feature', {
+      fromAgentId: `${workspace.id}:orchestrator`,
+    })
+    await waitForDispatchDelivery(store, workspace.id, dispatch.id)
+    const run = store.getActiveRunByAgentId(workspace.id, worker.id)
+    if (!run) throw new Error('Expected delivered worker run')
+    store.stopAgentRun(run.runId)
+    await expect
+      .poll(() => store.getWorker(workspace.id, worker.id).status, { timeout: 8000 })
+      .toBe('stopped')
+    expect(store.getActiveRunByAgentId(workspace.id, worker.id)).toBeUndefined()
     store.reportTask(workspace.id, worker.id, { status: 'success', text: 'Done' })
 
     const updatedWorker = store.getWorker(workspace.id, worker.id)

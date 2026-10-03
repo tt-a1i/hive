@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -60,7 +61,9 @@ describe('agent manager Windows PTY stop (real node-pty)', () => {
         ].join('\n')
       )
       const runner = join(root, 'runner.mts')
-      const nodePtyUrl = pathToFileURL(resolve('node_modules/node-pty/lib/index.js')).href
+      const nodePtyUrl = pathToFileURL(
+        createRequire(import.meta.url).resolve('@lydell/node-pty')
+      ).href
       const supportUrl = pathToFileURL(resolve('src/server/agent-manager-support.ts')).href
       const outputBusUrl = pathToFileURL(resolve('src/server/pty-output-bus.ts')).href
       writeFileSync(

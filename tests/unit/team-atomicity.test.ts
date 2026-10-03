@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { DispatchRecord } from '../../src/server/dispatch-ledger-store.js'
+import {
+  createDispatchLedgerStore,
+  type DispatchRecord,
+} from '../../src/server/dispatch-ledger-store.js'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createTeamOperations, type TeamOperationsInput } from '../../src/server/team-operations.js'
 import { createWorkflowDispatchAwaiter } from '../../src/server/workflow-dispatch-awaiter.js'
+import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
 const operationDatabases: Database[] = []
 afterEach(() => {
@@ -169,6 +173,7 @@ describe('team atomicity', () => {
       createDispatch: vi.fn(() => dispatch),
       deleteDispatch,
       deleteMessage,
+      findOpenDispatchById: vi.fn(() => dispatch),
       findOpenDispatch: vi.fn(),
       insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchCancelled: vi.fn(),
@@ -241,6 +246,7 @@ describe('team atomicity', () => {
       createDispatch: vi.fn(() => dispatch),
       deleteDispatch,
       deleteMessage,
+      findOpenDispatchById: vi.fn(() => dispatch),
       findOpenDispatch: vi.fn(),
       insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchCancelled: vi.fn(),
@@ -286,7 +292,7 @@ describe('team atomicity', () => {
       workspaceId: workspace.id,
     })
     const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const writeSendPrompt = vi.fn(() => ({ payloadBytes: 0, write: Promise.resolve() }))
     const inboundNotes = new Map<string, number>([[dispatch.id, 5]])
 
     const ops = createTeamOperations({
@@ -310,6 +316,7 @@ describe('team atomicity', () => {
       createDispatch: vi.fn(() => dispatch),
       deleteDispatch: vi.fn(),
       deleteMessage: vi.fn(),
+      findOpenDispatchById: vi.fn(() => dispatch),
       findOpenDispatch: vi.fn(),
       insertMessage: vi.fn(() => ({ sequence: 1 })),
       markDispatchCancelled: vi.fn(),
@@ -349,7 +356,8 @@ describe('team atomicity', () => {
       orchestrator.name,
       worker.description,
       'Implement login',
-      5
+      5,
+      { beforeWrite: expect.any(Function) }
     )
   })
 
@@ -396,7 +404,7 @@ describe('team atomicity', () => {
       item.status = 'submitted'
       return true
     })
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const writeSendPrompt = vi.fn(() => ({ payloadBytes: 0, write: Promise.resolve() }))
 
     const ops = createTeamOperations({
       ...operationDependencies(),
@@ -455,7 +463,8 @@ describe('team atomicity', () => {
       orchestrator.name,
       worker.description,
       older.text,
-      0
+      0,
+      { beforeWrite: expect.any(Function) }
     )
     expect(writeSendPrompt).toHaveBeenNthCalledWith(
       2,
@@ -465,7 +474,8 @@ describe('team atomicity', () => {
       orchestrator.name,
       worker.description,
       current.text,
-      0
+      0,
+      { beforeWrite: expect.any(Function) }
     )
   })
 
@@ -489,7 +499,7 @@ describe('team atomicity', () => {
       workspaceId: workspace.id,
     })
     const claimQueuedDispatch = vi.fn(() => true)
-    const writeSendPrompt = vi.fn(() => Promise.resolve())
+    const writeSendPrompt = vi.fn(() => ({ payloadBytes: 0, write: Promise.resolve() }))
 
     const ops = createTeamOperations({
       ...operationDependencies(),
@@ -546,7 +556,8 @@ describe('team atomicity', () => {
       orchestrator.name,
       worker.description,
       dispatch.text,
-      0
+      0,
+      { beforeWrite: expect.any(Function) }
     )
   })
 
@@ -737,23 +748,45 @@ describe('team atomicity', () => {
   })
 
   test('reportTask records and queues the report (no longer throws) when the orchestrator run is absent', () => {
-    const store = createRuntimeStore()
+    const db = new Database(':memory:')
+    operationDatabases.push(db)
+    initializeRuntimeDatabase(db)
+    const ledger = createDispatchLedgerStore(db)
+    const store = createWorkspaceStore(db, () => ledger.listOpenDispatchKinds())
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
     // Simulate PTY already running so dispatchTask can promote to working.
     store.getWorker(workspace.id, worker.id).status = 'idle'
 
-    // Dispatch first so pendingTaskCount rises to 1.
-    store.dispatchTask(workspace.id, worker.id, 'Implement login')
-    expect(store.listDispatches(workspace.id)).toContainEqual(
-      expect.objectContaining({ status: 'queued', text: 'Implement login' })
-    )
-    const beforeMessages = store.listMessagesForRecovery(workspace.id, 0).length
+    const dispatch = ledger.createDispatch({
+      workspaceId: workspace.id,
+      toAgentId: worker.id,
+      text: 'Implement login',
+    })
+    expect(ledger.claimQueuedDispatch(dispatch.id)).toBe(true)
+    store.markTaskDispatched(workspace.id, worker.id)
+    const ops = createTeamOperations({
+      agentRuntime: { getActiveRunByAgentId: () => undefined } as never,
+      createDispatch: ledger.createDispatch,
+      deleteDispatch: ledger.deleteDispatch,
+      deleteMessage: () => {},
+      findOpenDispatch: ledger.findOpenDispatch,
+      findOpenDispatchById: ledger.findOpenDispatchById,
+      listOpenWorkspaceDispatches: ledger.listOpenWorkspaceDispatches,
+      insertMessage: () => ({ sequence: 1 }),
+      markDispatchCancelled: ledger.markCancelled,
+      claimQueuedDispatch: ledger.claimQueuedDispatch,
+      reparkClaimedDispatch: ledger.reparkClaimedDispatch,
+      markDispatchReportedByWorker: ledger.markReportedByWorker,
+      reportOutbox: createReportOutboxStore(db),
+      workflowDispatchAwaiter: createWorkflowDispatchAwaiter(),
+      workspaceStore: store,
+    })
 
     // No orchestrator run exists. The report must NOT be lost or rejected: it is
     // recorded, the dispatch is marked reported, and it is queued in the outbox
     // for redelivery when the orchestrator comes back.
-    const result = store.reportTask(workspace.id, worker.id, {
+    const result = ops.reportTask(workspace.id, worker.id, {
       status: 'success',
       text: 'Done',
       requireActiveRun: true,
@@ -765,8 +798,12 @@ describe('team atomicity', () => {
     expect(store.listWorkers(workspace.id)).toContainEqual(
       expect.objectContaining({ id: worker.id, pendingTaskCount: 0 })
     )
-    expect(store.listMessagesForRecovery(workspace.id, 0).length).toBe(beforeMessages + 1)
-    expect(store.listDispatches(workspace.id)).toContainEqual(
+    expect(
+      createReportOutboxStore(db).listPending(workspace.id, `${workspace.id}:orchestrator`)
+    ).toContainEqual(
+      expect.objectContaining({ dispatchId: dispatch.id, payload: expect.stringContaining('Done') })
+    )
+    expect(ledger.listWorkspaceDispatches(workspace.id)).toContainEqual(
       expect.objectContaining({
         status: 'reported',
         text: 'Implement login',

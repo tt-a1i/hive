@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -109,11 +117,15 @@ const writeEchoAgent = (workspacePath: string, filename: string) => {
   writeFileSync(
     scriptPath,
     [
+      "const { appendFileSync, writeFileSync } = require('node:fs')",
+      `const inputPath = ${JSON.stringify(`${scriptPath}.stdin.log`)}`,
+      "writeFileSync(inputPath, '')",
       "for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(0))",
       'process.stdin.setRawMode?.(true)',
       "process.stdin.setEncoding('utf8')",
       "let inputBuffer = ''",
       "process.stdin.on('data', (chunk) => {",
+      '  appendFileSync(inputPath, chunk)',
       '  const lines = (inputBuffer + chunk).split(/\\r\\n|\\r|\\n/)',
       "  inputBuffer = lines.pop() ?? ''",
       "  for (const line of lines) process.stdout.write('STDIN:' + line + '\\n')",
@@ -356,11 +368,13 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('Bob')
         expect(state.output).toContain('Use existing members from `team list` by name.')
         expect(state.output).toContain('Use `team send "<member-name>" "<task>"`')
-        expect(state.output).toContain(
-          'You may complete work directly when delegation adds no useful'
+        expect(readFileSync(`${orchestratorScript}.stdin.log`, 'utf8')).toContain(
+          'Keep small, direct tasks local'
         )
-        expect(state.output).toContain('messages neither create nor close responsibility')
-        expect(state.output).toContain(
+        expect(readFileSync(`${orchestratorScript}.stdin.log`, 'utf8')).toContain(
+          'messages neither create nor close responsibility'
+        )
+        expect(readFileSync(`${orchestratorScript}.stdin.log`, 'utf8')).toContain(
           'Member reports submit outcomes, not proof of user-goal acceptance'
         )
       })
@@ -450,12 +464,13 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('layer b fallback')
         expect(state.output).toContain('Bob')
         expect(state.output).toContain('<hive-memory context="recovery">')
-        expect(state.output).toContain('Layer B recovery should remember the relay debug decision.')
-        expect(state.output.indexOf('请继续修复 restart bug')).toBeLessThan(
-          state.output.indexOf('Layer B recovery should remember')
+        const received = readFileSync(`${aliceScript}.stdin.log`, 'utf8')
+        expect(received).toContain('Layer B recovery should remember the relay debug decision.')
+        expect(received.indexOf('请继续修复 restart bug')).toBeLessThan(
+          received.indexOf('Layer B recovery should remember')
         )
-        expect(state.output.indexOf('layer b fallback')).toBeLessThan(
-          state.output.indexOf('Layer B recovery should remember')
+        expect(received.indexOf('layer b fallback')).toBeLessThan(
+          received.indexOf('Layer B recovery should remember')
         )
       })
 
