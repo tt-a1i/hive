@@ -36,6 +36,7 @@ interface TeamMemoryAuthBody {
 }
 
 interface TeamMemoryAddBody extends TeamMemoryAuthBody {
+  supersedes_id?: unknown
   body?: unknown
   kind?: unknown
   procedure_ref?: unknown
@@ -208,6 +209,9 @@ export const teamMemoryRoutes: RouteDefinition[] = [
       },
       body: requireMemoryBody(body.body),
       kind,
+      ...(body.supersedes_id !== undefined
+        ? { supersedesId: requireNonEmptyString(body.supersedes_id, 'supersedes_id') }
+        : {}),
       procedureRef,
       scope: parseScope(body.scope),
       tags: parseTags(body.tags),

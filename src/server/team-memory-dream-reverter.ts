@@ -13,7 +13,7 @@ type RevertableDreamRunRecord = DreamRunRecord & { revertBlob: DreamRunRevertBlo
 
 const MEMORY_STATUSES = new Set(['active', 'candidate', 'archived', 'rejected'])
 const MEMORY_SOURCES = new Set(['manual', 'dream'])
-const MEMORY_SOURCE_TYPES = new Set(['manual', 'message', 'dispatch', 'report', 'dream'])
+const MEMORY_SOURCE_TYPES = new Set(['manual', 'message', 'dispatch', 'report', 'dream', 'memory'])
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
@@ -190,9 +190,26 @@ export const createDreamRunReverter = (db: Database) => {
   const restorePriorEntry = (
     workspaceId: string,
     runId: string,
+    runStartedAt: number,
     prior: { entry: MemoryEntryRow; sources: MemorySourceRow[] }
   ) => {
     assertPriorEntry(workspaceId, runId, prior.entry)
+    // A stale Dream revert must not undo a later decision supersession.
+    const laterSupersession = db
+      .prepare(
+        `SELECT 1
+         FROM memory_sources AS supersession
+         JOIN memory_entries AS replacement ON replacement.id = supersession.memory_id
+         WHERE supersession.source_type = 'memory'
+           AND supersession.source_id = ?
+           AND supersession.created_at >= ?
+           AND replacement.workspace_id = ?
+           AND replacement.scope = 'workspace'
+         LIMIT 1`
+      )
+      .get(prior.entry.id, runStartedAt, workspaceId)
+    if (laterSupersession) return
+
     const result = db
       .prepare(
         `UPDATE memory_entries
@@ -289,7 +306,7 @@ export const createDreamRunReverter = (db: Database) => {
 
       const now = Date.now()
       for (const prior of run.revertBlob.prior_entries) {
-        restorePriorEntry(workspaceId, runId, prior)
+        restorePriorEntry(workspaceId, runId, run.startedAt, prior)
       }
       for (const memoryId of run.revertBlob.added_entry_ids) {
         archiveAddedEntry(workspaceId, runId, memoryId, now)

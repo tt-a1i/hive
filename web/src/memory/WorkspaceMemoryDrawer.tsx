@@ -196,6 +196,9 @@ const MemoryRow = ({
                     {source.actorRoleSnapshot ? ` · ${source.actorRoleSnapshot}` : ''}
                   </div>
                   {source.excerpt ? <p className="mt-0.5">{source.excerpt}</p> : null}
+                  {source.sourceType === 'memory' && source.sourceId ? (
+                    <code className="text-ter">{source.sourceId}</code>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -60,6 +60,7 @@ const TEAM_USAGE = [
   '  team recall "<query>" [--limit <n>] [--window <n>]',
   '  team memory add "<body>" [--kind fact|preference|decision|pitfall|procedure_ref] [--scope workspace|user] [--tag <tag>] [--ref-type workflow|skill|procedure|template|doc --ref-id <id> [--ref-title <title>]]',
   '  team memory show <memory-id>',
+  '  team memory add "<new decision>" --kind decision --supersedes <old-memory-id>',
   '  team memory search "<query>" [--limit <n>] [--scope workspace|user|all]',
   '  team memory dream show <dream-run-id>',
   '  team memory apply --run <dream-run-id> --stdin',
@@ -663,6 +664,7 @@ export const parseRecallArgs = (args: string[]) => {
 }
 
 export interface ParsedMemoryAddArgs {
+  supersedesId?: string
   body: string
   kind: MemoryKind
   procedureRef: MemoryProcedureRef | null
@@ -678,10 +680,20 @@ export const parseMemoryAddArgs = (args: string[]): ParsedMemoryAddArgs => {
   let procedureRefTitle: string | null = null
   let procedureRefType: MemoryProcedureRef['type'] | undefined
   let scope: MemoryScope = 'workspace'
+  let supersedesId: string | undefined
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === undefined) continue
+
+    if (arg === '--supersedes') {
+      const next = args[index + 1]
+      if (!next?.trim() || next.startsWith('--'))
+        throw new Error(`--supersedes requires a memory ID\n\n${MEMORY_ADD_USAGE}`)
+      supersedesId = next.trim()
+      index += 1
+      continue
+    }
 
     if (arg === '--kind') {
       const next = args[index + 1]
@@ -823,6 +835,7 @@ export const parseMemoryAddArgs = (args: string[]): ParsedMemoryAddArgs => {
   return {
     body,
     kind,
+    ...(supersedesId !== undefined ? { supersedesId } : {}),
     procedureRef,
     scope,
     tags,
@@ -1124,6 +1137,7 @@ export const runTeamCommand = async (argv: string[]) => {
         token: env.HIVE_AGENT_TOKEN,
         body: memory.body,
         kind: memory.kind,
+        ...(memory.supersedesId !== undefined ? { supersedes_id: memory.supersedesId } : {}),
         procedure_ref: memory.procedureRef,
         scope: memory.scope,
         tags: memory.tags,

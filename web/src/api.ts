@@ -861,7 +861,7 @@ export const openWorkspaceInEditor = async (
 
 export type MemoryStatus = 'active' | 'candidate' | 'archived' | 'rejected'
 export type MemorySource = 'manual' | 'dream'
-export type MemorySourceType = 'manual' | 'message' | 'dispatch' | 'report' | 'dream'
+export type MemorySourceType = 'manual' | 'message' | 'dispatch' | 'report' | 'dream' | 'memory'
 
 export interface MemorySourceRecord {
   actorAgentIdSnapshot: string | null

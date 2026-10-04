@@ -266,6 +266,7 @@ export const buildProtocolGuide = (
       '- `team memory add "<body>" [--kind fact|preference|decision|pitfall|procedure_ref] [--scope workspace|user] [--tag <tag>] [--ref-type workflow|skill|procedure|template|doc --ref-id <id> [--ref-title <title>]]` — save durable workspace/user memory.',
       '- `team memory show <memory-id>` — inspect a memory entry and evidence snapshots.',
       '- `team memory forget <memory-id>` — archive obsolete memory.',
+      '- `team memory add "<new decision>" --kind decision --supersedes <old-memory-id>` — atomically archive an active workspace decision and preserve its replacement history. Orchestrator only; this records the caller, not proof of user confirmation.',
       '- `team memory dream show <dream-run-id>` — inspect a pending memory maintenance run.',
       '- `team memory apply --run <dream-run-id> --stdin` — apply strict JSON Dream ops.',
       '',
