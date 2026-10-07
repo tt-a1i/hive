@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readdirSync, renameSync, rmdirSync, unlinkSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, resolve, sep } from 'node:path'
 import { HttpError } from './http-errors.js'
 import type { Database } from './sqlite.js'
@@ -283,14 +283,22 @@ export const createWorkspaceUploadStore = (db: Database, uploadsDir: string) => 
         created_at: now,
       }
 
+      let ownsFile = false
       try {
         await mkdir(dirname(storagePath), { recursive: true })
         // Async IO keeps a 100MB write from stalling every PTY/WebSocket on
         // the event loop; `wx` keeps the no-clobber guarantee. The INSERT's
         // WHERE EXISTS guard plus the removeFile cleanup below still cover a
         // workspace deleted while the write was in flight.
-        await writeFile(storagePath, input.data, { flag: 'wx' })
+        const file = await open(storagePath, 'wx')
+        ownsFile = true
+        try {
+          await file.writeFile(input.data)
+        } finally {
+          await file.close()
+        }
       } catch {
+        if (ownsFile) removeFile(storagePath)
         throw new HttpError(500, 'Upload could not be saved')
       }
 
