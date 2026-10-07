@@ -129,3 +129,13 @@ describe('resolveStartupCommandLaunchConfig — CLI brand identification', () =>
     expect(result?.sessionIdCapture?.source).toBe('codex_session_jsonl_dir')
   })
 })
+
+test('preserves startup payload while identifying a padded CLI command', () => {
+  const settings = createBuiltinPresetSettingsStub()
+  const command = '  claude --continue  '
+  const config = resolveStartupCommandLaunchConfig(settings, command)
+  expect(config?.args?.at(-1)).toBe(command)
+  expect(config?.interactiveCommand).toBe('claude')
+  expect(config?.sessionIdCapture?.source).toBe('claude_project_jsonl_dir')
+  expect(resolveStartupCommandLaunchConfig(settings, ' \t\n ')).toBeUndefined()
+})
