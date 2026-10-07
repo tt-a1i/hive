@@ -70,7 +70,7 @@ describe('startup command parser', () => {
     test('uses an interactive login shell for bash-like shells', () => {
       const parsed = createStartupCommandLaunch('  echo hi  ', { SHELL: '/bin/bash' }, 'linux')
       expect(parsed).toEqual({
-        args: ['-lic', 'echo hi'],
+        args: ['-lic', '  echo hi  '],
         command: '/bin/bash',
       })
     })
@@ -92,6 +92,12 @@ describe('startup command parser', () => {
   })
 
   describe('Windows verbatim branch', () => {
+    test('preserves padded and trailing whitespace in the Windows command payload', () => {
+      const command = '  echo hello \t '
+      const parsed = createStartupCommandLaunch(command, { ComSpec: 'cmd.exe' }, 'win32')
+      expect(parsed).toEqual({ command: 'cmd.exe', args: ['/d', '/s', '/c', command] })
+    })
+
     test('parser still emits a string[] for storage compatibility', () => {
       const parsed = createStartupCommandLaunch(
         '"C:\\nvm4w\\nodejs\\claude.CMD" --resume foo',
