@@ -127,11 +127,11 @@ export const autostartAgent = async (
     let exitCode: number | null = run.exitCode
     let status: string = run.status
     let output = ''
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     let deadline = startedAt + SETTLE_WAIT_MS
     const silentStartingDeadline = startedAt + SILENT_STARTING_SETTLE_WAIT_MS
-    while (status !== 'exited' && status !== 'error' && Date.now() < deadline) {
-      const remainingMs = Math.max(0, deadline - Date.now())
+    while (status !== 'exited' && status !== 'error' && performance.now() < deadline) {
+      const remainingMs = Math.max(0, deadline - performance.now())
       const waitMs = Math.min(POLL_INTERVAL_MS, remainingMs)
       if (port.waitForRunExit) {
         await port.waitForRunExit(run.runId, waitMs)
@@ -150,7 +150,7 @@ export const autostartAgent = async (
         status === 'starting' &&
         output.length === 0 &&
         deadline < silentStartingDeadline &&
-        Date.now() >= deadline
+        performance.now() >= deadline
       ) {
         deadline = silentStartingDeadline
       }
