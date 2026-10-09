@@ -35,6 +35,7 @@ export const useWorkflowsPolling = ({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const cancelledRef = useRef(false)
+  const scheduleRequestRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchRuns = useCallback(async () => {
@@ -49,11 +50,14 @@ export const useWorkflowsPolling = ({
 
   const fetchSchedules = useCallback(async () => {
     if (!workspaceId) return
+    // An older list can predate a pause/resume already reconciled by a newer read.
+    const request = ++scheduleRequestRef.current
     try {
       const next = await listWorkflowSchedules(workspaceId)
-      if (!cancelledRef.current) setSchedules(next)
+      if (!cancelledRef.current && request === scheduleRequestRef.current) setSchedules(next)
     } catch (e) {
-      if (!cancelledRef.current) setError(e instanceof Error ? e.message : String(e))
+      if (!cancelledRef.current && request === scheduleRequestRef.current)
+        setError(e instanceof Error ? e.message : String(e))
     }
   }, [workspaceId])
 
@@ -72,6 +76,7 @@ export const useWorkflowsPolling = ({
   }, [fetchSchedules])
 
   useEffect(() => {
+    scheduleRequestRef.current += 1
     cancelledRef.current = false
     if (!enabled || !workspaceId) {
       return () => {
