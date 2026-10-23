@@ -25,19 +25,40 @@ const runVitest = async (filesOrArgs = [], extraArgs = []) => {
   mkdirSync(testHome)
   let child
   let interrupted
+  let cancellation
+  let cancelTimer
+  let finishCancellation
   const stop = (signal) => {
+    if (interrupted) return
     interrupted = signal
     if (!child?.pid) return
     if (process.platform === 'win32') {
-      const stopped = spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'])
+      const stopped = spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+        timeout: 5000,
+      })
       if (stopped.status !== 0) child.kill(signal)
     } else {
-      // Cancellation must not leave workers running after the runner exits.
-      try {
-        process.kill(-child.pid, 'SIGKILL')
-      } catch (error) {
-        if (error.code !== 'ESRCH') throw error
+      const signalGroup = (value) => {
+        try {
+          process.kill(-child.pid, value)
+        } catch (error) {
+          if (error.code !== 'ESRCH') throw error
+        }
       }
+      // Nested runners must receive the signal before their parent is killed,
+      // so they can stop their own detached children and remove their data.
+      signalGroup(signal)
+      cancellation = new Promise((resolve, reject) => {
+        finishCancellation = resolve
+        cancelTimer = setTimeout(() => {
+          try {
+            signalGroup('SIGKILL')
+            resolve()
+          } catch (error) {
+            reject(error)
+          }
+        }, 2000)
+      })
     }
   }
   const onInt = () => stop('SIGINT')
@@ -70,6 +91,16 @@ const runVitest = async (filesOrArgs = [], extraArgs = []) => {
       child.once('error', reject)
       child.once('close', (code) => resolve(code))
     })
+    if (cancellation) {
+      try {
+        process.kill(-child.pid, 0)
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error
+        clearTimeout(cancelTimer)
+        finishCancellation()
+      }
+      await cancellation
+    }
   } finally {
     process.removeListener('SIGINT', onInt)
     process.removeListener('SIGTERM', onTerm)

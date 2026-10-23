@@ -64,3 +64,9 @@
 接续本地验证：`pnpm check`、`pnpm exec tsc --noEmit`、`actionlint .github/workflows/ci.yml`、`git diff --check` 通过；六个相关文件 54 passed、1 skipped（旧 SQLite 互读转独立任务）。main 已验证的四个重叠文件未再重复本地全跑，新的完整分片/平台/旧驱动由真实 Actions 验证。
 
 本对话按 AGENTS 派出 A/B/C/D 四个独立 reviewer；其结论和最终 Actions 结果在收尾时补充。前述侧对话自查和测量保留为历史，不当作本轮独立审查与远端通过证据。
+
+### 独立复审收尾
+
+四方最终 A-。A/B 发现取消测试留下进程，进一步实测发现直接强杀外层会留下嵌套 runner：已改为先转发原信号，最多两秒后强杀；进程组提前为空即完成。B 在源码 SHA256 `e2efa2e2` 前缀版本实测普通子孙、真实 node-pty 及嵌套 runner，记录 PID 均消失、内外临时目录删除，SIGINT/SIGTERM 退出码 130/143。C 发现三项 CLI 显式路径及 Windows AppData 绕过 HOME：共享入口已清除/隔离，实际子进程哨兵断言通过。D 未发现平台或发布合同降级。严重项均修复，无未处理阻塞；不承诺入口遭 SIGKILL、任意独立 session 或未实测的 Windows 信号清理。
+
+证据目录 `/tmp/hive-ci-b-review-20261023/` 保留原失败和复验；本轮额外 runner/path 41 项通过，取消实现变更后的 planner/runner 26 项通过。远端使用草稿 PR #68 验证，未经用户授权不合并。
