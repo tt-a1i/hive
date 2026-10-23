@@ -25,36 +25,12 @@ importers:
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
-      '@radix-ui/react-dialog':
-        specifier: ^1.1.15
-        version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-slot':
-        specifier: ^1.2.4
-        version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
-      '@radix-ui/react-tooltip':
-        specifier: ^1.2.8
-        version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@tailwindcss/vite':
-        specifier: ^4.2.2
-        version: 4.2.2(vite@7.3.2(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
-      '@xterm/addon-clipboard':
-        specifier: ^0.2.0
-        version: 0.2.0
-      '@xterm/addon-fit':
-        specifier: ^0.11.0
-        version: 0.11.0
       '@xterm/addon-serialize':
         specifier: ^0.14.0
         version: 0.14.0
       '@xterm/addon-unicode11':
         specifier: ^0.9.0
         version: 0.9.0
-      '@xterm/addon-web-links':
-        specifier: ^0.12.0
-        version: 0.12.0
-      '@xterm/addon-webgl':
-        specifier: ^0.19.0
-        version: 0.19.0
       '@xterm/headless':
         specifier: ^6.0.0
         version: 6.0.0
@@ -64,12 +40,6 @@ importers:
       chokidar:
         specifier: ^5.0.0
         version: 5.0.0
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       commander:
         specifier: ^14.0.0
         version: 14.0.3
@@ -82,30 +52,6 @@ importers:
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
-      isomorphic-dompurify:
-        specifier: ^3.14.0
-        version: 3.14.0(@noble/hashes@2.2.0)
-      lucide-react:
-        specifier: ^1.8.0
-        version: 1.8.0(react@19.2.5)
-      marked:
-        specifier: ^18.0.4
-        version: 18.0.4
-      qrcode:
-        specifier: 1.5.4
-        version: 1.5.4
-      react:
-        specifier: ^19.1.0
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.1.0
-        version: 19.2.5(react@19.2.5)
-      tailwind-merge:
-        specifier: ^3.5.0
-        version: 3.5.0
-      tailwindcss:
-        specifier: ^4.2.2
-        version: 4.2.2
       ws:
         specifier: ^8.20.0
         version: 8.20.0
@@ -113,6 +59,18 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.12
         version: 2.4.12
+      '@radix-ui/react-dialog':
+        specifier: ^1.1.15
+        version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@radix-ui/react-slot':
+        specifier: ^1.2.4
+        version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
+      '@radix-ui/react-tooltip':
+        specifier: ^1.2.8
+        version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@tailwindcss/vite':
+        specifier: ^4.2.2
+        version: 4.2.2(vite@7.3.2(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0))
       '@testing-library/jest-dom':
         specifier: ^6.6.3
         version: 6.9.1
@@ -137,15 +95,57 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      '@xterm/addon-clipboard':
+        specifier: ^0.2.0
+        version: 0.2.0
+      '@xterm/addon-fit':
+        specifier: ^0.11.0
+        version: 0.11.0
+      '@xterm/addon-web-links':
+        specifier: ^0.12.0
+        version: 0.12.0
+      '@xterm/addon-webgl':
+        specifier: ^0.19.0
+        version: 0.19.0
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       concurrently:
         specifier: ^9.1.2
         version: 9.2.1
+      isomorphic-dompurify:
+        specifier: ^3.14.0
+        version: 3.14.0(@noble/hashes@2.2.0)
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+      lucide-react:
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.5)
+      marked:
+        specifier: ^18.0.4
+        version: 18.0.4
+      qrcode:
+        specifier: 1.5.4
+        version: 1.5.4
+      react:
+        specifier: ^19.1.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.5(react@19.2.5)
+      tailwind-merge:
+        specifier: ^3.5.0
+        version: 3.5.0
+      tailwindcss:
+        specifier: ^4.2.2
+        version: 4.2.2
       tsx:
         specifier: ^4.20.6
         version: 4.21.0

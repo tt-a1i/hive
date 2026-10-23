@@ -13,3 +13,10 @@ source license.
 Hive includes optional marketplace prompt snapshots from third-party projects.
 Their upstream license files are preserved under the packaged vendor
 marketplace directories when those snapshots are included in a release.
+
+Browser dependency notices are bundled in web/dist/licenses/third-party.txt.
+react-remove-scroll-bar 2.3.8 omits LICENSE from its npm archive. Its notice is
+preserved at assets/licenses/react-remove-scroll-bar-LICENSE.txt from:
+https://github.com/theKashey/react-remove-scroll-bar/blob/8ca9ba5ea52de03308fe8ced94f7b159a44d28ff/LICENSE
+Older @radix-ui subpackages without LICENSE use the shared radix-ui/primitives
+MIT notice shipped by @radix-ui/react-dialog.

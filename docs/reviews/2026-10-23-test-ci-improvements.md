@@ -100,3 +100,13 @@ A/B/C/D再次独立复核均A-，无阻塞；修复测试错误的通道假设�
 最终6a6afff完整CI 39910808114一次通过，plan到result为298秒，2695pass/5skip；八个平台和legacy通过。Windows Node26 scriptless job 219秒，其中npm安装179个依赖约116秒，安装后的真实功能检查约5秒。证据 `/tmp/hive-ci-windows-cache/baseline-node26-scriptless.log`。
 
 本轮仅为Windows缓存npm下载目录；仍mkdtemp新prefix并执行正常/scriptless两种全新安装，不缓存node_modules、不删验收。B审查发现setup-node按镜像全局配置缓存C:\npm\cache，而pack-smoke空配置实际走用户LocalAppData目录；已改为actions/cache直接缓存~/AppData/Local/npm-cache，key含架构与锁文件哈希。A/B复核关闭路径问题，C/D核门禁保持；实际冷暖命中和收益需Actions验证，不预先声称提速。actionlint与diff检查通过。
+
+## 发布安装依赖瘦身
+
+把18个仅浏览器/构建用途的依赖从dependencies移至devDependencies，版本、integrity与全部lock snapshots不变。esbuild工作流编译、PTY、终端镜像和xterm许可依赖保留。冻结离线安装、完整build、typecheck、biome通过；52个原网页产物字节不变，仅增加许可证聚合文件。
+
+本地独立prefix安装：旧179个依赖/9826文件/167364023字节，新28个依赖/1843文件/44188572字节；约27秒与3.4秒，不外推Windows。最终tarball两种安装策略均通过真实PTY/HTTP/SQLite/team验收。脱离仓库的安装还核验14个runtime裸模块引用解析均在prefix内、实际TypeScript workflow编译、53个网页文件逐字节HTTP读回以及React/Radix/上游许可原文。最终包相比上述28依赖测量新增约74KB许可文件。证据 `/tmp/hive-ci-deps/`。
+
+### Self-Review
+
+A/B/D发现移除生产依赖会移走原node_modules许可：已在现有Vite构建插件按实际chunk模块收集直接/传递许可，Tailwind CSS显式纳入，原xterm许可保持。旧Radix缺文件仅允许同primitives仓库MIT声明复用共享notice；react-remove-scroll-bar2.3.8缺文件按固定版本保留固定上游commit原文，来源记录在NOTICE。未知许可缺失会阻断build。A建议收紧Radix repo已修，C指出hook类型缺失已修并typecheck通过。未新增/删除产品测试，未修改src/web/src逻辑。实际Windows安装收益和全平台保护交由本次远端矩阵；不把本地结果写成远端通过。原基准实验空配置文件重复加载、探针/tmp真实路径差异、workflow缺meta及许可构建失败日志均保留，未当作产品失败或覆盖。
