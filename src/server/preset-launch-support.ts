@@ -1,7 +1,8 @@
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
+import { getBuiltinCommandPresetByCommand } from './command-preset-defaults.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import type { SessionCaptureSnapshot, SessionIdCaptureConfig } from './session-capture.js'
-import { doesCapturedSessionExist } from './session-capture.js'
+import { getCapturedSessionExistence } from './session-capture.js'
 import { getStartupCommandExecutable, normalizeExecutableToken } from './startup-command-parser.js'
 
 type BoundPreset = Pick<
@@ -79,15 +80,6 @@ const withPresetYoloArgs = (
 
 const getPresetYoloArgs = (preset: BoundPreset | null | undefined) => preset?.yoloArgsTemplate ?? []
 
-export const hasResumeLaunchArgs = (args: readonly string[]) =>
-  args.includes('--resume') ||
-  args.includes('-r') ||
-  args.includes('--continue') ||
-  args.includes('-c') ||
-  args.includes('--session') ||
-  args.includes('-s') ||
-  args[0] === 'resume'
-
 const splitShellCommand = (command: string) => {
   const tokens: string[] = []
   let current = ''
@@ -138,33 +130,156 @@ const getShellCommandArg = (args: readonly string[]) => {
   return windowsCommandIndex >= 0 ? args[windowsCommandIndex + 1] : undefined
 }
 
-const isResumeShellCommand = (
-  config: Pick<AgentLaunchConfigInput, 'args' | 'command' | 'interactiveCommand'>
+type ResumeLaunchConfig = Pick<
+  AgentLaunchConfigInput,
+  | 'args'
+  | 'command'
+  | 'interactiveCommand'
+  | 'resumedSessionId'
+  | 'resumeArgsTemplate'
+  | 'commandPresetId'
+  | 'sessionIdCapture'
+>
+
+const SHELL_COMMANDS = new Set(['sh', 'bash', 'zsh', 'ksh', 'fish', 'cmd'])
+// Codex global options from its CLI help. Their values are never subcommands,
+// even when a value itself is "resume" or looks like a resume flag.
+const CODEX_VALUE_OPTIONS = new Set([
+  '-c',
+  '--config',
+  '-m',
+  '--model',
+  '-s',
+  '--sandbox',
+  '-p',
+  '--profile',
+  '-C',
+  '--cd',
+  '-a',
+  '--ask-for-approval',
+  '-i',
+  '--image',
+  '--add-dir',
+  '--enable',
+  '--disable',
+  '--local-provider',
+  '--remote',
+  '--remote-auth-token-env',
+])
+const SHARED_VALUE_OPTIONS = new Set([
+  '--model',
+  '-m',
+  '--prompt',
+  '--system-prompt',
+  '--append-system-prompt',
+])
+
+const hasResumeLaunchArgs = (
+  args: readonly string[],
+  command: string | null,
+  resumeTemplate: string | null | undefined
 ) => {
-  const shellCommand = getShellCommandArg(config.args ?? [])
-  if (!shellCommand) return false
-  const executable = normalizeExecutableToken(getStartupCommandExecutable(shellCommand))
-  const interactiveCommand = normalizeExecutableToken(config.interactiveCommand ?? config.command)
-  if (executable && interactiveCommand && executable !== interactiveCommand) return false
-  const [, ...args] = splitShellCommand(shellCommand)
-  return hasResumeLaunchArgs(args)
+  const templateTokens = splitShellCommand(resumeTemplate ?? '')
+  const placeholder = templateTokens.findIndex((token) => token.includes('{session_id}'))
+  const placeholderToken = templateTokens[placeholder]
+  const inlineOption = placeholderToken?.endsWith('={session_id}')
+    ? placeholderToken.slice(0, -'={session_id}'.length)
+    : undefined
+  const prefix =
+    placeholder < 0
+      ? templateTokens
+      : inlineOption?.startsWith('-')
+        ? []
+        : templateTokens.slice(0, placeholder)
+  // The option bound to the session placeholder is the resume marker. Other
+  // template options (e.g. --model sonnet) also belong to fresh launches.
+  const sessionOption = prefix.at(-1)
+  const resumeOptions = new Set(sessionOption?.startsWith('-') ? [sessionOption] : [])
+  if (inlineOption?.startsWith('-')) resumeOptions.add(inlineOption)
+  if (command === 'claude' || command === 'hermes' || command === 'pi') {
+    for (const flag of ['--resume', '-r', '--continue', '-c']) resumeOptions.add(flag)
+  }
+  if (command === 'pi') resumeOptions.add('--session')
+  if (command === 'gemini' || command === 'qwen') resumeOptions.add('-r')
+  if (command === 'qwen') {
+    resumeOptions.add('--continue')
+    resumeOptions.add('-c')
+  }
+  if (command === 'opencode') {
+    for (const flag of ['--session', '-s', '--continue', '-c']) resumeOptions.add(flag)
+  }
+  const valueOptions = command === 'codex' ? CODEX_VALUE_OPTIONS : SHARED_VALUE_OPTIONS
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (!arg || arg === '--') return false
+    if (
+      prefix.length > 0 &&
+      !sessionOption?.startsWith('-') &&
+      prefix.every((token, offset) => token !== '--' && args[index + offset] === token)
+    )
+      return true
+    if (resumeOptions.has(arg.split('=')[0] ?? arg)) return true
+    if (command === 'codex' && (arg === '--image' || arg === '-i')) {
+      // Codex consumes one or more image paths up to the next option, including
+      // paths literally named "resume". Attached values (--image=x, -ix)
+      // end that option's consumption in the CLI's parser.
+      while (args[index + 1] && !args[index + 1]?.startsWith('-')) index += 1
+      continue
+    }
+    if (valueOptions.has(arg)) {
+      index += 1
+      continue
+    }
+    if (arg.startsWith('-')) continue
+    // Codex's resume is a subcommand; a prompt or another subcommand before
+    // it cannot turn a later literal "resume" into a session restoration.
+    if (command === 'codex') return arg === 'resume'
+    if (prefix.length && !sessionOption?.startsWith('-')) {
+      return prefix.every((token, offset) => args[index + offset] === token)
+    }
+  }
+  return false
 }
 
-export const isResumeLaunchConfig = (
-  config: Pick<
-    AgentLaunchConfigInput,
-    'args' | 'command' | 'interactiveCommand' | 'resumedSessionId'
-  >
-) =>
-  Boolean(config.resumedSessionId) ||
-  hasResumeLaunchArgs(config.args ?? []) ||
-  isResumeShellCommand(config)
+const hasResumeLaunchConfig = (config: ResumeLaunchConfig, preset?: BoundPreset | null) => {
+  let command = normalizeExecutableToken(
+    config.interactiveCommand ?? preset?.command ?? config.command
+  )
+  if (
+    !getBuiltinCommandPresetByCommand(command ?? '') &&
+    (config.commandPresetId === 'codex' ||
+      config.sessionIdCapture?.source === 'codex_session_jsonl_dir')
+  )
+    command = 'codex'
+  let args = config.args ?? []
+  if (SHELL_COMMANDS.has(normalizeExecutableToken(config.command) ?? '')) {
+    const shellCommand = getShellCommandArg(args)
+    if (!shellCommand) return false
+    const executable = normalizeExecutableToken(getStartupCommandExecutable(shellCommand))
+    if (config.interactiveCommand && executable !== command) return false
+    command = executable
+    args = splitShellCommand(shellCommand).slice(1)
+  }
+  const template =
+    getEffectiveResumeTemplate(config, preset) ??
+    getBuiltinCommandPresetByCommand(command ?? '')?.resumeArgsTemplate
+  return hasResumeLaunchArgs(args, command, template)
+}
 
-const shouldVerifySessionBeforeResume = (capture: SessionIdCaptureConfig | null | undefined) => {
+export const isResumeLaunchConfig = (config: ResumeLaunchConfig) =>
+  Boolean(config.resumedSessionId) || hasResumeLaunchConfig(config)
+
+const shouldVerifySessionBeforeResume = (
+  capture: SessionIdCaptureConfig | null | undefined,
+  discriminator?: SessionCaptureSnapshot['discriminator']
+) => {
   // Claude is a cheap project-dir existence check; OpenCode is a direct DB query.
-  // Codex/Gemini require broad session-store scans, so trust the persisted id and
-  // let the CLI fail fast if it is stale.
-  return capture?.source === 'claude_project_jsonl_dir' || capture?.source === 'opencode_session_db'
+  // Bound Codex sessions also need ownership verification before automatic resume.
+  return (
+    capture?.source === 'claude_project_jsonl_dir' ||
+    capture?.source === 'opencode_session_db' ||
+    (capture?.source === 'codex_session_jsonl_dir' && Boolean(discriminator))
+  )
 }
 
 const supportsPresetResume = (capture: SessionIdCaptureConfig | null | undefined) =>
@@ -183,6 +298,10 @@ export const withPresetResumeArgs = (
   discriminator?: SessionCaptureSnapshot['discriminator'],
   onInvalidSessionId?: (sessionId: string) => void
 ) => {
+  // A shell launch owns its literal command text. CLI preset arguments cannot
+  // be prepended to the shell's argv; explicit inner resume remains detectable
+  // by isResumeLaunchConfig, while fresh/recovery guidance uses existing paths.
+  if (SHELL_COMMANDS.has(normalizeExecutableToken(config.command) ?? '')) return config
   const launchConfig = normalizeCodexNodeEntrypoint(config, preset)
   let nextConfig = withPresetYoloArgs(launchConfig, preset)
   const sessionIdCapture = getEffectiveCapture(nextConfig, preset)
@@ -191,19 +310,30 @@ export const withPresetResumeArgs = (
   }
 
   const resumeArgsTemplate = getEffectiveResumeTemplate(nextConfig, preset)
+  if (resumeArgsTemplate && resumeArgsTemplate !== nextConfig.resumeArgsTemplate) {
+    nextConfig = { ...nextConfig, resumeArgsTemplate }
+  }
   if (!lastSessionId || !resumeArgsTemplate) return nextConfig
   if (sessionIdCapture && !supportsPresetResume(sessionIdCapture)) return nextConfig
   if (
-    cwd &&
-    sessionIdCapture &&
-    shouldVerifySessionBeforeResume(sessionIdCapture) &&
-    !doesCapturedSessionExist(cwd, sessionIdCapture, lastSessionId, discriminator)
-  ) {
-    onInvalidSessionId?.(lastSessionId)
+    sessionIdCapture?.source === 'codex_session_jsonl_dir' &&
+    hasResumeLaunchConfig(launchConfig, preset)
+  )
     return nextConfig
+  if (cwd && sessionIdCapture && shouldVerifySessionBeforeResume(sessionIdCapture, discriminator)) {
+    const existence = getCapturedSessionExistence(
+      cwd,
+      sessionIdCapture,
+      lastSessionId,
+      discriminator
+    )
+    if (existence !== true) {
+      if (existence === false) onInvalidSessionId?.(lastSessionId)
+      return nextConfig
+    }
   }
   const args = launchConfig.args ?? []
-  if (hasResumeLaunchArgs(args)) return nextConfig
+  if (hasResumeLaunchConfig(launchConfig, preset)) return nextConfig
   const yoloArgs = getPresetYoloArgs(preset)
   const resumeArgs = resumeArgsTemplate.replace('{session_id}', lastSessionId).trim().split(/\s+/)
 

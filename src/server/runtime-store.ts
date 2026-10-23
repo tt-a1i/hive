@@ -109,6 +109,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     statusTask: controller.statusTask,
     ...services.dispatchMessageOps,
     listDispatches: services.dispatchLedgerStore.listWorkspaceDispatches,
+    getDispatch: services.dispatchLedgerStore.getDispatch,
     listOpenDispatches: services.dispatchLedgerStore.listOpenWorkspaceDispatches,
     listRecentDispatches: services.dispatchLedgerStore.listRecentWorkspaceDispatches,
     ...createRuntimeStoreExternalGoalMethods(services),

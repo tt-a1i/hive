@@ -28,6 +28,7 @@ import {
 import { isResumeLaunchConfig } from './preset-launch-support.js'
 import type { RestartPolicy } from './restart-policy.js'
 import { clearResumedSessionAfterExitIfStale } from './resumed-session-cleanup.js'
+import { getCodexHome } from './session-capture-codex.js'
 import { normalizeExecutableToken } from './startup-command-parser.js'
 import {
   buildMemoryDigestSafely,
@@ -106,7 +107,11 @@ export const createAgentRunStarter =
     if (commandBrand === 'claude') {
       ensureClaudeDirectoryTrusted(cwd)
     } else if (commandBrand === 'codex') {
-      ensureCodexDirectoryTrusted(cwd)
+      ensureCodexDirectoryTrusted(
+        cwd,
+        undefined,
+        startEnv.CODEX_HOME ?? getCodexHome(undefined, process.platform, cwd)
+      )
     }
 
     const startInput = {

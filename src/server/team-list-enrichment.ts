@@ -1,6 +1,7 @@
 import type { TeamListItem } from '../shared/types.js'
 import { getBuiltinCommandPresetByCommand } from './command-preset-defaults.js'
 import type { RuntimeStore } from './runtime-store.js'
+import { normalizeExecutableToken } from './startup-command-parser.js'
 
 export type TeamListEnrichmentStore = Pick<
   RuntimeStore,
@@ -10,12 +11,13 @@ export type TeamListEnrichmentStore = Pick<
 
 /** Only expose an explicitly configured model, never infer a provider default.
  * Raw launch arguments may contain credentials and must not enter the roster. */
-export const readConfiguredModel = (args: readonly string[]): string | null => {
+export const readConfiguredModel = (args: readonly string[], command?: string): string | null => {
+  const codex = normalizeExecutableToken(command) === 'codex'
   let model: string | null = null
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === '--') break
-    if (arg === '--model') {
+    if (arg === '--model' || (codex && arg === '-m')) {
       const value = args[index + 1]
       if (value && !value.startsWith('-')) {
         model = value
@@ -71,7 +73,10 @@ export const enrichTeamList = (
     const next: TeamListItem = { ...worker }
     const config = store.peekAgentLaunchConfig(workspaceId, worker.id)
     next.configuredCommand = config?.command ?? null
-    next.configuredModel = config && presetId ? readConfiguredModel(config.args ?? []) : null
+    next.configuredModel =
+      config && getBuiltinCommandPresetByCommand(normalizeExecutableToken(config.command) ?? '')
+        ? readConfiguredModel(config.args ?? [], config.command)
+        : null
     if (line !== null) next.lastPtyLine = line
     if (presetId !== null) next.commandPresetId = presetId
     next.startupReadyAt =

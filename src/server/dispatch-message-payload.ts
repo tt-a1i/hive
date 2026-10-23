@@ -6,7 +6,7 @@ import {
 } from './hive-envelope-escape.js'
 
 export const formatRequiredSeenSeqAdvice = (dispatchId: string, requiredSeenSeq: number) =>
-  `If no further messages arrive before you report, use \`--seen ${requiredSeenSeq}\`; if more arrive, use the latest required_seen_seq you were given or read \`team messages --dispatch ${dispatchId}\`.`
+  `You may use \`--seen ${requiredSeenSeq}\` only after inspecting and considering every inbound message through that watermark. The number alone does not show their contents. If any earlier input is missing or only summarized, read \`team messages --dispatch ${dispatchId}\` in full first; use --after only from a previously fully inspected cursor. New inputs can still make a report stale.`
 
 export const buildDispatchMessagePayload = (
   message: DispatchMessageRecord,
@@ -18,6 +18,11 @@ export const buildDispatchMessagePayload = (
     ? []
     : [
         `required_seen_seq: ${requiredSeenSeq}`,
+        ...(requiredSeenSeq > message.sequence
+          ? [
+              'Later inbound messages are not included in this envelope; read the dispatch messages before reporting.',
+            ]
+          : []),
         formatRequiredSeenSeqAdvice(message.dispatchId, requiredSeenSeq),
       ]
   return [

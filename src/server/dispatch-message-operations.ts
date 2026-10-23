@@ -6,7 +6,7 @@ import type { AgentRuntime } from './agent-runtime-contract.js'
 import type { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createDispatchMessageOutbox } from './dispatch-message-outbox.js'
 import { authorizeDispatchMessage, dispatchRoot } from './dispatch-message-policy.js'
-import type { DispatchMessageStore } from './dispatch-message-store.js'
+import type { CollaborationHistoryCursor, DispatchMessageStore } from './dispatch-message-store.js'
 import { BadRequestError, ConflictError, ForbiddenError } from './http-errors.js'
 import type { Database } from './sqlite.js'
 import type { WorkspaceStore } from './workspace-store.js'
@@ -52,16 +52,11 @@ export const createDispatchMessageOperations = (ports: {
     listCollaborationMessageHistory(
       workspaceId: string,
       dispatchId: string,
-      afterMessageId?: string,
-      limit = 101
+      cursor: CollaborationHistoryCursor = {}
     ) {
-      const { rootDispatchId } = getDispatchCollaboration(workspaceId, dispatchId)
-      return ports.messages.listRootMessageHistory(
-        workspaceId,
-        rootDispatchId,
-        afterMessageId,
-        limit
-      )
+      const dispatch = ports.ledger.getDispatch(workspaceId, dispatchId)
+      if (!dispatch) throw new ConflictError('Dispatch does not exist in this workspace')
+      return ports.messages.listRootMessageHistory(workspaceId, dispatchRoot(dispatch), cursor)
     },
     listWorkspaceDispatchMessages: ports.messages.listWorkspaceMessages,
     listActionableDispatchMessages: ports.messages.listActionableWorkspaceMessages,

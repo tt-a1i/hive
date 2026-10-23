@@ -98,6 +98,7 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
     input: CancelTaskInput
   ) => Promise<ReportTaskResult>
   listDispatches: (workspaceId: string, options?: ListDispatchesOptions) => DispatchRecord[]
+  getDispatch: (workspaceId: string, dispatchId: string) => DispatchRecord | undefined
   listOpenDispatches: (workspaceId: string) => DispatchRecord[]
   listRecentDispatches: (workspaceId: string, limit?: number) => DispatchRecord[]
   listExternalGoalWorkspaces: ExternalGoalBridge['listWorkspaces']

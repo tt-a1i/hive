@@ -27,7 +27,8 @@ import { copyPendingTextToClipboard } from '../lib/clipboard.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { useToast } from '../ui/useToast.js'
-import { ActionCenterMessages } from './ActionCenterMessages.js'
+import { ActionCenterMessages, type MessageRequest } from './ActionCenterMessages.js'
+import { ActionCenterReport } from './ActionCenterReport.js'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -179,7 +180,7 @@ const useActionCenterSummary = (workspaceId: string) => {
     }
   }, [load])
 
-  return { error, summary }
+  return { error, summary: summary?.workspaceId === workspaceId ? summary : null }
 }
 
 const useRecapCopy = (workspaceId: string) => {
@@ -248,12 +249,26 @@ const ActionCenterDetails = ({
 }) => {
   const { t } = useI18n()
   const { attention, evidenceWorkers, recentActivity } = getActionCenterView(summary)
-  const [messageRequest, setMessageRequest] = useState<{ dispatchId: string } | null>(null)
+  const [messageRequest, setMessageRequest] = useState<MessageRequest | null>(null)
+  const [reportDispatchId, setReportDispatchId] = useState<string | null>(null)
 
   return (
     <div className="mt-2 grid gap-2 md:grid-cols-2" data-testid="action-center-evidence">
+      {reportDispatchId ? (
+        <div className="md:col-span-2">
+          <ActionCenterReport
+            key={reportDispatchId}
+            workspaceId={summary.workspaceId}
+            dispatchId={reportDispatchId}
+            onClose={() => setReportDispatchId(null)}
+            onOpenHistory={(dispatchId) => setMessageRequest({ dispatchId })}
+            {...(onOpenWorker ? { onOpenWorker } : {})}
+          />
+        </div>
+      ) : null}
       <div className="md:col-span-2">
         <ActionCenterMessages
+          key={summary.workspaceId}
           workspaceId={summary.workspaceId}
           messages={summary.recentDispatchMessages}
           workers={summary.workers}
@@ -301,7 +316,12 @@ const ActionCenterDetails = ({
                       <button
                         type="button"
                         className="text-left underline decoration-dotted underline-offset-2"
-                        onClick={() => setMessageRequest({ dispatchId: item.dispatchId })}
+                        onClick={() =>
+                          setMessageRequest({
+                            dispatchId: item.dispatchId,
+                            messageId: item.messageId,
+                          })
+                        }
                       >
                         {attentionText(item, t)}
                       </button>
@@ -327,9 +347,13 @@ const ActionCenterDetails = ({
                 <li key={activity.id}>
                   <button
                     type="button"
-                    onClick={() => onOpenWorker?.(activity.toAgentId)}
+                    onClick={() =>
+                      activity.kind === 'reported'
+                        ? setReportDispatchId(activity.id)
+                        : onOpenWorker?.(activity.toAgentId)
+                    }
                     className="flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-2 disabled:cursor-default disabled:hover:bg-transparent"
-                    disabled={!onOpenWorker}
+                    disabled={activity.kind !== 'reported' && !onOpenWorker}
                     data-testid={`action-center-activity-${activity.id}`}
                   >
                     <span className="shrink-0 text-sec">{describeActivity(activity, t)}</span>
@@ -429,7 +453,8 @@ const ActionCenterDrawer = ({
 }) => {
   const { t } = useI18n()
   const isMobile = useIsMobile()
-  const [messageRequest, setMessageRequest] = useState<{ dispatchId: string } | null>(null)
+  const [messageRequest, setMessageRequest] = useState<MessageRequest | null>(null)
+  const [reportDispatchId, setReportDispatchId] = useState<string | null>(null)
   const { attention, evidenceWorkers, latest, latestDetail, recentActivity } =
     getActionCenterView(summary)
   const handleOpenWorker = (workerId: string) => {
@@ -580,7 +605,18 @@ const ActionCenterDrawer = ({
                     />
                   </section>
 
+                  {reportDispatchId ? (
+                    <ActionCenterReport
+                      key={reportDispatchId}
+                      workspaceId={summary.workspaceId}
+                      dispatchId={reportDispatchId}
+                      onClose={() => setReportDispatchId(null)}
+                      onOpenHistory={(dispatchId) => setMessageRequest({ dispatchId })}
+                      {...(onOpenWorker ? { onOpenWorker: handleOpenWorker } : {})}
+                    />
+                  ) : null}
                   <ActionCenterMessages
+                    key={summary.workspaceId}
                     workspaceId={summary.workspaceId}
                     messages={summary.recentDispatchMessages}
                     workers={summary.workers}
@@ -610,7 +646,10 @@ const ActionCenterDrawer = ({
                                       type="button"
                                       className="text-left underline decoration-dotted underline-offset-2"
                                       onClick={() =>
-                                        setMessageRequest({ dispatchId: item.dispatchId })
+                                        setMessageRequest({
+                                          dispatchId: item.dispatchId,
+                                          messageId: item.messageId,
+                                        })
                                       }
                                     >
                                       {attentionText(item, t)}
@@ -643,10 +682,14 @@ const ActionCenterDrawer = ({
                               <li key={activity.id}>
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenWorker(activity.toAgentId)}
+                                  onClick={() =>
+                                    activity.kind === 'reported'
+                                      ? setReportDispatchId(activity.id)
+                                      : handleOpenWorker(activity.toAgentId)
+                                  }
                                   className="action-center-list-row"
                                   data-tone={activityTone(activity.kind)}
-                                  disabled={!onOpenWorker}
+                                  disabled={activity.kind !== 'reported' && !onOpenWorker}
                                   data-testid={`action-center-activity-${activity.id}`}
                                 >
                                   <span className="action-center-row-dot" aria-hidden />
@@ -760,6 +803,7 @@ export const ActionCenterTopbarButton = ({ onOpenWorker, workspaceId }: ActionCe
         </button>
       </Tooltip>
       <ActionCenterDrawer
+        key={workspaceId}
         copyingRecap={copyingRecap}
         error={error}
         onClose={() => setOpen(false)}
@@ -828,6 +872,7 @@ export const ActionCenterStrip = ({ onOpenWorker, workspaceId }: ActionCenterPro
       </div>
       {expanded && summary ? (
         <ActionCenterDetails
+          key={workspaceId}
           copyingRecap={copyingRecap}
           onCopyRecap={handleCopyRecap}
           {...(onOpenWorker ? { onOpenWorker } : {})}

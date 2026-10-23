@@ -32,5 +32,6 @@ export interface ActionCenterConversation {
   messages: ActionCenterMessage[]
   related_dispatches: ActionCenterResponsibility[]
   root_dispatch_id: string
+  previous_before_message_id: string | null
   next_after_message_id: string | null
 }

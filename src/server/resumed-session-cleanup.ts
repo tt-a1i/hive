@@ -9,7 +9,7 @@ interface ResumedSessionCleanupInput {
   exitCode: number | null
   sessionCaptureDiscriminator?: SessionCaptureSnapshot['discriminator']
   sessionStore: AgentSessionStorePort
-  startConfig: Pick<AgentLaunchConfigInput, 'resumedSessionId' | 'sessionIdCapture'>
+  startConfig: Pick<AgentLaunchConfigInput, 'cwd' | 'resumedSessionId' | 'sessionIdCapture'>
   workspace: WorkspaceSummary
 }
 
@@ -25,7 +25,7 @@ export const shouldClearResumedSessionAfterExit = ({
   const capture = startConfig.sessionIdCapture
   if (!capture) return true
   const capturedSessionExists = getCapturedSessionExistence(
-    workspace.path,
+    startConfig.cwd?.trim() ? startConfig.cwd : workspace.path,
     capture,
     resumedSessionId,
     sessionCaptureDiscriminator

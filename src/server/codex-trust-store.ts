@@ -1,6 +1,18 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
+import { join, resolve } from 'node:path'
+import { getCodexHome } from './session-capture-codex.js'
 
 // Codex records per-directory trust in ~/.codex/config.toml as a table:
 //
@@ -17,13 +29,10 @@ import { join } from 'node:path'
 // --dangerously-bypass-approvals-and-sandbox does NOT cover this: it skips
 // command approvals / sandboxing, not the pre-session directory trust gate.
 
-const getCodexDir = (homeDir: string) => join(homeDir, '.codex')
-const getCodexConfigPath = (homeDir: string) => join(getCodexDir(homeDir), 'config.toml')
+const getCodexConfigPath = (codexDir: string) => join(codexDir, 'config.toml')
 
-// TOML bare-string keys escape backslash and double-quote (see TOML basic
-// strings). POSIX/macOS workspace paths almost never contain these, but quote
-// defensively so a stray char cannot corrupt the file.
-const toTomlQuotedKey = (value: string) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+// JSON escaping also covers TOML basic-string controls, except DEL.
+const toTomlQuotedKey = (value: string) => JSON.stringify(value).replace(/\x7f/g, '\\u007f')
 
 // Match the exact section header for this cwd, e.g. [projects."/abs/path"],
 // tolerating optional whitespace inside the brackets. Anchored per-line.
@@ -35,15 +44,14 @@ const hasProjectSection = (toml: string, cwd: string): boolean => {
 const readConfig = (configPath: string): string => {
   try {
     return readFileSync(configPath, 'utf8')
-  } catch {
-    // Missing (or unreadable) config: start from empty and let codex own the
-    // rest of the file. We only ever append our own project table.
-    return ''
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+    throw error
   }
 }
 
 /**
- * Ensure ~/.codex/config.toml trusts `cwd` so codex does not show its first-run
+ * Ensure the effective Codex config.toml trusts `cwd` so codex does not show its first-run
  * directory-trust prompt there. Appends a `[projects."<cwd>"]` table with
  * `trust_level = "trusted"` only when that section is absent; existing content
  * (every other project table and all top-level settings) is preserved
@@ -53,11 +61,22 @@ const readConfig = (configPath: string): string => {
  * pre-existing behaviour), so it must not block member startup.
  *
  * @param cwd      Absolute workspace path codex will launch in.
- * @param homeDir  Home directory override, for tests. Defaults to os.homedir().
+ * @param homeDir  Legacy user HOME override; when provided, uses HOME/.codex.
+ * @param codexHome  Exact Codex directory override, as passed to the launched CLI.
  */
-export const ensureCodexDirectoryTrusted = (cwd: string, homeDir: string = homedir()): void => {
+export const ensureCodexDirectoryTrusted = (
+  cwd: string,
+  homeDir?: string,
+  codexHome?: string
+): void => {
   try {
-    const configPath = getCodexConfigPath(homeDir)
+    const codexDir =
+      codexHome !== undefined
+        ? resolve(cwd, codexHome)
+        : homeDir !== undefined
+          ? join(homeDir, '.codex')
+          : getCodexHome(undefined, process.platform, cwd)
+    const configPath = getCodexConfigPath(codexDir)
     const existing = readConfig(configPath)
     if (hasProjectSection(existing, cwd)) return
 
@@ -67,10 +86,21 @@ export const ensureCodexDirectoryTrusted = (cwd: string, homeDir: string = homed
     const separator = existing.length === 0 ? '' : existing.endsWith('\n') ? '\n' : '\n\n'
     const next = `${existing}${separator}${section}`
 
-    mkdirSync(getCodexDir(homeDir), { recursive: true })
-    const tempPath = `${configPath}.hive-${process.pid}.tmp`
-    writeFileSync(tempPath, next, 'utf8')
-    renameSync(tempPath, configPath)
+    mkdirSync(codexDir, { recursive: true })
+    const mode = existsSync(configPath) ? statSync(configPath).mode & 0o777 : 0o600
+    const tempPath = `${configPath}.hive-${randomUUID()}.tmp`
+    const fd = openSync(tempPath, 'wx', 0o600)
+    try {
+      try {
+        fchmodSync(fd, mode)
+        writeFileSync(fd, next, 'utf8')
+      } finally {
+        closeSync(fd)
+      }
+      renameSync(tempPath, configPath)
+    } finally {
+      rmSync(tempPath, { force: true })
+    }
   } catch (error) {
     console.error('[hive] swallowed:codexTrustStore.ensureTrusted', error)
   }

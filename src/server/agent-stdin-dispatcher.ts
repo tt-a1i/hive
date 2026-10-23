@@ -87,8 +87,13 @@ export const buildWorkerDispatchPayload = (
     `dispatch_id: ${escapeHiveEnvelopeText(dispatchId)}`,
     'New responsibility. Preserve your startup role and assigned file ownership.',
     `required_seen_seq: ${requiredSeenSeq}`,
-    // Snapshot at envelope build. A note inserted before the write lands can
-    // make this stale; `team report` 409 returns the live required seq.
+    // This is a submission requirement, not a claim that the dispatch envelope
+    // includes the attached messages. A later append can still make it stale.
+    ...(requiredSeenSeq > 0
+      ? [
+          'Attached inbound messages are not included in this task envelope; read the dispatch messages before reporting.',
+        ]
+      : []),
     formatRequiredSeenSeqAdvice(escapeHiveEnvelopeText(dispatchId), requiredSeenSeq),
     '',
     ...(memoryDigest ? [memoryDigest, ''] : []),

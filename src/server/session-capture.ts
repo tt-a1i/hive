@@ -87,11 +87,12 @@ export const snapshotSessionIdsForCapture = (
     }
   }
   if (capture.source === 'codex_session_jsonl_dir') {
-    const codexHome = getCodexHome(capture.pattern)
+    const codexHome = getCodexHome(capture.pattern, process.platform, cwd)
     return {
       env: { CODEX_HOME: codexHome },
       knownSessionIds: snapshotCodexSessionIds(cwd, codexHome),
       root: codexHome,
+      ...(discriminator ? { discriminator } : {}),
     }
   }
   if (capture.source === 'gemini_session_json_dir') {
@@ -156,7 +157,8 @@ export const captureSessionIdForCapture = async (
       onCapture,
       timeoutMs,
       intervalMs,
-      snapshot.root
+      snapshot.root,
+      snapshot.discriminator
     )
   }
   if (capture.source === 'gemini_session_json_dir') {
@@ -211,7 +213,14 @@ export const getCapturedSessionExistence = (
     return hasClaudeSessionFile(cwd, sessionId, capture.pattern, discriminator)
   }
   if (capture.source === 'codex_session_jsonl_dir') {
-    return getCodexSessionExistence(cwd, sessionId, capture.pattern)
+    return getCodexSessionExistence(
+      cwd,
+      sessionId,
+      capture.pattern,
+      process.platform,
+      undefined,
+      discriminator
+    )
   }
   if (capture.source === 'gemini_session_json_dir') {
     return hasGeminiSession(cwd, sessionId, capture.pattern)

@@ -4,6 +4,10 @@ import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
 import { getHiveTeamRules } from './hive-team-guidance.js'
 
+// Header metadata must stay on one line; descriptions remain multiline below it.
+const escapeStartupField = (value: string) =>
+  escapeHiveEnvelopeText(value).replaceAll('\r', '&#13;').replaceAll('\n', '&#10;')
+
 export const buildAgentSessionBindingMarker = ({
   agent,
   workspace,
@@ -19,7 +23,7 @@ export const buildAgentLegacyIdentityMarker = ({
   agent: AgentSummary
   workspace: WorkspaceSummary
 }) =>
-  `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`
+  `You are ${escapeStartupField(agent.name)} (${agent.role}) in workspace ${escapeStartupField(workspace.name)}.`
 
 export const buildAgentStartupInstructions = ({
   agent,
@@ -37,8 +41,8 @@ export const buildAgentStartupInstructions = ({
     '<hive-message kind="startup">',
     '',
     buildAgentLegacyIdentityMarker({ agent, workspace }),
-    `Current workspace: ${escapeHiveEnvelopeText(workspace.name)}`,
-    `Project path: ${escapeHiveEnvelopeText(workspace.path)}`,
+    `Current workspace: ${escapeStartupField(workspace.name)}`,
+    `Project path: ${escapeStartupField(workspace.path)}`,
     buildAgentSessionBindingMarker({ agent, workspace }),
     '',
     // agent.description follows the user's chosen language / custom edit, but
@@ -79,8 +83,8 @@ export const buildWorkflowAgentStartupInstructions = ({
     '<hive-message kind="startup">',
     '',
     buildAgentLegacyIdentityMarker({ agent, workspace }),
-    `Current workspace: ${escapeHiveEnvelopeText(workspace.name)}`,
-    `Project path: ${escapeHiveEnvelopeText(workspace.path)}`,
+    `Current workspace: ${escapeStartupField(workspace.name)}`,
+    `Project path: ${escapeStartupField(workspace.path)}`,
     buildAgentSessionBindingMarker({ agent, workspace }),
     '',
     `Your role: ${escapeHiveEnvelopeText(agent.description)}`,

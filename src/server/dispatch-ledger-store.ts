@@ -134,13 +134,13 @@ export const createDispatchLedgerStore = (db: Database) => {
     return row ? toRecord(row) : undefined
   }
   const listRelatedDispatches = (workspaceId: string, rootDispatchId: string) =>
-    (
-      db
-        .prepare(
-          'SELECT * FROM dispatches WHERE workspace_id = ? AND root_dispatch_id = ? ORDER BY sequence'
-        )
-        .all(workspaceId, rootDispatchId) as DispatchRow[]
-    ).map(toRecord)
+    db
+      .prepare(`SELECT id, parent_dispatch_id AS parentDispatchId, to_agent_id AS toAgentId, status, text
+        FROM dispatches WHERE workspace_id = ? AND root_dispatch_id = ? ORDER BY sequence`)
+      .all(workspaceId, rootDispatchId) as Pick<
+      DispatchRecord,
+      'id' | 'parentDispatchId' | 'toAgentId' | 'status' | 'text'
+    >[]
   const createDispatch = (input: CreateDispatchInput) => {
     const parent = input.relatedToDispatchId
       ? getDispatch(input.workspaceId, input.relatedToDispatchId)

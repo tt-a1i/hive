@@ -17,6 +17,8 @@ import {
   type SessionCaptureSnapshot,
   snapshotSessionIdsForCapture,
 } from './session-capture.js'
+import { getCodexHome } from './session-capture-codex.js'
+import { normalizeExecutableToken } from './startup-command-parser.js'
 
 const resolveHiveBinDir = () => {
   const moduleDir = dirname(fileURLToPath(import.meta.url))
@@ -124,12 +126,22 @@ export const buildAgentRunBootstrap = (
   const sessionCaptureSnapshot = startConfig.resumedSessionId
     ? undefined
     : snapshotSessionIdsForCapture(cwd, startConfig.sessionIdCapture, discriminator)
+  const codexCapture =
+    startConfig.sessionIdCapture?.source === 'codex_session_jsonl_dir'
+      ? startConfig.sessionIdCapture
+      : undefined
+  const codexHome =
+    codexCapture ||
+    normalizeExecutableToken(startConfig.interactiveCommand ?? startConfig.command) === 'codex'
+      ? getCodexHome(codexCapture?.pattern, process.platform, cwd)
+      : undefined
   return {
     sessionCaptureDiscriminator: discriminator,
     sessionCaptureSnapshot,
     startConfig,
     startEnv: {
       ...getSessionCaptureEnvironment(sessionCaptureSnapshot),
+      ...(codexHome !== undefined ? { CODEX_HOME: codexHome } : {}),
       HIVE_PORT: '',
       HIVE_PROJECT_ID: workspace.id,
       HIVE_AGENT_ID: agentId,

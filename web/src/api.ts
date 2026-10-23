@@ -1,3 +1,4 @@
+import type { serializeDispatchRecord } from '../../src/server/dispatch-ledger-serializer.js'
 import type {
   ActionCenterConversation,
   ActionCenterMessage,
@@ -2113,11 +2114,17 @@ export const getRetentionSignals = async (): Promise<RetentionSignals> => {
 export const getDispatchMessageHistory = async (
   workspaceId: string,
   dispatchId: string,
-  afterMessageId: string | null = null,
+  cursor:
+    | { afterMessageId?: string; beforeMessageId?: string; aroundMessageId?: string }
+    | string
+    | null = null,
   signal?: AbortSignal
 ): Promise<ActionCenterConversation> => {
   const query = new URLSearchParams({ scope: 'collaboration' })
-  if (afterMessageId) query.set('after_message_id', afterMessageId)
+  const window = typeof cursor === 'string' ? { afterMessageId: cursor } : cursor
+  if (window?.afterMessageId) query.set('after_message_id', window.afterMessageId)
+  if (window?.beforeMessageId) query.set('before_message_id', window.beforeMessageId)
+  if (window?.aroundMessageId) query.set('around_message_id', window.aroundMessageId)
   const response = await apiFetch(
     `/api/ui/workspaces/${encodeURIComponent(workspaceId)}/dispatches/${encodeURIComponent(dispatchId)}/messages?${query}`,
     signal ? { signal } : undefined
@@ -2125,6 +2132,45 @@ export const getDispatchMessageHistory = async (
   if (!response.ok)
     throw new Error(await readErrorMessage(response, 'Failed to load task messages'))
   return response.json()
+}
+
+export type ActionCenterDispatchDetail = ReturnType<typeof serializeDispatchRecord>
+
+export const getActionCenterDispatch = async (
+  workspaceId: string,
+  dispatchId: string,
+  signal?: AbortSignal
+): Promise<ActionCenterDispatchDetail> => {
+  const response = await apiFetch(
+    `/api/ui/workspaces/${encodeURIComponent(workspaceId)}/dispatches/${encodeURIComponent(dispatchId)}`,
+    signal ? { signal } : undefined
+  )
+  if (!response.ok) throw new Error(await readErrorMessage(response, 'Failed to load report'))
+  return response.json()
+}
+
+export type ActionCenterArtifactContent = {
+  content: string
+  size_bytes: number
+  modified_at: string
+}
+
+export type ActionCenterArtifactResult =
+  | { ok: true; data: ActionCenterArtifactContent }
+  | { ok: false; status: number }
+
+export const getActionCenterArtifact = async (
+  workspaceId: string,
+  dispatchId: string,
+  artifactIndex: number,
+  signal: AbortSignal
+): Promise<ActionCenterArtifactResult> => {
+  const response = await apiFetch(
+    `/api/ui/workspaces/${encodeURIComponent(workspaceId)}/dispatches/${encodeURIComponent(dispatchId)}/artifacts/${artifactIndex}`,
+    { signal, cache: 'no-store' }
+  )
+  if (!response.ok) return { ok: false, status: response.status }
+  return { ok: true, data: await response.json() }
 }
 
 export type { ControllerStatus as ExternalControllerStatus } from '../../src/shared/types.js'

@@ -2,7 +2,6 @@ import type { DispatchMessageRecord } from '../shared/team-collaboration.js'
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 
 import type { DispatchRecord } from './dispatch-ledger-store.js'
-import { formatRequiredSeenSeqAdvice } from './dispatch-message-payload.js'
 import { buildDispatchQuestionReplyCommand } from './dispatch-message-reply.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
@@ -73,19 +72,8 @@ const formatDispatchMessages = (
     const related = messages.filter(
       (message) => message.dispatchId === dispatch.id || message.sourceDispatchId === dispatch.id
     )
-    const requiredSeenSeq = related.reduce(
-      (seq, message) =>
-        message.dispatchId === dispatch.id &&
-        message.recipientAgentId === dispatch.toAgentId &&
-        message.fromAgentId !== dispatch.toAgentId &&
-        message.kind !== 'progress'
-          ? Math.max(seq, message.sequence)
-          : seq,
-      0
-    )
-    if (related.length === 0) return []
     return [
-      `- dispatch ${dispatch.id}: required_seen_seq ${requiredSeenSeq}. ${formatRequiredSeenSeqAdvice(dispatch.id, requiredSeenSeq)}`,
+      `- dispatch ${dispatch.id}: this recovery preview may omit messages or truncate their text. Before reporting, read \`team messages --dispatch ${dispatch.id}\` in full, consider its inbound requirements, and use that inspected response's required_seen_seq. Do not acknowledge inputs from this preview alone.`,
       ...related
         .slice(-8)
         .map(

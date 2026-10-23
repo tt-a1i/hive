@@ -4,7 +4,7 @@ import {
   dispatchMessageEligibilitySql,
   isDispatchMessageEligible,
 } from './dispatch-message-delivery-policy.js'
-import { ConflictError } from './http-errors.js'
+import { BadRequestError, ConflictError } from './http-errors.js'
 import type { Database } from './sqlite.js'
 
 type MessageRow = {
@@ -41,6 +41,12 @@ const toRecord = (row: MessageRow): DispatchMessageRecord => ({
   deliveredAt: row.delivered_at,
   deliveryError: row.error,
 })
+
+export interface CollaborationHistoryCursor {
+  afterMessageId?: string
+  beforeMessageId?: string
+  aroundMessageId?: string
+}
 
 export const readDispatchMessage = (db: Database, workspaceId: string, id: string) => {
   const row = db.prepare(`${select} WHERE m.workspace_id = ? AND m.id = ?`).get(workspaceId, id) as
@@ -116,32 +122,55 @@ export const createDispatchMessageStore = (db: Database) => {
   const listRootMessageHistory = (
     workspaceId: string,
     rootDispatchId: string,
-    afterMessageId?: string,
-    limit = 101
-  ) => {
-    let afterRow = 0
-    if (afterMessageId) {
-      const cursor = db
-        .prepare(`SELECT m.rowid AS cursor FROM dispatch_messages m JOIN dispatches d ON d.id = m.dispatch_id
-        WHERE m.workspace_id = ? AND d.root_dispatch_id = ? AND m.id = ?`)
-        .get(workspaceId, rootDispatchId, afterMessageId) as { cursor: number } | undefined
-      if (!cursor) throw new ConflictError('Message cursor does not belong to this collaboration')
-      afterRow = cursor.cursor
-    }
-    return (
-      db
-        .prepare(`${select} WHERE m.workspace_id = ? AND m.rowid > ? AND m.dispatch_id IN (
-      SELECT id FROM dispatches WHERE workspace_id = ? AND root_dispatch_id = ?
-    ) ORDER BY m.rowid LIMIT ?`)
-        .all(
-          workspaceId,
-          afterRow,
-          workspaceId,
-          rootDispatchId,
-          Math.min(101, Math.max(1, limit))
-        ) as MessageRow[]
-    ).map(toRecord)
-  }
+    cursor: CollaborationHistoryCursor = {}
+  ) =>
+    db.transaction(() => {
+      const anchors = [
+        cursor.afterMessageId,
+        cursor.beforeMessageId,
+        cursor.aroundMessageId,
+      ].filter((id) => id !== undefined)
+      if (anchors.length > 1) throw new BadRequestError('Message cursors are mutually exclusive')
+      const scope = `m.workspace_id = ? AND m.dispatch_id IN (
+        SELECT id FROM dispatches WHERE workspace_id = ? AND root_dispatch_id = ?)`
+      const scopeParams = [workspaceId, workspaceId, rootDispatchId]
+      const anchor = cursor.afterMessageId === '' ? undefined : anchors[0]
+      const rowId = (id: string) => {
+        const row = db
+          .prepare(`SELECT m.rowid AS cursor FROM dispatch_messages m WHERE ${scope} AND m.id = ?`)
+          .get(...scopeParams, id) as { cursor: number } | undefined
+        if (!row) throw new ConflictError('Message cursor does not belong to this collaboration')
+        return row.cursor
+      }
+      const anchorRow = anchor !== undefined ? rowId(anchor) : 0
+      const read = (comparison: '>' | '>=' | '<', row: number, limit: number) => {
+        const descending = comparison === '<'
+        const rows = db
+          .prepare(`${select} WHERE ${scope} AND m.rowid ${comparison} ?
+            ORDER BY m.rowid ${descending ? 'DESC' : 'ASC'} LIMIT ?`)
+          .all(...scopeParams, row, limit) as MessageRow[]
+        return descending ? rows.reverse() : rows
+      }
+      const rows =
+        cursor.aroundMessageId !== undefined
+          ? [...read('<', anchorRow, 49), ...read('>=', anchorRow, 51)]
+          : cursor.beforeMessageId !== undefined
+            ? read('<', anchorRow, 100)
+            : read('>', anchorRow, 100)
+      const hasBeyond = (id: string, comparison: '<' | '>') =>
+        db
+          .prepare(
+            `SELECT 1 FROM dispatch_messages m WHERE ${scope} AND m.rowid ${comparison} ? LIMIT 1`
+          )
+          .get(...scopeParams, rowId(id)) !== undefined
+      const firstId = rows[0]?.id
+      const lastId = rows.at(-1)?.id
+      return {
+        messages: rows.map(toRecord),
+        previousBeforeMessageId: firstId && hasBeyond(firstId, '<') ? firstId : null,
+        nextAfterMessageId: lastId && hasBeyond(lastId, '>') ? lastId : null,
+      }
+    })()
   const listMessages = (workspaceId: string, dispatchId: string, afterSeq = 0) =>
     (
       db
