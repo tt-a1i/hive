@@ -10,7 +10,7 @@ export const parseSequence = (value: string, flag: string): number => {
   return Number(value)
 }
 
-const parseOptions = (args: string[], allowed: Set<string>) => {
+export const parseOptions = (args: string[], allowed: Set<string>) => {
   const options = new Map<string, string>()
   const positionals: string[] = []
   let positionalOnly = false
@@ -27,7 +27,7 @@ const parseOptions = (args: string[], allowed: Set<string>) => {
     }
     if (!allowed.has(arg)) throw new Error(`Unknown argument: ${arg}`)
     if (options.has(arg)) throw new Error(`Duplicate argument: ${arg}`)
-    if (arg === '--stdin') {
+    if (arg === '--stdin' || arg === '--list') {
       options.set(arg, 'true')
       continue
     }

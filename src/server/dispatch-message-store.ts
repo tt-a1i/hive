@@ -75,6 +75,40 @@ export const createDispatchMessageStore = (db: Database) => {
         .get(workspaceId, messageId) as { controller_thread_id: string | null } | undefined
     )?.controller_thread_id ?? null
   const getMessage = (workspaceId: string, id: string) => readDispatchMessage(db, workspaceId, id)
+  const listSentQuestions = (
+    workspaceId: string,
+    agentId: string,
+    dispatchId?: string,
+    beforeId?: string
+  ) => {
+    const before = beforeId
+      ? (db
+          .prepare(
+            "SELECT rowid AS row FROM dispatch_messages WHERE workspace_id = ? AND from_agent_id = ? AND kind = 'question' AND id = ?"
+          )
+          .get(workspaceId, agentId, beforeId) as { row: number } | undefined)
+      : undefined
+    if (beforeId && !before)
+      throw new ConflictError('Question history cursor does not belong to this sender')
+    const rows = db
+      .prepare(`${select} WHERE m.workspace_id = ? AND m.from_agent_id = ? AND m.kind = 'question'
+      AND (? IS NULL OR m.dispatch_id = ? OR m.source_dispatch_id = ?) AND (? IS NULL OR m.rowid < ?)
+      ORDER BY m.rowid DESC LIMIT 51`)
+      .all(
+        workspaceId,
+        agentId,
+        dispatchId ?? null,
+        dispatchId ?? null,
+        dispatchId ?? null,
+        before?.row ?? null,
+        before?.row ?? null
+      ) as MessageRow[]
+    const page = rows.slice(0, 50)
+    return {
+      questions: page.map(toRecord),
+      nextBefore: rows.length > 50 ? (page.at(-1)?.id ?? null) : null,
+    }
+  }
   const listWorkspaceMessages = (workspaceId: string) =>
     (
       db
@@ -275,6 +309,15 @@ export const createDispatchMessageStore = (db: Database) => {
       )
       .run(messageId)
   return {
+    listSentQuestions,
+    listAnswers: (workspaceId: string, questionId: string) =>
+      (
+        db
+          .prepare(
+            `${select} WHERE m.workspace_id = ? AND m.reply_to = ? AND m.kind = 'answer' ORDER BY m.rowid`
+          )
+          .all(workspaceId, questionId) as MessageRow[]
+      ).map(toRecord),
     controllerBinding,
     messageControllerThread,
     isEligible: (messageId: string) => isDispatchMessageEligible(db, messageId),

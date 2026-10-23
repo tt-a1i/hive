@@ -36,6 +36,14 @@ import {
   parseSequence,
 } from './team-message-args.js'
 
+import {
+  ASK_USAGE,
+  QUESTION_HISTORY_USAGE,
+  REPLY_USAGE,
+  RESUME_USAGE,
+  runQuestionCommand,
+} from './team-question.js'
+
 const REQUIRED_ENV_KEYS = [
   'HIVE_PORT',
   'HIVE_PROJECT_ID',
@@ -66,6 +74,10 @@ const TEAM_USAGE = [
   '  team memory forget <memory-id>',
   '  team send <member-name> "<task>" [--related-to <dispatch-id>]',
   `  ${MESSAGE_USAGE}`,
+  `  ${ASK_USAGE}`,
+  `  ${RESUME_USAGE}`,
+  `  ${QUESTION_HISTORY_USAGE}`,
+  `  ${REPLY_USAGE}`,
   '  team messages --dispatch <id> [--after <sequence>]',
   `  team spawn <role> [--name <name>] [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--ephemeral]`,
   `  team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`,
@@ -154,11 +166,12 @@ const throwHttpError = async (response: Response): Promise<never> => {
   )
 }
 
-const postJson = async (baseUrl: string, path: string, body: unknown) => {
+const postJson = async (baseUrl: string, path: string, body: unknown, signal?: AbortSignal) => {
   const response = await fetchRuntime(baseUrl, path, {
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
+    ...(signal ? { signal } : {}),
   })
 
   if (!response.ok) {
@@ -1018,6 +1031,28 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     console.log(TEAM_USAGE)
+    return
+  }
+
+  if (command === 'ask' || command === 'reply') {
+    const env = getHiveEnv()
+    await runQuestionCommand(
+      command,
+      args,
+      (path, body, signal) =>
+        postJson(
+          getBaseUrl(env),
+          path,
+          {
+            ...body,
+            project_id: env.HIVE_PROJECT_ID,
+            from_agent_id: env.HIVE_AGENT_ID,
+            token: env.HIVE_AGENT_TOKEN,
+          },
+          signal
+        ),
+      () => readStdinToString(command, `Usage: ${command === 'ask' ? ASK_USAGE : REPLY_USAGE}`)
+    )
     return
   }
 

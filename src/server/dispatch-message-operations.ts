@@ -7,6 +7,7 @@ import type { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createDispatchMessageOutbox } from './dispatch-message-outbox.js'
 import { authorizeDispatchMessage, dispatchRoot } from './dispatch-message-policy.js'
 import type { CollaborationHistoryCursor, DispatchMessageStore } from './dispatch-message-store.js'
+import { createDispatchQuestionOperations } from './dispatch-question-operations.js'
 import { BadRequestError, ConflictError, ForbiddenError } from './http-errors.js'
 import type { Database } from './sqlite.js'
 import type { WorkspaceStore } from './workspace-store.js'
@@ -47,6 +48,12 @@ export const createDispatchMessageOperations = (ports: {
     }
   }
   return {
+    ...createDispatchQuestionOperations({
+      hasAgent: ports.workspace.hasAgent,
+      getDispatch: ports.ledger.getDispatch,
+      getAgent: ports.workspace.getAgent,
+      messages: ports.messages,
+    }),
     drainDispatchMessageOutbox,
     getDispatchCollaboration,
     listCollaborationMessageHistory(
