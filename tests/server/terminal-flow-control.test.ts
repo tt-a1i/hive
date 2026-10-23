@@ -129,11 +129,19 @@ const startAgent = async (
 const openViewer = async (baseUrl: string, cookie: string, runId: string, clientId: string) => {
   const outputs: string[] = []
   const messageEvents: string[] = []
+  const snapshots: string[] = []
   const io = new WebSocket(toWsUrl(baseUrl, `/ws/terminal/${runId}/io`, clientId), {
     headers: { cookie },
   })
   const control = new WebSocket(toWsUrl(baseUrl, `/ws/terminal/${runId}/control`, clientId), {
     headers: { cookie },
+  })
+
+  control.on('message', (chunk) => {
+    const message = JSON.parse(chunk.toString()) as { type: string; snapshot?: string }
+    if (message.type === 'restore' && typeof message.snapshot === 'string') {
+      snapshots.push(message.snapshot)
+    }
   })
 
   io.on('message', (chunk) => {
@@ -153,7 +161,7 @@ const openViewer = async (baseUrl: string, cookie: string, runId: string, client
     }),
   ])
 
-  return { control, io, messageEvents, outputs }
+  return { control, io, messageEvents, outputs, snapshots }
 }
 
 afterEach(() => {
@@ -197,8 +205,9 @@ describe('terminal flow control', () => {
       await waitFor(() => {
         // A separate completion marker avoids assuming that ConPTY emits text,
         // title controls and the delayed newline as one contiguous substring.
-        // Wait for the delayed startup write before measuring the input echo.
-        expect(viewer.outputs.join('')).toContain('READY_END')
+        // Output before connection belongs to the control restore snapshot.
+        // Only readiness accepts it; the timed echo below must arrive over IO.
+        expect([...viewer.snapshots, ...viewer.outputs].join('')).toContain('READY_END')
       })
 
       await new Promise((resolve) => setTimeout(resolve, 20))
