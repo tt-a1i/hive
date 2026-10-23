@@ -70,3 +70,19 @@
 四方最终 A-。A/B 发现取消测试留下进程，进一步实测发现直接强杀外层会留下嵌套 runner：已改为先转发原信号，最多两秒后强杀；进程组提前为空即完成。B 在源码 SHA256 `e2efa2e2` 前缀版本实测普通子孙、真实 node-pty 及嵌套 runner，记录 PID 均消失、内外临时目录删除，SIGINT/SIGTERM 退出码 130/143。C 发现三项 CLI 显式路径及 Windows AppData 绕过 HOME：共享入口已清除/隔离，实际子进程哨兵断言通过。D 未发现平台或发布合同降级。严重项均修复，无未处理阻塞；不承诺入口遭 SIGKILL、任意独立 session 或未实测的 Windows 信号清理。
 
 证据目录 `/tmp/hive-ci-b-review-20261023/` 保留原失败和复验；本轮额外 runner/path 41 项通过，取消实现变更后的 planner/runner 26 项通过。远端使用草稿 PR #68 验证，未经用户授权不合并。
+
+## 第二轮：减少启动开销和分片尾部等待
+
+第一轮最终 head `ca9ae7c` 的 Actions 39903580331：首次反馈 331 秒（基线 1050 秒），但 Windows Node 22 scriptless 的真实 EOF 检查失败，输出 done 而退出状态未到。仅对同 SHA 失败 job 手动重跑一次通过，含诊断和重跑总计 605 秒。首次各 job 墙钟之和 1663 秒，基线 1542 秒；提速不等于节约计算资源。原失败保留于 `/tmp/hive-ci-optimization-20261023/windows-failure.log`。
+
+本轮仅改执行配置和现有测试，不改产品源码：
+
+- 完整测试改为四个原生 Vitest 分片，workflow 分母直接取矩阵 job-total。实际 BaseSequencer 分区为 101/101/101/100 文件，并集 403、无重复；未新增自定义分片框架。
+- 仅 DOM 环境加载 jest-dom matcher，纯 Node 测试不加载该依赖图。同一组 40 文件/317 项按旧、新、旧、新顺序运行，全部通过。Vitest 报告墙钟为 11.454/7.650/9.352/7.506 秒；第二对外部进程墙钟 10.595/7.820 秒。小样本重复改善成立，不能外推整个 CI 的同比。
+- EOF 检查失败时记录最后实际 HTTP 响应、PID 存活探测和迭代上下文；12 次真实 PTY、4 秒截止及所有断言不变。不声明 Windows 根因已修。临时副本故意要求 exit_code=99，真实退出为 0：原 AssertionError 与上下文均保留，退出 1；副本已删除。
+
+证据 `/tmp/hive-ci-round2/`：setup-*.json/log、native-shards.json、diagnostic-negative.log、targeted.log、dom-eof.log。相关四文件 36 项通过；修后 EOF 和明确使用 DOM matcher 的 welcome-pane 两文件 5 项通过。pnpm check、pnpm exec tsc --noEmit、actionlint、git diff --check 通过。完整执行和平台矩阵交给本轮 Actions；不在本地再次重复全量。
+
+### Self-Review
+
+A 架构 A-；B 边界 A-；C 测试价值 A-；D 合同 A-。A/B/C 指出原诊断调用 getLiveRun 可能遮盖原异常，已改成读取现有 HTTP 轮询快照，不新增 DB 访问，故障注入确认仍抛原错误；全部 reviewer 复核关闭。旧隔离、取消清理和平台保护保持。未处理阻塞：无。未知项：Windows 偶发 EOF 根因、四分片实际耗时与总资源成本仍需远端收据。

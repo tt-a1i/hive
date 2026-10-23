@@ -31,6 +31,17 @@ describe('agent manager PTY EOF handling (real node-pty)', () => {
   test('fast-exiting PTYs settle as exited instead of PTY error through HTTP and SQLite', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const server = await startTestServer()
+    const startedAt = Date.now()
+    let activeRunId: string | undefined
+    let lastRun:
+      | {
+          pid: number | null
+          exit_code: number | null
+          output: string
+          status: string
+        }
+      | undefined
+    let iteration = 0
     try {
       const cookie = await getUiCookie(server.baseUrl)
       const dir = join(server.dataDir, 'workspace')
@@ -77,17 +88,17 @@ describe('agent manager PTY EOF handling (real node-pty)', () => {
         expect(response.status).toBe(201)
         const payload = (await response.json()) as { run_id: string }
         runIds.push(payload.run_id)
+        activeRunId = payload.run_id
+        lastRun = undefined
+        iteration = index + 1
 
         await waitFor(async () => {
           const runResponse = await fetch(`${server.baseUrl}/api/runtime/runs/${payload.run_id}`, {
             headers: { cookie },
           })
           expect(runResponse.status).toBe(200)
-          const runState = (await runResponse.json()) as {
-            exit_code: number | null
-            output: string
-            status: string
-          }
+          const runState = (await runResponse.json()) as NonNullable<typeof lastRun>
+          lastRun = runState
           expect(runState).toMatchObject({
             exit_code: 0,
             output: expect.stringContaining('done'),
@@ -101,6 +112,30 @@ describe('agent manager PTY EOF handling (real node-pty)', () => {
         expect.stringContaining('PTY error for run'),
         expect.anything()
       )
+    } catch (error) {
+      // Keep the original failure; capture enough to distinguish a live child
+      // from a missing exit event without rerunning the whole platform job.
+      const run = lastRun
+      let processState = 'unknown'
+      if (run?.pid) {
+        try {
+          process.kill(run.pid, 0)
+          processState = 'alive'
+        } catch (probeError) {
+          processState = (probeError as NodeJS.ErrnoException).code ?? 'unknown'
+        }
+      }
+      console.warn('PTY EOF failure context', {
+        iteration,
+        activeRunId,
+        elapsedMs: Date.now() - startedAt,
+        node: process.version,
+        platform: process.platform,
+        run,
+        processState,
+        errors: consoleError.mock.calls,
+      })
+      throw error
     } finally {
       consoleError.mockRestore()
       await server.close()

@@ -123,7 +123,7 @@ test.each([
     extended: false,
     tests: true,
     legacy: true,
-    shards: [1, 2, 3],
+    shards: [1, 2, 3, 4],
   })
 })
 

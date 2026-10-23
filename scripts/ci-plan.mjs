@@ -125,7 +125,7 @@ if (process.argv[2] === '--run') {
       inputs.some((file) => file.startsWith('src/')) ||
       relevant.includes('tests/unit/sqlite.test.ts'),
     tests: full || inputs.length > 0,
-    shards: full ? [1, 2, 3] : [1],
+    shards: full ? [1, 2, 3, 4] : [1],
     inputs: [...new Set(inputs)],
   }
   console.log(JSON.stringify({ ...plan, changed: files }, null, 2))

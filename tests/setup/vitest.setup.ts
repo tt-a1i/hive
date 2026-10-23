@@ -1,6 +1,7 @@
-import '@testing-library/jest-dom/vitest'
-
 import { afterEach } from 'vitest'
+
+// Node-only suites do not need DOM matchers or their dependency graph.
+if (typeof document !== 'undefined') await import('@testing-library/jest-dom/vitest')
 
 // Node 25 ships an experimental localStorage that overrides jsdom's implementation
 // but lacks standard methods (setItem, getItem, clear, removeItem). Polyfill when needed.

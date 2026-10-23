@@ -113,7 +113,7 @@ jobs:
         env:
           CI_FULL: ${{ needs.plan.outputs.full }}
           CI_TEST_INPUTS: ${{ needs.plan.outputs.inputs }}
-          CI_TEST_SHARD: ${{ needs.plan.outputs.full == 'true' && format('{0}/3', matrix.shard) || '' }}
+          CI_TEST_SHARD: ${{ needs.plan.outputs.full == 'true' && format('{0}/{1}', matrix.shard, strategy.job-total) || '' }}
         run: node scripts/ci-plan.mjs --run
 
   legacy-sqlite:
