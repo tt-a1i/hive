@@ -54,3 +54,13 @@
 - D 合同：未更改产品协议、状态、权限或发布规则；六组合平台和 legacy 必跑保护保留。
 
 本地实现及上述验证完成；独立四审与真实 CI 尚未完成，不声称已合并、已部署或整体 CI 已变绿。
+
+## 主对话接续：2026-10-23
+
+已将 main `b48a807` 同步进分支（合并提交 `a6fa956`）。两组 Codex recorder 和提示断言复用 main 已通过完整 CI 的版本；保留启动中丢失会话的失败清理用例，启动前丢失另由 preset 用例覆盖。产品源码与 main 无差异。
+
+新的同仓 Actions 基线为 39900563583：plan 开始至 result 完成 1050 秒；verify 703 秒，其中全量测试步骤 662 秒；随后 Windows Node 22 job 325 秒（两次安装合计 255 秒）、Node 26 job 312 秒（安装 222 秒）。分支已把测试三分片与平台检查并行；本轮再把 Windows 两种安装策略分到独立 runner，Linux/macOS 保持原串行双策略。任务由六个增至八个，仍覆盖六个 OS/Node 组合的两种安装策略；Windows 生命周期每个 Node 只在 scriptless job 执行一次。增加两个 runner 的启动成本换取墙钟时间，不能声称减少总计算资源。
+
+接续本地验证：`pnpm check`、`pnpm exec tsc --noEmit`、`actionlint .github/workflows/ci.yml`、`git diff --check` 通过；六个相关文件 54 passed、1 skipped（旧 SQLite 互读转独立任务）。main 已验证的四个重叠文件未再重复本地全跑，新的完整分片/平台/旧驱动由真实 Actions 验证。
+
+本对话按 AGENTS 派出 A/B/C/D 四个独立 reviewer；其结论和最终 Actions 结果在收尾时补充。前述侧对话自查和测量保留为历史，不当作本轮独立审查与远端通过证据。

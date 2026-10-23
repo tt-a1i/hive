@@ -144,13 +144,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         node: ['22.18.0', '26']
+        install-policy: [both]
+        # Windows clean installs dominate the package gate; keep both policies,
+        # but run them on isolated runners instead of serially on one runner.
+        include:
+          - os: windows-latest
+            node: '22.18.0'
+            install-policy: scriptless
+          - os: windows-latest
+            node: '22.18.0'
+            install-policy: default
+          - os: windows-latest
+            node: '26'
+            install-policy: scriptless
+          - os: windows-latest
+            node: '26'
+            install-policy: default
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
+        if: matrix.install-policy != 'default'
         with:
           version: 10.30.3
       - uses: actions/setup-node@v6
@@ -162,13 +179,16 @@ jobs:
         with:
           name: hive-ci-package
           path: ci-package
-      - name: Verify the same package with both install policies
+      - name: Verify scriptless installation
+        if: matrix.install-policy != 'default'
         shell: bash
-        run: |
-          node scripts/pack-smoke.mjs --tarball ci-package/*.tgz
-          node scripts/pack-smoke.mjs --tarball ci-package/*.tgz --default-install
+        run: node scripts/pack-smoke.mjs --tarball ci-package/*.tgz
+      - name: Verify default installation
+        if: matrix.install-policy != 'scriptless'
+        shell: bash
+        run: node scripts/pack-smoke.mjs --tarball ci-package/*.tgz --default-install
       - name: Reuse the build for platform lifecycle regressions
-        if: needs.plan.outputs.extended != 'true'
+        if: needs.plan.outputs.extended != 'true' && matrix.install-policy != 'default'
         shell: bash
         run: |
           tar -xf ci-package/*.tgz
