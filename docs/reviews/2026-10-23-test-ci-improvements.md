@@ -94,3 +94,9 @@ Actions 39910074360 在 e4da7b6 上完成：403 文件全部执行，其中 term
 根因是测试只监听IO启动标记，而真实协议把连接前输出放在control restore快照。临时副本先等PTY实际输出READY_END再连viewer：旧测试稳定失败；修后同反例通过。现有helper独立收集真实restore，仅启动就绪合并快照和IO；300ms IN:tiny仍严格从实时IO断言，批处理计数不混入快照。完整流控5项通过，biome/typecheck/diff检查通过。反例副本已删除，前后日志保存在flow-race-before/after.log及flow-fixed.log。
 
 A/B/C/D再次独立复核均A-，无阻塞；修复测试错误的通道假设，不修改产品、不延长超时、不自动重试。完整远端复测待本次提交触发。
+
+## Windows 安装下载缓存校准
+
+最终6a6afff完整CI 39910808114一次通过，plan到result为298秒，2695pass/5skip；八个平台和legacy通过。Windows Node26 scriptless job 219秒，其中npm安装179个依赖约116秒，安装后的真实功能检查约5秒。证据 `/tmp/hive-ci-windows-cache/baseline-node26-scriptless.log`。
+
+本轮仅为Windows缓存npm下载目录；仍mkdtemp新prefix并执行正常/scriptless两种全新安装，不缓存node_modules、不删验收。B审查发现setup-node按镜像全局配置缓存C:\npm\cache，而pack-smoke空配置实际走用户LocalAppData目录；已改为actions/cache直接缓存~/AppData/Local/npm-cache，key含架构与锁文件哈希。A/B复核关闭路径问题，C/D核门禁保持；实际冷暖命中和收益需Actions验证，不预先声称提速。actionlint与diff检查通过。

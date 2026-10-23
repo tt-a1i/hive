@@ -173,6 +173,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
+      # pack-smoke clears npm config, so it uses the per-user default cache,
+      # not the hosted Windows image's global C:\npm\cache setting.
+      - uses: actions/cache@v4
+        if: runner.os == 'Windows'
+        with:
+          path: ~/AppData/Local/npm-cache
+          key: windows-pack-npm-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: npm install -g npm@12
         if: matrix.node == '26'
       - uses: actions/download-artifact@v4
