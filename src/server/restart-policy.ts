@@ -1,6 +1,7 @@
 import type { WorkspaceSummary } from '../shared/types.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import { FEATURE_FLAGS_ALL_OFF } from './feature-flags.js'
+import { isResumeLaunchConfig } from './preset-launch-support.js'
 import { buildRecoverySummary } from './recovery-summary.js'
 import {
   findPreviousRun,
@@ -100,7 +101,7 @@ export const createRestartPolicy = ({
       const auditedMemoryDigest = injectionIds ? memoryDigest : null
       const text = buildRecoverySummary({
         agent,
-        resumedSession: Boolean(startConfig.resumedSessionId),
+        resumedSession: isResumeLaunchConfig(startConfig),
         dispatchMessages: listDispatchMessagesForRecovery?.(workspace.id) ?? [],
         actionableDispatchMessages,
         ...(openDispatches ? { openDispatches } : {}),
