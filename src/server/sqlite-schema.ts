@@ -55,7 +55,12 @@ const ensureColumn = (db: Database, table: string, column: string, definition: s
   }
 }
 
-export const initializeRuntimeDatabase = (db: Database) => {
+export const initializeRuntimeDatabase = (db: Database) =>
+  db.transaction(() => applyRuntimeSchema(db))()
+
+const applyRuntimeSchema = (db: Database) => {
+  // Acquire SQLite's writer lock with the initial DDL before inspecting columns
+  // or version markers, and retain it until all migrations have committed.
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER PRIMARY KEY,
