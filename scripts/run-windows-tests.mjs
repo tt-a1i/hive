@@ -54,7 +54,7 @@ const groups = [
     'tests/server/workflow-nesting.test.ts',
     'tests/server/terminal-ws.test.ts',
     // Remote tunnel over a real runtime + real ws + real PTY (no native dep beyond the pre-existing
-    // node-pty/better-sqlite3); proves the single-daemon multi-device path holds on Windows too.
+    // node-pty); proves the single-daemon multi-device path holds on Windows too.
     'tests/server/remote-multi-device.test.ts',
   ],
   [
@@ -83,11 +83,9 @@ const groups = [
   ],
 ]
 
-const vitestBin = 'node_modules/vitest/vitest.mjs'
-
 for (const [index, files] of groups.entries()) {
   console.log(`\n[hive] Windows test group ${index + 1}/${groups.length}`)
-  const result = spawnSync(process.execPath, [vitestBin, 'run', ...files, ...vitestFlags], {
+  const result = spawnSync(process.execPath, ['scripts/run-tests.mjs', ...files, ...vitestFlags], {
     stdio: 'inherit',
   })
 

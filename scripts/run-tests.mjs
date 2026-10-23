@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -21,11 +21,22 @@ const runVitest = (filesOrArgs = [], extraArgs = []) => {
 
   // The test entry point must never inherit a user's live runtime database.
   const dataDir = mkdtempSync(join(tmpdir(), 'hive-test-data-'))
+  const testHome = join(dataDir, 'home')
+  mkdirSync(testHome)
   let result
   try {
     result = spawnSync(process.execPath, vitestArgs, {
       stdio: 'inherit',
-      env: { ...process.env, HIVE_DATA_DIR: dataDir },
+      env: {
+        ...process.env,
+        HIVE_DATA_DIR: dataDir,
+        HOME: testHome,
+        USERPROFILE: testHome,
+        CODEX_HOME: join(testHome, '.codex'),
+        HIVE_CLAUDE_PROJECTS_DIR: join(testHome, '.claude', 'projects'),
+        XDG_CONFIG_HOME: join(testHome, '.config'),
+        XDG_DATA_HOME: join(testHome, '.local', 'share'),
+      },
     })
   } finally {
     rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })

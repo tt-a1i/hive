@@ -11,6 +11,9 @@ import Database from '../../src/server/sqlite.js'
 import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
+// The required legacy-sqlite CI job owns old-driver interop on Node 22.
+const legacy = test.runIf(process.env.HIVE_TEST_LEGACY_SQLITE === '1')
+
 describe('built-in SQLite storage contract', () => {
   test('preserves the original error when SQLite rolls back the transaction itself', () => {
     const db = new Database(':memory:')
@@ -80,7 +83,7 @@ describe('built-in SQLite storage contract', () => {
     }
   })
 
-  test('preserves legacy files across migrations, FTS queries and reverse driver reads', () => {
+  legacy('preserves legacy files across migrations, FTS queries and reverse driver reads', () => {
     const root = mkdtempSync(join(tmpdir(), 'hive-sqlite-interop-'))
     const path = join(root, 'runtime.sqlite')
     try {

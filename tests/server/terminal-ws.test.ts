@@ -529,7 +529,7 @@ describe('terminal websocket server', () => {
       control.on('message', (chunk) => {
         messages.push(JSON.parse(chunk.toString()) as { code: number | null; type: string })
       })
-      io.send(process.platform === 'win32' ? 'exit\r' : 'exit\n')
+      io.send(process.platform === 'win32' ? 'exit 0\r' : 'exit 0\n')
 
       await waitFor(() => {
         expect(messages).toContainEqual({ type: 'exit', code: 0 })

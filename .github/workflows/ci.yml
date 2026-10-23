@@ -21,12 +21,16 @@ concurrency:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       code: ${{ steps.plan.outputs.code }}
       full: ${{ steps.plan.outputs.full }}
       native: ${{ steps.plan.outputs.native }}
       extended: ${{ steps.plan.outputs.extended }}
       inputs: ${{ steps.plan.outputs.inputs }}
+      tests: ${{ steps.plan.outputs.tests }}
+      shards: ${{ steps.plan.outputs.shards }}
+      legacy: ${{ steps.plan.outputs.legacy }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -40,7 +44,8 @@ jobs:
           CI_FULL: ${{ github.event_name == 'schedule' || inputs.full }}
         run: |
           if [ -z "$CI_BASE_SHA" ]; then
-            export CI_BASE_SHA="$(git rev-parse HEAD^)"
+            CI_BASE_SHA="$(git rev-parse HEAD^)"
+            export CI_BASE_SHA
           fi
           node scripts/ci-plan.mjs
 
@@ -48,6 +53,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
@@ -57,26 +63,80 @@ jobs:
         with:
           node-version: 22.18.0
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check
+      - run: pnpm exec tsc --noEmit
       - run: pnpm build
-      - name: Run affected tests or the high-risk full suite
-        env:
-          CI_FULL: ${{ needs.plan.outputs.full }}
-          CI_TEST_INPUTS: ${{ needs.plan.outputs.inputs }}
-        run: node scripts/ci-plan.mjs --run
-      - name: Pack once for all platforms
-        if: needs.plan.outputs.native == 'true'
+      - name: Pack once for tests and platforms
+        if: needs.plan.outputs.native == 'true' || needs.plan.outputs.tests == 'true'
         run: |
           mkdir -p ci-package
           npm pack --pack-destination ci-package
       - uses: actions/upload-artifact@v4
-        if: needs.plan.outputs.native == 'true'
+        if: needs.plan.outputs.native == 'true' || needs.plan.outputs.tests == 'true'
         with:
           name: hive-ci-package
           path: ci-package/*.tgz
           if-no-files-found: error
           retention-days: 3
+
+  tests:
+    needs: [plan, verify]
+    if: needs.plan.outputs.tests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: hive-ci-package
+          path: ci-package
+      - name: Reuse the verified build
+        run: |
+          tar -xf ci-package/*.tgz
+          cp -R package/dist .
+          mkdir -p web
+          cp -R package/web/dist web/
+      - name: Run affected tests or a full-suite shard
+        env:
+          CI_FULL: ${{ needs.plan.outputs.full }}
+          CI_TEST_INPUTS: ${{ needs.plan.outputs.inputs }}
+          CI_TEST_SHARD: ${{ needs.plan.outputs.full == 'true' && format('{0}/3', matrix.shard) || '' }}
+        run: node scripts/ci-plan.mjs --run
+
+  legacy-sqlite:
+    needs: plan
+    if: needs.plan.outputs.legacy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      # The old driver is test-only and has no Node 26 native build requirement.
+      - run: pnpm rebuild better-sqlite3
+      - name: Verify real old/new-driver migration and reverse reads
+        env:
+          HIVE_TEST_LEGACY_SQLITE: '1'
+        run: node scripts/run-tests.mjs tests/unit/sqlite.test.ts
 
   platforms:
     needs: [plan, verify]
@@ -87,6 +147,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node: ['22.18.0', '26']
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
@@ -130,6 +191,7 @@ jobs:
           - os: ubuntu-latest
             node: '22.18.0'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v6
@@ -139,7 +201,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           name: hive-ci-package
@@ -158,11 +220,12 @@ jobs:
 
   result:
     if: always()
-    needs: [plan, verify, platforms, extended]
+    needs: [plan, verify, tests, legacy-sqlite, platforms, extended]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v5
       - name: Require all selected checks to succeed
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          node -e 'const jobs = Object.values(JSON.parse(process.env.RESULTS)); if (jobs.some(j => !["success", "skipped"].includes(j.result))) process.exit(1)'
+        run: node scripts/ci-result.mjs

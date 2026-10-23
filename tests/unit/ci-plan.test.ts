@@ -70,6 +70,9 @@ test('documentation and gateway-only changes do not install the desktop runtime'
     full: false,
     native: false,
     extended: false,
+    tests: false,
+    legacy: false,
+    shards: [1],
     inputs: [],
   })
 })
@@ -80,6 +83,9 @@ test('UI changes only need static checks and build', () => {
     full: false,
     native: false,
     extended: false,
+    tests: false,
+    legacy: false,
+    shards: [1],
     inputs: [],
   })
 })
@@ -89,6 +95,9 @@ test('ordinary backend changes retain related tests plus real subprocess coverag
     code: true,
     full: false,
     native: false,
+    tests: true,
+    legacy: true,
+    shards: [1],
     inputs: [
       'src/server/settings-store.ts',
       'tests/cli/team-cli.test.ts',
@@ -106,11 +115,15 @@ test.each([
   'src/server/remote-loopback-auth.ts',
   'src/server/team-authz.ts',
   'src/server/workflow-script-worker.ts',
+  '.github/workflows/ci.yml',
 ])('high-risk %s changes keep full tests and platform validation', (file) => {
   expect(planChange({ [file]: 'export {}' })).toMatchObject({
     full: true,
     native: true,
     extended: false,
+    tests: true,
+    legacy: true,
+    shards: [1, 2, 3],
   })
 })
 
@@ -137,6 +150,19 @@ test('packaging changes trigger platform checks without unrelated full tests', (
     code: true,
     full: false,
     native: true,
+  })
+})
+
+test('editing legacy compatibility tests retains the dedicated old-driver job', () => {
+  expect(planChange({ 'tests/unit/sqlite.test.ts': 'export {}' })).toMatchObject({
+    tests: true,
+    legacy: true,
+    full: false,
+    native: false,
+  })
+  expect(planChange({ 'tests/unit/sqlite.test.ts': null })).toMatchObject({
+    legacy: true,
+    full: false,
   })
 })
 
@@ -175,6 +201,7 @@ test('source deletions force full validation, while removed test files are not e
 test.each([
   'scripts/ci-plan.mjs',
   'scripts/run-tests.mjs',
+  'scripts/ci-result.mjs',
 ])('%s selects its executable regression', (file) => {
   expect(planChange({ [file]: 'export {}' })).toMatchObject({
     full: false,
@@ -190,7 +217,7 @@ test('unclassified scripts retain full validation', () => {
   })
 })
 
-test('the real runner selects related tests, isolates its database, and propagates failures', () => {
+test('the real runner isolates user data, selects tests, and covers full-suite shards once', () => {
   const root = mkdtempSync(join(tmpdir(), 'hive-ci-run-'))
   roots.push(root)
   mkdirSync(join(root, 'scripts'))
@@ -214,13 +241,13 @@ test('the real runner selects related tests, isolates its database, and propagat
     `import { test, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { value } from '../src/value.js';
-test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', JSON.stringify(process.env.HIVE_DATA_DIR)); });`
+test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', JSON.stringify({ data:process.env.HIVE_DATA_DIR, home:process.env.HOME, codex:process.env.CODEX_HOME, profile:process.env.USERPROFILE })); });`
   )
   writeFileSync(
     join(root, 'tests/unrelated.test.js'),
-    "import { test, expect } from 'vitest'; test('unrelated failure', () => expect(1).toBe(2));"
+    "import { test, expect } from 'vitest'; import { writeFileSync } from 'node:fs'; test('unrelated failure', () => { writeFileSync('unrelated.json','true'); expect(1).toBe(2) });"
   )
-  const run = (inputs: string[]) =>
+  const run = (inputs: unknown, env: Record<string, string> = {}) =>
     spawnSync(process.execPath, ['scripts/ci-plan.mjs', '--run'], {
       cwd: root,
       encoding: 'utf8',
@@ -228,16 +255,109 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
         ...process.env,
         CI_FULL: 'false',
         CI_TEST_INPUTS: JSON.stringify(inputs),
+        CI_TEST_SHARD: '',
         HIVE_DATA_DIR: join(root, 'user-data'),
+        HOME: join(root, 'user-home'),
+        CODEX_HOME: join(root, 'user-codex'),
+        ...env,
       },
     })
   const selected = run(['src/value.js'])
   expect(selected.status, selected.stdout + selected.stderr).toBe(0)
-  const dataDir = JSON.parse(readFileSync(join(root, 'selected.json'), 'utf8'))
-  expect(dataDir).not.toBe(join(root, 'user-data'))
-  expect(existsSync(dataDir)).toBe(false)
+  const first = JSON.parse(readFileSync(join(root, 'selected.json'), 'utf8'))
+  expect(first.data).not.toBe(join(root, 'user-data'))
+  expect(first.home).toBe(join(first.data, 'home'))
+  expect(first.codex).toBe(join(first.home, '.codex'))
+  expect(first.profile).toBe(first.home)
+  expect(existsSync(first.data)).toBe(false)
   const mixed = run(['src/value.js', 'tests/unrelated.test.js'])
   expect(mixed.status, mixed.stdout + mixed.stderr).toBe(1)
   const failed = run(['tests/unrelated.test.js'])
   expect(failed.status, failed.stdout + failed.stderr).toBe(1)
+  const inventory: string[] = []
+  const statuses: Array<number | null> = []
+  for (const shard of ['1/2', '2/2']) {
+    for (const file of ['selected.json', 'unrelated.json'])
+      rmSync(join(root, file), { force: true })
+    const result = run([], { CI_FULL: 'true', CI_TEST_SHARD: shard })
+    statuses.push(result.status)
+    const ran = ['selected.json', 'unrelated.json'].filter((file) => existsSync(join(root, file)))
+    expect(ran).toHaveLength(1)
+    inventory.push(...ran)
+  }
+  expect(inventory.sort()).toEqual(['selected.json', 'unrelated.json'])
+  expect(statuses.sort()).toEqual([0, 1])
+  for (const file of ['selected.json', 'unrelated.json']) rmSync(join(root, file), { force: true })
+  for (const env of [
+    { CI_FULL: 'true', CI_TEST_SHARD: '0/2' },
+    { CI_FULL: 'true', CI_TEST_SHARD: '3/2' },
+    { CI_FULL: 'false', CI_TEST_SHARD: '1/2' },
+  ])
+    expect(run([], env).status).toBe(1)
+  expect(run({ wrong: 'shape' }).status).toBe(1)
+  expect(existsSync(join(root, 'selected.json'))).toBe(false)
+  expect(existsSync(join(root, 'unrelated.json'))).toBe(false)
 }, 30000)
+
+test('CI result requires all selected jobs and accepts only intentional skips', () => {
+  const names = ['verify', 'tests', 'platforms', 'extended', 'legacy-sqlite']
+  const status = (results: Record<string, unknown>) =>
+    spawnSync(process.execPath, [resolve('scripts/ci-result.mjs')], {
+      env: { ...process.env, RESULTS: JSON.stringify(results) },
+      encoding: 'utf8',
+    }).status
+  const full = {
+    plan: {
+      result: 'success',
+      outputs: {
+        code: 'true',
+        tests: 'true',
+        full: 'true',
+        native: 'true',
+        extended: 'true',
+        legacy: 'true',
+      },
+    },
+    ...Object.fromEntries(names.map((name) => [name, { result: 'success' }])),
+  }
+  expect(status(full)).toBe(0)
+  for (const name of names) {
+    for (const result of ['skipped', 'cancelled', 'failure', undefined]) {
+      expect(status({ ...full, [name]: result ? { result } : undefined })).toBe(1)
+    }
+  }
+  const docs = {
+    plan: {
+      result: 'success',
+      outputs: {
+        code: 'false',
+        tests: 'false',
+        full: 'false',
+        native: 'false',
+        extended: 'false',
+        legacy: 'false',
+      },
+    },
+    ...Object.fromEntries(names.map((name) => [name, { result: 'skipped' }])),
+  }
+  expect(status(docs)).toBe(0)
+  const backend = {
+    ...docs,
+    plan: {
+      ...docs.plan,
+      outputs: { ...docs.plan.outputs, code: 'true', tests: 'true', legacy: 'true' },
+    },
+    verify: { result: 'success' },
+    tests: { result: 'success' },
+    'legacy-sqlite': { result: 'success' },
+  }
+  expect(status(backend)).toBe(0)
+  expect(status({ ...backend, 'legacy-sqlite': { result: 'skipped' } })).toBe(1)
+  expect(status({ ...docs, plan: { ...docs.plan, result: 'failure' } })).toBe(1)
+  expect(
+    status({ ...docs, plan: { ...docs.plan, outputs: { ...docs.plan.outputs, tests: '' } } })
+  ).toBe(1)
+  expect(
+    status({ ...docs, plan: { ...docs.plan, outputs: { ...docs.plan.outputs, tests: 'true' } } })
+  ).toBe(1)
+})

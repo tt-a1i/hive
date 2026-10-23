@@ -147,11 +147,27 @@ if (!isResume || (!existsSync(sessionPath) && !existsSync(failMarker))) {
 }
 for (const signal of ['SIGHUP', 'SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(0))
 let pasteOpen = false
+let startupBuffer = ''
+let startupRecorded = false
 process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
   appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  if (!startupRecorded) {
+    startupBuffer += chunk
+    const start = startupBuffer.indexOf('<hive-message kind="startup">')
+    const end = startupBuffer.indexOf('</hive-message>', start)
+    if (start >= 0 && end >= start) {
+      // Persist the actual complete input, in Codex's native record shape.
+      appendFileSync(sessionPath, JSON.stringify({ type: 'response_item', payload: {
+        type: 'message', role: 'user', content: [{ type: 'input_text',
+          text: startupBuffer.slice(start, end + '</hive-message>'.length) }]
+      } }) + '\\n')
+      startupRecorded = true
+      startupBuffer = ''
+    }
+  }
   if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
     pasteOpen = false
@@ -366,9 +382,8 @@ describe('Layer A resume recovery integration', () => {
         expect(synchronization).toContain(
           `dispatch ${dispatched.dispatch_id} (submitted, owner ${worker.id})`
         )
-        expect(synchronization).toContain(
-          `dispatch ${dispatched.dispatch_id}: required_seen_seq ${beforeResumeInbox.required_seen_seq}`
-        )
+        expect(synchronization).toContain(`team messages --dispatch ${dispatched.dispatch_id}`)
+        expect(synchronization).toContain('Do not acknowledge inputs from this preview alone')
         expect(synchronization).toContain(
           `${added.message.id} (dispatch ${dispatched.dispatch_id}) #${added.message.sequence} note`
         )
@@ -632,7 +647,7 @@ describe('Layer A resume recovery integration', () => {
     }
   }, 30_000)
 
-  test('T5 Codex stale resume failure clears missing session id through HTTP and PTY', async () => {
+  test('T5 missing Codex session starts fresh and captures its new session through HTTP and PTY', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-layer-a-codex-home-'))
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
@@ -672,25 +687,23 @@ describe('Layer A resume recovery integration', () => {
 
       unlinkSync(getCodexSessionFilePath(codexHome, sessionId))
       writeFileSync(join(workspacePath, '.fail-next-resume'), '1\n')
-
+      writeFileSync(join(workspacePath, '.expect-fresh'), '1\n')
+      const freshId = '019dc277-0e8e-75c1-9794-94929426288f'
+      const config = server.store.peekAgentLaunchConfig(workspace.id, worker.id)
+      if (!config) throw new Error('Expected persisted recorder configuration')
+      server.store.configureAgentLaunch(workspace.id, worker.id, {
+        ...config,
+        args: ['--session-id-test', freshId],
+      })
+      // Configuration alone must not erase the saved ID; startup owns the check.
+      expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(sessionId)
       const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
       await waitFor(async () => {
         const run = await getRunOutputViaHttp(server.baseUrl, cookie, secondRun.runId)
-        expect(run.status).toBe('error')
-      })
-      await waitFor(() => {
-        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBeUndefined()
-      })
-
-      unlinkSync(join(workspacePath, '.fail-next-resume'))
-      writeFileSync(join(workspacePath, '.expect-fresh'), '1\n')
-
-      const thirdRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
-      await waitFor(async () => {
-        const run = await getRunOutputViaHttp(server.baseUrl, cookie, thirdRun.runId)
         expect(run.status).toBe('running')
-        expect(run.output).toContain(`ARGS:--session-id-test ${sessionId}`)
-        expect(run.output).not.toContain('resume')
+        expect(run.output).toContain(`ARGS:--session-id-test ${freshId}`)
+        expect(run.output).not.toContain(`ARGS:resume ${sessionId}`)
+        expect(readLastSessionId(server.dataDir, workspace.id, worker.id)).toBe(freshId)
       })
       unlinkSync(join(workspacePath, '.expect-fresh'))
     } finally {

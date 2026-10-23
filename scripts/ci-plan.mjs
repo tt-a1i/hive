@@ -12,6 +12,7 @@ const flags = [
 const scriptTests = {
   'scripts/ci-plan.mjs': ['tests/unit/ci-plan.test.ts'],
   'scripts/run-tests.mjs': ['tests/unit/ci-plan.test.ts'],
+  'scripts/ci-result.mjs': ['tests/unit/ci-plan.test.ts'],
   'scripts/prepare-build-artifacts.mjs': ['tests/unit/prepare-build-artifacts.test.js'],
   // Executed directly by the build or platform installation jobs.
   'scripts/clean-build.mjs': [],
@@ -20,10 +21,24 @@ const scriptTests = {
 
 if (process.argv[2] === '--run') {
   const inputs = JSON.parse(process.env.CI_TEST_INPUTS ?? '[]')
+  if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
+    throw new TypeError('CI_TEST_INPUTS must be an array of file paths')
+  }
   const full = process.env.CI_FULL === 'true'
+  const shard = process.env.CI_TEST_SHARD
+  if (shard) {
+    const match = /^(\d+)\/(\d+)$/u.exec(shard)
+    const index = Number(match?.[1])
+    const total = Number(match?.[2])
+    if (!full || !Number.isSafeInteger(total) || index < 1 || index > total) {
+      throw new Error('CI_TEST_SHARD must select a valid partition of the full suite')
+    }
+  }
   if (full || inputs.length) {
     const direct = inputs.every((file) => /\.test\.[jt]sx?$/u.test(file))
-    const args = full ? flags : [...(direct ? [] : ['--related']), ...inputs, ...flags]
+    const args = full
+      ? [...flags, ...(shard ? [`--shard=${shard}`] : [])]
+      : [...(direct ? [] : ['--related']), ...inputs, ...flags]
     const result = spawnSync(process.execPath, ['scripts/run-tests.mjs', ...args], {
       stdio: 'inherit',
     })
@@ -56,6 +71,7 @@ if (process.argv[2] === '--run') {
   for (const file of relevant) {
     if (file.startsWith('src/') && !existsSync(file)) full = true
     if (file.startsWith('scripts/') && !Object.hasOwn(scriptTests, file)) full = true
+    if (file === '.github/workflows/ci.yml') full = true
     if (file === 'package.json') {
       const oldPackage = JSON.parse(
         execFileSync('git', ['show', `${base}:package.json`], { encoding: 'utf8' })
@@ -104,6 +120,12 @@ if (process.argv[2] === '--run') {
     full,
     native: native || full,
     extended: forced,
+    legacy:
+      full ||
+      inputs.some((file) => file.startsWith('src/')) ||
+      relevant.includes('tests/unit/sqlite.test.ts'),
+    tests: full || inputs.length > 0,
+    shards: full ? [1, 2, 3] : [1],
     inputs: [...new Set(inputs)],
   }
   console.log(JSON.stringify({ ...plan, changed: files }, null, 2))

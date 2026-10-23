@@ -26,7 +26,7 @@ test('a shell starting during shutdown remains owned if its stop fails', async (
       if (!exited) throw new Error('removed a running shell')
       removed = true
     },
-  } as AgentManager
+  } as unknown as AgentManager
   const runtime = createWorkspaceShellRuntime(manager)
   const starting = runtime.start({ id: 'workspace', name: 'fixture', path: process.cwd() })
   const closing = runtime.close()
@@ -133,7 +133,7 @@ test('failed shell termination preserves the run for explicit retry', async () =
     removeRun() {
       removed = true
     },
-  } as AgentManager
+  } as unknown as AgentManager
   const runtime = createWorkspaceShellRuntime(manager)
   try {
     await runtime.start({ id: 'workspace', name: 'fixture', path: process.cwd() })

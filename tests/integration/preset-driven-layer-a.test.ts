@@ -117,7 +117,7 @@ const writeFakeCodex = (workspacePath: string) => {
     workspacePath,
     'codex',
     `#!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -129,23 +129,43 @@ const writeDelayMs = delayIndex >= 0 ? Number.parseInt(args[delayIndex + 1] ?? '
 const expectYoloMarker = join(process.cwd(), '.expect-yolo')
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
 const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
+const sessionPath = join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl')
+let input = '', startup = '', sessionCreated = false
+const startupRecord = () => JSON.stringify({ type: 'response_item', payload: {
+  type: 'message', role: 'user', content: [{ type: 'input_text', text: startup }]
+} }) + '\\n'
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
+  if (!startup) {
+    input += chunk
+    const start = input.indexOf('<hive-message kind="startup">')
+    const end = input.indexOf('</hive-message>', start)
+    if (start >= 0 && end >= start) {
+      startup = input.slice(start, end + '</hive-message>'.length)
+      if (sessionCreated) appendFileSync(sessionPath, startupRecord())
+      input = ''
+    }
+  }
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && chunk.includes('<hive-message') && chunk.includes('</hive-message>'))) {
     process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
   }
 })
 mkdirSync(sessionDir, { recursive: true })
-const writeSession = () => writeFileSync(
-    join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl'),
-    JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n'
-  )
+const writeSession = () => {
+  if (!(args.includes('resume') && existsSync(sessionPath))) {
+    writeFileSync(sessionPath,
+      JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n' +
+      (startup ? startupRecord() : ''))
+  }
+  sessionCreated = true
+}
 if (writeDelayMs > 0) setTimeout(writeSession, writeDelayMs)
 else writeSession()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
 const resumeIndex = args.indexOf('resume')
 if (existsSync(join(process.cwd(), '.expect-resume')) && !(resumeIndex >= 0 && args[resumeIndex + 1] === sessionId)) process.exit(2)
+if (existsSync(join(process.cwd(), '.expect-fresh')) && resumeIndex >= 0) process.exit(3)
 if (existsSync(expectYoloMarker) && !args.includes('--dangerously-bypass-approvals-and-sandbox')) process.exit(4)
 process.stdout.write('❯ ')
 setInterval(() => {}, 1000)
@@ -677,7 +697,7 @@ describe('preset-driven Layer A', () => {
     }
   }, 15000)
 
-  test('bound codex preset trusts captured session id even when the session file is gone', async () => {
+  test('bound codex preset starts fresh when its captured session file is gone', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-fast-resume-'))
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
@@ -709,15 +729,16 @@ describe('preset-driven Layer A', () => {
         expect(state.status).toBe('exited')
       })
       removeTestPath(codexHome)
-      writeFileSync(join(workspacePath, '.expect-resume'), '1\n')
+      writeFileSync(join(workspacePath, '.expect-fresh'), '1\n')
 
       const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(
-          `ARGS:--dangerously-bypass-approvals-and-sandbox resume ${sessionId} --session-id-test ${sessionId}`
+          `ARGS:--dangerously-bypass-approvals-and-sandbox --session-id-test ${sessionId}`
         )
+        expect(state.output).not.toContain(`resume ${sessionId}`)
       })
     } finally {
       await server.close()
