@@ -1,9 +1,7 @@
 import type { Database } from './sqlite.js'
 
 interface AgentSessionRow {
-  agent_id: string
   last_session_id: string
-  workspace_id: string
 }
 
 export interface AgentSessionStore {
@@ -13,16 +11,6 @@ export interface AgentSessionStore {
 }
 
 export const createAgentSessionStore = (db: Database): AgentSessionStore => {
-  const lastSessionIds = new Map<string, string>()
-
-  for (const row of db
-    .prepare(
-      'SELECT agent_id, workspace_id, last_session_id FROM agent_sessions ORDER BY updated_at ASC'
-    )
-    .all() as AgentSessionRow[]) {
-    lastSessionIds.set(`${row.workspace_id}:${row.agent_id}`, row.last_session_id)
-  }
-
   return {
     clearLastSessionId(workspaceId, agentId) {
       db.transaction(() => {
@@ -34,10 +22,16 @@ export const createAgentSessionStore = (db: Database): AgentSessionStore => {
           'UPDATE workers SET last_session_id = NULL WHERE id = ? AND workspace_id = ?'
         ).run(agentId, workspaceId)
       })()
-      lastSessionIds.delete(`${workspaceId}:${agentId}`)
     },
     getLastSessionId(workspaceId, agentId) {
-      return lastSessionIds.get(`${workspaceId}:${agentId}`)
+      // A surrounding launch-config transaction can still roll back after a
+      // nested session write. Read SQLite's state rather than cache it early.
+      const row = db
+        .prepare(
+          'SELECT last_session_id FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?'
+        )
+        .get(workspaceId, agentId) as AgentSessionRow | undefined
+      return row?.last_session_id
     },
     setLastSessionId(workspaceId, agentId, sessionId) {
       const updatedAt = Date.now()
@@ -51,7 +45,6 @@ export const createAgentSessionStore = (db: Database): AgentSessionStore => {
         isOrchestrator &&
         Boolean(db.prepare('SELECT 1 FROM workspaces WHERE id = ?').get(workspaceId))
       if (!workerExists && !workspaceExists) {
-        lastSessionIds.delete(`${workspaceId}:${agentId}`)
         return
       }
       db.transaction(() => {
@@ -69,7 +62,6 @@ export const createAgentSessionStore = (db: Database): AgentSessionStore => {
           ).run(sessionId, agentId, workspaceId)
         }
       })()
-      lastSessionIds.set(`${workspaceId}:${agentId}`, sessionId)
     },
   }
 }

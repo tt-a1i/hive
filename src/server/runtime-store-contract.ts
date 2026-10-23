@@ -128,6 +128,12 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
     agentId: string,
     input: AgentLaunchConfigInput
   ) => void
+  switchAgentCommandPreset: (
+    workspaceId: string,
+    agentId: string,
+    presetId: string,
+    input: StartAgentOptions
+  ) => Promise<LiveAgentRun>
   peekAgentLaunchConfig: (
     workspaceId: string,
     agentId: string

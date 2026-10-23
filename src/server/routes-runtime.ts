@@ -1,3 +1,4 @@
+import { BadRequestError } from './http-errors.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { ConfigureAgentLaunchBody, RouteDefinition } from './route-types.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
@@ -5,6 +6,33 @@ import { serializeLiveAgentRun } from './workflow-http-serializers.js'
 import { getWorkspaceShellAgentId } from './workspace-shell-runtime.js'
 
 export const runtimeRoutes: RouteDefinition[] = [
+  route(
+    'POST',
+    '/api/workspaces/:workspaceId/agents/:agentId/switch',
+    async ({ params, request, response, store }) => {
+      const workspaceId = getRequiredParam(
+        response,
+        params,
+        'workspaceId',
+        'Workspace id is required'
+      )
+      const agentId = getRequiredParam(response, params, 'agentId', 'Agent id is required')
+      if (!workspaceId || !agentId) return
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+      const body = await readJsonBody<{ command_preset_id?: unknown }>(request)
+      if (typeof body?.command_preset_id !== 'string' || !body.command_preset_id.trim())
+        throw new BadRequestError('Command preset id is required')
+      const run = await store.switchAgentCommandPreset(
+        workspaceId,
+        agentId,
+        body.command_preset_id,
+        {
+          hivePort: String(request.socket.localPort ?? ''),
+        }
+      )
+      sendJson(response, 201, { run_id: run.runId })
+    }
+  ),
   route('GET', '/api/ui/workspaces/:workspaceId/runs', ({ params, request, response, store }) => {
     const workspaceId = getRequiredParam(
       response,

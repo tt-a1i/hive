@@ -38,6 +38,12 @@ export interface AgentRuntime {
     input: StartAgentOptions
   ) => Promise<LiveAgentRun>
   stopAgentRun: (runId: string) => void
+  switchAgent: (
+    workspace: WorkspaceSummary,
+    agentId: string,
+    config: import('./agent-run-store.js').AgentLaunchConfigInput,
+    input: StartAgentOptions
+  ) => Promise<LiveAgentRun>
   validateAgentToken: AgentTokenRegistry['validate']
   writeStatusPrompt: (
     workspaceId: string,

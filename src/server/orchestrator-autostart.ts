@@ -108,7 +108,7 @@ export const autostartAgent = async (
   workspaceId: string,
   agentId: string,
   hivePort: string,
-  options: { missingConfigError: string }
+  options: { missingConfigError: string; requireRunning?: boolean }
 ): Promise<OrchestratorStartResult> => {
   const config = port.peekAgentLaunchConfig(workspaceId, agentId)
   if (!config) {
@@ -155,7 +155,10 @@ export const autostartAgent = async (
         deadline = silentStartingDeadline
       }
     }
-    if (status === 'error' || (status === 'exited' && (exitCode ?? 0) !== 0)) {
+    if (
+      status === 'error' ||
+      (status === 'exited' && (options.requireRunning || (exitCode ?? 0) !== 0))
+    ) {
       return {
         ok: false,
         error: formatEarlyExitError(getLaunchErrorCommand(config), exitCode),
