@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ const stableFullSuiteVitestFlags = [
   '--hookTimeout=60000',
 ]
 
-const runVitest = (filesOrArgs = [], extraArgs = []) => {
+const runVitest = async (filesOrArgs = [], extraArgs = []) => {
   const command =
     filesOrArgs[0] === '--related'
       ? ['related', '--run', ...filesOrArgs.slice(1)]
@@ -23,32 +23,61 @@ const runVitest = (filesOrArgs = [], extraArgs = []) => {
   const dataDir = mkdtempSync(join(tmpdir(), 'hive-test-data-'))
   const testHome = join(dataDir, 'home')
   mkdirSync(testHome)
-  let result
+  let child
+  let interrupted
+  const stop = (signal) => {
+    interrupted = signal
+    if (!child?.pid) return
+    if (process.platform === 'win32') {
+      const stopped = spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'])
+      if (stopped.status !== 0) child.kill(signal)
+    } else {
+      // Cancellation must not leave workers running after the runner exits.
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error
+      }
+    }
+  }
+  const onInt = () => stop('SIGINT')
+  const onTerm = () => stop('SIGTERM')
+  process.on('SIGINT', onInt)
+  process.on('SIGTERM', onTerm)
+  let status
   try {
-    result = spawnSync(process.execPath, vitestArgs, {
+    child = spawn(process.execPath, vitestArgs, {
       stdio: 'inherit',
+      detached: process.platform !== 'win32',
       env: {
         ...process.env,
         HIVE_DATA_DIR: dataDir,
         HOME: testHome,
         USERPROFILE: testHome,
+        LOCALAPPDATA: join(testHome, 'AppData', 'Local'),
+        APPDATA: join(testHome, 'AppData', 'Roaming'),
+        // Let each capture adapter resolve against the isolated home/XDG roots.
+        HIVE_OPENCODE_DB_PATH: undefined,
+        HIVE_GEMINI_HOME: undefined,
+        HIVE_QWEN_HOME: undefined,
         CODEX_HOME: join(testHome, '.codex'),
         HIVE_CLAUDE_PROJECTS_DIR: join(testHome, '.claude', 'projects'),
         XDG_CONFIG_HOME: join(testHome, '.config'),
         XDG_DATA_HOME: join(testHome, '.local', 'share'),
       },
     })
+    status = await new Promise((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', (code) => resolve(code))
+    })
   } finally {
+    process.removeListener('SIGINT', onInt)
+    process.removeListener('SIGTERM', onTerm)
     rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
 
-  if (result.error) {
-    throw result.error
-  }
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1)
-  }
+  if (interrupted) process.exit(interrupted === 'SIGINT' ? 130 : 143)
+  if (status !== 0) process.exit(status ?? 1)
 }
 
 const isTestFile = (filePath) => /\.test\.[cm]?[jt]sx?$/u.test(filePath)
@@ -80,10 +109,10 @@ if (process.platform === 'win32' && passthrough.length === 0) {
   const chunks = chunk(collectTestFiles('tests').sort(), 10)
   for (const [index, filesChunk] of chunks.entries()) {
     console.log(`\n[hive] Windows full test chunk ${index + 1}/${chunks.length}`)
-    runVitest(filesChunk, stableFullSuiteVitestFlags)
+    await runVitest(filesChunk, stableFullSuiteVitestFlags)
   }
 } else if (passthrough.length === 0) {
-  runVitest([], stableFullSuiteVitestFlags)
+  await runVitest([], stableFullSuiteVitestFlags)
 } else {
-  runVitest(passthrough)
+  await runVitest(passthrough)
 }

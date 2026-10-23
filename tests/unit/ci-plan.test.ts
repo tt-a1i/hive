@@ -241,7 +241,7 @@ test('the real runner isolates user data, selects tests, and covers full-suite s
     `import { test, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { value } from '../src/value.js';
-test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', JSON.stringify({ data:process.env.HIVE_DATA_DIR, home:process.env.HOME, codex:process.env.CODEX_HOME, profile:process.env.USERPROFILE })); });`
+test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', JSON.stringify({ data:process.env.HIVE_DATA_DIR, home:process.env.HOME, codex:process.env.CODEX_HOME, profile:process.env.USERPROFILE, local:process.env.LOCALAPPDATA, roaming:process.env.APPDATA, opencode:process.env.HIVE_OPENCODE_DB_PATH, gemini:process.env.HIVE_GEMINI_HOME, qwen:process.env.HIVE_QWEN_HOME })); });`
   )
   writeFileSync(
     join(root, 'tests/unrelated.test.js'),
@@ -259,6 +259,11 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
         HIVE_DATA_DIR: join(root, 'user-data'),
         HOME: join(root, 'user-home'),
         CODEX_HOME: join(root, 'user-codex'),
+        LOCALAPPDATA: join(root, 'user-local'),
+        APPDATA: join(root, 'user-roaming'),
+        HIVE_OPENCODE_DB_PATH: join(root, 'user-opencode.db'),
+        HIVE_GEMINI_HOME: join(root, 'user-gemini'),
+        HIVE_QWEN_HOME: join(root, 'user-qwen'),
         ...env,
       },
     })
@@ -269,6 +274,11 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
   expect(first.home).toBe(join(first.data, 'home'))
   expect(first.codex).toBe(join(first.home, '.codex'))
   expect(first.profile).toBe(first.home)
+  expect(first.local).toBe(join(first.home, 'AppData', 'Local'))
+  expect(first.roaming).toBe(join(first.home, 'AppData', 'Roaming'))
+  expect(first.opencode).toBeUndefined()
+  expect(first.gemini).toBeUndefined()
+  expect(first.qwen).toBeUndefined()
   expect(existsSync(first.data)).toBe(false)
   const mixed = run(['src/value.js', 'tests/unrelated.test.js'])
   expect(mixed.status, mixed.stdout + mixed.stderr).toBe(1)
