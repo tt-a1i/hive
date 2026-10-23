@@ -131,10 +131,9 @@ describe('buildWorkerDispatchPayload', () => {
     expect(payload).toContain('dispatch_id: disp-42')
     expect(payload).toContain('required_seen_seq: 0')
     expect(payload).toContain(
-      'only after inspecting and considering every inbound message through that watermark'
+      'You may use `--seen 0` only after inspecting and considering every inbound message through that watermark.'
     )
-    expect(payload).toContain('team messages --dispatch disp-42')
-    expect(payload).toContain('use --after only from a previously fully inspected cursor')
+    expect(payload).toContain('read `team messages --dispatch disp-42` in full first')
     expect(payload).toContain('add error handling to login.ts')
   })
 

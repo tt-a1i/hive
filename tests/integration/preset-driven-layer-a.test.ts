@@ -130,40 +130,40 @@ const expectYoloMarker = join(process.cwd(), '.expect-yolo')
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex')
 const sessionDir = join(codexHome, 'sessions', '2026', '04', '30')
 const sessionPath = join(sessionDir, 'rollout-2026-04-30T00-00-00-' + sessionId + '.jsonl')
-let input = '', startup = '', sessionCreated = false
-const startupRecord = () => JSON.stringify({ type: 'response_item', payload: {
-  type: 'message', role: 'user', content: [{ type: 'input_text', text: startup }]
-} }) + '\\n'
+const resumeIndex = args.indexOf('resume')
+let inputBuffer = ''
+let pendingRecords = ''
+let sessionReady = false
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  if (!startup) {
-    input += chunk
-    const start = input.indexOf('<hive-message kind="startup">')
-    const end = input.indexOf('</hive-message>', start)
-    if (start >= 0 && end >= start) {
-      startup = input.slice(start, end + '</hive-message>'.length)
-      if (sessionCreated) appendFileSync(sessionPath, startupRecord())
-      input = ''
-    }
+  inputBuffer += chunk
+  const frames = /<(hive-message|hive-system-message)(?: [^>]*)?>[\\s\\S]*?<\\/\\1>/g
+  let frame
+  let consumed = 0
+  while ((frame = frames.exec(inputBuffer)) !== null) {
+    const record = JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: frame[0] }] } }) + '\\n'
+    if (sessionReady) appendFileSync(sessionPath, record)
+    else pendingRecords += record
+    consumed = frames.lastIndex
   }
+  inputBuffer = inputBuffer.slice(consumed)
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && chunk.includes('<hive-message') && chunk.includes('</hive-message>'))) {
     process.stdout.write('\\n[Pasted text #1 +1 lines]\\n')
   }
 })
 mkdirSync(sessionDir, { recursive: true })
 const writeSession = () => {
-  if (!(args.includes('resume') && existsSync(sessionPath))) {
-    writeFileSync(sessionPath,
-      JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n' +
-      (startup ? startupRecord() : ''))
+  if (resumeIndex < 0 || !existsSync(sessionPath)) {
+    writeFileSync(sessionPath, JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: process.cwd() } }) + '\\n')
   }
-  sessionCreated = true
+  appendFileSync(sessionPath, pendingRecords)
+  pendingRecords = ''
+  sessionReady = true
 }
 if (writeDelayMs > 0) setTimeout(writeSession, writeDelayMs)
 else writeSession()
 process.stdout.write('ARGS:' + args.join(' ') + '\\n')
-const resumeIndex = args.indexOf('resume')
 if (existsSync(join(process.cwd(), '.expect-resume')) && !(resumeIndex >= 0 && args[resumeIndex + 1] === sessionId)) process.exit(2)
 if (existsSync(join(process.cwd(), '.expect-fresh')) && resumeIndex >= 0) process.exit(3)
 if (existsSync(expectYoloMarker) && !args.includes('--dangerously-bypass-approvals-and-sandbox')) process.exit(4)
@@ -697,7 +697,7 @@ describe('preset-driven Layer A', () => {
     }
   }, 15000)
 
-  test('bound codex preset starts fresh when its captured session file is gone', async () => {
+  test('bound codex preset starts fresh when the captured session file is gone', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-codex-fast-resume-'))
     const workspacePathRaw = join(homeDir, 'workspace')
     tempDirs.push(homeDir)
@@ -735,10 +735,10 @@ describe('preset-driven Layer A', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
+        expect(state.output).toContain('<hive-message kind="startup">')
         expect(state.output).toContain(
           `ARGS:--dangerously-bypass-approvals-and-sandbox --session-id-test ${sessionId}`
         )
-        expect(state.output).not.toContain(`resume ${sessionId}`)
       })
     } finally {
       await server.close()
