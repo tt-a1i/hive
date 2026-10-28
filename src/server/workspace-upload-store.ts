@@ -68,11 +68,17 @@ const mapRow = (row: WorkspaceUploadRow): WorkspaceUploadRecord => ({
   createdAt: row.created_at,
 })
 
+export const truncateUploadFilename = (value: string, maxLength: number): string => {
+  // Keep the UTF-16 budget, but exclude a scalar whose pair crosses the cut.
+  const splitsPair = (value.codePointAt(maxLength - 1) ?? 0) > 0xffff
+  return value.slice(0, splitsPair ? maxLength - 1 : maxLength)
+}
+
 const sanitizeOriginalName = (value: string): string => {
   const leaf = stripControlCharacters(basename(value.replaceAll('\\', '/')))
     .trim()
     .replace(/\s+/g, ' ')
-  return leaf ? leaf.slice(0, MAX_NAME_LENGTH) : DEFAULT_UPLOAD_NAME
+  return leaf ? truncateUploadFilename(leaf, MAX_NAME_LENGTH) : DEFAULT_UPLOAD_NAME
 }
 
 const sanitizeMimeType = (value: string | null | undefined): string => {
