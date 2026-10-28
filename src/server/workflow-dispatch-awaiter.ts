@@ -1,3 +1,5 @@
+import { MAX_WORKFLOW_DURATION_MS } from './workflow-script-loader.js'
+
 export interface ReportPayload {
   text: string
   artifacts: string[]
@@ -121,10 +123,15 @@ export const createWorkflowDispatchAwaiter = (
           reject(new Error(`workflow dispatch ${dispatchId} cancelled: ${earlyCancel}`))
           return
         }
+        // The enclosing workflow is already capped at this duration. Avoid
+        // Node turning a larger finite agent delay into a 1ms timeout.
+        const delay = Number.isFinite(timeoutMs)
+          ? Math.min(timeoutMs, MAX_WORKFLOW_DURATION_MS)
+          : timeoutMs
         const timer = setTimeout(() => {
           pending.delete(dispatchId)
           reject(new Error(`workflow dispatch ${dispatchId} timeout after ${timeoutMs}ms`))
-        }, timeoutMs)
+        }, delay)
         pending.set(dispatchId, { resolve, reject, timer })
       })
     },
