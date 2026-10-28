@@ -19,6 +19,7 @@ import {
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useI18n } from '../i18n.js'
+import { copyTextToClipboard } from '../lib/clipboard.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
@@ -145,7 +146,7 @@ type TaskItemHandlers = {
   onDelete?: (lineIndex: number) => void
   onAppendSubtask?: (parentLine: number, text: string) => void
   /** Copy this task's raw markdown line to the clipboard (§6.6.6). */
-  onCopyLine?: (lineIndex: number) => void
+  onCopyLine?: (lineIndex: number) => Promise<boolean>
   /** Cross-pane jump to a worker card when their chip is clicked (§6.6.6). */
   onSelectOwner?: (workerName: string) => void
   /**
@@ -219,15 +220,15 @@ const TaskItem = ({
   // (workspace switch, dialog close+reopen) — see §6.6.5: never persisted.
   const [collapsed, setCollapsed] = useState(false)
   // §6.6.6 — transient "just copied" affordance on the Copy button. Swaps the
-  // icon to ✓ for 1.5s so the user gets visual confirmation that the click
-  // landed (otherwise the clipboard write is silent). State is per-row, so
+  // icon to ✓ for 1.5s only after the clipboard write succeeds. State is per-row, so
   // copying multiple rows in quick succession each get their own checkmark.
   const [copied, setCopied] = useState(false)
+  const copyRequestRef = useRef(0)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Clear the pending timer on unmount so we don't `setState` on a dead
-  // component (React 19 would warn; harmless but noisy).
+  // Retire pending writes and feedback timers when the row unmounts.
   useEffect(
     () => () => {
+      copyRequestRef.current += 1
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
     },
     []
@@ -399,10 +400,13 @@ const TaskItem = ({
                 <button
                   type="button"
                   className="task-row__action pointer-coarse:h-10 pointer-coarse:w-10"
-                  onClick={() => {
-                    onCopyLine?.(task.line)
-                    setCopied(true)
+                  onClick={async () => {
+                    const request = ++copyRequestRef.current
                     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+                    setCopied(false)
+                    const succeeded = await onCopyLine?.(task.line)
+                    if (!succeeded || request !== copyRequestRef.current) return
+                    setCopied(true)
                     copyTimeoutRef.current = setTimeout(() => {
                       setCopied(false)
                       copyTimeoutRef.current = null
@@ -638,12 +642,16 @@ export const TaskGraphContent = ({
 }: TaskGraphContentProps) => {
   const { t } = useI18n()
   const [rawMode, setRawMode] = useState(false)
-  const copyTaskLine = (lineIndex: number) => {
+  const copyTaskLine = async (lineIndex: number) => {
     const line = content.split(/\r?\n/)[lineIndex]
-    if (typeof line !== 'string') return
-    void navigator.clipboard?.writeText(line).catch((error: unknown) => {
+    if (typeof line !== 'string') return false
+    try {
+      await copyTextToClipboard(line)
+      return true
+    } catch (error: unknown) {
       console.error('[hive] swallowed:tasks.copyLine', error)
-    })
+      return false
+    }
   }
   const taskHandlers: TaskItemHandlers = {
     onToggle: onToggleTaskLine,
