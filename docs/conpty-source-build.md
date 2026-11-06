@@ -1,8 +1,9 @@
 # ConPTY source-only handoff
 
 This candidate delivers a source patch and build instructions, **not native
-binaries**. Normal Hive startup still uses the system backend. A normal install
-must not be described as containing the native fix exercised in local acceptance.
+binaries**. Normal Hive startup uses the official ConPTY DLL from the pinned
+node-pty dependency and handles its initial DA1 query in the server. A normal
+install does not contain the custom native patch exercised in local acceptance.
 Do not replace Windows system files, silently select a custom DLL, or copy a
 private acceptance loader into the package.
 

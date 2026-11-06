@@ -63,14 +63,14 @@ describe('resolveTerminalInputProfile — cross-platform command normalization',
     ).toBe('opencode')
   })
 
-  test('returns "default" for non-opencode commands', () => {
+  test('detects claude from a Windows absolute path with .cmd suffix', () => {
     expect(
       resolveTerminalInputProfile({
         args: [],
         command: 'claude',
         interactiveCommand: 'C:\\Program Files\\nodejs\\claude.cmd',
       })
-    ).toBe('default')
+    ).toBe('claude')
   })
 
   test('falls back to command when interactiveCommand is null', () => {
@@ -209,7 +209,7 @@ describe('resolveTerminalInputProfile — legacy and wrapped launch shapes', () 
     ).toBe('opencode')
   })
 
-  test('shell-wrapped claude still resolves to default', () => {
+  test('detects claude from a shell-wrapped startup command', () => {
     expect(
       resolveTerminalInputProfile({
         args: ['/d', '/s', '/c', 'claude --dangerously-skip-permissions'],
@@ -217,6 +217,6 @@ describe('resolveTerminalInputProfile — legacy and wrapped launch shapes', () 
         commandPresetId: null,
         interactiveCommand: null,
       })
-    ).toBe('default')
+    ).toBe('claude')
   })
 })

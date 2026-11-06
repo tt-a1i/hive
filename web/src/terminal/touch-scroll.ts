@@ -215,7 +215,9 @@ export function attachTouchScroll({
     alternatePartialLines %= 1
     if (lines === 0) return false
     const cap =
-      profile === 'codex' || profile === 'opencode' ? MAX_PAGES_PER_FLUSH : MAX_ARROWS_PER_FLUSH
+      profile === 'claude' || profile === 'codex' || profile === 'opencode'
+        ? MAX_PAGES_PER_FLUSH
+        : MAX_ARROWS_PER_FLUSH
     // Lines beyond the cap are dropped, not queued — a backlog that keeps
     // scrolling after the finger stopped feels worse than losing distance.
     return emitAlternateLines(lines < 0 ? -1 : 1, Math.min(Math.abs(lines), cap)) > 0
@@ -365,6 +367,7 @@ export function attachTouchScroll({
     // coast step would jump a screenful at a time).
     if (
       !normalBufferPan &&
+      profile !== 'claude' &&
       profile !== 'opencode' &&
       Math.abs(v) >= ALT_GLIDE_MIN_VELOCITY_PX_PER_MS &&
       terminal.buffer?.active?.type === 'alternate'

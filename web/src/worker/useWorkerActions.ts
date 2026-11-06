@@ -21,6 +21,7 @@ const upsertWorker = (workers: TeamListItem[], worker: TeamListItem): TeamListIt
 const getTerminalInputProfileForPreset = (
   commandPresetId: string | null | undefined
 ): TerminalInputProfile => {
+  if (commandPresetId === 'claude') return 'claude'
   if (commandPresetId === 'codex') return 'codex'
   if (commandPresetId === 'grok') return 'grok'
   return commandPresetId === 'opencode' ? 'opencode' : 'default'

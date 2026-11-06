@@ -99,7 +99,7 @@ export const buildAgentPtySpawnOptions = (
   env,
   name: 'xterm-256color',
   rows: 24,
-  ...(platform === 'win32' ? { useConpty: true } : {}),
+  ...(platform === 'win32' ? { useConpty: true, useConptyDll: true } : {}),
 })
 
 export const createAgentManager = ({

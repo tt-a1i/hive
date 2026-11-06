@@ -460,7 +460,7 @@ export const listCommandPresets = async (): Promise<CommandPreset[]> => {
   }))
 }
 
-export type TerminalInputProfile = 'codex' | 'default' | 'grok' | 'opencode'
+export type TerminalInputProfile = 'claude' | 'codex' | 'default' | 'grok' | 'opencode'
 
 export interface TerminalRunSummary {
   agent_id: string

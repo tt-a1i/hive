@@ -14,7 +14,7 @@ type TerminalLike = {
 const PIXELS_PER_WHEEL_LINE = 16
 const TRACKPAD_DAMPING = 0.3
 
-export type TerminalWheelInputProfile = 'codex' | 'default' | 'grok' | 'opencode'
+export type TerminalWheelInputProfile = 'claude' | 'codex' | 'default' | 'grok' | 'opencode'
 
 type WheelFallbackResult = {
   input: string | null
@@ -46,7 +46,7 @@ const profileSequence = (
   profile: TerminalWheelInputProfile,
   direction: 'down' | 'up'
 ) => {
-  if (profile === 'codex' || profile === 'grok' || profile === 'opencode') {
+  if (profile === 'claude' || profile === 'codex' || profile === 'grok' || profile === 'opencode') {
     return direction === 'up' ? '[5~' : '[6~'
   }
   return arrowSequence(terminal.modes?.applicationCursorKeysMode, direction)

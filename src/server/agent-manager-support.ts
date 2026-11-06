@@ -5,6 +5,7 @@ import type { IPty } from '@lydell/node-pty'
 
 import { classifyCompletedRunStatus } from './agent-exit-classification.js'
 import type { AgentRunRecord, AgentRunSnapshot } from './agent-manager.js'
+import { createConptyStartupFilter } from './conpty-startup.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 
 export const MAX_RUN_OUTPUT_LENGTH = 1_000_000
@@ -335,7 +336,15 @@ export const attachAgentPty = (
     },
   }
 
-  pty.onData((chunk) => {
+  const filterStartup =
+    platform === 'win32'
+      ? createConptyStartupFilter((data) => {
+          if (!stdinClosed && !stopped()) pty.write(data)
+        })
+      : (chunk: string) => chunk
+  pty.onData((data) => {
+    const chunk = filterStartup(data)
+    if (!chunk) return
     if (run.status === 'starting') run.status = 'running'
     run.output += chunk
     if (run.output.length > MAX_RUN_OUTPUT_LENGTH)

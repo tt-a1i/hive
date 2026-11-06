@@ -1,7 +1,7 @@
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import { getStartupCommandExecutable, normalizeExecutableToken } from './startup-command-parser.js'
 
-export type TerminalInputProfile = 'codex' | 'default' | 'grok' | 'opencode'
+export type TerminalInputProfile = 'claude' | 'codex' | 'default' | 'grok' | 'opencode'
 
 export interface TerminalRunSummary {
   agent_id: string
@@ -14,6 +14,7 @@ export interface TerminalRunSummary {
 }
 
 const PROFILE_BY_BRAND: Partial<Record<string, TerminalInputProfile>> = {
+  claude: 'claude',
   codex: 'codex',
   grok: 'grok',
   opencode: 'opencode',
@@ -108,10 +109,12 @@ export const resolveTerminalInputProfile = (
   config: AgentLaunchConfigInput | undefined
 ): TerminalInputProfile => {
   if (!config) return 'default'
+  if (config.commandPresetId === 'claude') return 'claude'
   if (config.commandPresetId === 'codex') return 'codex'
   if (config.commandPresetId === 'grok') return 'grok'
   if (config.commandPresetId === 'opencode') return 'opencode'
   if (config.sessionIdCapture?.source === 'codex_session_jsonl_dir') return 'codex'
+  if (config.sessionIdCapture?.source === 'claude_project_jsonl_dir') return 'claude'
   if (config.sessionIdCapture?.source === 'opencode_session_db') return 'opencode'
 
   return (

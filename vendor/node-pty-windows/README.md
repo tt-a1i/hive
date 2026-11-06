@@ -19,8 +19,13 @@ no source maps in the upstream platform package; existing map comments are inert
 
 `src/server/pty.ts` selects this implementation only on Windows. Unix uses the
 original dependency. `prepare-build-artifacts.mjs` copies these source files to
-dist/vendor, making the reviewed JS available without postinstall scripts. Normal
-native backend selection is unchanged; no custom ConPTY loader is activated.
+dist/vendor, making the reviewed JS available without postinstall scripts.
+Hive's agent manager selects the official ConPTY DLL shipped by the pinned
+dependency so alternate-screen and mouse modes survive Windows PTY output.
+It consumes and answers the backend's initial DA1 query before publishing output,
+avoiding the no-viewer startup wait and duplicate browser replies. Subsequent
+application queries remain on the normal viewer path. No custom native loader
+or private binary is shipped.
 
 The Windows x64 ordinary npm archive passed the natural-exit probe without a
 post-exit kill and the HTTP/SQLite/internal-team smoke. Independent review of

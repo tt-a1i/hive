@@ -73,7 +73,11 @@ workspace IDs from a different server are not interchangeable.
 The xterm source patch is integrated into the normal Web build; see
 [`patches/README.md`](../patches/README.md). The node-pty JavaScript lifecycle
 patches are not the separately compiled OpenConsole/ConPTY runtime used in
-local acceptance. Current normal server startup still uses the system backend.
+local acceptance. Windows agent startup selects the official ConPTY DLL shipped
+by the pinned node-pty dependency, preserving alternate-screen and mouse modes.
+The server answers and consumes only its initial DA1 query so background agents
+start without waiting for a browser. Later application queries still go to the
+elected viewer; normal buffers never receive synthetic wheel keys.
 
 Windows launches now use `src/server/pty.ts` and the reviewed JavaScript under
 `vendor/node-pty-windows`, copied to `dist/vendor` during build. This closes the
