@@ -313,6 +313,24 @@ export const isRuntimeRunActive = async (runId: string): Promise<boolean> => {
   return run.status === 'starting' || run.status === 'running'
 }
 
+export const switchAgentCommandPreset = async (
+  workspaceId: string,
+  agentId: string,
+  preset: CommandPreset
+): Promise<{ runId: string }> => {
+  if (!preset.available) throw new Error('Selected CLI is not available')
+  const response = await apiFetch(`/api/workspaces/${workspaceId}/agents/${agentId}/switch`, {
+    body: JSON.stringify({ command_preset_id: preset.id }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, 'Failed to change agent CLI'))
+  }
+  const body = (await response.json()) as { run_id: string }
+  return { runId: body.run_id }
+}
+
 export const sendWorkspaceUserInput = async (workspaceId: string, text: string): Promise<void> => {
   const response = await apiFetch(`/api/workspaces/${workspaceId}/user-input`, {
     body: JSON.stringify({ text }),

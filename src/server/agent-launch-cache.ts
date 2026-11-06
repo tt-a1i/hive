@@ -12,8 +12,12 @@ interface AgentLaunchCacheStore {
   saveLaunchConfig: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => void
 }
 
-export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
+export const createAgentLaunchCache = (
+  store: AgentLaunchCacheStore,
+  transaction: (write: () => void) => void = (write) => write()
+) => {
   const launchConfigs = new Map<string, AgentLaunchConfigInput>()
+  const versions = new Map<string, symbol>()
   const workspaceByAgentId = new Map<string, string>()
   const missingLaunchConfigs = new Set<string>()
   const cacheKey = (workspaceId: string, agentId: string) => `${workspaceId}:${agentId}`
@@ -29,6 +33,9 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
   load()
 
   return {
+    getVersion(workspaceId: string, agentId: string) {
+      return versions.get(cacheKey(workspaceId, agentId))
+    },
     get(workspaceId: string, agentId: string) {
       const key = cacheKey(workspaceId, agentId)
       const config = launchConfigs.get(key)
@@ -56,7 +63,12 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
     getWorkspaceId(agentId: string) {
       return workspaceByAgentId.get(agentId)
     },
-    save(workspaceId: string, agentId: string, input: AgentLaunchConfigInput) {
+    save(
+      workspaceId: string,
+      agentId: string,
+      input: AgentLaunchConfigInput,
+      clearSession?: () => void
+    ) {
       const normalized = {
         command: input.command,
         args: input.args ?? [],
@@ -67,9 +79,13 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
         resumeArgsTemplate: input.resumeArgsTemplate ?? null,
         sessionIdCapture: input.sessionIdCapture ?? null,
       }
-      store.saveLaunchConfig(workspaceId, agentId, normalized)
+      transaction(() => {
+        store.saveLaunchConfig(workspaceId, agentId, normalized)
+        clearSession?.()
+      })
       const key = cacheKey(workspaceId, agentId)
       launchConfigs.set(key, normalized)
+      versions.set(key, Symbol())
       missingLaunchConfigs.delete(key)
       workspaceByAgentId.set(agentId, workspaceId)
     },
@@ -77,6 +93,7 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
       store.deleteLaunchConfig(workspaceId, agentId)
       const key = cacheKey(workspaceId, agentId)
       launchConfigs.delete(key)
+      versions.set(key, Symbol())
       missingLaunchConfigs.add(key)
       workspaceByAgentId.delete(agentId)
     },

@@ -285,6 +285,8 @@ export const WorkspaceDetail = ({
       />
     ) : (
       <OrchestratorPane
+        key={workspace.id}
+        onSwitchCli={orchestrator.switchCli}
         state={orchestrator.state}
         onRemoveWorkspace={() => {
           void onDeleteWorkspace(workspace).catch((error: unknown) => {

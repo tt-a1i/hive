@@ -1,10 +1,12 @@
-import { Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight, Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
+import type { CommandPreset } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
 import { EmptyState } from '../ui/EmptyState.js'
 import { Tooltip } from '../ui/Tooltip.js'
 import { CliInstallGuidancePanel } from '../workspace/CliInstallGuidance.js'
+import { SwitchOrchestratorDialog } from './SwitchOrchestratorDialog.js'
 
 /* The runtime error is `<command> CLI not found in PATH` where <command> is
    the executable name; install guidance is keyed by preset id. Only one
@@ -29,6 +31,7 @@ type OrchestratorPaneProps = {
   onRemoveWorkspace: () => void
   onStart: () => void
   onRestart: () => void
+  onSwitchCli?: (preset: CommandPreset) => Promise<void>
 }
 
 const StartingBody = () => {
@@ -164,9 +167,11 @@ export const OrchestratorPane = ({
   onRemoveWorkspace,
   onRestart,
   onStart,
+  onSwitchCli,
 }: OrchestratorPaneProps) => {
   const { t } = useI18n()
   const isMobile = useIsMobile()
+  const [switchOpen, setSwitchOpen] = useState(false)
   return (
     <div
       className="orchestrator-pane-root relative flex h-full w-full min-w-0 flex-col"
@@ -176,6 +181,18 @@ export const OrchestratorPane = ({
       }}
       data-testid="orchestrator-terminal-slot"
     >
+      {onSwitchCli ? (
+        <div className="flex shrink-0 justify-end border-b border-[var(--border)] px-2 py-1">
+          <button
+            type="button"
+            className="icon-btn icon-btn--ghost"
+            disabled={state.kind === 'starting'}
+            onClick={() => setSwitchOpen(true)}
+          >
+            <ArrowLeftRight size={12} aria-hidden /> {t('orchestrator.switchCli')}
+          </button>
+        </div>
+      ) : null}
       {state.kind === 'running' ? (
         <div
           id={`orch-pty-${state.runId}`}
@@ -203,6 +220,9 @@ export const OrchestratorPane = ({
       ) : (
         <StartingBody />
       )}
+      {switchOpen && onSwitchCli ? (
+        <SwitchOrchestratorDialog onClose={() => setSwitchOpen(false)} onSwitch={onSwitchCli} />
+      ) : null}
     </div>
   )
 }

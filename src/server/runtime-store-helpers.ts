@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { resolveCommandPresetLaunchConfig } from './agent-launch-resolver.js'
 import type { AgentManager } from './agent-manager.js'
 import { type AgentLaunchConfigInput, createAgentRunStore } from './agent-run-store.js'
 import { createAgentRuntime } from './agent-runtime.js'
@@ -11,7 +12,7 @@ import { createDispatchMessageOperations } from './dispatch-message-operations.j
 import { createDispatchMessageStore } from './dispatch-message-store.js'
 import { createExternalGoalStore } from './external-goal-store.js'
 import { readFeatureFlags } from './feature-flags.js'
-import { ConflictError } from './http-errors.js'
+import { BadRequestError, ConflictError } from './http-errors.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { hasFirstRunSetupPrompt, isInteractiveAgentCommand } from './post-start-input-writer.js'
@@ -263,7 +264,7 @@ export const createRuntimeStoreServices = (
     agentRunStore,
     agentSessionStore,
     settings.getCommandPreset,
-    (workspaceId, agentId) => {
+    (workspaceId, agentId, replacing) => {
       // #81 follow-up: stop() leaves the old PTY draining (up to the
       // force-kill window) while startAgent has already spawned a replacement
       // run. The dying run's late onExit must not stop the agent, tear down
@@ -274,6 +275,9 @@ export const createRuntimeStoreServices = (
       workerOutputTracker?.detach(workspaceId, agentId)
       if (!workspaceStore.hasAgent(workspaceId, agentId)) return
       workspaceStore.markAgentStopped(workspaceId, agentId)
+      // A user-requested CLI handover retains members and responsibilities,
+      // including when the replacement needs another attempt to start.
+      if (replacing) return
       // TIER 1 #1 — if the exiting worker had any open workflow dispatches,
       // tell the workflow awaiter so the runner's `awaitReport` rejects
       // immediately instead of hanging until DEFAULT_TIMEOUT_MS (10 min).
@@ -314,7 +318,8 @@ export const createRuntimeStoreServices = (
     restartPolicy,
     (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId),
     getFlags,
-    memoryInjection
+    memoryInjection,
+    (write) => db.transaction(write)()
   )
   const dispatchMessageOps = createDispatchMessageOperations({
     db,
@@ -494,7 +499,8 @@ export const createRuntimeStoreLifecycle = ({
   const startAgent = async (
     workspaceId: string,
     agentId: string,
-    input: { hivePort: string }
+    input: { hivePort: string },
+    launchConfig?: AgentLaunchConfigInput
   ): Promise<LiveAgentRun> => {
     if (
       agentId === getOrchestratorId(workspaceId) &&
@@ -505,14 +511,14 @@ export const createRuntimeStoreLifecycle = ({
     services.workspaceStore.getAgent(workspaceId, agentId)
     services.workspaceStore.markAgentStarted(workspaceId, agentId)
     try {
-      const run = await services.agentRuntime.startAgent(
-        services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary,
-        agentId,
-        input
-      )
+      const workspace = services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary
+      const run = await (launchConfig
+        ? services.agentRuntime.switchAgent(workspace, agentId, launchConfig, input)
+        : services.agentRuntime.startAgent(workspace, agentId, input))
       if (run.status === 'error') {
         services.workspaceStore.markAgentStopped(workspaceId, agentId)
       } else {
+        services.workspaceStore.markAgentStarted(workspaceId, agentId)
         services.workerOutputTracker?.attach(workspaceId, agentId, run.runId, run.output)
         // #33: a freshly started worker may have dispatches parked from when
         // it was stopped — deliver them now (single-shot via claims; no-op
@@ -545,7 +551,8 @@ export const createRuntimeStoreLifecycle = ({
       }
       return run
     } catch (error) {
-      services.workspaceStore.markAgentStopped(workspaceId, agentId)
+      if (!services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId))
+        services.workspaceStore.markAgentStopped(workspaceId, agentId)
       throw error
     }
   }
@@ -673,6 +680,16 @@ export const createRuntimeStoreLifecycle = ({
       ...services.shellRuntime.listTerminalRuns(workspaceId),
     ],
     startAgent,
+    switchAgentCommandPreset: (
+      workspaceId: string,
+      agentId: string,
+      presetId: string,
+      input: { hivePort: string }
+    ) => {
+      const config = resolveCommandPresetLaunchConfig(services.settings, presetId)
+      if (!config) throw new BadRequestError('Command preset not found')
+      return startAgent(workspaceId, agentId, input, config)
+    },
     startWorkspaceShell: (workspaceId: string) =>
       services.shellRuntime.start(
         services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary

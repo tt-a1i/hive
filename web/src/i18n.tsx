@@ -365,6 +365,10 @@ const enMessages = {
   'orchestrator.stoppedDesc':
     'Start the Orchestrator to plan tasks and dispatch them to team members.',
   'orchestrator.stoppedTitle': 'Orchestrator is stopped',
+  'orchestrator.switchCli': 'Change Orchestrator CLI',
+  'orchestrator.switchCliConfirm': 'Switch and start',
+  'orchestrator.switchCliDesc':
+    'Stop the current Orchestrator and start the selected CLI. Workspace tasks and members stay available. CLI conversation history does not transfer between providers.',
   'role.coder': 'Coder',
   'role.custom': 'Custom',
   'role.reviewer': 'Reviewer',
@@ -1250,6 +1254,10 @@ const zhMessages: Record<TranslationKey, string> = {
   'orchestrator.startingTitle': 'Orchestrator 启动中',
   'orchestrator.stoppedDesc': '启动 Orchestrator 后才能规划任务并分派给团队成员。',
   'orchestrator.stoppedTitle': 'Orchestrator 已停止',
+  'orchestrator.switchCli': '切换主控 CLI',
+  'orchestrator.switchCliConfirm': '切换并启动',
+  'orchestrator.switchCliDesc':
+    '停止当前主控并启动所选 CLI。保留工作区任务和成员；不同服务商之间不迁移 CLI 对话历史。',
   'role.coder': '开发',
   'role.custom': '自定义',
   'role.reviewer': '审查',

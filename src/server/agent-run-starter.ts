@@ -43,6 +43,7 @@ interface AgentRunStarterInput {
   onAgentExit: (workspaceId: string, agentId: string) => void
   store: AgentRunStarterStorePort
   sessionStore: AgentSessionStorePort
+  getLaunchConfigVersion: (workspaceId: string, agentId: string) => symbol | undefined
   tokenRegistry: AgentTokenRegistry
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
   getAgent: ((workspaceId: string, agentId: string) => AgentSummary | undefined) | undefined
@@ -60,7 +61,8 @@ export const createAgentRunStarter =
     registry,
     onAgentExit,
     store,
-    sessionStore,
+    sessionStore: persistedSessionStore,
+    getLaunchConfigVersion,
     tokenRegistry,
     getCommandPreset,
     getAgent,
@@ -78,6 +80,20 @@ export const createAgentRunStarter =
       throw new ConflictError('This workspace uses Codex App as its controller')
     if (!agentManager) throw new Error('Agent manager is required to start agents')
 
+    // Session capture can finish after a CLI switch. An old run must never
+    // overwrite (or clear) the replacement CLI's resume session.
+    const launchVersion = getLaunchConfigVersion(workspace.id, agentId)
+    const sessionStore: AgentSessionStorePort = {
+      ...persistedSessionStore,
+      setLastSessionId: (workspaceId, targetAgentId, sessionId) => {
+        if (getLaunchConfigVersion(workspaceId, targetAgentId) !== launchVersion) return
+        persistedSessionStore.setLastSessionId(workspaceId, targetAgentId, sessionId)
+      },
+      clearLastSessionId: (workspaceId, targetAgentId) => {
+        if (getLaunchConfigVersion(workspaceId, targetAgentId) !== launchVersion) return
+        persistedSessionStore.clearLastSessionId(workspaceId, targetAgentId)
+      },
+    }
     const agent = getAgent?.(workspace.id, agentId)
     const { sessionCaptureDiscriminator, sessionCaptureSnapshot, startConfig, startEnv } =
       buildAgentRunBootstrap(workspace, agentId, config, sessionStore, getCommandPreset, agent)

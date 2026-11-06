@@ -15,7 +15,9 @@ import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { createAgentTokenRegistry } from './agent-tokens.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import type { FeatureFlags } from './feature-flags.js'
+import { ConflictError } from './http-errors.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
+import { autostartAgent } from './orchestrator-autostart.js'
 import { createNoopRestartPolicy, type RestartPolicy } from './restart-policy.js'
 import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 
@@ -40,16 +42,18 @@ export const createAgentRuntime = (
   agentRunStore: AgentRunStorePort,
   sessionStore: AgentSessionStorePort,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined,
-  onAgentExit: (workspaceId: string, agentId: string) => void,
+  onAgentExit: (workspaceId: string, agentId: string, replacing?: boolean) => void,
   restartPolicy: RestartPolicy = createNoopRestartPolicy(),
   getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined,
   getFlags?: () => FeatureFlags,
-  memoryInjection?: TeamMemoryInjectionService
+  memoryInjection?: TeamMemoryInjectionService,
+  transaction?: (write: () => void) => void
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
-  const launchCache = createAgentLaunchCache(agentRunStore)
+  const launchCache = createAgentLaunchCache(agentRunStore, transaction)
   const tokenRegistry = createAgentTokenRegistry()
   const startPromises = new Map<string, Promise<LiveAgentRun>>()
+  const switchPromises = new Map<string, Promise<LiveAgentRun>>()
   let closing = false
   const requireManager = () => {
     if (!agentManager) throw new Error('Agent manager is required for PTY terminal operations')
@@ -71,9 +75,11 @@ export const createAgentRuntime = (
   const startLiveRun = createAgentRunStarter({
     agentManager,
     registry,
-    onAgentExit,
+    onAgentExit: (workspaceId, agentId) =>
+      onAgentExit(workspaceId, agentId, switchPromises.has(`${workspaceId}:${agentId}`)),
     store: agentRunStore,
     sessionStore,
+    getLaunchConfigVersion: launchCache.getVersion,
     tokenRegistry,
     getCommandPreset,
     getAgent,
@@ -82,14 +88,30 @@ export const createAgentRuntime = (
     ...(memoryInjection ? { memoryInjection } : {}),
   })
 
-  return {
+  const configureLaunch: AgentRuntime['configureAgentLaunch'] = (workspaceId, agentId, input) => {
+    const previous = launchCache.peek(workspaceId, agentId)
+    const changedCli =
+      previous &&
+      (previous.command !== input.command ||
+        previous.commandPresetId !== (input.commandPresetId ?? null))
+    launchCache.save(
+      workspaceId,
+      agentId,
+      input,
+      changedCli ? () => sessionStore.clearLastSessionId(workspaceId, agentId) : undefined
+    )
+  }
+
+  const runtime: AgentRuntime = {
     async close() {
       closing = true
-      await Promise.allSettled([...startPromises.values()])
+      await Promise.allSettled([...startPromises.values(), ...switchPromises.values()])
       await closeAgentRuntime(agentManager, registry, syncRun)
     },
     configureAgentLaunch(workspaceId, agentId, input) {
-      launchCache.save(workspaceId, agentId, input)
+      if (switchPromises.has(`${workspaceId}:${agentId}`))
+        throw new ConflictError('Agent CLI switch is in progress')
+      configureLaunch(workspaceId, agentId, input)
     },
     deleteAgentLaunchConfig(workspaceId, agentId) {
       launchCache.remove(workspaceId, agentId)
@@ -142,6 +164,8 @@ export const createAgentRuntime = (
       if (closing) throw new Error('Agent runtime is closing')
       launchCache.setWorkspaceId(agentId, workspace.id)
       const key = `${workspace.id}:${agentId}`
+      const switching = switchPromises.get(key)
+      if (switching) return switching
       const activeRun = getActiveRunByAgent(
         registry,
         launchCache.getWorkspaceId,
@@ -164,6 +188,56 @@ export const createAgentRuntime = (
       })
       startPromises.set(key, startPromise)
       return startPromise
+    },
+    switchAgent(workspace, agentId, config, input) {
+      if (closing) return Promise.reject(new ConflictError('Agent runtime is closing'))
+      if (workspace.controller_mode === 'codex_app' && agentId === `${workspace.id}:orchestrator`)
+        return Promise.reject(new ConflictError('This workspace uses Codex App as its controller'))
+      const key = `${workspace.id}:${agentId}`
+      if (switchPromises.has(key))
+        return Promise.reject(new ConflictError('Agent CLI switch is in progress'))
+      const switching = Promise.resolve()
+        .then(async () => {
+          await Promise.allSettled([startPromises.get(key)])
+          const liveRuns = registry.list().filter((run) => {
+            if (run.agentId !== agentId) return false
+            const status = syncRun(run).status
+            return status === 'starting' || status === 'running'
+          })
+          for (const run of liveRuns) {
+            runtime.stopAgentRun(run.runId)
+            if (!(await runtime.waitForRunExit(run.runId, 10_000)))
+              throw new ConflictError('Timed out waiting for the previous CLI to stop')
+          }
+          if (closing) throw new ConflictError('Agent runtime is closing')
+          configureLaunch(workspace.id, agentId, config)
+          // Keep handover protection until the replacement's early-exit
+          // window has settled, including a CLI that exits with code zero.
+          const result = await autostartAgent(
+            {
+              startAgent: () =>
+                startLiveRun(
+                  workspace,
+                  agentId,
+                  launchCache.get(workspace.id, agentId),
+                  input.hivePort
+                ),
+              getLiveRun: runtime.getLiveRun,
+              waitForRunExit: runtime.waitForRunExit,
+              peekAgentLaunchConfig: launchCache.peek,
+            },
+            workspace.id,
+            agentId,
+            input.hivePort,
+            { missingConfigError: 'Agent launch config not found', requireRunning: true }
+          )
+          if (!result.ok || !result.run_id)
+            throw new Error(result.error ?? 'Replacement CLI failed to start')
+          return runtime.getLiveRun(result.run_id)
+        })
+        .finally(() => switchPromises.delete(key))
+      switchPromises.set(key, switching)
+      return switching
     },
     stopAgentRun(runId) {
       stopLiveRun(agentManager, registry, syncRun, runId, (stoppedRunId) => {
@@ -213,6 +287,7 @@ export const createAgentRuntime = (
       return stdinDispatcher.deliverSystemMessageToAgent(workspaceId, agentId, text, input)
     },
   }
+  return runtime
 }
 
 export type { AgentRuntime }

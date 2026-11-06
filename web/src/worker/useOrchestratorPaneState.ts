@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { TerminalRunSummary } from '../api.js'
-import { type OrchestratorStartResult, startAgentRun, stopAgentRun } from '../api.js'
+import {
+  type CommandPreset,
+  type OrchestratorStartResult,
+  startAgentRun,
+  stopAgentRun,
+  switchAgentCommandPreset,
+} from '../api.js'
 import { findOrchestratorRun, orchestratorAgentId } from '../terminal/useTerminalRuns.js'
 import type { OrchestratorPaneState } from './OrchestratorPane.js'
 
@@ -21,6 +27,7 @@ interface UseOrchestratorPaneStateOutput {
   start: () => void
   stop: () => void
   restart: () => void
+  switchCli: (preset: CommandPreset) => Promise<void>
 }
 
 /**
@@ -128,5 +135,12 @@ export const useOrchestratorPaneState = ({
     workspaceId,
   ])
 
-  return { state, start, stop, restart }
+  const switchCli = async (preset: CommandPreset) => {
+    const result = await switchAgentCommandPreset(workspaceId, agentId, preset)
+    onClearAutostartError()
+    if (orchestratorRun) onRunClosed?.(workspaceId, orchestratorRun.run_id)
+    onAfterStart?.({ ok: true, error: null, run_id: result.runId })
+  }
+
+  return { state, start, stop, restart, switchCli }
 }
