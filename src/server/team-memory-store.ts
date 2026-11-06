@@ -8,11 +8,12 @@ import {
   type MemoryScope,
 } from '../shared/team-memory.js'
 import type { AgentSummary } from '../shared/types.js'
+import { BadRequestError, ConflictError, ForbiddenError } from './http-errors.js'
 import type { Database } from './sqlite.js'
 
 export type MemoryStatus = 'active' | 'candidate' | 'archived' | 'rejected'
 export type MemorySource = 'manual' | 'dream'
-export type MemorySourceType = 'manual' | 'message' | 'dispatch' | 'report' | 'dream'
+export type MemorySourceType = 'manual' | 'message' | 'dispatch' | 'report' | 'dream' | 'memory'
 export type MemoryInjectionContext = 'startup' | 'dispatch' | 'recovery' | 'manual_search'
 
 export interface MemoryActorSnapshot {
@@ -64,6 +65,7 @@ export interface MemorySearchResult extends MemoryEntryWithSources {
 }
 
 export interface AddMemoryEntryInput {
+  supersedesId?: string
   actor: MemoryActorSnapshot
   body: string
   confidence?: number | null
@@ -605,6 +607,20 @@ export const createTeamMemoryStore = (db: Database) => {
     requireProcedureRefForProcedureKind(input.kind, procedureRef)
 
     db.transaction(() => {
+      if (input.supersedesId !== undefined) {
+        if (input.actor.role !== 'orchestrator')
+          throw new ForbiddenError('Only the Orchestrator may supersede decisions')
+        if (input.kind !== 'decision' || scope !== 'workspace')
+          throw new BadRequestError('Supersession requires a workspace decision')
+        const previous = getEntryWithSources(input.workspaceId, input.supersedesId)
+        if (!previous || previous.workspaceId !== input.workspaceId)
+          throw new ConflictError('Decision does not exist in this workspace')
+        if (previous.kind !== 'decision' || previous.status !== 'active')
+          throw new ConflictError('Only active decisions may be superseded')
+        db.prepare(
+          "UPDATE memory_entries SET status = 'archived', archived_at = ?, updated_at = ? WHERE id = ?"
+        ).run(now, now, previous.id)
+      }
       const ftsRowid = nextFtsRowid()
       db.prepare(
         `INSERT INTO memory_entries (
@@ -670,6 +686,21 @@ export const createTeamMemoryStore = (db: Database) => {
         input.actor.role,
         now
       )
+      if (input.supersedesId !== undefined) {
+        db.prepare(`INSERT INTO memory_sources
+          (id, memory_id, source_type, source_id, excerpt, actor_agent_id_snapshot,
+           actor_name_snapshot, actor_role_snapshot, created_at)
+          VALUES (?, ?, 'memory', ?, ?, ?, ?, ?, ?)`).run(
+          randomUUID(),
+          id,
+          input.supersedesId,
+          excerptFor(requireEntryWithSources(input.workspaceId, input.supersedesId).body),
+          input.actor.id,
+          input.actor.name,
+          input.actor.role,
+          now
+        )
+      }
     })()
 
     const created = getEntryWithSources(input.workspaceId, id)
