@@ -109,7 +109,7 @@ export default defineConfig(async () => ({
     rollupOptions: {
       // This is a client-only bundle, so these dependencies' React Server Components
       // directives have no effect. Keep all other Rollup warnings visible.
-      onwarn(warning, warn) {
+      onwarn(warning: Rollup.RollupLog, warn: Rollup.LoggingFunction) {
         if (
           warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
           warning.message.includes('"use client"') &&
@@ -119,7 +119,7 @@ export default defineConfig(async () => ({
         warn(warning)
       },
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(id)) return 'react'
           if (/\/node_modules\/@radix-ui\//.test(id)) return 'radix'
           if (/\/node_modules\/@noble\//.test(id)) return 'crypto'
