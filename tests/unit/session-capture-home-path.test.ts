@@ -30,6 +30,27 @@ describe('session capture home path expansion', () => {
     expect(getGeminiHome('D:\\GeminiData\\TMP\\*\\chats\\*.json', 'win32')).toBe('D:\\GeminiData')
   })
 
+  test.each([
+    ['/tmp/hive-capture/gemini/tmp/*/chats/*.json', '/tmp/hive-capture/gemini', 'linux'],
+    [
+      '~/custom/tmp/nested/gemini/tmp/project/chats/*.json',
+      join(homedir(), 'custom/tmp/nested/gemini'),
+      'linux',
+    ],
+    [
+      'D:\\tmp\\capture\\GeminiData\\TMP\\*\\CHATS\\*.json',
+      'D:\\tmp\\capture\\GeminiData',
+      'win32',
+    ],
+  ] as const)('uses the Gemini chat suffix in %s', (pattern, root, platform) => {
+    expect(getGeminiHome(pattern, platform)).toBe(root)
+  })
+
+  test('ignores unrelated tmp directories and retains the default root', () => {
+    expect(getGeminiHome('/storage/tmp/archives/*.json', 'linux')).toBe(getGeminiHome())
+    expect(getGeminiHome()).toBe(getGeminiHome('~/.gemini/tmp/*/chats/*.json'))
+  })
+
   test('expands custom Codex homes with backslashes', () => {
     expect(getCodexHome('~\\custom\\codex\\sessions\\**\\*.jsonl', 'win32')).toBe(
       join(homedir(), 'custom', 'codex')

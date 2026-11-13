@@ -1,11 +1,14 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
+
 import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
+
+afterEach(() => vi.unstubAllEnvs())
 
 // Two real runtimes share a native session directory, as concurrent agents do.
 // Inspect their live AbortSignals only to distinguish cancellation from capture timeout.
@@ -16,6 +19,7 @@ test.each([
   const root = mkdtempSync(join(tmpdir(), 'hive-capture-lifecycle-'))
   const workspacePath = join(root, 'workspace')
   const geminiHome = join(root, 'gemini')
+  vi.stubEnv('HIVE_GEMINI_HOME', join(root, 'unused-default-home'))
   const chats = join(geminiHome, 'tmp', 'shared-project', 'chats')
   mkdirSync(workspacePath)
   mkdirSync(chats, { recursive: true })
