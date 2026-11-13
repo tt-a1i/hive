@@ -1,5 +1,7 @@
 const TERMINAL_OUTPUT_MIN_RENDER_INTERVAL_MS = 50
-const TERMINAL_OUTPUT_WRITE_ACK_TIMEOUT_MS = 1000
+const TERMINAL_WRITE_STALL_TIMEOUT_MS = 10_000
+const MAX_PENDING_CHARS = 256 * 1024
+const MAX_PENDING_ITEMS = 1024
 
 type AcknowledgeTerminalOutput = (bytes: number) => void
 type RenderItem =
@@ -7,7 +9,7 @@ type RenderItem =
   | { kind: 'resize'; cols: number; rows: number }
 
 interface TerminalOutputRenderQueueOptions {
-  canRender: () => boolean
+  onOverflow: () => void
   write: (chunk: string, callback: () => void) => void
   resize?: (cols: number, rows: number, callback: () => void) => void
 }
@@ -20,7 +22,7 @@ export interface TerminalOutputRenderQueue {
 }
 
 export const createTerminalOutputRenderQueue = ({
-  canRender,
+  onOverflow,
   write,
   resize,
 }: TerminalOutputRenderQueueOptions): TerminalOutputRenderQueue => {
@@ -28,8 +30,18 @@ export const createTerminalOutputRenderQueue = ({
   let writing = false
   let lastFlushAt: number | null = null
   let flushTimer: number | undefined
-  let writeTimer: number | undefined
+  let stallTimer: number | undefined
   const pending: RenderItem[] = []
+  let pendingChars = 0
+
+  const overflow = () => {
+    disposed = true
+    if (flushTimer !== undefined) window.clearTimeout(flushTimer)
+    if (stallTimer !== undefined) window.clearTimeout(stallTimer)
+    pending.length = 0
+    pendingChars = 0
+    onOverflow()
+  }
 
   const ack = (items: RenderItem[]) => {
     for (const item of items) {
@@ -57,15 +69,16 @@ export const createTerminalOutputRenderQueue = ({
     if (flushTimer !== undefined) window.clearTimeout(flushTimer)
     flushTimer = undefined
     if (disposed || writing || pending.length === 0) return
-    if (!canRender()) {
-      ack(pending)
-      return
-    }
     const first = pending.shift()
     if (!first) return
     const batch = [first]
     if (first.kind === 'output') {
-      while (pending[0]?.kind === 'output') batch.push(pending.shift() as RenderItem)
+      pendingChars -= first.chunk.length
+      while (pending[0]?.kind === 'output') {
+        const next = pending.shift() as Extract<RenderItem, { kind: 'output' }>
+        pendingChars -= next.chunk.length
+        batch.push(next)
+      }
     }
     writing = true
     lastFlushAt = first.kind === 'resize' ? null : Date.now()
@@ -73,45 +86,63 @@ export const createTerminalOutputRenderQueue = ({
     const complete = () => {
       if (completed || disposed) return
       completed = true
-      if (writeTimer !== undefined) window.clearTimeout(writeTimer)
-      writeTimer = undefined
+      if (stallTimer !== undefined) window.clearTimeout(stallTimer)
+      stallTimer = undefined
       writing = false
       ack(batch)
       schedule()
     }
+    stallTimer = window.setTimeout(overflow, TERMINAL_WRITE_STALL_TIMEOUT_MS)
     if (first.kind === 'resize') {
       // A geometry barrier drains xterm's native write queue and must never
       // advance on a timeout, even when a preceding byte ACK has timed out.
       if (resize) resize(first.cols, first.rows, complete)
       else complete()
     } else {
-      writeTimer = window.setTimeout(complete, TERMINAL_OUTPUT_WRITE_ACK_TIMEOUT_MS)
-      try {
-        write(batch.map((item) => (item.kind === 'output' ? item.chunk : '')).join(''), complete)
-      } catch (error) {
-        complete()
-        throw error
-      }
+      write(batch.map((item) => (item.kind === 'output' ? item.chunk : '')).join(''), complete)
     }
   }
   return {
     dispose() {
       disposed = true
       if (flushTimer !== undefined) window.clearTimeout(flushTimer)
-      if (writeTimer !== undefined) window.clearTimeout(writeTimer)
+      if (stallTimer !== undefined) window.clearTimeout(stallTimer)
       pending.length = 0
+      pendingChars = 0
     },
     enqueue(chunk, bytes, acknowledge) {
       if (disposed) return
-      const item: RenderItem = { kind: 'output', chunk, bytes, acknowledge }
-      if (!canRender() || !chunk.length) ack([item])
-      if (!chunk.length) return
-      pending.push(item)
+      if (!chunk.length) {
+        acknowledge(bytes)
+        return
+      }
+      const last = pending.at(-1)
+      const merges = last?.kind === 'output' && last.acknowledge === acknowledge
+      if (
+        pendingChars + chunk.length > MAX_PENDING_CHARS ||
+        (!merges && pending.length >= MAX_PENDING_ITEMS)
+      ) {
+        overflow()
+        return
+      }
+      pendingChars += chunk.length
+      if (last?.kind === 'output' && merges) {
+        last.chunk += chunk
+        last.bytes += bytes
+      } else pending.push({ kind: 'output', chunk, bytes, acknowledge })
       schedule()
     },
     enqueueResize(cols, rows) {
       if (disposed) return
-      pending.push({ kind: 'resize', cols, rows })
+      const last = pending.at(-1)
+      if (last?.kind !== 'resize' && pending.length >= MAX_PENDING_ITEMS) {
+        overflow()
+        return
+      }
+      if (last?.kind === 'resize') {
+        last.cols = cols
+        last.rows = rows
+      } else pending.push({ kind: 'resize', cols, rows })
       schedule()
     },
     flush,
