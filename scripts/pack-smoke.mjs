@@ -57,33 +57,40 @@ const waitFor = async (predicate, timeoutMs = 5000) => {
   throw new Error('Timed out waiting for packaged hive runtime to start')
 }
 
-const stopChild = async (child) => {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return
-
-  await new Promise((resolveExit) => {
-    const forceKill = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    }, 2000)
-
-    child.once('exit', () => {
-      clearTimeout(forceKill)
-      resolveExit()
-    })
-
-    if (process.platform === 'win32' && child.pid) {
-      try {
-        execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-          stdio: 'ignore',
-          timeout: 3000,
-        })
-      } catch {
-        child.kill('SIGKILL')
+const stopChild = async (child, closed) => {
+  let forceKill
+  let closeTimeout
+  try {
+    if (child.pid && child.exitCode === null && child.signalCode === null) {
+      forceKill = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+      }, 2000)
+      if (process.platform === 'win32') {
+        try {
+          execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+            stdio: 'ignore',
+            timeout: 3000,
+          })
+        } catch {
+          child.kill('SIGKILL')
+        }
+      } else {
+        child.kill('SIGTERM')
       }
-      return
     }
-
-    child.kill('SIGTERM')
-  })
+    await Promise.race([
+      closed,
+      new Promise((_, reject) => {
+        closeTimeout = setTimeout(
+          () => reject(new Error('Packaged runtime stdio did not close')),
+          10000
+        )
+      }),
+    ])
+  } finally {
+    clearTimeout(forceKill)
+    clearTimeout(closeTimeout)
+  }
 }
 
 try {
@@ -242,6 +249,8 @@ try {
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
+  // Install immediately: on Windows the cmd wrapper can exit before its descendants close the pipes.
+  const closed = new Promise((resolveClose) => child.once('close', resolveClose))
   let spawnError
   child.on('error', (error) => {
     spawnError = error
@@ -320,10 +329,13 @@ try {
       )
     }
   } finally {
-    await stopChild(child)
+    await stopChild(child, closed)
   }
 
-  const database = new DatabaseSync(join(tempDir, 'data', 'runtime.sqlite'), { readOnly: true })
+  // A forced Windows shutdown can leave a WAL that needs recovery before querying.
+  const database = new DatabaseSync(join(tempDir, 'data', 'runtime.sqlite'), {
+    readOnly: process.platform !== 'win32',
+  })
   try {
     if (
       database.prepare('SELECT name FROM workspaces WHERE name = ?').get('Pack Smoke')?.name !==
