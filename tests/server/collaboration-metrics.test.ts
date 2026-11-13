@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -84,6 +84,32 @@ describe('collaboration cost metrics (issue #75)', () => {
       const emptyWorkspace = (await emptyResponse.json()) as { id: string }
 
       const fromAgentId = `${workspace.id}:orchestrator`
+      const receivedPath = join(dataDir, 'orchestrator-input.txt')
+      const receiverScript = join(workspacePath, 'receiver.cjs')
+      writeFileSync(receivedPath, '')
+      writeFileSync(
+        receiverScript,
+        "const fs=require('node:fs');process.stdin.setRawMode(true);process.stdin.on('data',d=>fs.appendFileSync(process.argv[2],d));process.stdout.write('READY')"
+      )
+      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${fromAgentId}/config`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: uiCookie },
+        body: JSON.stringify({ command: process.execPath, args: [receiverScript, receivedPath] }),
+      })
+      const started = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${fromAgentId}/start`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ hive_port: String(hive.port) }),
+        }
+      )
+      expect(started.status).toBe(201)
+      await waitFor(() =>
+        expect(hive.store.getActiveRunByAgentId(workspace.id, fromAgentId)?.output).toContain(
+          'READY'
+        )
+      )
       const first = await hive.store.dispatchTaskByWorkerName(
         workspace.id,
         'Alice',
@@ -111,7 +137,32 @@ describe('collaboration cost metrics (issue #75)', () => {
       })
 
       await delay(20)
-      hive.store.reportTask(workspace.id, worker.id, { dispatchId: first.id, text: 'login done' })
+      const report = async (dispatchId: string, text: string) => {
+        const response = await fetch(`${baseUrl}/api/team/report`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            project_id: workspace.id,
+            from_agent_id: worker.id,
+            token: hive.store.peekAgentToken(worker.id),
+            dispatch_id: dispatchId,
+            result: text,
+            seen_seq: 0,
+          }),
+        })
+        expect(response.status).toBe(202)
+      }
+      expect(
+        hive.store.listDispatches(workspace.id).find((row) => row.id === first.id)
+          ?.reportPayloadBytes
+      ).toBeNull()
+      await report(first.id, 'login done')
+      await waitFor(() =>
+        expect(
+          hive.store.listDispatches(workspace.id).find((row) => row.id === first.id)
+            ?.reportPayloadBytes
+        ).toBeGreaterThan(0)
+      )
 
       const second = await hive.store.dispatchTaskByWorkerName(
         workspace.id,
@@ -134,7 +185,17 @@ describe('collaboration cost metrics (issue #75)', () => {
       })
 
       await delay(20)
-      hive.store.reportTask(workspace.id, worker.id, { dispatchId: second.id, text: 'review done' })
+      expect(
+        hive.store.listDispatches(workspace.id).find((row) => row.id === second.id)
+          ?.reportPayloadBytes
+      ).toBeNull()
+      await report(second.id, 'review done')
+      await waitFor(() =>
+        expect(
+          hive.store.listDispatches(workspace.id).find((row) => row.id === second.id)
+            ?.reportPayloadBytes
+        ).toBeGreaterThan(0)
+      )
 
       const afterReport = hive.store.listDispatches(workspace.id)
       const firstRow = afterReport.find((row) => row.id === first.id)
@@ -167,15 +228,19 @@ describe('collaboration cost metrics (issue #75)', () => {
       expect(body.send_to_delivered_ms.p95).toBeGreaterThan(0)
       expect(body.delivered_to_reported_ms.p50).toBeGreaterThan(0)
       expect(body.delivered_to_reported_ms.p95).toBeGreaterThan(0)
-      // Independent of the ledger: every recorded envelope wraps its task /
-      // report text, so the totals must exceed the raw text bytes and stay
-      // within the same order of magnitude (a stray unit mix-up would not).
+      // Dispatches and reports carry short inbox wakeups; measure the exact report
+      // wakeups observed by the real orchestrator PTY, independently of the ledger.
       const rawDispatchBytes = Buffer.byteLength('implement login review login', 'utf8')
-      const rawReportBytes = Buffer.byteLength('login done review done', 'utf8')
       expect(dispatchBytesTotal).toBeGreaterThan(rawDispatchBytes)
       expect(dispatchBytesTotal).toBeLessThan(rawDispatchBytes + 2 * 8_000)
-      expect(reportBytesTotal).toBeGreaterThan(rawReportBytes)
-      expect(reportBytesTotal).toBeLessThan(rawReportBytes + 2 * 8_000)
+      const wakeups =
+        readFileSync(receivedPath, 'utf8').match(
+          /\[hive-inbox [a-f0-9-]+[^\]\r\n]*\] Read "(?:[^"\\]|\\.)*" for the complete Hive system message\./g
+        ) ?? []
+      expect(wakeups).toHaveLength(2)
+      expect(reportBytesTotal).toBe(
+        wakeups.reduce((total, wakeup) => total + Buffer.byteLength(wakeup), 0)
+      )
       expect(body.dispatch_payload_bytes.total).toBe(dispatchBytesTotal)
       expect(body.dispatch_payload_bytes.avg).toBe(dispatchBytesTotal / 2)
       expect(body.report_payload_bytes.total).toBe(reportBytesTotal)
