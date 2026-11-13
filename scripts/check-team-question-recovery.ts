@@ -261,13 +261,23 @@ try {
   assert.equal(beforeAnswer.status, 'pending')
   assert.deepEqual(beforeAnswer.answers, [])
   await json(cli(orchestrator, ['reply', waitingId, '--stdin'], 'Proceed'))
-  const afterAnswer = await json<QuestionResult>(waiting)
-  assert.equal(afterAnswer.status, 'answered')
-  assert.equal(afterAnswer.timed_out, false)
-  assert.equal(afterAnswer.answers[0]?.text, 'Proceed')
-  assert.equal(afterAnswer.question.dispatch_id, review)
-  assert.equal(afterAnswer.question.recipient_agent_id, orchestrator)
+  const afterAnswer = await waiting.result
+  assert.equal(afterAnswer.code, 0, afterAnswer.stderr)
+  assert.equal(afterAnswer.stdout, 'Proceed\n')
   assert.ok(performance.now() - waitStarted < 5000)
+  const explicit = cli(bob, [
+    'ask',
+    '--dispatch',
+    review,
+    '--to',
+    'orchestrator',
+    'Explicit decision',
+  ])
+  const explicitId = await savedId(explicit)
+  await json(cli(orchestrator, ['reply', explicitId, '--stdin'], 'First line\nSecond line'))
+  const explicitAnswer = await explicit.result
+  assert.equal(explicitAnswer.code, 0, explicitAnswer.stderr)
+  assert.equal(explicitAnswer.stdout, 'First line\nSecond line\n')
   const timeoutRequest = cli(bob, [
     'ask',
     '--dispatch',
@@ -310,7 +320,7 @@ try {
     assert.equal(interruptAnswer.answers[0]?.text, 'Recovered after interrupt')
   }
   const beforeRestart = runtime.store.listWorkspaceDispatchMessages(workspaceId).length
-  assert.equal(beforeRestart, count + (canSignalChild ? 6 : 4))
+  assert.equal(beforeRestart, count + (canSignalChild ? 8 : 6))
   await runtime.close()
   runtime = await runHiveCommand(['--port', '0', '--no-open'])
   cookie = (await request('/api/ui/session')).headers.get('set-cookie') ?? ''

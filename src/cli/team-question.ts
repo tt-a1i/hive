@@ -9,8 +9,8 @@ type Post = (path: string, body: object, signal?: AbortSignal) => Promise<Respon
 
 interface QuestionResult {
   status: 'pending' | 'answered' | 'closed'
-  question: { id: string }
-  answers: unknown[]
+  question: { id: string; recipient_agent_id: string }
+  answers: Array<{ text: string }>
 }
 
 export const runQuestionCommand = async (
@@ -128,6 +128,17 @@ export const runQuestionCommand = async (
     const result = (await (
       await post('/api/team/question', { question_id: questionId, wait_ms: seconds * 1000 }, signal)
     ).json()) as QuestionResult
+    const directAnswer =
+      !options.has('--resume') &&
+      !options.has('--from-dispatch') &&
+      seconds > 0 &&
+      result.status === 'answered' &&
+      result.question.recipient_agent_id === `${process.env.HIVE_PROJECT_ID}:orchestrator` &&
+      result.answers.length > 0
+    if (directAnswer) {
+      console.log(result.answers.map((answer) => answer.text).join('\n'))
+      return
+    }
     console.log(
       JSON.stringify({
         ...result,
