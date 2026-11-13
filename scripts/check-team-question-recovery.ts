@@ -240,6 +240,21 @@ try {
     [reply.message.id]
   )
   assert.equal(runtime.store.getWorker(workspaceId, bob).pendingTaskCount, 1)
+  const peerWait = cli(bob, [
+    'ask',
+    '--dispatch',
+    author,
+    '--from-dispatch',
+    review,
+    '--wait',
+    '3',
+    'Peer decision',
+  ])
+  const peerId = await savedId(peerWait)
+  await json(cli(alice, ['reply', peerId, 'Peer answer']))
+  const peerResult = await json<QuestionResult>(peerWait)
+  assert.equal(peerResult.status, 'answered')
+  assert.equal(peerResult.answers[0]?.text, 'Peer answer')
   // Discard the write receipt, then recover its ID from sender-only history.
   await team(bob, 'message', {
     dispatch_id: review,
