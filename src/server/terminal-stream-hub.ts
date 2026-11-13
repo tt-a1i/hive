@@ -218,12 +218,14 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     if (state.exitInterval) return
     state.exitInterval = setInterval(() => {
       try {
-        const run = store.getLiveRun(runId)
-        if (run.status !== 'exited' && run.status !== 'error') return
+        const run = store.findLiveRun(runId)
+        // Removed shells no longer have a live-run record, but their viewers
+        // and mirror still need the same terminal cleanup as an exited run.
+        if (run && run.status !== 'exited' && run.status !== 'error') return
         state.exited = true
         state.outputUnsubscribe?.()
         state.outputUnsubscribe = null
-        const payload = serializeTerminalExit(run.exitCode)
+        const payload = serializeTerminalExit(run?.exitCode ?? null)
         for (const viewer of state.viewers.values()) {
           const controlSocket = viewer.controlSocket
           if (controlSocket) sendWebSocketMessage(controlSocket, payload, `terminal ${runId} exit`)
