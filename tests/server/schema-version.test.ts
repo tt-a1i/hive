@@ -291,7 +291,7 @@ describe('schema version', () => {
       .prepare('SELECT version FROM schema_version WHERE version = ?')
       .get(CURRENT_SCHEMA_VERSION) as { version: number } | undefined
 
-    expect(presetCount.count).toBe(10)
+    expect(presetCount.count).toBe(11)
     expect(piPreset).toEqual({
       command: 'pi',
       display_name: 'Pi',

@@ -111,6 +111,12 @@ describe('settings api', () => {
         display_name: 'Grok Build',
         yolo_args_template: ['--always-approve'],
       }),
+      expect.objectContaining({
+        id: 'kimi',
+        command: 'kimi',
+        display_name: 'Kimi Code',
+        yolo_args_template: ['--auto'],
+      }),
     ])
     expect(templates).toEqual([
       expect.objectContaining({

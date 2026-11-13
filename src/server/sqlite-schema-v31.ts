@@ -43,4 +43,5 @@ export const applySchemaVersion31 = (db: Database) => {
   const now = Date.now()
   upsertBuiltinCommandPreset(db, 'cursor', now)
   upsertBuiltinCommandPreset(db, 'grok', now)
+  upsertBuiltinCommandPreset(db, 'kimi', now)
 }
