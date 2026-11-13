@@ -26,8 +26,6 @@ export const createAgentRuntimeSwitch = (ports: SwitchRuntime) => {
   }
   const stopAndWait = async (agentId: string) => {
     for (const run of ports.listLiveRuns().filter((item) => item.agentId === agentId)) {
-      const current = ports.getLiveRun(run.runId)
-      if (current.status === 'error' || current.status === 'exited') continue
       ports.stopAgentRun(run.runId)
       if (!(await ports.waitForRunExit(run.runId, 10000)))
         throw new ConflictError('The previous agent process has not exited. Retry after it stops.')

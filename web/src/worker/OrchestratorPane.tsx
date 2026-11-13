@@ -198,7 +198,7 @@ export const OrchestratorPane = ({
       {state.kind === 'running' ? (
         <div
           id={`orch-pty-${state.runId}`}
-          className="orchestrator-pty-slot relative flex min-h-0 flex-1 w-full"
+          className={`orchestrator-pty-slot relative flex w-full ${isMobile ? 'h-full' : 'min-h-0 flex-1'}`}
           data-pty-slot="orchestrator"
           data-terminal-auto-focus="true"
         >

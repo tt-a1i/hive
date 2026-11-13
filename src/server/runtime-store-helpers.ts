@@ -204,7 +204,7 @@ export const createRuntimeStoreServices = (
   const restartPolicy = buildRuntimeRestartPolicy({
     listOpenDispatches: dispatchLedgerStore.listOpenWorkspaceDispatches,
     listAllDispatches: (workspaceId) =>
-      dispatchLedgerStore.listWorkspaceDispatches(workspaceId, { limit: 20 }),
+      dispatchLedgerStore.listRecentWorkspaceDispatches(workspaceId, 20),
     listDispatchMessagesForRecovery: dispatchMessageStore.listRecoveryMessages,
     listActionableDispatchMessagesForRecovery: dispatchMessageStore.listActionableWorkspaceMessages,
     agentRunStore,
@@ -578,6 +578,9 @@ export const createRuntimeStoreLifecycle = ({
       return
     }
     const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId)
+    const hasPriorContext =
+      Boolean(services.agentSessionStore.getLastSessionId(workspaceId, agentId)) ||
+      services.agentRunStore.listAgentRuns(agentId).length > 0
     services.db.transaction(() => {
       services.agentRunStore.saveLaunchConfig(workspaceId, agentId, input)
       services.db
@@ -586,7 +589,8 @@ export const createRuntimeStoreLifecycle = ({
       services.db
         .prepare('UPDATE workers SET last_session_id = NULL WHERE workspace_id = ? AND id = ?')
         .run(workspaceId, agentId)
-      services.settings.setAppState(`agent_handover:${workspaceId}:${agentId}`, randomUUID())
+      if (hasPriorContext)
+        services.settings.setAppState(`agent_handover:${workspaceId}:${agentId}`, randomUUID())
     })()
     services.agentSessionStore.invalidateAfterConfigChange(workspaceId, agentId)
     activeRun?.captureController?.abort()

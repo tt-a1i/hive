@@ -244,7 +244,7 @@ export const WorkerCard = ({
               <Play size={12} aria-hidden />
             </CardActionBtn>
           )}
-          {canSwitchCli && !worker.ephemeral && (
+          {canSwitchCli && worker.spawnedBy !== 'workflow' && (
             <CardActionBtn
               title={t('switchCli.title')}
               onClick={handleAction('switch-cli')}

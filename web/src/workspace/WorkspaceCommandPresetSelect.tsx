@@ -39,6 +39,7 @@ const PresetIcon = ({ id, className }: { id: string; className?: string }) => {
 
 type WorkspaceCommandPresetSelectProps = {
   error: string | null
+  label?: string
   onChange: (value: string) => void
   presets: CommandPreset[]
   value: string
@@ -54,6 +55,7 @@ type WorkspaceCommandPresetSelectProps = {
  */
 export const WorkspaceCommandPresetSelect = ({
   error,
+  label,
   onChange,
   presets,
   value,
@@ -91,7 +93,7 @@ export const WorkspaceCommandPresetSelect = ({
   return (
     <div className="flex flex-col gap-2">
       <span className="text-xs font-medium uppercase tracking-wider text-ter">
-        {t('workspace.preset.label')}
+        {label ?? t('workspace.preset.label')}
       </span>
       <div ref={containerRef} className="cli-select group relative">
         <PresetIcon id={value} className="cli-select__leading w-3.5 h-3.5" />

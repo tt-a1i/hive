@@ -43,10 +43,15 @@ export const agentSwitchRoutes: RouteDefinition[] = [
             : resolveCommandPresetLaunchConfig(store.settings, preset)
           : resolveStartupCommandLaunchConfig(store.settings, startup as string)
       if (!config) throw new BadRequestError('Unknown command preset or empty startup command')
-      const run = await store.switchAgentLaunch(workspaceId, agentId, config, {
-        restart: body.restart,
-        hivePort: String(request.socket.localPort ?? ''),
-      })
+      const run = await store.switchAgentLaunch(
+        workspaceId,
+        agentId,
+        { ...(previous?.cwd !== undefined ? { cwd: previous.cwd } : {}), ...config },
+        {
+          restart: body.restart,
+          hivePort: String(request.socket.localPort ?? ''),
+        }
+      )
       sendJson(response, 200, { run_id: run?.runId ?? null })
     }
   ),

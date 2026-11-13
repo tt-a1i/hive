@@ -115,6 +115,7 @@ export const SwitchAgentCliDialog = ({
             )}
             <div className="mt-4">
               <WorkspaceCommandPresetSelect
+                label={t('switchCli.select')}
                 presets={presets}
                 value={selected}
                 onChange={setSelected}

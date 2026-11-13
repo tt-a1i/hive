@@ -8,7 +8,11 @@ export const createRuntimeStoreAgentSwitch =
     lifecycle: ReturnType<typeof createRuntimeStoreLifecycle>
   ): RuntimeStore['switchAgentLaunch'] =>
   async (workspaceId, agentId, config, input) => {
-    services.workspaceStore.getAgent(workspaceId, agentId)
+    const agent = services.workspaceStore.getAgent(workspaceId, agentId)
+    if (agent.role === 'workflow' || agent.spawnedBy === 'workflow')
+      throw new ConflictError(
+        'Workflow-managed members must keep their workflow launch configuration.'
+      )
     const workspace = services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary
     const run = await services.agentRuntime.switchAgentLaunch(
       workspace,

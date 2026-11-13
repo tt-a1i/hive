@@ -57,6 +57,20 @@ test('switching an orchestrator preset clears the old session and delivers ledge
         body: JSON.stringify({ command: process.execPath, command_preset_id: id, args }),
       })
     expect((await configure(a.id, [oldScript])).status).toBe(204)
+    expect(
+      db
+        .prepare('SELECT value FROM app_state WHERE key = ?')
+        .get(`agent_handover:${workspace.id}:${orch}`)
+    ).toBeUndefined()
+    const configResponse = await fetch(`${agentUrl}/config`, { headers })
+    expect(configResponse.status).toBe(200)
+    expect(await configResponse.json()).toEqual(
+      expect.objectContaining({
+        command: process.execPath,
+        args: [oldScript],
+        command_preset_id: a.id,
+      })
+    )
     const start = async () => fetch(`${agentUrl}/start`, { method: 'POST', headers, body: '{}' })
     expect((await start()).status).toBe(201)
     const session = () =>
@@ -70,7 +84,9 @@ test('switching an orchestrator preset clears the old session and delivers ledge
     expect((await configure(a.id, [oldScript, '--same-engine'])).status).toBe(204)
     expect(session()).toEqual({ last_session_id: 'old-session' })
     db.exec(
-      `CREATE TRIGGER fail_switch BEFORE UPDATE OF last_session_id ON workers BEGIN SELECT RAISE(ABORT, 'blocked switch'); END`
+      `CREATE TABLE switch_parent (id INTEGER PRIMARY KEY);
+       CREATE TABLE switch_child (id INTEGER REFERENCES switch_parent(id) DEFERRABLE INITIALLY DEFERRED);
+       CREATE TRIGGER fail_switch AFTER UPDATE OF last_session_id ON workers BEGIN INSERT INTO switch_child VALUES (1); END;`
     )
     expect((await configure(b.id, [newScript])).status).toBe(500)
     expect(session()).toEqual({ last_session_id: 'old-session' })
@@ -98,25 +114,33 @@ test('switching an orchestrator preset clears the old session and delivers ledge
       reason: 'completed test',
     })
     expect(server.store.listOpenDispatches(workspace.id)).toEqual([])
-    const run = server.store.getActiveRunByAgentId(workspace.id, orch)
-    if (!run) throw new Error('missing orchestrator run')
+    const switched = await fetch(
+      `${server.baseUrl}/api/ui/workspaces/${workspace.id}/agents/${orch}/switch`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ command_preset_id: b.id, restart: true }),
+      }
+    )
+    expect(switched.status).toBe(200)
+    expect(await switched.json()).toEqual({ run_id: expect.any(String) })
+    expect(session()).toBeUndefined()
+    const handoverKey = encodeURIComponent(`agent_handover:${workspace.id}:${orch}`)
+    expect(
+      (await fetch(`${server.baseUrl}/api/settings/app-state/${handoverKey}`, { headers })).status
+    ).toBe(403)
     expect(
       (
-        await fetch(`${server.baseUrl}/api/runtime/runs/${run.runId}/stop`, {
-          method: 'POST',
+        await fetch(`${server.baseUrl}/api/settings/app-state/${handoverKey}`, {
+          method: 'PUT',
           headers,
+          body: JSON.stringify({ value: null }),
         })
       ).status
-    ).toBe(202)
-    await vi.waitFor(() =>
-      expect(server.store.getActiveRunByAgentId(workspace.id, orch)).toBeUndefined()
-    )
-    expect((await configure(b.id, [newScript])).status).toBe(204)
-    expect(session()).toBeUndefined()
+    ).toBe(403)
     expect(db.prepare('SELECT last_session_id FROM workers WHERE id = ?').get(orch)).toEqual({
       last_session_id: null,
     })
-    expect((await start()).status).toBe(201)
     await vi.waitFor(
       () => {
         const output = server.store.getActiveRunByAgentId(workspace.id, orch)?.output ?? ''
@@ -181,6 +205,71 @@ test('saving a different engine prevents a still-running old PTY from recording 
   } finally {
     db.close()
     await server.close()
+    removeTestPath(root)
+  }
+}, 10000)
+
+test('shell-wrapped package runners distinguish engines while preserving same-engine arguments', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'hive-switch-shell-'))
+  const dataDir = join(root, 'data')
+  const first = await startTestServer({ dataDir })
+  let second: Awaited<ReturnType<typeof startTestServer>> | undefined
+  try {
+    const workspace = first.store.createWorkspace(root, 'shell engine')
+    const worker = first.store.addWorker(workspace.id, { name: 'Worker', role: 'coder' })
+    const path = `/api/workspaces/${workspace.id}/agents/${worker.id}/config`
+    const cookie = await getUiCookie(first.baseUrl)
+    const post = (baseUrl: string, cookieValue: string, startup: string) =>
+      fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        headers: { cookie: cookieValue, 'content-type': 'application/json' },
+        body: JSON.stringify({ startup_command: startup }),
+      })
+    expect((await post(first.baseUrl, cookie, 'npx -y @anthropic-ai/claude-code')).status).toBe(204)
+    const previous = first.store.peekAgentLaunchConfig(workspace.id, worker.id)
+    await first.close()
+    const db = new Database(join(dataDir, 'runtime.sqlite'))
+    try {
+      db.prepare(
+        'INSERT INTO agent_sessions (workspace_id, agent_id, last_session_id, updated_at) VALUES (?, ?, ?, ?)'
+      ).run(workspace.id, worker.id, 'old-session', 1)
+      db.prepare('UPDATE workers SET last_session_id = ? WHERE id = ?').run(
+        'old-session',
+        worker.id
+      )
+    } finally {
+      db.close()
+    }
+    second = await startTestServer({ dataDir })
+    const secondCookie = await getUiCookie(second.baseUrl)
+    expect(
+      (await post(second.baseUrl, secondCookie, 'npx -y @anthropic-ai/claude-code --verbose'))
+        .status
+    ).toBe(204)
+    const check = new Database(join(dataDir, 'runtime.sqlite'))
+    try {
+      expect(
+        check
+          .prepare('SELECT last_session_id FROM agent_sessions WHERE agent_id = ?')
+          .get(worker.id)
+      ).toEqual({ last_session_id: 'old-session' })
+      expect((await post(second.baseUrl, secondCookie, 'npx -y @openai/codex')).status).toBe(204)
+      const current = second.store.peekAgentLaunchConfig(workspace.id, worker.id)
+      expect(current?.command).toBe(previous?.command)
+      expect(current?.interactiveCommand).toBe(previous?.interactiveCommand)
+      expect(
+        check
+          .prepare('SELECT last_session_id FROM agent_sessions WHERE agent_id = ?')
+          .get(worker.id)
+      ).toBeUndefined()
+      expect(
+        check.prepare('SELECT last_session_id FROM workers WHERE id = ?').get(worker.id)
+      ).toEqual({ last_session_id: null })
+    } finally {
+      check.close()
+    }
+  } finally {
+    await second?.close()
     removeTestPath(root)
   }
 }, 10000)
