@@ -8,12 +8,6 @@ import { buildOrchestratorReminderTail, buildWorkerReminderTail } from './hive-t
 import { PtyInactiveError } from './http-errors.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
 import { createImmediateInteractiveInputWriter } from './post-start-input-writer.js'
-import {
-  buildDispatchMemoryDigestSafely,
-  logMemoryDigestInjection,
-  rollbackMemoryDigestInjection,
-  type TeamMemoryInjectionService,
-} from './team-memory-injection.js'
 
 interface AgentStdinDispatcherInput {
   agentManager: AgentManager | undefined
@@ -21,7 +15,6 @@ interface AgentStdinDispatcherInput {
   getWorkspaceId: (agentId: string) => string | undefined
   registry: LiveRunRegistry
   syncRun: (run: LiveAgentRun) => LiveAgentRun
-  memoryInjection?: TeamMemoryInjectionService
   /** Live flags retained for payload API compatibility. Optional; omitted → all off. */
   getFlags?: () => FeatureFlags
 }
@@ -78,7 +71,6 @@ export const buildWorkerDispatchPayload = (
   _workerDescription: string,
   dispatchId: string,
   text: string,
-  memoryDigest?: string | null,
   requiredSeenSeq = 0
 ): string =>
   [
@@ -96,7 +88,6 @@ export const buildWorkerDispatchPayload = (
       : []),
     formatRequiredSeenSeqAdvice(escapeHiveEnvelopeText(dispatchId), requiredSeenSeq),
     '',
-    ...(memoryDigest ? [memoryDigest, ''] : []),
     'Task:',
     escapeHiveEnvelopeText(text),
     '</hive-message>',
@@ -133,7 +124,6 @@ export const createAgentStdinDispatcher = ({
   getWorkspaceId,
   registry,
   syncRun,
-  memoryInjection,
   getFlags,
 }: AgentStdinDispatcherInput) => {
   const flags = () => getFlags?.() ?? FEATURE_FLAGS_ALL_OFF
@@ -301,56 +291,23 @@ export const createAgentStdinDispatcher = ({
       if (!resolveActiveRun(workspaceId, workerId)) {
         throw new PtyInactiveError(`No active run for agent: ${workerId}`)
       }
-      const memoryDigest = buildDispatchMemoryDigestSafely({
-        memoryInjection,
-        taskText: text,
-        workerDescription,
-        workspaceId,
-      })
-      const injectionIds = logMemoryDigestInjection({
-        agentId: workerId,
-        contextType: 'dispatch',
-        dispatchId,
-        memoryDigest,
-        memoryInjection,
-        workspaceId,
-      })
-      const rollback = () =>
-        rollbackMemoryDigestInjection({
-          injectionIds,
-          memoryInjection,
-        })
       const payload = buildWorkerDispatchPayload(
         fromAgentName,
         workerDescription,
         dispatchId,
         text,
-        injectionIds ? memoryDigest?.text : null,
         requiredSeenSeq
       )
-      try {
-        let written = false
-        const write = writeToActiveAgentRun(workspaceId, workerId, payload, {
-          requireActiveRun: true,
-          beforeWrite: () => {
-            if (input.beforeWrite?.() === false) return false
-            written = true
-            return true
-          },
-        })
-          .then(() => {
-            if (!written) rollback()
-            return written
-          })
-          .catch((error) => {
-            rollback()
-            throw error
-          })
-        return { payloadBytes: utf8ByteLength(payload), write }
-      } catch (error) {
-        rollback()
-        throw error
-      }
+      let written = false
+      const write = writeToActiveAgentRun(workspaceId, workerId, payload, {
+        requireActiveRun: true,
+        beforeWrite: () => {
+          if (input.beforeWrite?.() === false) return false
+          written = true
+          return true
+        },
+      }).then(() => written)
+      return { payloadBytes: utf8ByteLength(payload), write }
     },
     writeCancelPrompt(
       workspaceId: string,

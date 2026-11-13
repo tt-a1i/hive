@@ -8,7 +8,10 @@ import { createMessageLogStore } from '../../src/server/message-log-store.js'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import { openRuntimeDatabase } from '../../src/server/runtime-database.js'
 import Database from '../../src/server/sqlite.js'
-import { initializeRuntimeDatabase } from '../../src/server/sqlite-schema.js'
+import {
+  CURRENT_SCHEMA_VERSION,
+  initializeRuntimeDatabase,
+} from '../../src/server/sqlite-schema.js'
 import { createWorkspaceStore } from '../../src/server/workspace-store.js'
 
 // The required legacy-sqlite CI job owns old-driver interop on Node 22.
@@ -191,7 +194,7 @@ describe('built-in SQLite storage contract', () => {
         ).toEqual({ text: reportText })
         expect(
           migrated.prepare('SELECT MAX(version) AS version FROM schema_version').get()
-        ).toEqual({ version: 45 })
+        ).toEqual({ version: CURRENT_SCHEMA_VERSION })
         expect(migrated.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
         migrated.transaction(() => {
           restored.updateWorkerProfile(workspace.id, worker.id, { name: 'new driver worker' })

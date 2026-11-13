@@ -63,10 +63,6 @@ const WorkflowsDrawer = lazy(() =>
   import('./workflows/WorkflowsDrawer.js').then((m) => ({ default: m.WorkflowsDrawer }))
 )
 
-const WorkspaceMemoryDrawer = lazy(() =>
-  import('./memory/WorkspaceMemoryDrawer.js').then((m) => ({ default: m.WorkspaceMemoryDrawer }))
-)
-
 export const AppInner = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[] | null>(null)
   const { activeWorkspaceId, selectWorkspace, setActiveWorkspaceId } = useWorkspaceSelection()
@@ -77,7 +73,6 @@ export const AppInner = () => {
   })
   const [addDialogTrigger, setAddDialogTrigger] = useState(0)
   const [taskGraphOpen, setTaskGraphOpen] = useState(false)
-  const [memoryOpen, setMemoryOpen] = useState(false)
   const [workflowsOpen, setWorkflowsOpen] = useState(false)
   const [activeWorkerId, setActiveWorkerId] = useState<string | null>(null)
   // Active mobile bottom-nav section. Lifted here (not internal to MobileShell)
@@ -167,7 +162,6 @@ export const AppInner = () => {
   const deleteWorkspace = useWorkspaceDelete({
     activeWorkspaceId,
     onActiveDeleted: () => {
-      setMemoryOpen(false)
       setTaskGraphOpen(false)
       setWorkflowsOpen(false)
     },
@@ -290,16 +284,6 @@ export const AppInner = () => {
         />
       </Suspense>
     ) : null
-  const memoryDrawer =
-    memoryOpen && !demoMode ? (
-      <Suspense fallback={null}>
-        <WorkspaceMemoryDrawer
-          open
-          onClose={() => setMemoryOpen(false)}
-          workspaceId={activeWorkspaceId ?? null}
-        />
-      </Suspense>
-    ) : null
   const sidebar = (
     <Sidebar
       activeWorkspaceId={eff.effectiveActiveWorkspaceId}
@@ -397,8 +381,6 @@ export const AppInner = () => {
     <>
       <MainLayout
         hideTopbarActions={!eff.effectiveActiveWorkspace}
-        memoryOpen={memoryOpen}
-        {...(demoMode ? {} : { onToggleMemory: () => setMemoryOpen((value) => !value) })}
         onToggleTaskGraph={() => setTaskGraphOpen((value) => !value)}
         openTaskCount={openTaskCount}
         topbarActions={topbarActions}
@@ -414,7 +396,6 @@ export const AppInner = () => {
         {workspaceContent}
         {terminalPanels}
         {appOverlays}
-        {memoryDrawer}
         {workflowsDrawer}
       </MainLayout>
       <PackageUpdateToast versionInfo={versionInfo} />

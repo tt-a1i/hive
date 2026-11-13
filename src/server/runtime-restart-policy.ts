@@ -5,7 +5,6 @@ import type { FeatureFlags } from './feature-flags.js'
 import type { MessageLogHandle, MessageLogRecord, RecoveryMessage } from './message-log-store.js'
 import { createRestartPolicy } from './restart-policy.js'
 import type { TasksFileService } from './tasks-file.js'
-import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 import type { WorkspaceStore } from './workspace-store.js'
 
 // Narrow helper keeps runtime-store under the hard line cap.
@@ -15,7 +14,6 @@ export const buildRuntimeRestartPolicy = ({
   listOpenDispatches,
   listDispatchMessagesForRecovery,
   listActionableDispatchMessagesForRecovery,
-  memoryInjection,
   tasksFileService,
   workspaceStore,
   getFlags,
@@ -32,7 +30,6 @@ export const buildRuntimeRestartPolicy = ({
     insertMessage: (record: MessageLogRecord) => MessageLogHandle
     listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   }
-  memoryInjection?: TeamMemoryInjectionService
   tasksFileService: Pick<TasksFileService, 'readTasks'>
   workspaceStore: Pick<WorkspaceStore, 'getWorkspaceSnapshot'>
   getFlags?: () => FeatureFlags
@@ -50,5 +47,4 @@ export const buildRuntimeRestartPolicy = ({
       : {}),
     readTasks: tasksFileService.readTasks,
     ...(getFlags ? { getFlags } : {}),
-    ...(memoryInjection ? { memoryInjection } : {}),
   })

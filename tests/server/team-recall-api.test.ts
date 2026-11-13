@@ -152,54 +152,6 @@ describe('/api/team/recall', () => {
     )
   })
 
-  test('returns low-confidence active memory through recall without requiring dispatch injection', async () => {
-    if (!server) throw new Error('Expected test server')
-    const memory = server.store.addMemoryEntry({
-      actor: { id: orchestratorId, name: 'Queen', role: 'orchestrator' },
-      body: 'Low confidence pull-only marker: zeta retry policy is still unverified.',
-      confidence: 0.2,
-      kind: 'pitfall',
-      source: 'dream',
-      tags: ['zeta'],
-      workspaceId,
-    })
-
-    const response = await postRecall({
-      project_id: workspaceId,
-      from_agent_id: orchestratorId,
-      token,
-      query: 'zeta retry policy',
-      limit: 10,
-      window: 1,
-    })
-
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as {
-      ok: boolean
-      results: Array<{
-        memory_confidence: number | null
-        memory_id: string | null
-        memory_kind: string | null
-        memory_status: string | null
-        memory_tags: string[]
-        source_type: string
-        text: string
-      }>
-    }
-    expect(body.ok).toBe(true)
-    expect(body.results).toEqual([
-      expect.objectContaining({
-        memory_confidence: 0.2,
-        memory_id: memory.id,
-        memory_kind: 'pitfall',
-        memory_status: 'active',
-        memory_tags: ['zeta'],
-        source_type: 'memory',
-        text: 'Low confidence pull-only marker: zeta retry policy is still unverified.',
-      }),
-    ])
-  })
-
   test('rejects missing token before reading recall data', async () => {
     const response = await postRecall({
       project_id: workspaceId,

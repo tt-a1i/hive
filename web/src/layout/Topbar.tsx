@@ -1,4 +1,4 @@
-import { Brain, Check, Copy, ExternalLink, ListChecks, Workflow } from 'lucide-react'
+import { Check, Copy, ExternalLink, ListChecks, Workflow } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 
 import type { VersionInfo } from '../api.js'
@@ -12,8 +12,6 @@ import { APP_VERSION } from '../version.js'
 type TopbarProps = {
   actions?: ReactNode
   hideActions?: boolean
-  memoryOpen?: boolean
-  onToggleMemory?: () => void
   onToggleTaskGraph?: () => void
   openTaskCount?: number
   taskGraphOpen?: boolean
@@ -26,8 +24,6 @@ type TopbarProps = {
 export const Topbar = ({
   actions,
   hideActions = false,
-  memoryOpen = false,
-  onToggleMemory,
   onToggleTaskGraph,
   openTaskCount = 0,
   taskGraphOpen = false,
@@ -164,22 +160,6 @@ export const Topbar = ({
       {hideActions ? null : (
         <div className="flex items-center gap-1">
           {actions}
-          {onToggleMemory ? (
-            <Tooltip label={memoryOpen ? t('topbar.hideMemory') : t('topbar.showMemory')}>
-              <button
-                type="button"
-                onClick={onToggleMemory}
-                aria-pressed={memoryOpen}
-                aria-label={memoryOpen ? t('topbar.hideMemory') : t('topbar.showMemory')}
-                className="flex h-7 cursor-pointer items-center gap-1 rounded border px-2 text-xs font-medium text-ter transition-colors hover:bg-3 hover:text-pri focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                data-testid="topbar-memory"
-                style={{ borderColor: 'var(--border)', background: 'var(--bg-1)' }}
-              >
-                <Brain size={13} />
-                <span>{t('topbar.memory')}</span>
-              </button>
-            </Tooltip>
-          ) : null}
           {onToggleTaskGraph ? (
             <Tooltip label={taskGraphTooltip}>
               <button

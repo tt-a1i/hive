@@ -6,7 +6,7 @@
  * tag carries larger injected bodies.
  *
  * The content must already be escaped or intentionally contain trusted Hive
- * sub-envelopes such as `<hive-memory>`.
+ * sub-envelopes.
  */
 export const wrapRawSystemMessage = (content: string) =>
   `<hive-system-message>\n${content}\n</hive-system-message>`

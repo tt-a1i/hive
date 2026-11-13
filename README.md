@@ -441,31 +441,9 @@ polishing the multi-agent collaboration workflow, Windows support, and clearer
 orchestration observability. Try it out and open issues — feedback shapes what
 gets prioritized next.
 
-## On the roadmap: cross-agent long-term memory
+## Search collaboration history
 
-<p align="center">
-  <a href="https://github.com/EverMind-AI/EverOS">
-    <img src="https://avatars.githubusercontent.com/EverMind-AI" width="72" alt="EverMind / EverOS" />
-  </a>
-</p>
-
-Single-agent memory already exists, but the styles diverge:
-
-- **Claude Code's [Auto Dream](https://claudefa.st/blog/guide/mechanics/auto-dream)** is **batch / offline** — invoked via `/dream` (or on a 24h timer), Claude consolidates JSONL session logs in the cloud, merges duplicates, extracts patterns, and proposes a new memory file for you to review and adopt. REM-sleep style, with a clean wake/sleep separation.
-- **Hermes Agent** runs the opposite playbook — **embedded and in-stride**. Every N turns it forks a background sub-agent to review the recent exchange and writes directly into a **multi-organ local store**: `MEMORY.md` (facts/rules) · `USER.md` (who-you-are) · SQLite + FTS5 (episodic search) · Honcho (third-person model) · `skills/` (procedural memory). The agent is allowed to edit its own skill files in stride — memory and capability are the same thing.
-
-But these are all **per-agent** memories. Hive coordinates *teams* of agents, so the next step is wiring them together: let the whole team **share one long-term memory store** — what Worker A learned today becomes context the Orchestrator can dispatch to Worker B tomorrow.
-
-We're planning to back this with **[EverOS](https://github.com/EverMind-AI/EverOS)**
-— an open-source long-term memory OS from [EverMind](https://evermind.ai/),
-currently SOTA on the LoCoMo / LongMemEval / HaluMem memory benchmarks.
-Its four-layer architecture (Agentic / Memory / Index / API+MCP) maps
-cleanly onto Hive's multi-PTY model: each agent keeps its in-CLI memory,
-team-level facts flow through EverOS, and the Orchestrator joins both
-when dispatching.
-
-Track progress at [#6](https://github.com/tt-a1i/hive/issues/6) — drop a
-+1 or comment with your use case to influence priority.
+Hive stores workspace collaboration messages and reports. Use `team recall` to search the history, and verify facts that may have changed before relying on them.
 
 ## A different form factor: squad
 

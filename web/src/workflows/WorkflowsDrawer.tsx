@@ -24,10 +24,8 @@ import { useEffect, useState } from 'react'
 
 import {
   deleteWorkflowSchedule,
-  listMemoryInjectionsForDispatch,
   listWorkflowRunDispatches,
   listWorkflowRunLogs,
-  type MemoryInjection,
   stopWorkflowRun,
   updateWorkflowSchedule,
   type WorkflowDispatchSummary,
@@ -198,8 +196,6 @@ const dispatchStatusLabel = (
 
 const DispatchAgentRow = ({ dispatch }: { dispatch: WorkflowDispatchSummary }) => {
   const [open, setOpen] = useState(false)
-  const [memoryInjections, setMemoryInjections] = useState<MemoryInjection[] | null>(null)
-  const [memoryError, setMemoryError] = useState<string | null>(null)
   const { t } = useI18n()
   const status = DISPATCH_STATUS_ICON[dispatch.status]
   const labelText = dispatch.label ?? `step-${dispatch.stepIndex ?? '?'}`
@@ -220,23 +216,6 @@ const DispatchAgentRow = ({ dispatch }: { dispatch: WorkflowDispatchSummary }) =
         : dispatch.status === 'queued'
           ? t('workflows.dispatchStatus.queued')
           : null
-
-  useEffect(() => {
-    setMemoryInjections(null)
-    setMemoryError(null)
-    if (!open) return
-    let cancelled = false
-    listMemoryInjectionsForDispatch(dispatch.workspaceId, dispatch.id)
-      .then((items) => {
-        if (!cancelled) setMemoryInjections(items)
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setMemoryError(error instanceof Error ? error.message : String(error))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [dispatch.id, dispatch.workspaceId, open])
 
   return (
     <div
@@ -291,22 +270,6 @@ const DispatchAgentRow = ({ dispatch }: { dispatch: WorkflowDispatchSummary }) =
               <div className="whitespace-pre-wrap text-pri">{dispatch.reportText}</div>
             </div>
           ) : null}
-          {memoryInjections && memoryInjections.length > 0 ? (
-            <div>
-              <div className="wf-dispatch-detail__label">memory injected</div>
-              <ul className="space-y-1">
-                {memoryInjections.map((injection) => (
-                  <li key={injection.id} className="break-words text-sec">
-                    <span className="drawer-kind-badge" style={{ marginRight: 4 }}>
-                      {injection.memory.kind}
-                    </span>{' '}
-                    {truncateText(injection.memory.body, 120)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {memoryError ? <div className="drawer-card__error">Memory: {memoryError}</div> : null}
         </div>
       ) : null}
     </div>

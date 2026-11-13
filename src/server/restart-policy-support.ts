@@ -4,7 +4,6 @@ import type { PersistedAgentRun } from './agent-run-store.js'
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 import type { FeatureFlags } from './feature-flags.js'
 import type { MessageLogHandle, MessageLogRecord, RecoveryMessage } from './message-log-store.js'
-import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 
 export interface RestartPolicyInput {
   deleteMessage: (handle: MessageLogHandle) => void
@@ -25,7 +24,6 @@ export interface RestartPolicyInput {
   /** Resolves the live experimental flags, threaded into the recovery handover
    *  prompt so it matches a fresh startup. Optional; omitted → all off. */
   getFlags?: () => FeatureFlags
-  memoryInjection?: TeamMemoryInjectionService
 }
 
 export const findPreviousRun = (runs: PersistedAgentRun[], currentRunId: string) =>
@@ -38,11 +36,9 @@ export const writeSystemMessage = ({
   runId,
   text,
   writeToRun,
-  onWriteFailure,
 }: {
   deleteMessage: RestartPolicyInput['deleteMessage']
   insertMessage: RestartPolicyInput['insertMessage']
-  onWriteFailure?: () => void
   record: MessageLogRecord
   runId: string
   text: string
@@ -51,7 +47,6 @@ export const writeSystemMessage = ({
   const handle = insertMessage(record)
   try {
     void writeToRun(runId, text).catch(() => {
-      onWriteFailure?.()
       try {
         deleteMessage(handle)
       } catch {
@@ -60,7 +55,6 @@ export const writeSystemMessage = ({
       }
     })
   } catch (error) {
-    onWriteFailure?.()
     deleteMessage(handle)
     throw error
   }

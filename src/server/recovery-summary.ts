@@ -121,7 +121,6 @@ export const buildRecoverySummary = ({
   dispatchMessages = [],
   actionableDispatchMessages = [],
   resumedSession = false,
-  memoryDigest,
   messages,
   tasksContent,
   workers,
@@ -134,7 +133,6 @@ export const buildRecoverySummary = ({
   dispatchMessages?: DispatchMessageRecord[]
   actionableDispatchMessages?: DispatchMessageRecord[]
   resumedSession?: boolean
-  memoryDigest?: string | null | undefined
   messages: RecoveryMessage[]
   tasksContent: string
   workers: AgentSummary[]
@@ -168,7 +166,6 @@ export const buildRecoverySummary = ({
       '## Active members',
       ...formatWorkers(workers),
       '',
-      ...(memoryDigest ? ['## Hive memory digest', memoryDigest, ''] : []),
       agent.role === 'orchestrator' ? '## Hive member dispatch rules' : '## Hive member boundaries',
       ...getHiveTeamRules(agent, flags),
       '',

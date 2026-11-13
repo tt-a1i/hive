@@ -20,9 +20,6 @@ import { applySchemaVersion22 } from './sqlite-schema-v22.js'
 import { applySchemaVersion23 } from './sqlite-schema-v23.js'
 import { applySchemaVersion24 } from './sqlite-schema-v24.js'
 import { applySchemaVersion25 } from './sqlite-schema-v25.js'
-import { applySchemaVersion26 } from './sqlite-schema-v26.js'
-import { applySchemaVersion27 } from './sqlite-schema-v27.js'
-import { applySchemaVersion28 } from './sqlite-schema-v28.js'
 import { applySchemaVersion29 } from './sqlite-schema-v29.js'
 import { applySchemaVersion30 } from './sqlite-schema-v30.js'
 import { applySchemaVersion31 } from './sqlite-schema-v31.js'
@@ -31,17 +28,16 @@ import { applySchemaVersion33 } from './sqlite-schema-v33.js'
 import { applySchemaVersion34 } from './sqlite-schema-v34.js'
 import { applySchemaVersion35 } from './sqlite-schema-v35.js'
 import { applySchemaVersion36 } from './sqlite-schema-v36.js'
-import { applySchemaVersion37 } from './sqlite-schema-v37.js'
 import { applySchemaVersion38 } from './sqlite-schema-v38.js'
 import { applySchemaVersion39 } from './sqlite-schema-v39.js'
 import { applySchemaVersion40 } from './sqlite-schema-v40.js'
-import { applySchemaVersion41 } from './sqlite-schema-v41.js'
 import { applySchemaVersion42 } from './sqlite-schema-v42.js'
 import { applySchemaVersion43 } from './sqlite-schema-v43.js'
 import { applySchemaVersion44 } from './sqlite-schema-v44.js'
 import { applySchemaVersion45 } from './sqlite-schema-v45.js'
+import { applySchemaVersion46 } from './sqlite-schema-v46.js'
 
-export const CURRENT_SCHEMA_VERSION = 45
+export const CURRENT_SCHEMA_VERSION = 46
 
 // Idempotent column-add helper. SQLite doesn't have `ALTER TABLE … ADD COLUMN
 // IF NOT EXISTS`, so PRAGMA-check first. Safe to call on every init; required
@@ -213,40 +209,6 @@ export const initializeRuntimeDatabase = (db: Database) => {
     CREATE INDEX IF NOT EXISTS idx_workspace_uploads_workspace_created
       ON workspace_uploads (workspace_id, created_at DESC, id DESC);
 
-    CREATE TABLE IF NOT EXISTS external_goal_sessions (
-      id TEXT PRIMARY KEY,
-      workspace_id TEXT NOT NULL,
-      source TEXT NOT NULL,
-      status TEXT NOT NULL,
-      goal TEXT NOT NULL,
-      context_json TEXT NOT NULL,
-      title TEXT,
-      summary TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      closed_at INTEGER
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_external_goal_sessions_workspace
-      ON external_goal_sessions (workspace_id, created_at);
-
-    CREATE TABLE IF NOT EXISTS external_goal_events (
-      id TEXT PRIMARY KEY,
-      goal_id TEXT NOT NULL,
-      workspace_id TEXT NOT NULL,
-      sequence INTEGER NOT NULL,
-      kind TEXT NOT NULL,
-      status TEXT,
-      body TEXT NOT NULL,
-      artifacts_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      UNIQUE(goal_id, sequence)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_external_goal_events_goal
-      ON external_goal_events (goal_id, sequence);
-    CREATE INDEX IF NOT EXISTS idx_external_goal_events_workspace
-      ON external_goal_events (workspace_id, created_at);
   `)
 
   // Idempotent column additions — run on every init regardless of
@@ -462,19 +424,14 @@ export const initializeRuntimeDatabase = (db: Database) => {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(25, Date.now())
   }
 
-  applySchemaVersion26(db)
   if (!appliedVersions.has(26)) {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(26, Date.now())
   }
 
   if (!appliedVersions.has(27)) {
-    applySchemaVersion27(db, { rebuild: true })
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(27, Date.now())
-  } else {
-    applySchemaVersion27(db, { rebuild: false })
   }
 
-  applySchemaVersion28(db)
   if (!appliedVersions.has(28)) {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(28, Date.now())
   }
@@ -519,7 +476,6 @@ export const initializeRuntimeDatabase = (db: Database) => {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(36, Date.now())
   }
 
-  applySchemaVersion37(db)
   if (!appliedVersions.has(37)) {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(37, Date.now())
   }
@@ -540,7 +496,6 @@ export const initializeRuntimeDatabase = (db: Database) => {
   }
   if (!appliedVersions.has(41))
     db.transaction(() => {
-      applySchemaVersion41(db)
       db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
         41,
         Date.now()
@@ -561,5 +516,14 @@ export const initializeRuntimeDatabase = (db: Database) => {
         )
       })()
     }
+  }
+  if (!appliedVersions.has(46)) {
+    db.transaction(() => {
+      applySchemaVersion46(db)
+      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
+        46,
+        Date.now()
+      )
+    })()
   }
 }

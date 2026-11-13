@@ -8,11 +8,6 @@ import {
   writeSystemMessage,
 } from './restart-policy-support.js'
 import { createSystemRecoverySummaryMessage } from './runtime-message-builders.js'
-import {
-  buildMemoryDigestSafely,
-  logMemoryDigestInjection,
-  rollbackMemoryDigestInjection,
-} from './team-memory-injection.js'
 
 const RECOVERY_WINDOW_MS = 60 * 60 * 1000
 
@@ -46,7 +41,6 @@ export const createRestartPolicy = ({
   listOpenDispatches,
   listDispatchMessagesForRecovery,
   listActionableDispatchMessagesForRecovery,
-  memoryInjection,
   readTasks,
   getFlags,
 }: RestartPolicyInput): RestartPolicy => {
@@ -85,26 +79,12 @@ export const createRestartPolicy = ({
       // A deliberate restart without outstanding protocol work can start fresh.
       if (wasUserStopped && !ownsOpenWork && actionableDispatchMessages.length === 0) return false
 
-      const memoryDigest = buildMemoryDigestSafely({
-        contextType: 'recovery',
-        memoryInjection,
-        workspaceId: workspace.id,
-      })
-      const injectionIds = logMemoryDigestInjection({
-        agentId,
-        contextType: 'recovery',
-        memoryDigest,
-        memoryInjection,
-        workspaceId: workspace.id,
-      })
-      const auditedMemoryDigest = injectionIds ? memoryDigest : null
       const text = buildRecoverySummary({
         agent,
         resumedSession: Boolean(startConfig.resumedSessionId),
         dispatchMessages: listDispatchMessagesForRecovery?.(workspace.id) ?? [],
         actionableDispatchMessages,
         ...(openDispatches ? { openDispatches } : {}),
-        memoryDigest: auditedMemoryDigest?.text,
         messages: listMessagesForRecovery(workspace.id, Date.now() - RECOVERY_WINDOW_MS),
         tasksContent,
         workers,
@@ -118,7 +98,6 @@ export const createRestartPolicy = ({
         runId,
         text,
         writeToRun,
-        onWriteFailure: () => rollbackMemoryDigestInjection({ injectionIds, memoryInjection }),
       })
       return true
     },

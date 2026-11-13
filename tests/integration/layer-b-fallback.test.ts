@@ -12,10 +12,6 @@ import { basename, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import Database from '../../src/server/sqlite.js'
 
-import {
-  serializeWorkspaceMemoryEnabled,
-  workspaceMemoryEnabledKey,
-} from '../../src/server/team-memory-feature.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
@@ -68,24 +64,6 @@ const listSystemMessages = (
   const rows = db
     .prepare('SELECT type, worker_id, text FROM messages WHERE type = ? ORDER BY sequence ASC')
     .all(type) as Array<{ text: string; type: string; worker_id: string }>
-  db.close()
-  return rows
-}
-
-const listMemoryInjections = (dataDir: string) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
-  const rows = db
-    .prepare(
-      `SELECT context_type, memory_id, target_agent_id_snapshot, workspace_id
-       FROM memory_injections
-       ORDER BY injected_at ASC, id ASC`
-    )
-    .all() as Array<{
-    context_type: string
-    memory_id: string
-    target_agent_id_snapshot: string
-    workspace_id: string
-  }>
   db.close()
   return rows
 }
@@ -400,17 +378,6 @@ describe('Layer B fallback integration', () => {
       const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
       const alice = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Alice')
       const bob = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Bob', 'tester')
-      const recoveryMemory = server.store.addMemoryEntry({
-        actor: { id: orchestratorId(workspace.id), name: 'Orchestrator', role: 'orchestrator' },
-        body: 'Layer B recovery should remember the relay debug decision.',
-        kind: 'decision',
-        tags: ['recovery'],
-        workspaceId: workspace.id,
-      })
-      const db = new Database(join(server.dataDir, 'runtime.sqlite'))
-      db.prepare('UPDATE memory_entries SET pinned = 1 WHERE id = ?').run(recoveryMemory.id)
-      db.close()
-
       await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/tasks`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', cookie },
@@ -460,19 +427,11 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('请继续修复 restart bug')
         expect(state.output).toContain('layer b fallback')
         expect(state.output).toContain('Bob')
-        expect(state.output).toContain('<hive-memory context="recovery">')
         // Raw ConPTY output can split a sentence with wrapping/cursor sequences.
         // Verify the actual receiver input, without stripping or guessing text.
         const received = readFileSync(`${aliceScript}.stdin`, 'utf8')
         expect(received).toContain('请继续修复 restart bug')
         expect(received).toContain('layer b fallback')
-        expect(received).toContain('Layer B recovery should remember the relay debug decision.')
-        expect(received.indexOf('请继续修复 restart bug')).toBeLessThan(
-          received.indexOf('Layer B recovery should remember')
-        )
-        expect(received.indexOf('layer b fallback')).toBeLessThan(
-          received.indexOf('Layer B recovery should remember')
-        )
       })
 
       const recoverySummaries = listSystemMessages(server.dataDir, 'system_recovery_summary')
@@ -483,21 +442,6 @@ describe('Layer B fallback integration', () => {
       expect(recoverySummaries.at(-1)?.text).toContain('请继续修复 restart bug')
       expect(recoverySummaries.at(-1)?.text).toContain('layer b fallback')
       expect(recoverySummaries.at(-1)?.text).toContain('Bob')
-      expect(recoverySummaries.at(-1)?.text).toContain(
-        'Layer B recovery should remember the relay debug decision.'
-      )
-      await waitFor(() => {
-        expect(listMemoryInjections(server.dataDir)).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              context_type: 'recovery',
-              memory_id: recoveryMemory.id,
-              target_agent_id_snapshot: alice.id,
-              workspace_id: workspace.id,
-            }),
-          ])
-        )
-      })
       server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\r')
       await waitFor(async () => {
         expect((await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)).status).toBe('exited')
@@ -521,17 +465,6 @@ describe('Layer B fallback integration', () => {
       const cookie = await getUiCookie(server.baseUrl)
       const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
       const bob = await createWorkerViaHttp(server.baseUrl, cookie, workspace.id, 'Bob', 'tester')
-      server.store.addMemoryEntry({
-        actor: { id: orchestratorId(workspace.id), name: 'Orchestrator', role: 'orchestrator' },
-        body: 'Disabled recovery memory must not be injected.',
-        kind: 'fact',
-        workspaceId: workspace.id,
-      })
-      server.store.settings.setAppState(
-        workspaceMemoryEnabledKey(workspace.id),
-        serializeWorkspaceMemoryEnabled(false)
-      )
-
       await server.store.dispatchTask(workspace.id, bob.id, '审查 Phase 3 SSE schema 缺口')
 
       const db = new Database(join(server.dataDir, 'runtime.sqlite'))
@@ -581,10 +514,7 @@ describe('Layer B fallback integration', () => {
         expect(state.output).toContain('## Open tasks')
         expect(state.output).toContain('Bob')
         expect(state.output).toContain('审查 Phase 3 SSE schema 缺口')
-        expect(state.output).not.toContain('<hive-memory context="recovery">')
-        expect(state.output).not.toContain('Disabled recovery memory must not be injected.')
       })
-      expect(listMemoryInjections(server.dataDir)).toEqual([])
       server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\r')
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)

@@ -9,12 +9,6 @@ export type TeamCommand =
   | 'next'
   | 'report'
   | 'recall'
-  | 'memory_add'
-  | 'memory_apply'
-  | 'memory_dream_show'
-  | 'memory_forget'
-  | 'memory_search'
-  | 'memory_show'
   | 'status'
   | 'cancel'
   | 'help'
@@ -22,7 +16,6 @@ export type TeamCommand =
   | 'review'
   | 'dismiss'
   | 'workflow'
-  | 'goal_report'
 
 const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>([
   'message',
@@ -33,17 +26,10 @@ const ORCHESTRATOR_COMMANDS = new Set<TeamCommand>([
   'cancel',
   'help',
   'recall',
-  'memory_add',
-  'memory_apply',
-  'memory_dream_show',
-  'memory_forget',
-  'memory_search',
-  'memory_show',
   'spawn',
   'review',
   'dismiss',
   'workflow',
-  'goal_report',
 ])
 const WORKER_COMMANDS = new Set<TeamCommand>([
   'message',
@@ -52,9 +38,6 @@ const WORKER_COMMANDS = new Set<TeamCommand>([
   'status',
   'help',
   'recall',
-  'memory_dream_show',
-  'memory_search',
-  'memory_show',
 ])
 const WORKER_ROLES = new Set<AgentSummary['role']>(['coder', 'reviewer', 'tester', 'custom'])
 

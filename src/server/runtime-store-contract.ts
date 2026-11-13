@@ -12,19 +12,7 @@ import type { DeviceSessionProvider } from './remote-device-session.js'
 import type { RemoteDeviceRecord, RemoteDeviceStore } from './remote-device-store.js'
 import type { RemotePairing } from './remote-pairing.js'
 import type { RemoteTunnel, TunnelStatus } from './remote-tunnel.js'
-import type { MemoryDreamInput } from './runtime-store-dream.js'
 import type { SettingsStore } from './settings-store.js'
-import type { BuildMemoryDiagnosticsInput, MemoryDiagnostics } from './team-memory-diagnostics.js'
-import type { DreamRunRecord } from './team-memory-dream-store.js'
-import type {
-  AddMemoryEntryInput,
-  LogMemoryInjectionsInput,
-  MemoryEntryWithSources,
-  MemoryInjectionWithMemory,
-  MemoryListOptions,
-  MemorySearchOptions,
-  MemorySearchResult,
-} from './team-memory-store.js'
 import type {
   CancelTaskInput,
   DispatchTaskInput,
@@ -129,39 +117,6 @@ export interface RuntimeStore extends DispatchMessageOperations {
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   recallMessages: (workspaceId: string, query: string, options?: RecallOptions) => RecallResult[]
-  addMemoryEntry: (input: AddMemoryEntryInput) => MemoryEntryWithSources
-  approveMemoryCandidate: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  archiveMemoryEntry: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  getMemoryEntry: (workspaceId: string, memoryId: string) => MemoryEntryWithSources | undefined
-  getMemoryDiagnostics: (input: BuildMemoryDiagnosticsInput) => MemoryDiagnostics
-  listMemoryEntries: (workspaceId: string, options?: MemoryListOptions) => MemoryEntryWithSources[]
-  listMemoryInjectionsForDispatch: (
-    workspaceId: string,
-    dispatchId: string
-  ) => MemoryInjectionWithMemory[]
-  logMemoryInjections: (input: LogMemoryInjectionsInput) => string[]
-  rejectMemoryCandidate: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  searchMemoryEntries: (
-    workspaceId: string,
-    query: string,
-    options?: MemorySearchOptions
-  ) => MemorySearchResult[]
-  setMemoryDisabled: (
-    workspaceId: string,
-    memoryId: string,
-    disabled: boolean
-  ) => MemoryEntryWithSources
-  setMemoryPinned: (
-    workspaceId: string,
-    memoryId: string,
-    pinned: boolean
-  ) => MemoryEntryWithSources
-  applyMemoryDreamRun: (workspaceId: string, runId: string, rawOps: unknown) => DreamRunRecord
-  getMemoryDreamInput: (workspaceId: string, runId: string) => MemoryDreamInput
-  listMemoryDreamRuns: (workspaceId: string, limit?: number) => DreamRunRecord[]
-  revertMemoryDream: (workspaceId: string, runId: string) => DreamRunRecord
-  runMemoryDream: (workspaceId: string) => Promise<DreamRunRecord>
-  tickMemoryDreamScheduler: (now?: number) => Promise<void>
   peekAgentToken: (agentId: string) => string | undefined
   pauseTerminalRun: (runId: string) => void
   resizeAgentRun: (runId: string, cols: number, rows: number) => void

@@ -6,6 +6,7 @@ import {
   applyPendingTaskCount,
   createOrchestrator,
   createWorkflowAgent,
+  getOrchestratorId,
   isWorkerAgent,
   type MessageKindRecord,
   type WorkerRow,
@@ -98,7 +99,10 @@ export const hydrateWorkspaceFromDb = (
   for (const workerRow of db
     .prepare(buildWorkerSelect(db, 'WHERE workspace_id = ?'))
     .all(workspaceId) as WorkerRow[]) {
-    workspaces.get(workspaceId)?.agents.push(createWorkerSummary(workerRow.workspace_id, workerRow))
+    if (workerRow.id !== getOrchestratorId(workspaceId))
+      workspaces
+        .get(workspaceId)
+        ?.agents.push(createWorkerSummary(workerRow.workspace_id, workerRow))
   }
 
   applyMessageKinds(workspaces, messageKinds, workspaceId)
@@ -123,7 +127,8 @@ export const seedWorkspacesFromDb = (
   }
 
   for (const row of db.prepare(buildWorkerSelect(db, '')).all() as WorkerRow[]) {
-    workspaces.get(row.workspace_id)?.agents.push(createWorkerSummary(row.workspace_id, row))
+    if (row.id !== getOrchestratorId(row.workspace_id))
+      workspaces.get(row.workspace_id)?.agents.push(createWorkerSummary(row.workspace_id, row))
   }
 
   applyMessageKinds(workspaces, messageKinds)

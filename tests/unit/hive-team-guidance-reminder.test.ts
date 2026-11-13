@@ -92,16 +92,10 @@ describe('work-centered core rules', () => {
     expect(buildProtocolGuide('core')).toContain('background agents')
   })
 
-  test('puts durable-memory details in the on-demand guide, preserving evidence rules', () => {
-    const core = getHiveTeamRules({ role: 'orchestrator' }).join('\n')
+  test('offers recall guidance without durable memory commands', () => {
     const memory = buildProtocolGuide('memory')
-    expect(core).toContain('team guide memory')
-    expect(core).not.toContain('team memory add "<body>"')
-    expect(memory).toContain('evidence-backed')
-    expect(memory).toContain('Do not save routine progress')
-    expect(memory).toContain('Write memories as facts, not instructions')
-    expect(memory).toContain('only the Orchestrator decides whether to add, apply, or forget')
-    expect(core).not.toContain('await parallel(')
+    expect(memory).toContain('team recall')
+    expect(memory).not.toContain('team memory')
   })
 })
 
@@ -238,20 +232,8 @@ describe('buildProtocolDoc', () => {
     expect(doc).toContain('## Guide: workflow')
     expect(doc).toContain('## Guide: member')
     expect(doc).toContain('team cancel --dispatch <id> "<reason>"')
-    expect(doc).toContain('team memory add "<body>"')
-    expect(doc).toContain('team memory show <memory-id>')
-    expect(doc).toContain('team memory search "<query>"')
-    expect(doc).toContain('team memory dream show <dream-run-id>')
-    expect(doc).toContain('team memory apply --run <dream-run-id> --stdin')
-    expect(doc).toContain('team memory forget <memory-id>')
-  })
-
-  test('member guide omits memory add and tells members to report durable findings', () => {
-    const guide = buildProtocolGuide('member')
-    expect(guide).not.toContain('team memory add')
-    expect(guide).toContain('team memory dream show <dream-run-id>')
-    expect(guide).toContain('Report durable findings')
-    expect(guide).toContain('only the Orchestrator changes durable memory')
+    expect(doc).toContain('team recall')
+    expect(doc).not.toContain('team memory')
   })
 
   test('mentions the .hive/PROTOCOL.md recovery path with shell-neutral guidance', () => {

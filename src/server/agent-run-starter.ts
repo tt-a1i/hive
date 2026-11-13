@@ -29,12 +29,6 @@ import type { RestartPolicy } from './restart-policy.js'
 import { clearResumedSessionAfterExitIfStale } from './resumed-session-cleanup.js'
 import { getCodexHome } from './session-capture-codex.js'
 import { normalizeExecutableToken } from './startup-command-parser.js'
-import {
-  buildMemoryDigestSafely,
-  logMemoryDigestInjection,
-  rollbackMemoryDigestInjection,
-  type TeamMemoryInjectionService,
-} from './team-memory-injection.js'
 
 interface AgentRunStarterInput {
   agentManager: AgentManager | undefined
@@ -50,7 +44,6 @@ interface AgentRunStarterInput {
    *  prompt (`workflowsEnabled` gates the `team workflow` line + authoring
    *  rule). */
   getFlags?: () => FeatureFlags
-  memoryInjection?: TeamMemoryInjectionService
 }
 
 export const createAgentRunStarter =
@@ -65,7 +58,6 @@ export const createAgentRunStarter =
     getAgent,
     restartPolicy,
     getFlags,
-    memoryInjection,
   }: AgentRunStarterInput) =>
   async (
     workspace: WorkspaceSummary,
@@ -299,35 +291,17 @@ export const createAgentRunStarter =
             ).then(finishPostStartInput, failPostStartInput)
             return
           }
-          const memoryDigest = buildMemoryDigestSafely({
-            contextType: 'startup',
-            memoryInjection,
-            workspaceId: workspace.id,
-          })
-          const injectionIds = logMemoryDigestInjection({
-            agentId,
-            contextType: 'startup',
-            memoryDigest,
-            memoryInjection,
-            workspaceId: workspace.id,
-          })
-          const auditedMemoryDigest = injectionIds ? memoryDigest : null
-          const failStartupInjection = (error: unknown) => {
-            rollbackMemoryDigestInjection({ injectionIds, memoryInjection })
-            failPostStartInput(error)
-          }
           try {
             void postStartWriter(
               run.runId,
               buildAgentStartupInstructions({
                 agent,
-                memoryDigest: auditedMemoryDigest?.text,
                 workspace,
                 flags: getFlags?.() ?? FEATURE_FLAGS_ALL_OFF,
               })
-            ).then(finishPostStartInput, failStartupInjection)
+            ).then(finishPostStartInput, failPostStartInput)
           } catch (error) {
-            failStartupInjection(error)
+            failPostStartInput(error)
           }
           return
         }

@@ -1,19 +1,17 @@
 import type { RuntimeStore, RuntimeStoreOptions } from './runtime-store-contract.js'
 import { createRuntimeStoreDiagnosticsMethods } from './runtime-store-diagnostics.js'
-import { createRuntimeStoreDreamMethods } from './runtime-store-dream.js'
 import {
   createRuntimeStoreLifecycle,
   createRuntimeStoreServices,
   logTasksFileWatchStartError,
 } from './runtime-store-helpers.js'
-import { createRuntimeStoreMemoryMethods } from './runtime-store-memory.js'
 import { createRuntimeStoreRemoteMethods } from './runtime-store-remote.js'
 import { createRuntimeStoreShutdown } from './runtime-store-shutdown.js'
 import { createRuntimeStoreWorkerMutations } from './runtime-store-worker-mutations.js'
 import { createRuntimeStoreWorkflowRuntime } from './runtime-store-workflows.js'
+import { createRuntimeStoreWorkspaceDelete } from './runtime-store-workspace-delete.js'
 import type { WorkflowRunRecord } from './workflow-run-store.js'
 import { persistWorkflowSchedule } from './workflow-schedule-create.js'
-import type { StagedWorkspaceUploadsDelete } from './workspace-upload-store.js'
 
 export type { RuntimeStore, WorkflowRunRecord }
 
@@ -53,38 +51,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       return workspace
     },
     listWorkspaces: () => services.workspaceStore.listWorkspaces(),
-    deleteWorkspace: async (workspaceId) => {
-      const workspace = services.workspaceStore.getWorkspaceSnapshot(workspaceId)
-      lifecycle.deleteWorkspaceShell(workspaceId)
-      for (const agent of workspace.agents) {
-        const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, agent.id)
-        if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
-        services.agentRuntime.deleteAgentLaunchConfig(workspaceId, agent.id)
-      }
-      await services.tasksFileWatcher.stop(workspaceId)
-      services.teamMemoryExport.cancel(workspaceId)
-      // Upload blobs are only tombstoned (renamed) inside the transaction and
-      // permanently unlinked after COMMIT, so a failed commit restores them
-      // instead of resurrecting a workspace whose attachments all 404.
-      let stagedUploads: StagedWorkspaceUploadsDelete | undefined
-      try {
-        runDataMutation(() => {
-          services.dispatchLedgerStore.deleteWorkspaceDispatches(workspaceId)
-          services.teamMemoryStore.deleteWorkspaceMemories(workspaceId)
-          services.teamMemoryDreamStore.deleteWorkspaceDreamRuns(workspaceId)
-          services.workspaceStore.deleteWorkspaceData(workspaceId)
-          stagedUploads = services.workspaceUploadStore.stageWorkspaceUploadsDelete(workspaceId)
-        })
-      } catch (error) {
-        stagedUploads?.rollback()
-        throw error
-      }
-      stagedUploads?.commit()
-      services.workspaceStore.forgetWorkspace(workspaceId)
-      if (services.settings.getAppState('active_workspace_id')?.value === workspaceId) {
-        services.settings.setAppState('active_workspace_id', null)
-      }
-    },
+    deleteWorkspace: createRuntimeStoreWorkspaceDelete(services, lifecycle, runDataMutation),
     addWorker: (workspaceId, input) => services.workspaceStore.addWorker(workspaceId, input),
     addWorkerWithLaunch: workerMutations.addWorkerWithLaunch,
     updateWorkerProfile: (workspaceId, workerId, input) =>
@@ -134,8 +101,6 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       services.messageLogStore.listMessagesForRecovery(workspaceId, sinceMs),
     recallMessages: (workspaceId, query, options) =>
       services.teamRecallStore.recallMessages(workspaceId, query, options),
-    ...createRuntimeStoreMemoryMethods(services),
-    ...createRuntimeStoreDreamMethods(services),
     peekAgentToken: (agentId) => services.agentRuntime.peekAgentToken(agentId),
     pauseTerminalRun: lifecycle.pauseTerminalRun,
     resizeAgentRun: lifecycle.resizeTerminalRun,
@@ -149,6 +114,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     validateUiToken: (token) => services.uiAuth.validate(token),
     ...createRuntimeStoreDiagnosticsMethods(services),
     ...createRuntimeStoreRemoteMethods(services),
+
     getWorkflowDispatchAwaiter: () => services.workflowDispatchAwaiter,
     runWorkflow: (input) => getWorkflowRuntime().runner.runWorkflow(input),
     startWorkflow: (input) => getWorkflowRuntime().runner.startWorkflow(input),

@@ -147,12 +147,23 @@ export const createWorkspaceStore = (
         name,
         path,
       }
-      db.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
-        summary.id,
-        name,
-        path,
-        Date.now()
-      )
+      db.transaction(() => {
+        db.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
+          summary.id,
+          name,
+          path,
+          Date.now()
+        )
+        db.prepare(`INSERT INTO workers (id, workspace_id, name, description, role, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)`).run(
+          `${summary.id}:orchestrator`,
+          summary.id,
+          'Orchestrator',
+          null,
+          'orchestrator',
+          Date.now()
+        )
+      })()
       workspaces.set(summary.id, {
         summary,
         agents: [createOrchestrator(summary.id), createWorkflowAgent(summary.id)],

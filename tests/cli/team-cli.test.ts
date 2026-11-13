@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -15,32 +14,6 @@ let workspacePath = ''
 let workerId = ''
 const originalEnv = { ...process.env }
 const tempDirs: string[] = []
-
-const runTeamBinaryWithStdin = (
-  args: string[],
-  env: Record<string, string>,
-  stdinContent: string
-): Promise<{ code: number | null; stderr: string; stdout: string }> =>
-  new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['--import', 'tsx', 'bin/team', ...args], {
-      env: { ...process.env, ...env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
-    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
-    child.on('error', reject)
-    child.on('close', (code) =>
-      resolve({
-        code,
-        stderr: Buffer.concat(stderr).toString('utf8'),
-        stdout: Buffer.concat(stdout).toString('utf8'),
-      })
-    )
-    child.stdin.write(stdinContent)
-    child.stdin.end()
-  })
 
 beforeEach(async () => {
   const server = await startTestServer()
@@ -307,15 +280,6 @@ describe('team cli with real server', () => {
       '--dispatch',
       sendPayload.dispatch_id,
     ])
-    const memory = serverStore.addMemoryEntry({
-      actor: { id: `${workspaceId}:orchestrator`, name: 'Queen', role: 'orchestrator' },
-      body: '低置信访问链记忆：pull 通道仍应可查。',
-      confidence: 0.2,
-      kind: 'pitfall',
-      source: 'dream',
-      tags: ['访问链'],
-      workspaceId,
-    })
     logSpy.mockClear()
 
     await runTeamCommand(['recall', '访问链', '--limit', '5', '--window', '1'])
@@ -323,7 +287,6 @@ describe('team cli with real server', () => {
       ok: true
       results: Array<{
         context: Array<{ text: string; type: string }>
-        memory_id: string | null
         message_type: string | null
         report_text: string | null
         source_type: string
@@ -344,11 +307,6 @@ describe('team cli with real server', () => {
           report_text: '远程访问链路已恢复，移动端 E2E relay 正常',
           source_type: 'dispatch',
         }),
-        expect.objectContaining({
-          memory_id: memory.id,
-          source_type: 'memory',
-          text: '低置信访问链记忆：pull 通道仍应可查。',
-        }),
       ])
     )
     const reportHit = payload.results.find(
@@ -357,287 +315,6 @@ describe('team cli with real server', () => {
     expect(
       reportHit?.context.some((item) => item.type === 'send' && item.text === '调查远程访问链路')
     ).toBe(true)
-  })
-
-  test('team memory add/show writes active entries and rejects worker writes through the real CLI path', async () => {
-    if (!serverStore) {
-      throw new Error('Expected test server store')
-    }
-    const workspaceId = process.env.HIVE_PROJECT_ID
-    if (!workspaceId) {
-      throw new Error('Expected workspace id')
-    }
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await runTeamCommand([
-      'memory',
-      'add',
-      'Remote mobile API calls must use the relay path.',
-      '--kind',
-      'decision',
-      '--tag',
-      'remote',
-      '--tag',
-      'relay',
-    ])
-    const activePayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      memory: { id: string; status: string; tags: string[] }
-      ok: true
-    }
-    expect(activePayload).toEqual({
-      memory: expect.objectContaining({
-        id: expect.any(String),
-        status: 'active',
-        tags: ['remote', 'relay'],
-      }),
-      ok: true,
-    })
-
-    await runTeamCommand(['memory', 'show', activePayload.memory.id])
-    const showPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      memory: { id: string; sources: Array<{ actor_agent_id_snapshot: string }> }
-    }
-    expect(showPayload.memory).toEqual(
-      expect.objectContaining({
-        id: activePayload.memory.id,
-        sources: expect.arrayContaining([
-          expect.objectContaining({
-            actor_agent_id_snapshot: `${workspaceId}:orchestrator`,
-          }),
-        ]),
-      })
-    )
-
-    const workerToken = serverStore.peekAgentToken(workerId)
-    if (!workerToken) {
-      throw new Error('Expected worker token after start')
-    }
-    process.env.HIVE_AGENT_ID = workerId
-    process.env.HIVE_AGENT_TOKEN = workerToken
-
-    await expect(
-      runTeamCommand([
-        'memory',
-        'add',
-        'The setup script fails when pnpm is missing.',
-        '--kind',
-        'pitfall',
-        '--tag',
-        'setup',
-      ])
-    ).rejects.toBeInstanceOf(Error)
-    logSpy.mockRestore()
-
-    expect(serverStore.listMemoryEntries(workspaceId, { statuses: ['candidate'] })).toEqual([])
-  })
-
-  test('team memory search/forget uses the real CLI and server path with role authz', async () => {
-    if (!serverStore) {
-      throw new Error('Expected test server store')
-    }
-    const workspaceId = process.env.HIVE_PROJECT_ID
-    if (!workspaceId) {
-      throw new Error('Expected workspace id')
-    }
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await runTeamCommand([
-      'memory',
-      'add',
-      'Remote mobile API calls must use the relay path.',
-      '--kind',
-      'decision',
-      '--tag',
-      'remote',
-    ])
-    const addPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      memory: { id: string }
-    }
-
-    const workerToken = serverStore.peekAgentToken(workerId)
-    if (!workerToken) {
-      throw new Error('Expected worker token after start')
-    }
-    process.env.HIVE_AGENT_ID = workerId
-    process.env.HIVE_AGENT_TOKEN = workerToken
-
-    await runTeamCommand(['memory', 'search', 'remote', 'relay'])
-    const searchPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      ok: true
-      results: Array<{ id: string; status: string }>
-    }
-    expect(searchPayload).toEqual({
-      ok: true,
-      results: [
-        expect.objectContaining({
-          id: addPayload.memory.id,
-          status: 'active',
-        }),
-      ],
-    })
-
-    await expect(runTeamCommand(['memory', 'forget', addPayload.memory.id])).rejects.toBeInstanceOf(
-      Error
-    )
-
-    process.env.HIVE_AGENT_ID = `${workspaceId}:orchestrator`
-    const orchestratorToken = serverStore.peekAgentToken(process.env.HIVE_AGENT_ID)
-    if (!orchestratorToken) {
-      throw new Error('Expected orchestrator token after start')
-    }
-    process.env.HIVE_AGENT_TOKEN = orchestratorToken
-
-    await runTeamCommand(['memory', 'forget', addPayload.memory.id])
-    const forgetPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      memory: { id: string; status: string }
-      ok: true
-    }
-    expect(forgetPayload).toEqual({
-      memory: expect.objectContaining({
-        id: addPayload.memory.id,
-        status: 'archived',
-      }),
-      ok: true,
-    })
-
-    await runTeamCommand(['memory', 'search', 'remote', 'relay'])
-    const archivedSearchPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      results: unknown[]
-    }
-    expect(archivedSearchPayload.results).toEqual([])
-
-    await runTeamCommand(['memory', 'show', addPayload.memory.id])
-    const showPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      memory: { id: string; sources: Array<{ source_type: string }>; status: string }
-    }
-    logSpy.mockRestore()
-
-    expect(showPayload.memory).toEqual(
-      expect.objectContaining({
-        id: addPayload.memory.id,
-        sources: expect.arrayContaining([expect.objectContaining({ source_type: 'manual' })]),
-        status: 'archived',
-      })
-    )
-  })
-
-  test('team memory dream show is worker-readable while apply stays orchestrator-only', async () => {
-    if (!serverStore) {
-      throw new Error('Expected test server store')
-    }
-    const workspaceId = process.env.HIVE_PROJECT_ID
-    if (!workspaceId) {
-      throw new Error('Expected workspace id')
-    }
-    const orchestratorId = `${workspaceId}:orchestrator`
-    const orchestratorToken = serverStore.peekAgentToken(orchestratorId)
-    if (!orchestratorToken) {
-      throw new Error('Expected orchestrator token after start')
-    }
-    serverStore.recordUserInput(
-      workspaceId,
-      orchestratorId,
-      'Dream should remember run-scoped apply.'
-    )
-    const run = await serverStore.runMemoryDream(workspaceId)
-    expect(run).toEqual(expect.objectContaining({ status: 'running' }))
-
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    await runTeamCommand(['memory', 'dream', 'show', run.id])
-    const showPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      ok: true
-      prompt: string
-      run: { id: string; status: string }
-    }
-    expect(showPayload).toEqual(
-      expect.objectContaining({
-        ok: true,
-        run: expect.objectContaining({ id: run.id, status: 'running' }),
-      })
-    )
-    expect(showPayload.prompt).toContain('untrusted JSON data')
-    expect(showPayload.prompt).toContain('Dream should remember run-scoped apply.')
-    expect((showPayload as Record<string, unknown>).messages).toBeUndefined()
-    expect((showPayload as Record<string, unknown>).memories).toBeUndefined()
-
-    const workerToken = serverStore.peekAgentToken(workerId)
-    if (!workerToken) {
-      throw new Error('Expected worker token after start')
-    }
-    process.env.HIVE_AGENT_ID = workerId
-    process.env.HIVE_AGENT_TOKEN = workerToken
-    await runTeamCommand(['memory', 'dream', 'show', run.id])
-    const workerShowPayload = JSON.parse(logSpy.mock.calls.at(-1)?.[0] ?? '{}') as {
-      ok: true
-      prompt: string
-      run: { id: string }
-    }
-    expect(workerShowPayload).toEqual(
-      expect.objectContaining({
-        ok: true,
-        prompt: expect.stringContaining('Dream should remember run-scoped apply.'),
-        run: expect.objectContaining({ id: run.id }),
-      })
-    )
-
-    const baseEnv = {
-      HIVE_PORT: process.env.HIVE_PORT ?? '',
-      HIVE_PROJECT_ID: workspaceId,
-    }
-    const forbidden = await runTeamBinaryWithStdin(
-      ['memory', 'apply', '--run', run.id, '--stdin'],
-      { ...baseEnv, HIVE_AGENT_ID: workerId, HIVE_AGENT_TOKEN: workerToken },
-      '{"ops":[]}'
-    )
-    expect(forbidden.code).toBe(1)
-    expect(forbidden.stderr).toContain('Request failed with status 403')
-
-    const missing = await runTeamBinaryWithStdin(
-      ['memory', 'apply', '--run', 'missing-dream-run', '--stdin'],
-      { ...baseEnv, HIVE_AGENT_ID: orchestratorId, HIVE_AGENT_TOKEN: orchestratorToken },
-      '{"ops":[]}'
-    )
-    expect(missing.code).toBe(1)
-    expect(missing.stderr).toContain('Request failed with status 404')
-    expect(missing.stderr).toContain('Dream run not found: missing-dream-run')
-
-    const applied = await runTeamBinaryWithStdin(
-      ['memory', 'apply', '--run', run.id, '--stdin'],
-      { ...baseEnv, HIVE_AGENT_ID: orchestratorId, HIVE_AGENT_TOKEN: orchestratorToken },
-      JSON.stringify({
-        ops: [
-          { body: 'Dream apply is run-scoped and orchestrator-only.', kind: 'fact', op: 'add' },
-        ],
-      })
-    )
-    expect(applied.code).toBe(0)
-    const appliedPayload = JSON.parse(applied.stdout) as { run: { status: string } }
-    expect(appliedPayload.run.status).toBe('completed')
-
-    const malformed = await runTeamBinaryWithStdin(
-      ['memory', 'apply', '--run', run.id, '--stdin'],
-      { ...baseEnv, HIVE_AGENT_ID: orchestratorId, HIVE_AGENT_TOKEN: orchestratorToken },
-      '{not-json'
-    )
-    expect(malformed.code).toBe(1)
-    expect(malformed.stderr).toContain('stdin must be valid JSON')
-
-    const repeated = await runTeamBinaryWithStdin(
-      ['memory', 'apply', '--run', run.id, '--stdin'],
-      { ...baseEnv, HIVE_AGENT_ID: orchestratorId, HIVE_AGENT_TOKEN: orchestratorToken },
-      '{"ops":[]}'
-    )
-    expect(repeated.code).toBe(1)
-    expect(repeated.stderr).toContain('Request failed with status 409')
-    expect(repeated.stderr).toContain('Dream run is no longer running')
-
-    expect(serverStore.listMemoryEntries(workspaceId, { statuses: ['active'] })).toContainEqual(
-      expect.objectContaining({
-        body: 'Dream apply is run-scoped and orchestrator-only.',
-        source: 'dream',
-      })
-    )
-    logSpy.mockRestore()
   })
 
   test('team cancel --dispatch closes the selected dispatch', async () => {

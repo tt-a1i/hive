@@ -17,7 +17,6 @@ import type { CommandPresetRecord } from './command-preset-store.js'
 import type { FeatureFlags } from './feature-flags.js'
 import { createLiveRunRegistry } from './live-run-registry.js'
 import { createNoopRestartPolicy, type RestartPolicy } from './restart-policy.js'
-import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 
 const waitForExitEntry = async (promise: Promise<unknown>, timeoutMs: number): Promise<boolean> => {
   if (timeoutMs <= 0) return false
@@ -43,8 +42,7 @@ export const createAgentRuntime = (
   onAgentExit: (workspaceId: string, agentId: string) => void,
   restartPolicy: RestartPolicy = createNoopRestartPolicy(),
   getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined,
-  getFlags?: () => FeatureFlags,
-  memoryInjection?: TeamMemoryInjectionService
+  getFlags?: () => FeatureFlags
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
@@ -66,7 +64,6 @@ export const createAgentRuntime = (
     registry,
     syncRun,
     ...(getFlags ? { getFlags } : {}),
-    ...(memoryInjection ? { memoryInjection } : {}),
   })
   const startLiveRun = createAgentRunStarter({
     agentManager,
@@ -79,7 +76,6 @@ export const createAgentRuntime = (
     getAgent,
     restartPolicy,
     ...(getFlags ? { getFlags } : {}),
-    ...(memoryInjection ? { memoryInjection } : {}),
   })
 
   return {

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { createAgentStdinDispatcher } from '../../src/server/agent-stdin-dispatcher.js'
 import { PtyInactiveError } from '../../src/server/http-errors.js'
-import type { TeamMemoryInjectionService } from '../../src/server/team-memory-injection.js'
 
 type FakeRun = {
   agentId: string
@@ -14,10 +13,7 @@ type FakeRun = {
 
 const BRACKET_OPEN = '[200~'
 
-const makeHarness = (
-  command: string,
-  input: { failWrite?: boolean; memoryInjection?: TeamMemoryInjectionService } = {}
-) => {
+const makeHarness = (command: string, input: { failWrite?: boolean } = {}) => {
   const runs: FakeRun[] = []
   const writes: Array<{ runId: string; text: string }> = []
   const agentManager = {
@@ -45,7 +41,6 @@ const makeHarness = (
     getWorkspaceId: (agentId: string) => agentId.split(':')[0] ?? '',
     registry: registry as never,
     syncRun: (run) => run,
-    ...(input.memoryInjection ? { memoryInjection: input.memoryInjection } : {}),
   })
   return { runs, writes, dispatcher }
 }
@@ -60,37 +55,6 @@ describe('per-agent stdin write queue', () => {
     expect(() =>
       dispatcher.writeSendPrompt('ws', 'ws:w1', 'd1', 'Orchestrator', 'Coder role', 'do it')
     ).toThrow(PtyInactiveError)
-  })
-
-  test('dispatch memory audit rolls back when the send write fails', () => {
-    const deleted: string[][] = []
-    const memoryInjection: TeamMemoryInjectionService = {
-      buildDigest: () => null,
-      buildDispatchDigest: () => ({
-        memoryIds: ['memory-1'],
-        text: '<hive-memory context="dispatch">memory</hive-memory>',
-      }),
-      deleteInjections: (injectionIds) => {
-        deleted.push(injectionIds)
-      },
-      logInjections: () => ['injection-1'],
-    }
-    const { dispatcher, runs } = makeHarness(process.execPath, {
-      failWrite: true,
-      memoryInjection,
-    })
-    runs.push({
-      agentId: 'ws:w1',
-      runId: 'r1',
-      startedAt: 1,
-      status: 'running',
-      output: 'ready\n',
-    })
-
-    expect(() =>
-      dispatcher.writeSendPrompt('ws', 'ws:w1', 'd1', 'Orchestrator', 'Coder role', 'do it')
-    ).toThrow(PtyInactiveError)
-    expect(deleted).toEqual([['injection-1']])
   })
 
   test('two writes to the same agent do not interleave: the first submit precedes the second paste', async () => {

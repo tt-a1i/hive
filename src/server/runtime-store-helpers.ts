@@ -30,19 +30,6 @@ import { buildRuntimeRestartPolicy } from './runtime-restart-policy.js'
 import { createSettingsStore } from './settings-store.js'
 import { createTasksFileService } from './tasks-file.js'
 import { createTasksFileWatcher } from './tasks-file-watcher.js'
-import { createTeamMemoryDiagnostics } from './team-memory-diagnostics.js'
-import { createWorkspaceMemoryDigestProvider } from './team-memory-digest.js'
-import { createDreamCliExecutor } from './team-memory-dream-cli.js'
-import { buildMemoryDreamInput } from './team-memory-dream-input.js'
-import { createTeamMemoryDreamRunner } from './team-memory-dream-runner.js'
-import { createTeamMemoryDreamScheduler } from './team-memory-dream-scheduler.js'
-import { createTeamMemoryDreamStore } from './team-memory-dream-store.js'
-import {
-  createTeamMemoryExportService,
-  MEMORY_EXPORT_DREAM_CHANGELOG_LIMIT,
-} from './team-memory-export.js'
-import { createLocalTeamMemoryProvider } from './team-memory-provider.js'
-import { createTeamMemoryStore } from './team-memory-store.js'
 import { createTeamOperations } from './team-operations.js'
 import { createTeamRecallStore } from './team-recall-store.js'
 import { resolveTerminalInputProfile } from './terminal-input-profile.js'
@@ -87,16 +74,9 @@ export interface RuntimeStoreServices {
   tasksFileWatcher: ReturnType<typeof createTasksFileWatcher>
   tasksFileWatchCallbacks: Set<(workspaceId: string, content: string) => void>
   tasksFileService: ReturnType<typeof createTasksFileService>
-  teamMemoryDreamRunner: ReturnType<typeof createTeamMemoryDreamRunner>
-  teamMemoryDreamScheduler: ReturnType<typeof createTeamMemoryDreamScheduler>
   removeWorkerCompletely: (workspaceId: string, workerId: string, reason?: string) => void
   protocolEventStats: ReturnType<typeof createProtocolEventStats>
   reportOutbox: ReturnType<typeof createReportOutboxStore>
-  teamMemoryDreamStore: ReturnType<typeof createTeamMemoryDreamStore>
-  teamMemoryDiagnostics: ReturnType<typeof createTeamMemoryDiagnostics>
-  teamMemoryStore: ReturnType<typeof createTeamMemoryStore>
-  teamMemoryExport: ReturnType<typeof createTeamMemoryExportService>
-  teamMemoryProvider: ReturnType<typeof createLocalTeamMemoryProvider>
   teamRecallStore: ReturnType<typeof createTeamRecallStore>
   teamOps: ReturnType<typeof createTeamOperations>
   uiAuth: ReturnType<typeof createUiAuth>
@@ -165,8 +145,6 @@ export const createRuntimeStoreServices = (
   const messageLogStore = createMessageLogStore(db)
   const dispatchLedgerStore = createDispatchLedgerStore(db)
   const dispatchMessageStore = createDispatchMessageStore(db)
-  const teamMemoryStore = createTeamMemoryStore(db)
-  const teamMemoryDreamStore = createTeamMemoryDreamStore(db)
   const teamRecallStore = createTeamRecallStore(db)
   const reportOutbox = createReportOutboxStore(db)
   const workflowDispatchAwaiter = createWorkflowDispatchAwaiter()
@@ -177,23 +155,6 @@ export const createRuntimeStoreServices = (
   const agentSessionStore = createAgentSessionStore(db)
   const settings = createSettingsStore(db)
   const getFlags = () => readFeatureFlags(settings)
-  const teamMemoryProvider = createLocalTeamMemoryProvider({ memoryStore: teamMemoryStore })
-  const teamMemoryDreamCli = createDreamCliExecutor()
-  const teamMemoryDiagnostics = createTeamMemoryDiagnostics({
-    dreamStore: teamMemoryDreamStore,
-    memoryProvider: teamMemoryProvider,
-    memoryStore: teamMemoryStore,
-  })
-  const memoryDigestProvider = createWorkspaceMemoryDigestProvider({
-    memoryStore: teamMemoryProvider,
-    settings,
-  })
-  const memoryInjection = {
-    buildDigest: memoryDigestProvider.buildDigest,
-    buildDispatchDigest: memoryDigestProvider.buildDispatchDigest,
-    deleteInjections: teamMemoryStore.deleteInjections,
-    logInjections: teamMemoryStore.logInjections,
-  }
   const webhookNotifier = createWebhookNotifier({
     getUrl: () => settings.getAppState(WEBHOOK_URL_KEY)?.value ?? null,
   })
@@ -227,13 +188,6 @@ export const createRuntimeStoreServices = (
 
   const workspaceStore = createWorkspaceStore(db, dispatchLedgerStore.listOpenDispatchKinds)
   const workspaceUploadStore = createWorkspaceUploadStore(db, uploadStorage.uploadsDir)
-  const teamMemoryExport = createTeamMemoryExportService({
-    getWorkspacePath: (workspaceId) =>
-      workspaceStore.getWorkspaceSnapshot(workspaceId).summary.path,
-    listDreamRuns: (workspaceId) =>
-      teamMemoryDreamStore.listRuns(workspaceId, MEMORY_EXPORT_DREAM_CHANGELOG_LIMIT),
-    listEntries: teamMemoryStore.listExportEntries,
-  })
   const startExistingWorkspaceWatches = () => {
     for (const workspace of workspaceStore.listWorkspaces()) {
       void tasksFileWatcher
@@ -247,7 +201,6 @@ export const createRuntimeStoreServices = (
     listActionableDispatchMessagesForRecovery: dispatchMessageStore.listActionableWorkspaceMessages,
     agentRunStore,
     messageLogStore,
-    memoryInjection,
     tasksFileService,
     workspaceStore,
     getFlags,
@@ -310,8 +263,7 @@ export const createRuntimeStoreServices = (
     },
     restartPolicy,
     (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId),
-    getFlags,
-    memoryInjection
+    getFlags
   )
   const dispatchMessageOps = createDispatchMessageOperations({
     db,
@@ -321,35 +273,6 @@ export const createRuntimeStoreServices = (
     runtime: agentRuntime,
     isClosing: () => closing,
   })
-  const teamMemoryDreamRunner = createTeamMemoryDreamRunner({
-    applyScheduledRun: teamMemoryDreamStore.applyAndCompleteRun,
-    buildScheduledInput: (workspaceId, run) =>
-      buildMemoryDreamInput({ teamMemoryDreamStore, teamMemoryStore }, workspaceId, run),
-    dreamStore: teamMemoryDreamStore,
-    deliverToOrchestrator: (workspaceId, text) =>
-      agentRuntime.deliverSystemMessageToAgent(workspaceId, getOrchestratorId(workspaceId), text, {
-        requireActiveRun: true,
-      }),
-    executeScheduledDream: ({ prompt, workspaceId }) =>
-      teamMemoryDreamCli.execute({
-        cwd: workspaceStore.getWorkspaceSnapshot(workspaceId).summary.path,
-        getCommandPreset: settings.getCommandPreset,
-        orchestratorLaunchConfig: agentRuntime.peekAgentLaunchConfig(
-          workspaceId,
-          getOrchestratorId(workspaceId)
-        ),
-        prompt,
-      }),
-    scheduleExport: teamMemoryExport.schedule,
-  })
-  const teamMemoryDreamScheduler = createTeamMemoryDreamScheduler({
-    getScheduleState: teamMemoryDreamStore.getScheduleState,
-    getWorkspaceSnapshot: (workspaceId) => workspaceStore.getWorkspaceSnapshot(workspaceId),
-    listWorkspaces: workspaceStore.listWorkspaces,
-    runScheduled: teamMemoryDreamRunner.runScheduled,
-    settings,
-  })
-  teamMemoryDreamScheduler.start()
   // Shared by explicit deletion and ephemeral-worker cleanup.
   function removeWorkerCompletely(
     workspaceId: string,
@@ -460,16 +383,9 @@ export const createRuntimeStoreServices = (
     tasksFileWatcher,
     tasksFileWatchCallbacks,
     tasksFileService,
-    teamMemoryDreamRunner,
-    teamMemoryDreamScheduler,
     protocolEventStats,
     removeWorkerCompletely,
     reportOutbox,
-    teamMemoryDreamStore,
-    teamMemoryDiagnostics,
-    teamMemoryExport,
-    teamMemoryProvider,
-    teamMemoryStore,
     teamRecallStore,
     teamOps,
     uiAuth,
@@ -586,13 +502,11 @@ export const createRuntimeStoreLifecycle = ({
         // Fail in-flight workflow awaiters BEFORE their workers vanish, so the
         // runner's `await agent(...)` rejects with a clear shutdown error
         // instead of hanging on a Promise that can never resolve.
-        await services.teamMemoryDreamScheduler.close()
         services.workflowDispatchAwaiter.cancelAll('runtime closing')
         // Shells do not use SQLite. Their exit failure must not bypass cleanup
         // of the independent agents/watchers that do; keep the database last.
         const [shellClose] = await Promise.allSettled([services.shellRuntime.close()])
         try {
-          await services.teamMemoryExport.close()
           await services.agentRuntime.close()
           await services.tasksFileWatcher.close()
           services.workerOutputTracker?.closeAll()

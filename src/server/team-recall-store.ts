@@ -18,16 +18,11 @@ export interface RecallResult {
   dispatchStatus: string | null
   fromAgentId: string | null
   indexName: 'like' | 'trigram' | 'unicode'
-  memoryConfidence?: number | null
-  memoryId?: string | null
-  memoryKind?: string | null
-  memoryStatus?: string | null
-  memoryTags?: string[]
   messageType: string | null
   reportText: string | null
   score: number
   sourceSequence: number
-  sourceType: 'dispatch' | 'memory' | 'message'
+  sourceType: 'dispatch' | 'message'
   text: string
   toAgentId: string | null
   workerId: string | null

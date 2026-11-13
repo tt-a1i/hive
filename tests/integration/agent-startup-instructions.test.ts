@@ -3,11 +3,6 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
-import Database from '../../src/server/sqlite.js'
-import {
-  serializeWorkspaceMemoryEnabled,
-  workspaceMemoryEnabledKey,
-} from '../../src/server/team-memory-feature.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -35,24 +30,6 @@ const waitFor = async (
 
 const expectReceivedText = (received: string, text: string) => {
   expect(received).toContain(text)
-}
-
-const listMemoryInjections = (dataDir: string) => {
-  const db = new Database(join(dataDir, 'runtime.sqlite'), { readOnly: true })
-  const rows = db
-    .prepare(
-      `SELECT context_type, memory_id, target_agent_id_snapshot, workspace_id
-       FROM memory_injections
-       ORDER BY injected_at ASC, id ASC`
-    )
-    .all() as Array<{
-    context_type: string
-    memory_id: string
-    target_agent_id_snapshot: string
-    workspace_id: string
-  }>
-  db.close()
-  return rows
 }
 
 afterEach(() => {
@@ -144,24 +121,6 @@ describe('agent startup instructions', () => {
       })
       expect(workerResponse.status).toBe(201)
       const worker = (await workerResponse.json()) as { id: string }
-      const pinnedMemory = hive.store.addMemoryEntry({
-        actor: { id: orchestratorId, name: 'Orchestrator', role: 'orchestrator' },
-        body: 'Pinned startup memory must be present for every fresh agent.',
-        kind: 'decision',
-        tags: ['startup'],
-        workspaceId: workspace.id,
-      })
-      const digestMemory = hive.store.addMemoryEntry({
-        actor: { id: orchestratorId, name: 'Orchestrator', role: 'orchestrator' },
-        body: 'Digest startup memory should be bounded but reusable.',
-        kind: 'pitfall',
-        tags: ['digest'],
-        workspaceId: workspace.id,
-      })
-      const db = new Database(join(dataDir, 'runtime.sqlite'))
-      db.prepare('UPDATE memory_entries SET pinned = 1 WHERE id = ?').run(pinnedMemory.id)
-      db.close()
-
       const configure = async (agentId: string) => {
         const response = await fetch(
           `${baseUrl}/api/workspaces/${workspace.id}/agents/${agentId}/config`,
@@ -215,11 +174,6 @@ describe('agent startup instructions', () => {
           'utf8'
         )
         expect(output).toContain('<hive-message kind="startup">')
-        expect(output).toContain('<hive-memory context="startup">')
-        expectReceivedText(output, 'Pinned startup memory')
-        expectReceivedText(output, 'present for every fresh agent')
-        expectReceivedText(output, 'Digest startup memory')
-        expectReceivedText(output, 'reusable')
         expect(output).toContain('You are Orchestrator (orchestrator) in workspace Alpha.')
         expect(output).toContain('team send "<member-name>" "<task>"')
         expect(output).toContain('team list')
@@ -229,11 +183,8 @@ describe('agent startup instructions', () => {
         )
         expect(output).toContain('team guide dispatch')
         expect(output).toContain('team guide tasks')
-        expect(output).toContain('team guide memory')
         expect(output).toContain('team guide member')
-        expect(output).not.toContain('Memory Dream:')
         expect(output).not.toContain('Command usage:')
-        expect(output).not.toContain('Treat recalled memory as background evidence')
         expect(output).toContain('member')
         expect(output).not.toContain('If exactly one worker is available')
         expect(output).not.toContain('closed exception')
@@ -259,11 +210,6 @@ describe('agent startup instructions', () => {
           'utf8'
         )
         expect(output).toContain('<hive-message kind="startup">')
-        expect(output).toContain('<hive-memory context="startup">')
-        expectReceivedText(output, 'Pinned startup memory')
-        expectReceivedText(output, 'present for every fresh agent')
-        expectReceivedText(output, 'Digest startup memory')
-        expectReceivedText(output, 'reusable')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')
         expectReceivedText(output, 'Report only when ending this round of responsibility')
         expectReceivedText(
@@ -285,143 +231,6 @@ describe('agent startup instructions', () => {
         expect(output).not.toContain('team send <member-name>')
         expect(body.output).toContain('SUBMITTED')
       }, 6000)
-
-      await waitFor(() => {
-        expect(listMemoryInjections(dataDir)).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              context_type: 'startup',
-              memory_id: pinnedMemory.id,
-              target_agent_id_snapshot: orchestratorId,
-              workspace_id: workspace.id,
-            }),
-            expect.objectContaining({
-              context_type: 'startup',
-              memory_id: digestMemory.id,
-              target_agent_id_snapshot: orchestratorId,
-              workspace_id: workspace.id,
-            }),
-            expect.objectContaining({
-              context_type: 'startup',
-              memory_id: pinnedMemory.id,
-              target_agent_id_snapshot: worker.id,
-              workspace_id: workspace.id,
-            }),
-            expect.objectContaining({
-              context_type: 'startup',
-              memory_id: digestMemory.id,
-              target_agent_id_snapshot: worker.id,
-              workspace_id: workspace.id,
-            }),
-          ])
-        )
-      })
-    } finally {
-      await hive.close()
-    }
-  }, 20_000)
-
-  test('workspace memory off skips startup digest and injection audit', async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), 'hive-agent-startup-memory-off-'))
-    const workspacePath = join(dataDir, 'workspace')
-    const binDir = join(dataDir, 'bin')
-    mkdirSync(workspacePath, { recursive: true })
-    mkdirSync(binDir, { recursive: true })
-    tempDirs.push(dataDir)
-
-    const fakeClaude = join(binDir, 'claude')
-    writeFileSync(
-      fakeClaude,
-      [
-        '#!/usr/bin/env node',
-        "const { appendFileSync } = require('node:fs')",
-        `const receiptPath = ${JSON.stringify(dataDir)} + '/' + encodeURIComponent(process.env.HIVE_AGENT_ID) + '.stdin.txt'`,
-        "process.stdin.setEncoding('utf8')",
-        'if (process.stdin.isTTY) process.stdin.setRawMode(true)',
-        "process.stdin.on('data', (chunk) => {",
-        '  appendFileSync(receiptPath, chunk)',
-        "  process.stdout.write('IN:' + chunk)",
-        "  if (chunk.includes('</hive-message>')) process.stdout.write('\\nRECEIVED\\n')",
-        '})',
-        'process.stdin.resume()',
-      ].join('\n')
-    )
-    chmodSync(fakeClaude, 0o755)
-    if (process.platform === 'win32') {
-      writeFileSync(
-        `${fakeClaude}.cmd`,
-        `@echo off\r\n"${process.execPath}" "%~dp0${basename(fakeClaude)}" %*\r\n`
-      )
-    }
-
-    process.env.HIVE_DATA_DIR = dataDir
-    process.env.PATH = `${binDir}${delimiter}${originalPath ?? ''}`
-    const hive = await runHiveCommand(['--port', '0'])
-
-    try {
-      const baseUrl = `http://127.0.0.1:${hive.port}`
-      const uiCookie = await getUiCookie(baseUrl)
-      const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({
-          autostart_orchestrator: false,
-          name: 'MemoryOff',
-          path: workspacePath,
-        }),
-      })
-      expect(workspaceResponse.status).toBe(201)
-      const workspace = (await workspaceResponse.json()) as { id: string }
-      const orchestratorId = `${workspace.id}:orchestrator`
-      hive.store.addMemoryEntry({
-        actor: { id: orchestratorId, name: 'Orchestrator', role: 'orchestrator' },
-        body: 'This startup memory must stay out while disabled.',
-        kind: 'fact',
-        workspaceId: workspace.id,
-      })
-      hive.store.settings.setAppState(
-        workspaceMemoryEnabledKey(workspace.id),
-        serializeWorkspaceMemoryEnabled(false)
-      )
-
-      const configureResponse = await fetch(
-        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/config`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', cookie: uiCookie },
-          body: JSON.stringify({ command: 'claude', args: [] }),
-        }
-      )
-      expect(configureResponse.status).toBe(204)
-      const startResponse = await fetch(
-        `${baseUrl}/api/workspaces/${workspace.id}/agents/${orchestratorId}/start`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', cookie: uiCookie },
-          body: JSON.stringify({ hive_port: String(hive.port) }),
-        }
-      )
-      expect(startResponse.status).toBe(201)
-      const run = (await startResponse.json()) as { run_id: string }
-      const live = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
-      if (!live) throw new Error('Started agent has no live run')
-      await live.postStartInputReady
-
-      await waitFor(async () => {
-        const response = await fetch(`${baseUrl}/api/runtime/runs/${run.run_id}`, {
-          headers: { cookie: uiCookie },
-        })
-        const body = (await response.json()) as { output: string }
-        const output = readFileSync(
-          join(dataDir, `${encodeURIComponent(orchestratorId)}.stdin.txt`),
-          'utf8'
-        )
-        expect(output).toContain('<hive-message kind="startup">')
-        expect(output).not.toContain('<hive-memory context="startup">')
-        expect(output).not.toContain('This startup memory must stay out while disabled.')
-        expect(body.output).toContain('RECEIVED')
-      }, 6000)
-      expect(listMemoryInjections(dataDir)).toEqual([])
     } finally {
       await hive.close()
     }

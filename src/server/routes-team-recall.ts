@@ -3,7 +3,6 @@ import { BadRequestError } from './http-errors.js'
 import { readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
 import { authenticateCliAgent, requireCommandForRole } from './team-authz.js'
-import type { MemorySearchResult } from './team-memory-store.js'
 import type { RecallContextMessage, RecallResult } from './team-recall-store.js'
 
 interface TeamRecallBody {
@@ -14,8 +13,6 @@ interface TeamRecallBody {
   token?: unknown
   window?: unknown
 }
-
-const DEFAULT_RECALL_LIMIT = 10
 
 const requireNonEmptyString = (value: unknown, field: string) => {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -53,11 +50,6 @@ const serializeRecallResult = (result: RecallResult) => ({
   dispatch_status: result.dispatchStatus,
   from_agent_id: result.fromAgentId,
   index_name: result.indexName,
-  memory_confidence: result.memoryConfidence ?? null,
-  memory_id: result.memoryId ?? null,
-  memory_kind: result.memoryKind ?? null,
-  memory_status: result.memoryStatus ?? null,
-  memory_tags: result.memoryTags ?? [],
   message_type: result.messageType,
   report_text: result.reportText,
   score: result.score,
@@ -66,36 +58,6 @@ const serializeRecallResult = (result: RecallResult) => ({
   text: result.text,
   to_agent_id: result.toAgentId,
   worker_id: result.workerId,
-})
-
-const memoryToRecallResult = (memory: MemorySearchResult): RecallResult => ({
-  context: memory.sources.map((source) => ({
-    createdAt: source.createdAt,
-    fromAgentId: source.actorAgentIdSnapshot,
-    sourceSequence: source.sourceSequence ?? 0,
-    text: source.excerpt ?? '',
-    toAgentId: null,
-    type: source.sourceType,
-    workerId: source.actorAgentIdSnapshot ?? '',
-  })),
-  createdAt: memory.updatedAt,
-  dispatchId: null,
-  dispatchStatus: null,
-  fromAgentId: null,
-  indexName: memory.indexName,
-  memoryConfidence: memory.confidence,
-  memoryId: memory.id,
-  memoryKind: memory.kind,
-  memoryStatus: memory.status,
-  memoryTags: memory.tags,
-  messageType: null,
-  reportText: null,
-  score: memory.score,
-  sourceSequence: 0,
-  sourceType: 'memory',
-  text: memory.body,
-  toAgentId: null,
-  workerId: null,
 })
 
 export const teamRecallRoutes: RouteDefinition[] = [
@@ -120,20 +82,10 @@ export const teamRecallRoutes: RouteDefinition[] = [
       ...(limit !== undefined ? { limit } : {}),
       ...(window !== undefined ? { window } : {}),
     })
-    const memoryResults = store
-      .searchMemoryEntries(projectId, query, {
-        ...(limit !== undefined ? { limit } : {}),
-        statuses: ['active'],
-      })
-      .map(memoryToRecallResult)
-    const combined = [...recallResults, ...memoryResults]
-      .sort((a, b) => a.score - b.score || b.createdAt - a.createdAt)
-      .slice(0, limit ?? DEFAULT_RECALL_LIMIT)
-
     sendJson(response, 200, {
       ok: true,
       query,
-      results: combined.map(serializeRecallResult),
+      results: recallResults.map(serializeRecallResult),
     })
   }),
 ]

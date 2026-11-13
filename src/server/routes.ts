@@ -20,7 +20,6 @@ import { scenarioRoutes } from './routes-scenarios.js'
 import { settingsRoutes } from './routes-settings.js'
 import { taskRoutes } from './routes-tasks.js'
 import { teamRoutes } from './routes-team.js'
-import { teamMemoryRoutes } from './routes-team-memory.js'
 import { teamMessageRoutes } from './routes-team-messages.js'
 import { teamRecallRoutes } from './routes-team-recall.js'
 import { teamReviewRoutes } from './routes-team-review.js'
@@ -29,8 +28,6 @@ import { versionRoutes } from './routes-version.js'
 import { workerRoutes } from './routes-workers.js'
 import { workflowScheduleRoutes } from './routes-workflow-schedules.js'
 import { workflowRoutes } from './routes-workflows.js'
-import { workspaceMemoryRoutes } from './routes-workspace-memory.js'
-import { workspaceMemoryDreamRoutes } from './routes-workspace-memory-dreams.js'
 import { workspaceUploadRoutes } from './routes-workspace-uploads.js'
 import { workspaceRoutes } from './routes-workspaces.js'
 
@@ -47,11 +44,8 @@ const routes: RouteDefinition[] = [
   ...uiRoutes,
   ...settingsRoutes,
   ...taskRoutes,
-  ...workspaceMemoryDreamRoutes,
-  ...workspaceMemoryRoutes,
   ...runtimeRoutes,
   ...teamRecallRoutes,
-  ...teamMemoryRoutes,
   ...teamRoutes,
   ...teamReviewRoutes,
   ...teamMessageRoutes,

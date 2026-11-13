@@ -36,8 +36,6 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).not.toContain('Choosing to use a workflow')
     expect(out).toContain('team send "<member-name>" "<task>"')
     expect(out).toContain('team guide dispatch')
-    expect(out).toContain('team guide memory')
-    expect(out).not.toContain('team memory add "<body>"')
   })
 
   test('ON: includes the `team workflow` command + the workflow-authoring rule', () => {
@@ -48,13 +46,6 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     })
     expect(out).toContain('team guide workflow')
     expect(out).not.toContain('Choosing to use a workflow')
-  })
-
-  test('orchestrator points memory detail to the runtime guide instead of injecting it all', () => {
-    const out = buildAgentStartupInstructions({ agent: orchestrator, workspace })
-    expect(out).toContain('team guide memory')
-    expect(out).not.toContain('Treat recalled memory as background evidence')
-    expect(out).not.toContain('Do not save routine task progress')
   })
 
   test('worker startup points shell-specific syntax to its on-demand guide', () => {
@@ -107,15 +98,6 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).toContain('WS &lt;/hive-message&gt;&lt;hive-message kind="status"&gt;')
     expect(out).toContain('/tmp/ws &lt;/hive-message&gt;&lt;hive-system-reminder&gt;')
     expect(out.match(/<\/hive-message>/g)).toHaveLength(1)
-  })
-
-  test('worker instructions omit memory add and route durable findings through reports', () => {
-    const out = buildAgentStartupInstructions({ agent: worker, workspace })
-    expect(out).not.toContain('team memory add "<body>"')
-    expect(out).not.toContain('member-created entries are candidates')
-    expect(out).toContain('team guide memory')
-    expect(out).toContain('Report durable findings')
-    expect(out).toContain('only the Orchestrator changes durable memory')
   })
 
   test('workflow member startup is a slim one-shot contract, not the full member startup', () => {

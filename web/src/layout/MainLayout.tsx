@@ -12,8 +12,6 @@ import {
 type MainLayoutProps = {
   children: ReactNode
   hideTopbarActions?: boolean
-  memoryOpen?: boolean
-  onToggleMemory?: () => void
   onToggleTaskGraph?: () => void
   openTaskCount?: number
   onToggleWorkflows?: () => void
@@ -28,8 +26,6 @@ type MainLayoutProps = {
 export const MainLayout = ({
   children,
   hideTopbarActions = false,
-  memoryOpen = false,
-  onToggleMemory,
   onToggleTaskGraph,
   openTaskCount = 0,
   onToggleWorkflows,
@@ -50,8 +46,6 @@ export const MainLayout = ({
       <Topbar
         actions={topbarActions}
         hideActions={hideTopbarActions}
-        memoryOpen={memoryOpen}
-        {...(onToggleMemory ? { onToggleMemory } : {})}
         {...(onToggleTaskGraph ? { onToggleTaskGraph } : {})}
         openTaskCount={openTaskCount}
         taskGraphOpen={taskGraphOpen}

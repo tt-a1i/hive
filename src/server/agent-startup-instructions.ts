@@ -27,12 +27,10 @@ export const buildAgentLegacyIdentityMarker = ({
 
 export const buildAgentStartupInstructions = ({
   agent,
-  memoryDigest,
   workspace,
   flags = FEATURE_FLAGS_ALL_OFF,
 }: {
   agent: AgentSummary
-  memoryDigest?: string | null | undefined
   workspace: WorkspaceSummary
   /** Live flags gate optional workflow reference. They do not grant staffing authorization. */
   flags?: FeatureFlags
@@ -50,10 +48,6 @@ export const buildAgentStartupInstructions = ({
     `Your role: ${escapeHiveEnvelopeText(agent.description)}`,
     '',
   ]
-
-  if (memoryDigest) {
-    lines.push(memoryDigest, '')
-  }
 
   lines.push('Hive boundaries:', ...getHiveTeamRules(agent, flags).map((rule) => `- ${rule}`))
   if (agent.role !== 'orchestrator') {
