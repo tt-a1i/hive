@@ -1,5 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { ImageIcon, MoreVertical, Pencil, Play, RotateCcw, Square, Trash2 } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  ImageIcon,
+  MoreVertical,
+  Pencil,
+  Play,
+  RotateCcw,
+  Square,
+  Trash2,
+} from 'lucide-react'
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useRef, useState } from 'react'
 
 import type { TeamListItem } from '../../../src/shared/types.js'
@@ -23,10 +32,18 @@ const statusKey = (status: WorkerStatusKind) => {
   return 'common.stopped'
 }
 
-export type WorkerCardActionKind = 'start' | 'stop' | 'restart' | 'rename' | 'avatar' | 'delete'
+export type WorkerCardActionKind =
+  | 'start'
+  | 'stop'
+  | 'restart'
+  | 'rename'
+  | 'avatar'
+  | 'delete'
+  | 'switch-cli'
 
 type WorkerCardProps = {
   hasRun: boolean
+  canSwitchCli?: boolean
   isPending?: boolean
   isEditing?: boolean
   onRenameWorker: (worker: TeamListItem, newName: string) => Promise<{ error: string | null }>
@@ -44,6 +61,7 @@ type WorkerCardProps = {
  */
 export const WorkerCard = ({
   hasRun,
+  canSwitchCli = false,
   isPending = false,
   isEditing = false,
   onRenameWorker,
@@ -224,6 +242,17 @@ export const WorkerCard = ({
               ariaLabel={t('worker.startAria', { name: worker.name })}
             >
               <Play size={12} aria-hidden />
+            </CardActionBtn>
+          )}
+          {canSwitchCli && !worker.ephemeral && (
+            <CardActionBtn
+              title={t('switchCli.title')}
+              onClick={handleAction('switch-cli')}
+              disabled={isPending}
+              testId={`worker-card-switch-cli-${worker.id}`}
+              ariaLabel={t('switchCli.workerAria', { name: worker.name })}
+            >
+              <ArrowLeftRight size={12} aria-hidden />
             </CardActionBtn>
           )}
           <CardActionBtn

@@ -16,6 +16,7 @@ type WorkersPaneProps = {
   onDeleteWorker: (worker: TeamListItem) => void
   onOpenShellTerminal: () => void
   onOpenWorker: (worker: TeamListItem) => void
+  onSwitchCli?: (worker: TeamListItem) => void
   onRenameWorker: (worker: TeamListItem, newName: string) => Promise<{ error: string | null }>
   onUpdateWorkerAvatar: (
     workerId: string,
@@ -69,6 +70,7 @@ export const WorkersPane = ({
   onDeleteWorker,
   onOpenShellTerminal,
   onOpenWorker,
+  onSwitchCli,
   onRenameWorker,
   onUpdateWorkerAvatar,
   onStopWorker,
@@ -103,6 +105,10 @@ export const WorkersPane = ({
     if (kind === 'restart') {
       const runId = runIdsByAgentId.get(worker.id)
       if (runId) onRestartWorker?.(worker.id, runId)
+      return
+    }
+    if (kind === 'switch-cli') {
+      onSwitchCli?.(worker)
       return
     }
     if (kind === 'rename') {
@@ -206,6 +212,7 @@ export const WorkersPane = ({
                     <li key={worker.id}>
                       <WorkerCard
                         hasRun={runIdsByAgentId.has(worker.id)}
+                        canSwitchCli={Boolean(onSwitchCli)}
                         isPending={
                           startingWorkerId === worker.id ||
                           (worker.status === 'working' && !runIdsByAgentId.has(worker.id)) ||

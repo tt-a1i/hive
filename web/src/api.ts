@@ -1774,3 +1774,39 @@ export const getReportedDispatches = async (
     throw new Error('Missing report snapshot time')
   return { reports: await response.json(), snapshotMs }
 }
+
+export interface AgentLaunchConfig {
+  command: string
+  args: string[]
+  command_preset_id: string | null
+}
+
+export const getAgentLaunchConfig = async (
+  workspaceId: string,
+  agentId: string
+): Promise<AgentLaunchConfig | null> => {
+  const response = await apiFetch(
+    `/api/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/config`
+  )
+  if (response.status === 404) return null
+  if (!response.ok)
+    throw new Error(await readErrorMessage(response, 'Failed to load agent configuration'))
+  return (await response.json()) as AgentLaunchConfig
+}
+
+export const switchAgentCli = async (
+  workspaceId: string,
+  agentId: string,
+  input: { command_preset_id?: string; startup_command?: string; restart: boolean }
+): Promise<{ run_id: string | null }> => {
+  const response = await apiFetch(
+    `/api/ui/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/switch`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  )
+  if (!response.ok) throw new Error(await readErrorMessage(response, 'Failed to switch CLI'))
+  return (await response.json()) as { run_id: string | null }
+}

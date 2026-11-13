@@ -1,4 +1,4 @@
-import { Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight, Copy, Crown, LoaderCircle, Play, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useI18n } from '../i18n.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
@@ -29,6 +29,7 @@ type OrchestratorPaneProps = {
   onRemoveWorkspace: () => void
   onStart: () => void
   onRestart: () => void
+  onSwitchCli?: () => void
 }
 
 const StartingBody = () => {
@@ -164,6 +165,7 @@ export const OrchestratorPane = ({
   onRemoveWorkspace,
   onRestart,
   onStart,
+  onSwitchCli,
 }: OrchestratorPaneProps) => {
   const { t } = useI18n()
   const isMobile = useIsMobile()
@@ -176,10 +178,27 @@ export const OrchestratorPane = ({
       }}
       data-testid="orchestrator-terminal-slot"
     >
+      {!isMobile && onSwitchCli && (
+        <div
+          className="flex items-center justify-between border-b px-3 py-1"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <span className="text-xs font-medium text-sec">Orchestrator</span>
+          <button
+            type="button"
+            className="icon-btn icon-btn--ghost"
+            onClick={onSwitchCli}
+            data-testid="orchestrator-switch-cli"
+            aria-label={t('switchCli.title')}
+          >
+            <ArrowLeftRight size={14} aria-hidden /> {t('switchCli.title')}
+          </button>
+        </div>
+      )}
       {state.kind === 'running' ? (
         <div
           id={`orch-pty-${state.runId}`}
-          className="orchestrator-pty-slot relative flex h-full w-full"
+          className="orchestrator-pty-slot relative flex min-h-0 flex-1 w-full"
           data-pty-slot="orchestrator"
           data-terminal-auto-focus="true"
         >
