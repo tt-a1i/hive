@@ -1417,7 +1417,7 @@ describe('post-start input writer', () => {
     expect(hasInteractivePromptReady(KIMI_READY_SCREEN, 'claude')).toBe(false)
   })
 
-  test('detects the Kimi trust screen as a first-run setup prompt and extends the readiness deadline', async () => {
+  test('Kimi accepts a ready composer when trust setup finishes before the deadline', async () => {
     expect(hasFirstRunSetupPrompt(KIMI_TRUST_SCREEN)).toBe(true)
     expect(hasFirstRunSetupPrompt('Trust this folder?\n❯ Trust and continue\n  Exit')).toBe(true)
 
@@ -1431,7 +1431,7 @@ describe('post-start input writer', () => {
     const write = createPostStartInputWriter(manager as never, 'kimi')
     const done = write('run-1', '/help')
 
-    await vi.advanceTimersByTimeAsync(45_000)
+    await vi.advanceTimersByTimeAsync(29_900)
     expect(manager.writeInput).not.toHaveBeenCalled()
 
     output = KIMI_READY_SCREEN
@@ -1478,28 +1478,36 @@ describe('post-start input writer', () => {
     expect(manager.writeInput).not.toHaveBeenCalled()
   })
 
-  test('Kimi trust-screen deadline extension still times out once the setup prompt is gone', async () => {
+  test('Kimi setup remains fail-closed past an absolute deadline and stops polling', async () => {
     vi.useFakeTimers()
     let output = KIMI_TRUST_SCREEN
+    const writes: string[] = []
     const manager = {
-      getRun: vi.fn(() => ({ output, status: 'running' })),
-      writeInput: vi.fn(),
+      getRun: () => ({ output, status: 'running' }),
+      writeInput: (_runId: string, text: string) => writes.push(text),
     }
-
-    const write = createPostStartInputWriter(manager as never, 'kimi')
-    const done = write('run-1', '/help')
-    const rejected = expect(done).rejects.toBeInstanceOf(PromptReadinessTimeoutError)
-
-    await vi.advanceTimersByTimeAsync(45_000)
-    expect(manager.writeInput).not.toHaveBeenCalled()
-
-    output = KIMI_PREPARING_SPLASH
-    await vi.advanceTimersByTimeAsync(29_999)
-    expect(manager.writeInput).not.toHaveBeenCalled()
-
+    let failure: unknown
+    const done = createPostStartInputWriter(manager as never, 'kimi')('run-1', '/help').catch(
+      (error) => {
+        failure = error
+      }
+    )
+    await vi.advanceTimersByTimeAsync(29999)
+    expect(failure).toBeUndefined()
+    expect(writes).toEqual([])
     await vi.advanceTimersByTimeAsync(1)
-    await rejected
-    expect(manager.writeInput).not.toHaveBeenCalled()
+    expect(failure).toBeInstanceOf(PromptReadinessTimeoutError)
+    expect(failure).toMatchObject({
+      code: 'PROMPT_READINESS_TIMEOUT',
+      command: 'kimi',
+      runId: 'run-1',
+    })
+    await done
+    await vi.advanceTimersByTimeAsync(60000)
+    output = KIMI_READY_SCREEN
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(writes).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   test('global Trust and continue pattern does not treat a bare Claude or Codex prompt as setup', () => {

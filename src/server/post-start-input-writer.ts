@@ -527,8 +527,6 @@ const whenInteractiveInputReady = (
   rejectDone: (error: Error) => void
 ) => {
   const startedAt = Date.now()
-  const isKimi = getCommandName(command) === 'kimi'
-  let kimiReadyDeadline = startedAt + PROMPT_READY_HARD_TIMEOUT_MS
   let settleCandidate: { since: number; tail: string } | null = null
   const isReadyToWrite = (output: string) => {
     const promptReadyState = getInteractivePromptReadyState(output, command)
@@ -566,9 +564,6 @@ const whenInteractiveInputReady = (
     const firstRunSetupPromptVisible = hasFirstRunSetupPrompt(output)
     const now = Date.now()
     const elapsed = now - startedAt
-    if (isKimi && firstRunSetupPromptVisible) {
-      kimiReadyDeadline = now + PROMPT_READY_HARD_TIMEOUT_MS
-    }
     // Fallback delivery so a readiness anchor that scrolls out of the tail
     // window (e.g. pi's one-shot startup banner) never strands a dispatch.
     // Commands with a soft fallback (codex/claude) deliver after the short
@@ -584,10 +579,7 @@ const whenInteractiveInputReady = (
       onReady(baselineLength)
       return
     }
-    if (
-      (isKimi && now >= kimiReadyDeadline) ||
-      (!isKimi && firstRunSetupPromptVisible && elapsed >= PROMPT_READY_HARD_TIMEOUT_MS)
-    ) {
+    if (elapsed >= PROMPT_READY_HARD_TIMEOUT_MS) {
       rejectDone(new PromptReadinessTimeoutError(command, runId))
       return
     }

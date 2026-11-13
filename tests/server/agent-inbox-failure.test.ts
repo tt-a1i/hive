@@ -106,7 +106,9 @@ test('real inbox disk failure retains an immediate dispatch and accepted report 
             ?.deliveredAt
       )
       .toEqual(expect.any(Number))
-    expect(expandInboxReferences(readFileSync(paths[1] as string, 'utf8'))).toContain(task)
+    await expect
+      .poll(() => expandInboxReferences(readFileSync(paths[1] as string, 'utf8')))
+      .toContain(task)
     rmSync(join(dataDir, 'inbox'), { recursive: true })
     writeFileSync(join(dataDir, 'inbox'), 'Blocked again for report delivery')
     const beforeFailure = consoleError.mock.calls.length
@@ -146,9 +148,9 @@ test('real inbox disk failure retains an immediate dispatch and accepted report 
     rmSync(join(dataDir, 'inbox'))
     server.store.drainReportOutbox(workspace.id)
     await expect.poll(pending).toEqual({ delivered_at: expect.any(Number) })
-    expect(expandInboxReferences(readFileSync(paths[0] as string, 'utf8'))).toContain(
-      'REPORT_EVIDENCE_SURVIVES_DISK_FAILURE'
-    )
+    await expect
+      .poll(() => expandInboxReferences(readFileSync(paths[0] as string, 'utf8')))
+      .toContain('REPORT_EVIDENCE_SURVIVES_DISK_FAILURE')
   } finally {
     consoleError.mockRestore()
     db.close()
