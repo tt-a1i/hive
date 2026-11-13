@@ -115,8 +115,8 @@ const parsePort = (argv: string[]) => {
       throw new Error('Usage: hive [--port <port>]')
     }
 
-    const port = Number.parseInt(value, 10)
-    if (Number.isNaN(port) || port < 0) {
+    const port = Number(value)
+    if (!/^\d+$/.test(value) || port > 65535) {
       throw new Error(`Invalid port: ${value}`)
     }
 
@@ -178,7 +178,7 @@ export const formatPortInUseMessage = (
     '  - Open the existing Hive window.',
     ...stopHint,
     '  - Start Hive on another port:',
-    `      hive --port ${port + 1}`,
+    `      hive --port ${port === 65535 ? 65534 : port + 1}`,
   ].join('\n')
 }
 

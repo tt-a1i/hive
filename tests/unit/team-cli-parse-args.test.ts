@@ -311,3 +311,31 @@ describe('decodeStdinBuffer', () => {
     expect(decodeStdinBuffer(body)).toBe('ok')
   })
 })
+
+describe('option delimiters', () => {
+  test('accepts equals values, repeated artifacts, and literal report text', () => {
+    expect(
+      parseReportArgs(['--dispatch=d1', '--artifact=a', '--artifact=b', '--', '--help'])
+    ).toMatchObject({
+      dispatchId: 'd1',
+      artifacts: ['a', 'b'],
+      result: '--help',
+    })
+    expect(parseRecallArgs(['--limit=3', '--', '--port'])).toEqual({ query: '--port', limit: 3 })
+  })
+
+  test('preserves attached option values including dashes and newlines', () => {
+    expect(parseReportArgs(['--artifact=-file', '--artifact=--', 'done']).artifacts).toEqual([
+      '-file',
+      '--',
+    ])
+    expect(parseCancelArgs(['--dispatch=--value', 'reason']).dispatchId).toBe('--value')
+    expect(parseReviewArgs(['--name=line1\nline2', 'review']).name).toBe('line1\nline2')
+  })
+
+  test('rejects unknown short flags and values on boolean flags', () => {
+    expect(() => parseReportArgs(['-x'])).toThrow(/Unknown argument/)
+    expect(() => parseReportArgs(['--stdin=yes'])).toThrow(/does not take a value/)
+    expect(() => parseReviewArgs(['-x'])).toThrow(/Unknown argument/)
+  })
+})

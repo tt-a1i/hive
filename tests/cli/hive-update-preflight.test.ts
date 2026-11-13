@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -107,5 +115,52 @@ test.skipIf(process.platform !== 'win32')(
       '--prefix',
       f.prefix,
     ])
+  }
+)
+
+test.skipIf(process.platform === 'win32')(
+  'executable upgrade failure recommends the version before npm changed it',
+  () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-upgrade-version-'))
+    roots.push(root)
+    const prefix = join(root, 'prefix')
+    const packageRoot = join(prefix, 'lib/node_modules/@tt-a1i/hive')
+    const bin = join(root, 'bin')
+    mkdirSync(packageRoot, { recursive: true })
+    mkdirSync(bin, { recursive: true })
+    cpSync(new URL('../../src', import.meta.url), join(packageRoot, 'src'), { recursive: true })
+    symlinkSync(join(process.cwd(), 'node_modules'), join(packageRoot, 'node_modules'), 'dir')
+    const packageJson = join(packageRoot, 'package.json')
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ name: '@tt-a1i/hive', version: '1.2.3', type: 'module' })
+    )
+    const npm = join(bin, 'npm')
+    writeFileSync(
+      npm,
+      `#!/bin/sh\n'${process.execPath}' -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({name:"@tt-a1i/hive",version:"9.9.9",type:"module"}))' '${packageJson}'\n`,
+      { mode: 0o755 }
+    )
+    const source = `
+    import { spawnSync } from 'node:child_process';
+    import { runHiveUpdateCommand } from ${JSON.stringify(pathToFileURL(join(packageRoot, 'src/cli/hive-update.ts')).href)};
+    process.exitCode = await runHiveUpdateCommand([], {
+      runUpdate: async (_command, args) => ({ exitCode: spawnSync(${JSON.stringify(npm)}, args).status ?? 1 })
+    });
+  `
+    const result = spawnSync(
+      process.execPath,
+      ['--import', pathToFileURL(require.resolve('tsx')).href, '--input-type=module', '-e', source],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        timeout: 20000,
+      }
+    )
+    expect(result.status).toBe(1)
+    expect(JSON.parse(readFileSync(packageJson, 'utf8')).version).toBe('9.9.9')
+    expect(result.stderr).toContain('failed native verification')
+    expect(result.stderr).toContain('@tt-a1i/hive@1.2.3')
+    expect(result.stderr).not.toContain('@tt-a1i/hive@9.9.9')
   }
 )

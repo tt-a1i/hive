@@ -169,7 +169,9 @@ First-run flow:
    injects the internal `team` command into the agent session.
 4. Add workers from the Team Members panel.
 5. Ask the Orchestrator to delegate work. It sends tasks with
-   `team send <worker-name> "<task>"`; workers report back with `team report`.
+   `team send <worker-name> "<task>"`, which starts a configured worker on demand.
+   A worker can use `team ask "<question>"` to wait for a decision. The Orchestrator
+   answers with `team reply <question-id> "<answer>"`, and the worker uses `team report` when done.
 
 For stronger automation, enable the experimental **Workflows** toggle in
 settings. The Orchestrator can then author and run multi-agent workflows that

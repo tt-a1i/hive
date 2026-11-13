@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { CODER_ROLE_DESCRIPTION } from '../../src/server/role-templates.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
@@ -619,7 +619,7 @@ describe('team API authz (R1.4)', () => {
     }
   })
 
-  test('team send queues a stopped worker without auto-starting it', async () => {
+  test('team send starts a stopped worker with the actual server port', async () => {
     const ctx = await setupHive()
     try {
       const uiCookie = await getUiCookie(ctx.baseUrl)
@@ -670,34 +670,17 @@ describe('team API authz (R1.4)', () => {
       })
 
       expect(response.status).toBe(202)
-      // #33: a parked dispatch is no longer silent — the orchestrator is told
-      // it queued for a stopped worker (replay delivers it on the next start).
-      const sent = (await response.json()) as { dispatch_id: string }
-      expect(sent).toEqual({
-        dispatch_id: expect.any(String),
-        parent_dispatch_id: null,
-        root_dispatch_id: sent.dispatch_id,
-        ok: true,
-        restarted_worker: false,
-        queued: true,
-        worker_status: 'stopped',
+      const sent = (await response.json()) as { dispatch_id: string; restarted_worker: boolean }
+      expect(sent.restarted_worker).toBe(true)
+      await vi.waitFor(() => {
+        expect(existsSync(portFile)).toBe(true)
+        expect(readFileSync(portFile, 'utf8')).toBe(String(ctx.hive.port))
+        expect(
+          ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, stoppedWorker.id)
+        ).toBeDefined()
       })
-      expect(existsSync(portFile)).toBe(false)
-      expect(
-        ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, stoppedWorker.id)
-      ).toBeUndefined()
-      expect(ctx.hive.store.getWorker(ctx.workspaceId, stoppedWorker.id)).toEqual(
-        expect.objectContaining({
-          pendingTaskCount: 1,
-          status: 'stopped',
-        })
-      )
       expect(ctx.hive.store.listDispatches(ctx.workspaceId)).toContainEqual(
-        expect.objectContaining({
-          status: 'queued',
-          text: 'start with correct port',
-          toAgentId: stoppedWorker.id,
-        })
+        expect.objectContaining({ text: 'start with correct port', toAgentId: stoppedWorker.id })
       )
     } finally {
       await ctx.hive.close()

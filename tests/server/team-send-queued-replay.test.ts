@@ -76,7 +76,7 @@ afterEach(async () => {
 })
 
 describe('queued dispatch to a stopped worker (#33)', () => {
-  test('send parks with queued:true, team list shows it, and starting the worker delivers it', async () => {
+  test('parked dispatch appears in team list and starting the worker delivers it', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-queued-replay-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
@@ -122,28 +122,17 @@ describe('queued dispatch to a stopped worker (#33)', () => {
       const orchToken = hive.store.peekAgentToken(orchestratorId)
       if (!orchToken) throw new Error('Expected orchestrator token after start')
 
-      // 1. team send to the STOPPED worker → parked, and the response says so.
-      const sendResponse = await fetch(`${baseUrl}/api/team/send`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          project_id: workspace.id,
-          from_agent_id: orchestratorId,
-          token: orchToken,
-          to: 'Alice',
-          text: 'implement login',
-        }),
-      })
-      expect(sendResponse.status).toBe(202)
-      const sent = (await sendResponse.json()) as {
-        dispatch_id: string
-        queued?: boolean
-        worker_status?: string
-        restarted_worker?: boolean
-      }
-      expect(sent.queued).toBe(true)
-      expect(sent.worker_status).toBe('stopped')
-      expect(sent.restarted_worker).toBe(false)
+      // Explicit internal parking remains available for replay and recovery.
+      const parkedDispatch = await hive.store.dispatchTask(
+        workspace.id,
+        worker.id,
+        'implement login',
+        {
+          fromAgentId: orchestratorId,
+          autoStartWorker: false,
+        }
+      )
+      const sent = { dispatch_id: parkedDispatch.id }
 
       const parked = hive.store
         .listDispatches(workspace.id)
@@ -270,19 +259,11 @@ describe('queued dispatch to a stopped worker (#33)', () => {
       const orchToken = hive.store.peekAgentToken(orchestratorId)
       if (!orchToken) throw new Error('Expected orchestrator token after start')
 
-      const sendResponse = await fetch(`${baseUrl}/api/team/send`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          project_id: workspace.id,
-          from_agent_id: orchestratorId,
-          token: orchToken,
-          to: 'Alice',
-          text: 'manual replay task',
-        }),
+      const parked = await hive.store.dispatchTask(workspace.id, worker.id, 'manual replay task', {
+        fromAgentId: orchestratorId,
+        autoStartWorker: false,
       })
-      expect(sendResponse.status).toBe(202)
-      const sent = (await sendResponse.json()) as { dispatch_id: string }
+      const sent = { dispatch_id: parked.id }
 
       await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`, {
         method: 'POST',

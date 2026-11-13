@@ -306,6 +306,7 @@ export const createRuntimeStoreServices = (
     for (const targetAgentId of droppedNoticeTargets) {
       teamOps.drainReportOutbox(workspaceId, targetAgentId)
     }
+    dispatchMessageOps.notifyDispatchQuestionChange(workspaceId)
     agentRuntime.deleteAgentLaunchConfig(workspaceId, workerId)
     if (activeRun) agentRuntime.stopAgentRun(activeRun.runId)
   }
@@ -498,6 +499,7 @@ export const createRuntimeStoreLifecycle = ({
   return {
     close: async () => {
       services.markRuntimeClosing()
+      services.dispatchMessageOps.notifyDispatchQuestionChange()
       try {
         // Fail in-flight workflow awaiters BEFORE their workers vanish, so the
         // runner's `await agent(...)` rejects with a clear shutdown error

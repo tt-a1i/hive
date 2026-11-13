@@ -10,8 +10,13 @@ export const parseSequence = (value: string, flag: string): number => {
   return Number(value)
 }
 
-export const parseOptions = (args: string[], allowed: Set<string>) => {
+export const parseOptions = (
+  args: string[],
+  allowed: Set<string>,
+  repeatable = new Set<string>()
+) => {
   const options = new Map<string, string>()
+  const repeated = new Map<string, string[]>()
   const positionals: string[] = []
   let positionalOnly = false
   for (let i = 0; i < args.length; i += 1) {
@@ -21,21 +26,32 @@ export const parseOptions = (args: string[], allowed: Set<string>) => {
       positionalOnly = true
       continue
     }
-    if (positionalOnly || !/^--?[a-zA-Z][\w-]*(?:=.*)?$/.test(arg)) {
+    if (positionalOnly || !arg.startsWith('-') || arg === '-') {
       positionals.push(arg)
       continue
     }
-    if (!allowed.has(arg)) throw new Error(`Unknown argument: ${arg}`)
-    if (options.has(arg)) throw new Error(`Duplicate argument: ${arg}`)
-    if (arg === '--stdin' || arg === '--list') {
-      options.set(arg, 'true')
+    const equals = arg.indexOf('=')
+    const flag = equals < 0 ? arg : arg.slice(0, equals)
+    if (!allowed.has(flag)) throw new Error(`Unknown argument: ${arg}`)
+    if (options.has(flag) && !repeatable.has(flag)) throw new Error(`Duplicate argument: ${arg}`)
+    if (
+      flag === '--stdin' ||
+      flag === '--list' ||
+      flag === '--ephemeral' ||
+      flag === '--success' ||
+      flag === '--failed'
+    ) {
+      if (equals >= 0) throw new Error(`${flag} does not take a value`)
+      options.set(flag, 'true')
       continue
     }
-    const value = args[++i]
-    if (!value?.trim() || value.startsWith('--')) throw new Error(`${arg} requires a value`)
-    options.set(arg, value)
+    const value = equals < 0 ? args[++i] : arg.slice(equals + 1)
+    if (!value?.trim() || (equals < 0 && value.startsWith('-') && !/^-[0-9]/.test(value)))
+      throw new Error(`${flag} requires a value`)
+    options.set(flag, value)
+    if (repeatable.has(flag)) repeated.set(flag, [...(repeated.get(flag) ?? []), value])
   }
-  return { options, positionals }
+  return { options, positionals, repeated }
 }
 
 export const parseSendArgs = (args: string[]) => {

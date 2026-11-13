@@ -32,6 +32,7 @@ export const createRuntimeStoreWorkspaceDelete = (
     }
     stagedUploads?.commit()
     services.workspaceStore.forgetWorkspace(workspaceId)
+    services.dispatchMessageOps.notifyDispatchQuestionChange(workspaceId)
     if (services.settings.getAppState('active_workspace_id')?.value === workspaceId) {
       services.settings.setAppState('active_workspace_id', null)
     }

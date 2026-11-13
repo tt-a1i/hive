@@ -14,6 +14,7 @@ import {
   MESSAGE_USAGE,
   parseMessageArgs,
   parseMessagesArgs,
+  parseOptions,
   parseSendArgs,
   parseSequence,
 } from './team-message-args.js'
@@ -89,15 +90,6 @@ const getHiveEnv = (): HiveEnv => {
 }
 
 const getBaseUrl = (env: HiveEnv) => `http://127.0.0.1:${env.HIVE_PORT}`
-
-// Read `--flag value` from an argv slice; returns undefined when absent or
-// when the flag is the last token with no following value.
-const readFlag = (args: string[], flag: string): string | undefined => {
-  const index = args.indexOf(flag)
-  if (index === -1) return undefined
-  const value = args[index + 1]
-  return value && !value.startsWith('--') ? value : undefined
-}
 
 const describeFetchError = (baseUrl: string, error: unknown) => {
   const cause =
@@ -229,69 +221,31 @@ export interface ParsedReportArgs {
 }
 
 export const parseReportArgs = (args: string[], command = 'report'): ParsedReportArgs => {
-  const positionals: string[] = []
-  const artifacts: string[] = []
-  let dispatchId: string | undefined
-  let seenSeq: number | undefined
-  let useStdin = false
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    // Backward-compatible no-op: reports are interpreted from their text.
-    if (arg === '--success' || arg === '--failed') continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-
-    if (arg === '--artifact') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(withUsage('--artifact requires a value', command))
-      }
-      artifacts.push(next)
-      index += 1
-      continue
-    }
-
-    if (arg === '--seen') {
-      if (command !== 'report' || seenSeq !== undefined)
-        throw new Error(withUsage('Invalid or duplicate --seen', command))
-      const value = args[index + 1]
-      if (value === undefined) throw new Error(withUsage('--seen requires a value', command))
-      seenSeq = parseSequence(value, '--seen')
-      index += 1
-      continue
-    }
-
-    if (arg === '--dispatch') {
-      if (dispatchId !== undefined) throw new Error(withUsage('Duplicate --dispatch', command))
-      if (command === 'status') {
-        throw new Error(
-          withUsage(
-            'team status does not accept --dispatch; record task progress with team message --dispatch <id> --to orchestrator --kind progress "<update>". Use team report only when ending the responsibility.',
-            command
-          )
-        )
-      }
-      const next = args[index + 1]
-      if (next === undefined || !next.trim() || next.startsWith('--')) {
-        throw new Error(withUsage('--dispatch requires a value', command))
-      }
-      dispatchId = next
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(withUsage(`Unknown argument: ${arg}`, command))
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(
+      args,
+      new Set(['--stdin', '--success', '--failed', '--artifact', '--dispatch', '--seen']),
+      new Set(['--artifact'])
+    )
+  } catch (error) {
+    throw new Error(withUsage(error instanceof Error ? error.message : String(error), command))
   }
+  const { options, positionals, repeated } = parsed
+  const artifacts = repeated.get('--artifact') ?? []
+  const dispatchId = options.get('--dispatch')
+  const seen = options.get('--seen')
+  const useStdin = options.has('--stdin')
+  if (command === 'status' && dispatchId)
+    throw new Error(
+      withUsage(
+        'team status does not accept --dispatch; use team report to end the responsibility.',
+        command
+      )
+    )
+  if (command !== 'report' && seen !== undefined)
+    throw new Error(withUsage('Invalid --seen', command))
+  const seenSeq = seen === undefined ? undefined : parseSequence(seen, '--seen')
 
   if (useStdin && positionals.length > 0) {
     throw new Error(
@@ -330,29 +284,14 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
 }
 
 export const parseCancelArgs = (args: string[]): ParsedCancelArgs => {
-  const positionals: string[] = []
-  let dispatchId: string | undefined
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--dispatch') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--dispatch requires a value\n\n${CANCEL_USAGE}`)
-      }
-      dispatchId = next
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${CANCEL_USAGE}`)
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--dispatch']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${CANCEL_USAGE}`)
   }
+  const { options, positionals } = parsed
+  const dispatchId = options.get('--dispatch')
 
   if (!dispatchId) {
     throw new Error(`Missing --dispatch <dispatch-id>\n\n${CANCEL_USAGE}`)
@@ -389,61 +328,23 @@ export interface ParsedReviewArgs {
 }
 
 export const parseReviewArgs = (args: string[]): ParsedReviewArgs => {
-  const positionals: string[] = []
-  let cli: string | undefined
-  let model: string | undefined
-  let name: string | undefined
-  let role: TeamReviewRole | undefined
-  let useStdin = false
-
-  const readValue = (flag: string, index: number) => {
-    const next = args[index + 1]
-    if (next === undefined || next.startsWith('--')) {
-      throw new Error(`${flag} requires a value\n\n${REVIEW_USAGE}`)
-    }
-    return next
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--stdin', '--cli', '--model', '--name', '--role']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${REVIEW_USAGE}`)
   }
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-    if (arg === '--cli') {
-      cli = readValue('--cli', index)
-      index += 1
-      continue
-    }
-    if (arg === '--model') {
-      model = readValue('--model', index)
-      index += 1
-      continue
-    }
-    if (arg === '--name') {
-      name = readValue('--name', index)
-      index += 1
-      continue
-    }
-    if (arg === '--role') {
-      const value = readValue('--role', index)
-      if (!isTeamReviewRole(value)) {
-        throw new TeamUsageError(
-          'REVIEW_INVALID_ROLE',
-          `--role must be reviewer or tester\n\n${REVIEW_USAGE}`
-        )
-      }
-      role = value
-      index += 1
-      continue
-    }
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${REVIEW_USAGE}`)
-    }
-    positionals.push(arg)
-  }
+  const { options, positionals } = parsed
+  const cli = options.get('--cli')
+  const model = options.get('--model')
+  const name = options.get('--name')
+  const role = options.get('--role')
+  const useStdin = options.has('--stdin')
+  if (role && !isTeamReviewRole(role))
+    throw new TeamUsageError(
+      'REVIEW_INVALID_ROLE',
+      `--role must be reviewer or tester\n\n${REVIEW_USAGE}`
+    )
 
   if (useStdin && positionals.length > 0) {
     throw new TeamUsageError(
@@ -477,7 +378,7 @@ export const parseReviewArgs = (args: string[]): ParsedReviewArgs => {
     ...(cli ? { cli } : {}),
     ...(model ? { model } : {}),
     ...(name ? { name } : {}),
-    ...(role ? { role } : {}),
+    ...(role && isTeamReviewRole(role) ? { role } : {}),
   }
 }
 
@@ -491,31 +392,15 @@ const parseNonNegativeIntFlag = (value: string | undefined, flag: string) => {
 }
 
 export const parseRecallArgs = (args: string[]) => {
-  const positionals: string[] = []
-  let limit: number | undefined
-  let window: number | undefined
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--limit' || arg === '--window') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`${arg} requires a value\n\n${RECALL_USAGE}`)
-      }
-      if (arg === '--limit') limit = parseNonNegativeIntFlag(next, '--limit')
-      else window = parseNonNegativeIntFlag(next, '--window')
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${RECALL_USAGE}`)
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--limit', '--window']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${RECALL_USAGE}`)
   }
+  const { options, positionals } = parsed
+  const limit = parseNonNegativeIntFlag(options.get('--limit'), '--limit')
+  const window = parseNonNegativeIntFlag(options.get('--window'), '--window')
 
   if (positionals.length === 0) {
     throw new Error(`Missing <query>\n\n${RECALL_USAGE}`)
@@ -559,8 +444,13 @@ export const readStdinToString = async (
     )
   }
   const chunks: Buffer[] = []
+  let bytes = 0
+  const maxBytes = 1024 * 1024
   for await (const chunk of process.stdin) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+    bytes += buffer.length
+    if (bytes > maxBytes) throw new Error(`--stdin exceeds ${maxBytes} bytes\n\n${usage}`)
+    chunks.push(buffer)
   }
   const content = decodeStdinBuffer(Buffer.concat(chunks))
   if (!content.trim()) {
@@ -574,6 +464,32 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     console.log(TEAM_USAGE)
+    return
+  }
+
+  const beforeDelimiter = args.slice(0, args.indexOf('--') < 0 ? args.length : args.indexOf('--'))
+  if (beforeDelimiter.includes('--help') || beforeDelimiter.includes('-h')) {
+    const prefix =
+      command === 'workflow' && args[0] && !args[0].startsWith('-')
+        ? `team workflow ${args[0]}`
+        : `team ${command}`
+    const lines = TEAM_USAGE.split('\n').filter(
+      (line) => line.trimStart() === prefix || line.trimStart().startsWith(`${prefix} `)
+    )
+    const workflowUsage: Record<string, string> = {
+      run: 'Usage: team workflow run (--stdin | --inline <source>) [--name <name>] [--args <JSON>]',
+      schedule:
+        'Usage: team workflow schedule --cron <cron> --name <name> (--stdin | --inline <source>) [--args <JSON>]',
+      show: 'Usage: team workflow show <run-id>',
+      stop: 'Usage: team workflow stop <run-id>',
+    }
+    console.log(
+      command === 'workflow'
+        ? (workflowUsage[args[0] ?? ''] ?? 'Usage: team workflow <run|schedule|show|stop>')
+        : lines.length
+          ? `Usage:\n${lines.join('\n')}`
+          : `Usage: ${prefix}`
+    )
     return
   }
 
@@ -600,6 +516,7 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'list') {
+    if (args.length) throw new Error('Usage: team list')
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     const response = await fetchRuntime(baseUrl, `/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
@@ -620,7 +537,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'guide') {
     const topic = args[0]
-    if (!topic || !isProtocolGuideTopic(topic)) {
+    if (args.length !== 1 || !topic || !isProtocolGuideTopic(topic)) {
       throw new Error(GUIDE_USAGE)
     }
     if (REQUIRED_ENV_KEYS.some((key) => process.env[key] !== undefined)) {
@@ -654,6 +571,7 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'next') {
+    if (args.length) throw new Error('Usage: team next')
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     const response = await fetchRuntime(
@@ -763,17 +681,13 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'spawn') {
-    const role = args[0]
-    if (!role || role.startsWith('--')) {
-      throw new Error(
-        `Usage: team spawn <role> [--name <name>] [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--ephemeral]\n` +
-          '  Default: persistent member (lives until you `team dismiss` it).\n' +
-          '  --ephemeral: auto-dismiss after the next dispatch report (one-shot member).'
-      )
-    }
-    const name = readFlag(args, '--name')
-    const cli = readFlag(args, '--cli')
-    const ephemeral = args.includes('--ephemeral')
+    const { options, positionals } = parseOptions(args, new Set(['--name', '--cli', '--ephemeral']))
+    const role = positionals[0]
+    if (!role || positionals.length !== 1)
+      throw new Error('Usage: team spawn <role> [--name <name>] [--cli <cli>] [--ephemeral]')
+    const name = options.get('--name')
+    const cli = options.get('--cli')
+    const ephemeral = options.has('--ephemeral')
     const env = getHiveEnv()
     const response = await postJson(getBaseUrl(env), '/api/team/spawn', {
       project_id: env.HIVE_PROJECT_ID,
@@ -815,10 +729,10 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'dismiss') {
-    const memberName = args[0]
-    if (!memberName || memberName.startsWith('--')) {
+    const { positionals } = parseOptions(args, new Set())
+    const memberName = positionals[0]
+    if (!memberName || positionals.length !== 1)
       throw new Error('Usage: team dismiss <member-name>')
-    }
     const env = getHiveEnv()
     const response = await postJson(getBaseUrl(env), '/api/team/dismiss', {
       project_id: env.HIVE_PROJECT_ID,
@@ -834,13 +748,20 @@ export const runTeamCommand = async (argv: string[]) => {
     const sub = args[0]
     const rest = args.slice(1)
     if (sub === 'run') {
-      const inlineFlag = rest.indexOf('--inline')
-      const stdinFlag = rest.includes('--stdin')
-      const name = readFlag(rest, '--name')
+      const { options, positionals } = parseOptions(
+        rest,
+        new Set(['--inline', '--stdin', '--name', '--args'])
+      )
+      if (positionals.length || options.has('--inline') === options.has('--stdin'))
+        throw new Error(
+          'Usage: team workflow run (--inline <source> | --stdin) [--name <name>] [--args <JSON>]'
+        )
+      const inline = options.get('--inline')
+      const name = options.get('--name')
       // TIER 2 #8 — `--args '<JSON>'` makes the script's `args` global a
       // real value instead of always undefined. Parses lazily so a bad
       // JSON gives a clear local error before the HTTP round-trip.
-      const rawArgs = readFlag(rest, '--args')
+      const rawArgs = options.get('--args')
       let parsedArgs: unknown | undefined
       if (rawArgs !== undefined) {
         try {
@@ -851,20 +772,7 @@ export const runTeamCommand = async (argv: string[]) => {
           )
         }
       }
-      let source: string
-      if (inlineFlag !== -1) {
-        const literal = rest[inlineFlag + 1]
-        if (!literal) throw new Error('Usage: team workflow run --inline "<script-source>"')
-        source = literal
-      } else if (stdinFlag) {
-        source = await readStdinToString('workflow run')
-      } else {
-        throw new Error(
-          'Usage: team workflow run --stdin   |   team workflow run --inline "<script-source>"\n' +
-            '  Pass workflow source via stdin (POSIX heredoc / `type x.ts |`) or as one inline arg.\n' +
-            "  Optional: --args '<JSON>' makes the script's `args` global a real value."
-        )
-      }
+      const source = inline ?? (await readStdinToString('workflow run'))
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/run', {
         project_id: env.HIVE_PROJECT_ID,
@@ -878,8 +786,9 @@ export const runTeamCommand = async (argv: string[]) => {
       return
     }
     if (sub === 'stop') {
-      const runId = rest[0]
-      if (!runId) throw new Error('Usage: team workflow stop <run-id>')
+      const { positionals } = parseOptions(rest, new Set())
+      const runId = positionals[0]
+      if (!runId || positionals.length !== 1) throw new Error('Usage: team workflow stop <run-id>')
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/stop', {
         project_id: env.HIVE_PROJECT_ID,
@@ -891,8 +800,9 @@ export const runTeamCommand = async (argv: string[]) => {
       return
     }
     if (sub === 'show') {
-      const runId = rest[0]
-      if (!runId) throw new Error('Usage: team workflow show <run-id>')
+      const { positionals } = parseOptions(rest, new Set())
+      const runId = positionals[0]
+      if (!runId || positionals.length !== 1) throw new Error('Usage: team workflow show <run-id>')
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/show', {
         project_id: env.HIVE_PROJECT_ID,
@@ -908,12 +818,17 @@ export const runTeamCommand = async (argv: string[]) => {
         'Usage: team workflow schedule --cron "<5-field cron>" --name <name> --stdin\n' +
         '       team workflow schedule --cron "<cron>" --name <name> --inline "<source>" [--args \'<JSON>\']\n' +
         '  Registers a recurring run. Source is persisted so cron can fire it with no orchestrator present.'
-      const inlineFlag = rest.indexOf('--inline')
-      const stdinFlag = rest.includes('--stdin')
-      const cron = readFlag(rest, '--cron')
-      const name = readFlag(rest, '--name')
+      const { options, positionals } = parseOptions(
+        rest,
+        new Set(['--inline', '--stdin', '--cron', '--name', '--args'])
+      )
+      if (positionals.length || options.has('--inline') === options.has('--stdin'))
+        throw new Error(usage)
+      const inline = options.get('--inline')
+      const cron = options.get('--cron')
+      const name = options.get('--name')
       if (!cron || !name) throw new Error(usage)
-      const rawArgs = readFlag(rest, '--args')
+      const rawArgs = options.get('--args')
       let parsedArgs: unknown | undefined
       if (rawArgs !== undefined) {
         try {
@@ -924,16 +839,7 @@ export const runTeamCommand = async (argv: string[]) => {
           )
         }
       }
-      let source: string
-      if (inlineFlag !== -1) {
-        const literal = rest[inlineFlag + 1]
-        if (!literal) throw new Error(usage)
-        source = literal
-      } else if (stdinFlag) {
-        source = await readStdinToString('workflow schedule')
-      } else {
-        throw new Error(usage)
-      }
+      const source = inline ?? (await readStdinToString('workflow schedule'))
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/schedule', {
         project_id: env.HIVE_PROJECT_ID,

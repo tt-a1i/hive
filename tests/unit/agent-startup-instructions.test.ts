@@ -109,9 +109,7 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).toContain('team report --dispatch <id> --seen <required_seen_seq> --stdin')
     expect(out).toContain('Members share the filesystem')
     expect(out).toContain('assigned scope')
-    expect(out).toContain(
-      'team message --dispatch <own-dispatch-id> --to orchestrator --kind question'
-    )
+    expect(out).toContain('team ask "<question>"')
     expect(out).not.toContain('Startup handshake:')
     expect(out).not.toContain('Run once:')
     expect(out).not.toContain('Available team commands:')

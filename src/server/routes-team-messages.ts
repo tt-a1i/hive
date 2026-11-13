@@ -3,7 +3,7 @@ import {
   serializeDispatchMessage,
   serializeDispatchMessagesResult,
 } from './dispatch-message-serializer.js'
-import { BadRequestError } from './http-errors.js'
+import { BadRequestError, ConflictError } from './http-errors.js'
 import { readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteContext, RouteDefinition } from './route-types.js'
 import { authenticateCliAgent, requireCommandForRole, type TeamCommand } from './team-authz.js'
@@ -71,17 +71,81 @@ export const teamMessageRoutes: RouteDefinition[] = [
   route('POST', '/api/team/question', async ({ request, response, store }) => {
     const { body, workspaceId, agent } = await readMessageRequest(request, store, 'messages', [
       'question_id',
+      'wait_ms',
     ])
-    const result = store.getDispatchQuestion(
-      workspaceId,
-      agent.id,
-      requiredString(body.question_id, 'question_id')
-    )
+    const waitMs = body.wait_ms === undefined ? 0 : body.wait_ms
+    if (typeof waitMs !== 'number' || !Number.isSafeInteger(waitMs) || waitMs < 0 || waitMs > 60000)
+      throw new BadRequestError('wait_ms must be an integer from 0 to 60000')
+    const questionId = requiredString(body.question_id, 'question_id')
+    const read = () => store.getDispatchQuestion(workspaceId, agent.id, questionId)
+    let result = read()
+    if (result.status === 'pending' && waitMs > 0 && !store.isDispatchQuestionClosing()) {
+      let readError: unknown
+      await new Promise<void>((resolve) => {
+        let done = false
+        const finish = () => {
+          if (done) return
+          done = true
+          clearTimeout(timer)
+          unsubscribe()
+          response.off('close', finish)
+          resolve()
+        }
+        const check = () => {
+          if (store.isDispatchQuestionClosing()) return finish()
+          try {
+            result = read()
+            if (result.status !== 'pending') finish()
+          } catch (error) {
+            readError = error
+            finish()
+          }
+        }
+        const unsubscribe = store.subscribeDispatchQuestionChanges(workspaceId, check)
+        const timer = setTimeout(finish, waitMs)
+        response.once('close', finish)
+        if (response.destroyed) finish()
+        else check()
+      })
+      if (response.destroyed) return
+      if (readError) throw readError
+      if (!store.isDispatchQuestionClosing()) result = read()
+    }
     sendJson(response, 200, {
       status: result.status,
       question: serializeDispatchMessage(result.question),
       answers: result.answers.map(serializeDispatchMessage),
     })
+  }),
+  route('POST', '/api/team/ask', async ({ request, response, store }) => {
+    const { body, workspaceId, agent } = await readMessageRequest(request, store, 'message', [
+      'dispatch_id',
+      'text',
+      'recipient',
+    ])
+    if (body.recipient !== undefined && body.recipient !== 'orchestrator')
+      throw new BadRequestError('recipient must be orchestrator')
+    if (agent.role === 'orchestrator' && body.recipient === 'orchestrator')
+      throw new BadRequestError('The orchestrator cannot ask itself')
+    let dispatchId = optionalString(body.dispatch_id, 'dispatch_id')
+    if (!dispatchId && agent.role === 'orchestrator')
+      throw new BadRequestError('dispatch_id is required for the orchestrator')
+    if (!dispatchId) {
+      const owned = store
+        .listOpenDispatches(workspaceId)
+        .filter((item) => item.toAgentId === agent.id)
+      if (owned.length !== 1)
+        throw new ConflictError('Specify dispatch_id when you do not own exactly one open dispatch')
+      dispatchId = owned[0]?.id
+    }
+    if (!dispatchId) throw new ConflictError('No open dispatch')
+    const message = store.sendDispatchMessage(workspaceId, agent.id, {
+      dispatchId,
+      kind: 'question',
+      ...(agent.role === 'orchestrator' ? {} : { recipient: 'orchestrator' as const }),
+      text: requiredString(body.text, 'text'),
+    })
+    sendJson(response, 202, { ok: true, message: serializeDispatchMessage(message) })
   }),
   route('POST', '/api/team/reply', async ({ request, response, store }) => {
     const { body, workspaceId, agent } = await readMessageRequest(request, store, 'message', [

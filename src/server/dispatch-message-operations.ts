@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import type {
   DispatchMessagesResult,
   SendDispatchMessageInput,
@@ -20,6 +21,8 @@ export const createDispatchMessageOperations = (ports: {
   runtime: AgentRuntime
   isClosing: () => boolean
 }) => {
+  const changes = new EventEmitter()
+  changes.setMaxListeners(0)
   const drainDispatchMessageOutbox = createDispatchMessageOutbox({
     messages: ports.messages,
     runtime: ports.runtime,
@@ -55,6 +58,16 @@ export const createDispatchMessageOperations = (ports: {
       messages: ports.messages,
     }),
     drainDispatchMessageOutbox,
+    notifyDispatchQuestionChange: (workspaceId?: string) => changes.emit(workspaceId ?? 'closing'),
+    isDispatchQuestionClosing: ports.isClosing,
+    subscribeDispatchQuestionChanges: (workspaceId: string, listener: () => void) => {
+      changes.on(workspaceId, listener)
+      changes.on('closing', listener)
+      return () => {
+        changes.off(workspaceId, listener)
+        changes.off('closing', listener)
+      }
+    },
     getDispatchCollaboration,
     listCollaborationMessageHistory(
       workspaceId: string,
@@ -93,6 +106,7 @@ export const createDispatchMessageOperations = (ports: {
           text: input.text,
         })
       })()
+      changes.emit(workspaceId)
       drainDispatchMessageOutbox(workspaceId, message.recipientAgentId)
       return ports.messages.getMessage(workspaceId, message.id) ?? message
     },

@@ -881,10 +881,7 @@ export const createTeamOperations = ({
       if (!worker) {
         throw new ConflictError(formatUnknownWorkerError(workerName, roster))
       }
-      /* Capture the active-run state *before* dispatchTask runs. Internal
-         workflow calls and orchestrator-owned `team spawn` follow-up sends may
-         auto-start a stopped worker; user-managed stopped workers remain
-         stopped with a queued dispatch until the user restarts them. */
+      // Capture whether this send needs to start the worker before dispatching.
       const restartedWorker =
         input.fromAgentId !== undefined &&
         input.autoStartWorker !== false &&

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -136,6 +137,19 @@ describe('hive cli', () => {
     await expect(runHiveCommand(['--port', '0', 'extra'])).rejects.toThrow(
       'Unknown argument: extra'
     )
+  })
+
+  test.each([
+    '',
+    '-1',
+    '1x',
+    '1.5',
+    '65536',
+    '999999999999999999999',
+  ])('rejects invalid port %j before creating data', async (value) => {
+    const dataDir = process.env.HIVE_DATA_DIR as string
+    await expect(runHiveCommand(value ? ['--port', value] : ['--port'])).rejects.toThrow()
+    expect(existsSync(dataDir)).toBe(false)
   })
 
   test('starts http server and prints listening address', async () => {

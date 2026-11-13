@@ -32,8 +32,8 @@
 
 ```sh
 team message --dispatch D --kind note "补充要求"
-team message --dispatch D --to orchestrator --kind question "需要决定的问题"
-team message --dispatch TARGET --from-dispatch OWN --kind question "成果依据是什么"
+team ask "需要决定的问题"
+team ask --dispatch TARGET --from-dispatch OWN "成果依据是什么"
 team message --dispatch TARGET --from-dispatch OWN --kind answer --reply-to QUESTION "回答"
 team message --dispatch OWN --to orchestrator --kind progress "当前进度"
 team messages --dispatch D [--after N]
@@ -139,10 +139,10 @@ Orchestrator 也可以针对已 reported 成果提出 question；原作者仅能
 从独立协作实验分支提取便捷入口。用户授权基于最新 main 选择有价值的能力集成；本次不改变同 root 权限、责任生命周期、报告水位或存储版本。
 
 - `team reply Q (<text> | --stdin)`：服务端从已保存的问题推导反向路由，再执行既有消息写入鉴权；原 `message --kind answer --reply-to` 入口继续可用。普通投递与恢复中的回复提示使用短命令。
-- `team ask --dispatch D [--from-dispatch S] [--to orchestrator] (<text> | --stdin) [--wait 0..60]`：只写一次 question，保存后立即向 stderr 输出 ID。默认 wait=0，仅查询一次并返回；显式正数等待仅适用于当前工作依赖答案的情形，以单调时钟约束只读轮询，不重试写入。
+- `team ask [--dispatch D] [--from-dispatch S] [--to orchestrator] (<text> | --stdin) [--wait 0..60]`：只写一次 question，保存后立即向 stderr 输出 ID。成员只有一个开放派单时可省略 D，直接向主控提问。有多个开放派单时须指定 D。默认使用本地 HTTP 长轮询，最多等 60 秒，并将答复输出到 stdout。显式 --wait 0 立即返回快照。Ctrl+C 或等待超时后可凭 ID 续查，不会重发或撤销问题。
 - `team ask --resume Q [--wait 0..60]`：只读原问题。输出包含 question、answers、status、question_id、timed_out、resume；status 为 pending/answered/closed，是派生查询状态，不是新增持久状态机。wait=0 不宣称等待超时；读取失败仍报错，不编造成功快照。answered 只表示已有回答，不代表解决或验收。
 - `team ask --list [--dispatch D] [--before Q]`：仅查询当前认证成员发送的问题，每页最多 50 条，返回 next_before。用于写入回执丢失时找回 ID，找到后 resume，不能把丢回执当作未写入而盲目重发。
-- HTTP 入口为 POST `/api/team/reply`、`/api/team/question`、`/api/team/questions`，沿用身份字段、token 与既有角色鉴权；query/reply 使用 question_id，历史列表使用 dispatch_id/before_id。问题读取仅向原发送者或接收者开放，回复继续检查取消、成员删除、历史责任边界。历史游标绑定当前工作区和发送者。
+- HTTP 入口为 POST `/api/team/ask`、`/api/team/reply`、`/api/team/question`、`/api/team/questions`，沿用身份字段、token 与既有角色鉴权；读取与回复使用 question_id。读取可传 wait_ms（0 至 60000 毫秒，HTTP 默认 0），历史列表使用 dispatch_id/before_id。问题读取仅向原发送者或接收者开放，回复继续检查取消、成员删除、历史责任边界。历史游标绑定当前工作区和发送者。
 - 问题读取不返回可用于 report 的水位，不自动确认其他输入；报告仍须读取并考虑完整消息后使用原 `--seen`。不增加邮箱 ACK、成员委派、跨 root 问答、报告 outcome 或 schema migration。
 
 这些入口减少手工路由字段并支持找回持久问题，不据此声称真实模型速度、token 或成果质量已有改善。

@@ -188,9 +188,7 @@ describe('buildWorkerReminderTail', () => {
   test('interpolates the dispatch_id into the team-report syntax line', () => {
     const tail = buildWorkerReminderTail('disp-abc')
     expect(tail).toContain('team report --dispatch disp-abc --seen <required_seen_seq> --stdin')
-    expect(buildProtocolGuide('member')).toContain(
-      'team message --dispatch <own-dispatch-id> --to orchestrator --kind question'
-    )
+    expect(buildProtocolGuide('member')).toContain('team ask "<question>"')
     expect(buildProtocolGuide('member')).toContain('Stay quiet for routine readiness or standby')
     expect(buildProtocolGuide('member')).toContain(
       'Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch'

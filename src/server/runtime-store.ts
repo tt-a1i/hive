@@ -63,10 +63,18 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     deleteWorker: workerMutations.deleteWorker,
     recordUserInput: services.teamOps.recordUserInput,
     deliverUserInput: services.teamOps.deliverUserInput,
-    cancelTask: services.teamOps.cancelTask,
+    cancelTask: async (...args) => {
+      const result = await services.teamOps.cancelTask(...args)
+      services.dispatchMessageOps.notifyDispatchQuestionChange(args[0])
+      return result
+    },
     dispatchTask: services.teamOps.dispatchTask,
     dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
-    reportTask: services.teamOps.reportTask,
+    reportTask: (...args) => {
+      const result = services.teamOps.reportTask(...args)
+      services.dispatchMessageOps.notifyDispatchQuestionChange(args[0])
+      return result
+    },
     drainReportOutbox: services.teamOps.drainReportOutbox,
     statusTask: services.teamOps.statusTask,
     ...services.dispatchMessageOps,

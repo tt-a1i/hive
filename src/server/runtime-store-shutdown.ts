@@ -5,7 +5,10 @@ type Closeable = { close: () => Promise<void> }
 
 /** Own the shutdown order: stop admissions, drain users of SQLite, then close it. */
 export const createRuntimeStoreShutdown = (
-  services: Pick<ReturnType<typeof createRuntimeStoreServices>, 'markRuntimeClosing'>,
+  services: Pick<
+    ReturnType<typeof createRuntimeStoreServices>,
+    'markRuntimeClosing' | 'dispatchMessageOps'
+  >,
   lifecycle: Closeable,
   getWorkflows: () => ReturnType<typeof createRuntimeStoreWorkflowRuntime> | undefined
 ): (() => Promise<void>) => {
@@ -13,6 +16,7 @@ export const createRuntimeStoreShutdown = (
   return () =>
     (closing ??= (async () => {
       services.markRuntimeClosing()
+      services.dispatchMessageOps.notifyDispatchQuestionChange()
       const workflows = getWorkflows()
       workflows?.scheduler.close()
       await workflows?.runner.close()
