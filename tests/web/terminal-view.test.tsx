@@ -1094,7 +1094,7 @@ describe('TerminalView', () => {
     )
   })
 
-  test('pauses terminal repaint while parked and flushes output after reattach', async () => {
+  test('parses parked output once and retains the same terminal after reattach', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket as never)
     let slot = addPortalSlot('run-parked-output')
 
@@ -1114,8 +1114,9 @@ describe('TerminalView', () => {
       expect(document.querySelector('[data-terminal-host-parked="true"]')).not.toBeNull()
     })
 
+    const opensBeforeOutput = terminalOpenCount
     ioSocket?.onmessage?.({ data: 'parked-output' })
-    expect(terminalWrites).toEqual([])
+    expect(terminalWrites).toEqual(['parked-output'])
     const outputAcksWhileParked = parseControlMessages(controlSocket).filter(
       (message) => message.type === 'output_ack'
     )
@@ -1135,6 +1136,9 @@ describe('TerminalView', () => {
     expect(outputAcksAfterReattach).toEqual([
       { type: 'output_ack', bytes: new TextEncoder().encode('parked-output').byteLength },
     ])
+    ioSocket?.onmessage?.({ data: 'visible-output' })
+    await waitFor(() => expect(terminalWrites).toEqual(['parked-output', 'visible-output']))
+    expect(terminalOpenCount).toBe(opensBeforeOutput)
   })
 
   test('preserves Codex cursor and erase sequences while acknowledging original bytes', async () => {
