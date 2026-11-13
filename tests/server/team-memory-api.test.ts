@@ -97,6 +97,74 @@ const postMemory = (path: 'add' | 'forget' | 'search' | 'show', body: unknown) =
 }
 
 describe('/api/team/memory add/show/search/forget', () => {
+  test('decision supersession is atomic, attributable and restricted to the workspace orchestrator', async () => {
+    const identity = {
+      project_id: workspaceId,
+      from_agent_id: orchestratorId,
+      token: orchestratorToken,
+    }
+    const originalResponse = await postMemory('add', {
+      ...identity,
+      body: 'Use SQLite for storage.',
+      kind: 'decision',
+    })
+    expect(originalResponse.status).toBe(200)
+    const { memory: original } = await originalResponse.json()
+    const replacement = {
+      body: 'Use PostgreSQL for storage.',
+      kind: 'decision',
+      supersedes_id: original.id,
+    }
+    expect(
+      (
+        await postMemory('add', {
+          ...identity,
+          ...replacement,
+          from_agent_id: workerId,
+          token: workerToken,
+        })
+      ).status
+    ).toBe(403)
+    expect((await postMemory('add', { ...identity, ...replacement, kind: 'fact' })).status).toBe(
+      400
+    )
+    const otherWorkspaceId = await createWorkspace('Other')
+    const otherOrchestratorId = `${otherWorkspaceId}:orchestrator`
+    const otherToken = await configureAndStartAgent(otherOrchestratorId, otherWorkspaceId)
+    expect(
+      (
+        await postMemory('add', {
+          ...replacement,
+          project_id: otherWorkspaceId,
+          from_agent_id: otherOrchestratorId,
+          token: otherToken,
+        })
+      ).status
+    ).toBe(409)
+    expect(server?.store.getMemoryEntry(workspaceId, original.id)?.status).toBe('active')
+    const replacedResponse = await postMemory('add', { ...identity, ...replacement })
+    expect(replacedResponse.status).toBe(200)
+    const { memory: replaced } = await replacedResponse.json()
+    expect(replaced.status).toBe('active')
+    expect(replaced.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source_type: 'memory',
+          source_id: original.id,
+          actor_agent_id_snapshot: orchestratorId,
+        }),
+      ])
+    )
+    expect(server?.store.getMemoryEntry(workspaceId, original.id)).toMatchObject({
+      status: 'archived',
+      body: 'Use SQLite for storage.',
+    })
+    expect((await postMemory('add', { ...identity, ...replacement })).status).toBe(409)
+    expect(
+      server?.store.searchMemoryEntries(workspaceId, 'storage').map((memory) => memory.id)
+    ).toEqual([replaced.id])
+  }, 30000)
+
   test('orchestrator add becomes active and show returns source actor snapshots', async () => {
     const addResponse = await postMemory('add', {
       project_id: workspaceId,
