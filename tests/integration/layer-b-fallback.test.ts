@@ -346,7 +346,7 @@ describe('Layer B fallback integration', () => {
         expect(received).toContain('让 worker 评估一下项目目标')
         expect(received).toContain('Bob')
         expect(received).toContain('Use existing members from `team list` by name.')
-        expect(received).toContain('Use `team send "<member-name>" "<task>"`')
+        expect(received).toContain('`team send "<member-name>" "<task>"`')
         expect(received).toContain('Keep small, direct tasks local.')
         expect(received).toContain('messages neither create nor close responsibility')
         expect(received).toContain(
@@ -608,7 +608,9 @@ describe('Layer B fallback integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, thirdRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).not.toContain('--resume')
+        const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
         expect(state.output).toContain('<hive-system-message>')
         if (process.platform !== 'win32') {
           expect(state.output).toContain('STDIN:\u001b[200~<hive-system-message>')

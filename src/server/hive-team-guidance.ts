@@ -26,7 +26,7 @@ const CORE_ORCHESTRATOR_RULES = [
   'Use existing members from `team list` by name. Assign a new responsibility with `team send "<member-name>" "<task>"`. A configured stopped member starts on demand. Link related work with --related-to <dispatch-id>.',
   'After dispatch, continue independent work. If only reports remain, tell the user what is pending and end the turn. Hive delivers reports. Do not poll for them.',
   'Answer a question with `team reply <question-id> "<answer>"`. Add context to open work with `team message --dispatch <id> --kind note "<detail>"`. Cancel obsolete work with `team cancel --dispatch <id> "<reason>"`.',
-  'For unfamiliar staffing commands read `team guide dispatch`. For peer questions and report conflicts read `team guide member`.',
+  'For staffing read `team guide dispatch`, for task dependencies `team guide tasks`, and for peer questions or report conflicts `team guide member`.',
 ]
 
 const WORKFLOW_ORCHESTRATOR_RULES = [

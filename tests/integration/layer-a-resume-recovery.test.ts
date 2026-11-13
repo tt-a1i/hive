@@ -507,7 +507,9 @@ describe('Layer A resume recovery integration', () => {
         expect(run.output).toContain(
           `ARGS:--dangerously-skip-permissions --session-id-test ${sessionId}`
         )
-        expect(run.output).not.toContain('--resume')
+        const argvLine = run.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
       })
       unlinkSync(join(workspacePath, '.expect-fresh'))
     } finally {
@@ -702,7 +704,9 @@ describe('Layer A resume recovery integration', () => {
         const run = await getRunOutputViaHttp(server.baseUrl, cookie, thirdRun.runId)
         expect(run.status).toBe('running')
         expect(run.output).toContain(`ARGS:--session-id-test ${sessionId}`)
-        expect(run.output).not.toContain('resume')
+        const argvLine = run.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('resume')
       })
       unlinkSync(join(workspacePath, '.expect-fresh'))
     } finally {

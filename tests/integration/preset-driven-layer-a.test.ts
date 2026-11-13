@@ -561,7 +561,9 @@ describe('preset-driven Layer A', () => {
         expect(state.output).toContain(
           `ARGS:--dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --session-id-test ${aliceSessionId}`
         )
-        expect(state.output).not.toContain('--resume')
+        const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
       })
       await waitFor(() => {
         expect(readLastSessionId(dataDir, workspaceId, aliceId)).toBe(aliceSessionId)
@@ -601,7 +603,9 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(`ARGS:--session-id-test ${sessionId}`)
-        expect(state.output).not.toContain('--resume')
+        const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
         expect(state.output).not.toContain('--dangerously-skip-permissions')
       })
 

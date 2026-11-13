@@ -211,7 +211,8 @@ describe('agent startup instructions', () => {
         )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')
-        expectReceivedText(output, 'Report only when ending this round of responsibility')
+        expectReceivedText(output, 'team report --dispatch <id> --seen <required_seen_seq> --stdin')
+        expectReceivedText(output, 'team ask "<question>"')
         expectReceivedText(
           output,
           'Stay quiet for routine readiness or standby. Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch.'
