@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { PromptReadinessTimeoutError } from '../../src/server/http-errors.js'
 import {
   createImmediateInteractiveInputWriter,
   createPostStartInputWriter,
@@ -22,6 +23,7 @@ describe('isInteractiveAgentCommand — cross-platform path normalization', () =
     expect(isInteractiveAgentCommand('opencode')).toBe(true)
     expect(isInteractiveAgentCommand('gemini')).toBe(true)
     expect(isInteractiveAgentCommand('pi')).toBe(true)
+    expect(isInteractiveAgentCommand('kimi')).toBe(true)
   })
 
   test('strips Windows .cmd / .bat / .exe suffix before lookup', () => {
@@ -1246,5 +1248,255 @@ describe('post-start input writer', () => {
     const write = createImmediateInteractiveInputWriter(manager as never, 'pi')
     await expect(write('run-1', '/help')).rejects.toThrow(/inactive/u)
     expect(manager.writeInput).not.toHaveBeenCalled()
+  })
+
+  // Recorded-style Kimi Code TUI fixtures (startup splash, idle composer +
+  // footer, and the measured 2.4.1 trust screen). The splash already draws the
+  // same `│ >` composer box, so readiness requires that box plus a `context:`
+  // status bar after it, and the box itself must appear after the last
+  // "Preparing Kimi Code" banner.
+  const KIMI_PREPARING_SPLASH = [
+    ' ⠋ Preparing Kimi Code…',
+    '',
+    ' ╭────────────╮',
+    ' │ >          │',
+    ' ╰────────────╯',
+    '',
+  ].join('\n')
+
+  const KIMI_PREPARING_SPLASH_STYLED = [
+    '  \u001b[38;2;79;168;255m⠋\u001b[39m Preparing Kimi Code…',
+    '',
+    ' ╭────────────╮',
+    ' \u001b[38;2;90;90;90m│\u001b[39m > \u001b[7m \u001b[0m          \u001b[38;2;90;90;90m│\u001b[39m',
+    ' ╰────────────╯',
+    '',
+  ].join('\n')
+
+  const KIMI_READY_SCREEN = [
+    ' ╭────────────────────────────╮',
+    ' │  Welcome to Kimi Code!     │',
+    ' ╰────────────────────────────╯',
+    '',
+    ' ╭──────────────────────────────────────────────────────────────╮',
+    ' │ >                                                            │',
+    ' ╰──────────────────────────────────────────────────────────────╯',
+    ' Never Ask  kimi-k2  ~/project',
+    'ctrl+o expand                                                  context: 0% (0/32k)',
+    '',
+  ].join('\n')
+
+  const KIMI_READY_AFTER_PREPARING = `${KIMI_PREPARING_SPLASH}\n${KIMI_READY_SCREEN}`
+
+  const KIMI_STALE_READY_THEN_PREPARING = `${KIMI_READY_SCREEN}\n${KIMI_PREPARING_SPLASH}`
+
+  const KIMI_INPUT_BOX_WITHOUT_CONTEXT = [
+    ' ╭────────────╮',
+    ' │ >          │',
+    ' ╰────────────╯',
+    '',
+  ].join('\n')
+
+  const KIMI_CONTEXT_BEFORE_INPUT_BOX = [
+    '                          context: 0% (0/32k)',
+    ' ╭────────────╮',
+    ' │ >          │',
+    ' ╰────────────╯',
+    '',
+  ].join('\n')
+
+  const KIMI_UNCLOSED_INPUT_BOX = [
+    ' ╭────────────╮',
+    ' │ >           ',
+    ' ╰────────────╯',
+    '                          context: 0% (0/32k)',
+    '',
+  ].join('\n')
+
+  // Measured Kimi Code CLI 2.4.1 first-run trust screen (agent-signals
+  // kimi/trust-v2-4-1, 120x40 plain capture, 2026-10-30).
+  const KIMI_TRUST_SCREEN = [
+    ' ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+    '  Trust this folder?',
+    '  ↑↓ navigate · Enter select · Esc exit',
+    '',
+    '  /work/example',
+    '',
+    '  No project integrations or instructions to activate.',
+    '',
+    '  Trust is remembered for this folder, including future project config changes.',
+    '  Tool approvals follow your permission settings.',
+    '',
+    '   ❯ Trust and continue',
+    '     Exit',
+    ' ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+    '',
+  ].join('\n')
+
+  test('recognizes the Kimi ready composer only after Preparing Kimi Code, with the context status bar', () => {
+    expect(hasInteractivePromptReady('booting only', 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady('Preparing Kimi Code…', 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_PREPARING_SPLASH, 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_PREPARING_SPLASH_STYLED, 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_INPUT_BOX_WITHOUT_CONTEXT, 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_CONTEXT_BEFORE_INPUT_BOX, 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_UNCLOSED_INPUT_BOX, 'kimi')).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_STALE_READY_THEN_PREPARING, 'kimi')).toBe(false)
+
+    expect(hasInteractivePromptReady(KIMI_READY_SCREEN, 'kimi')).toBe(true)
+    expect(hasInteractivePromptReady(KIMI_READY_AFTER_PREPARING, 'kimi')).toBe(true)
+    // A later session frame can still show the banner above the composer; the
+    // input box and context bar after it are what mark readiness.
+    expect(
+      hasInteractivePromptReady(
+        [
+          '  ⠋ Preparing Kimi Code…',
+          '',
+          ' ╭────────────╮',
+          ' │ >          │',
+          ' ╰────────────╯',
+          ' Never Ask  fixture  ~/project with spaces',
+          '                          context: 0% (0/32k)',
+          '',
+        ].join('\n'),
+        'kimi'
+      )
+    ).toBe(true)
+    expect(hasInteractivePromptReady(KIMI_READY_SCREEN)).toBe(false)
+    expect(hasInteractivePromptReady(KIMI_READY_SCREEN, 'claude')).toBe(false)
+  })
+
+  test('detects the Kimi trust screen as a first-run setup prompt and extends the readiness deadline', async () => {
+    expect(hasFirstRunSetupPrompt(KIMI_TRUST_SCREEN)).toBe(true)
+    expect(hasFirstRunSetupPrompt('Trust this folder?\n❯ Trust and continue\n  Exit')).toBe(true)
+
+    vi.useFakeTimers()
+    let output = KIMI_TRUST_SCREEN
+    const manager = {
+      getRun: vi.fn(() => ({ output, status: 'running' })),
+      writeInput: vi.fn(),
+    }
+
+    const write = createPostStartInputWriter(manager as never, 'kimi')
+    const done = write('run-1', '/help')
+
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    output = KIMI_READY_SCREEN
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(manager.writeInput).toHaveBeenCalledTimes(1)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(1, 'run-1', '\u001b[200~/help\u001b[201~')
+
+    await vi.advanceTimersByTimeAsync(600)
+    expect(manager.writeInput).toHaveBeenCalledTimes(2)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(2, 'run-1', '\r')
+    await expect(done).resolves.toBeUndefined()
+  })
+
+  test('throws PromptReadinessTimeoutError for Kimi instead of falling back to delivery', async () => {
+    vi.useFakeTimers()
+    const manager = {
+      getRun: vi.fn(() => ({ output: KIMI_PREPARING_SPLASH, status: 'running' })),
+      writeInput: vi.fn(),
+    }
+
+    const write = createPostStartInputWriter(manager as never, 'kimi')
+    const done = write('run-1', '/help')
+    const rejected = expect(done).rejects.toSatisfy((error: unknown) => {
+      expect(error).toBeInstanceOf(PromptReadinessTimeoutError)
+      expect(error).toMatchObject({
+        name: 'PromptReadinessTimeoutError',
+        code: 'PROMPT_READINESS_TIMEOUT',
+        command: 'kimi',
+        runId: 'run-1',
+      })
+      return true
+    })
+
+    // Claude/Codex soft-fallback at 3s must not fire for Kimi.
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(26_999)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await rejected
+    expect(manager.writeInput).not.toHaveBeenCalled()
+  })
+
+  test('Kimi trust-screen deadline extension still times out once the setup prompt is gone', async () => {
+    vi.useFakeTimers()
+    let output = KIMI_TRUST_SCREEN
+    const manager = {
+      getRun: vi.fn(() => ({ output, status: 'running' })),
+      writeInput: vi.fn(),
+    }
+
+    const write = createPostStartInputWriter(manager as never, 'kimi')
+    const done = write('run-1', '/help')
+    const rejected = expect(done).rejects.toBeInstanceOf(PromptReadinessTimeoutError)
+
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    output = KIMI_PREPARING_SPLASH
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await rejected
+    expect(manager.writeInput).not.toHaveBeenCalled()
+  })
+
+  test('global Trust and continue pattern does not treat a bare Claude or Codex prompt as setup', () => {
+    expect(hasFirstRunSetupPrompt('Welcome to Claude Code\n❯')).toBe(false)
+    expect(hasFirstRunSetupPrompt('Welcome back\n›')).toBe(false)
+    expect(hasFirstRunSetupPrompt('❯ ')).toBe(false)
+    expect(hasFirstRunSetupPrompt('› ')).toBe(false)
+    // A completed trust step that has already reached the bare composer must
+    // not stay classified as a setup prompt just because the new global
+    // pattern is still in the scrollback.
+    expect(hasFirstRunSetupPrompt('Trust this folder?\n❯ Trust and continue\n❯')).toBe(false)
+    expect(hasFirstRunSetupPrompt('Trust this folder?\n❯ Trust and continue\n›')).toBe(false)
+  })
+
+  test('waits for Kimi prompt readiness and writes bracketed paste, including Windows command paths', async () => {
+    vi.useFakeTimers()
+    let output = KIMI_PREPARING_SPLASH_STYLED
+    const manager = {
+      getRun: vi.fn(() => ({ output, status: 'running' })),
+      writeInput: vi.fn(),
+    }
+
+    const write = createPostStartInputWriter(
+      manager as never,
+      'C:\\Users\\me\\AppData\\Roaming\\npm\\kimi.cmd'
+    )
+    const done = write('run-1', '<hive-message kind="startup">\nContinue from here.')
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(manager.writeInput).not.toHaveBeenCalled()
+
+    output = KIMI_READY_SCREEN
+    await vi.advanceTimersByTimeAsync(50)
+
+    expect(manager.writeInput).toHaveBeenCalledTimes(1)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(
+      1,
+      'run-1',
+      '\u001b[200~<hive-message kind="startup">\nContinue from here.\u001b[201~'
+    )
+    expect(manager.writeInput.mock.calls[0]?.[1]).toContain('\u001b[200~')
+    expect(manager.writeInput.mock.calls[0]?.[1]).toContain('\u001b[201~')
+
+    await vi.advanceTimersByTimeAsync(599)
+    expect(manager.writeInput).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(manager.writeInput).toHaveBeenCalledTimes(2)
+    expect(manager.writeInput).toHaveBeenNthCalledWith(2, 'run-1', '\r')
+    await expect(done).resolves.toBeUndefined()
   })
 })
