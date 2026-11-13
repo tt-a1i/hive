@@ -225,6 +225,7 @@ Three details matter:
 | Pi | `pi` | `--approve` | Session id capture not wired yet |
 | Cursor CLI | `cursor` | `--force` | Session id capture not wired yet |
 | Grok Build | `grok` | `--always-approve` | Session id capture not wired yet |
+| [Kimi Code](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html) | `kimi` | `--auto` | Session id capture not wired yet |
 | Custom | Any executable | User configured | User configured |
 
 Hive does not install these CLIs for you. Install and authenticate them in the
@@ -235,7 +236,7 @@ same shell environment you use to start Hive.
 | Tier | CLIs | Commitment |
 | --- | --- | --- |
 | Tier 1 | Claude Code, Codex | Minimum compatibility report in CI (`pnpm compat:cli:report`): Node 22.18+, built-in SQLite, prebuilt PTY, and CLI version detection when installed. |
-| Tier 2 | Gemini, OpenCode, Qwen Code, Hermes, Pi, Cursor CLI, Grok Build, Antigravity CLI | Built-in presets and manual smoke coverage; upstream CLI changes may require user reports before Hive catches up. |
+| Tier 2 | Gemini, OpenCode, Qwen Code, Hermes, Pi, Cursor CLI, Grok Build, Antigravity CLI, Kimi Code | Built-in presets and manual smoke coverage; upstream CLI changes may require user reports before Hive catches up. |
 | Custom | Any executable | User-maintained command, args, and auth behavior. Hive preserves the PTY/session wrapper but cannot promise CLI-specific compatibility. |
 
 For a wrapper around a supported CLI, keep that CLI's preset selected when entering

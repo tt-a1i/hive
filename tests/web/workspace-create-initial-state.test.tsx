@@ -75,6 +75,8 @@ describe('workspace create initial state', () => {
     fireEvent.change(nameInput, {
       target: { value: 'Alpha' },
     })
+    fireEvent.click(within(confirmDialog).getByTestId('workspace-command-preset'))
+    fireEvent.click(within(confirmDialog).getByTestId('workspace-command-preset-option-generic'))
     fireEvent.click(within(confirmDialog).getByTestId('confirm-workspace-startup-toggle'))
     fireEvent.change(within(confirmDialog).getByTestId('confirm-workspace-startup-command'), {
       target: { value: `${process.execPath} -e "process.stdin.resume()"` },

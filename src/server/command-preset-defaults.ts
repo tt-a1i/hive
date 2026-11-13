@@ -12,6 +12,7 @@ export const BUILTIN_COMMAND_PRESET_IDS = [
   'agy',
   'cursor',
   'grok',
+  'kimi',
 ] as const
 
 export type BuiltinCommandPresetId = (typeof BUILTIN_COMMAND_PRESET_IDS)[number]
@@ -136,6 +137,14 @@ export const BUILTIN_COMMAND_PRESETS: BuiltinCommandPresetDefaults[] = [
     resumeArgsTemplate: null,
     sessionIdCapture: null,
     yoloArgsTemplate: GROK_DEFAULT_YOLO_ARGS,
+  },
+  {
+    command: 'kimi',
+    displayName: 'Kimi Code',
+    id: 'kimi',
+    resumeArgsTemplate: '--session {session_id}',
+    sessionIdCapture: null,
+    yoloArgsTemplate: ['--auto'],
   },
 ]
 

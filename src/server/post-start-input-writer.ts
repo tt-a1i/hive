@@ -1,5 +1,6 @@
 import type { AgentManager } from './agent-manager.js'
 import { BUILTIN_INTERACTIVE_COMMANDS } from './command-preset-defaults.js'
+import { PromptReadinessTimeoutError } from './http-errors.js'
 import { normalizeExecutableToken } from './startup-command-parser.js'
 
 const READY_CHECK_INTERVAL_MS = 50
@@ -40,6 +41,7 @@ const COMMANDS_WITH_BRACKETED_PASTE = new Set([
   'codex',
   'grok',
   'hermes',
+  'kimi',
   'opencode',
   'pi',
 ])
@@ -141,6 +143,7 @@ const hasBarePromptLine = (output: string) => /^[❯›]$/u.test(getLastNonEmpty
 const SETUP_PROMPT_PATTERNS = [
   /\bDo you trust\b/iu,
   /\btrust this (?:directory|folder|workspace|project)\b/iu,
+  /\bTrust and continue\b/u,
   /\b(?:Log in|Login required|Sign in)\b/iu,
   /\b(?:Enter|Return)\s+to\s+confirm\b/iu,
   /\bEsc\s+to\s+(?:cancel|exit)\b/iu,
@@ -177,8 +180,21 @@ const getOpencodePromptReadyState = (output: string): PromptReadyState => {
   return 'not-ready'
 }
 
+const hasKimiPromptReady = (output: string) => {
+  const tail = getPlainTerminalTail(output)
+  const prompt = tail.lastIndexOf('│ >')
+  const context = tail.lastIndexOf('context:')
+  return (
+    prompt >= 0 &&
+    context > prompt &&
+    prompt > tail.lastIndexOf('Preparing Kimi Code') &&
+    /│ >\s*│/u.test(tail.slice(prompt, context))
+  )
+}
+
 const getInteractivePromptReadyState = (output: string, command = ''): PromptReadyState => {
   const commandName = getCommandName(command)
+  if (commandName === 'kimi') return hasKimiPromptReady(output) ? 'ready' : 'not-ready'
   if (
     hasBarePromptLine(output) ||
     (commandName === 'agy' && hasAgyPromptReady(output)) ||
@@ -242,6 +258,7 @@ const canTimeoutBeforePromptReady = (command: string) => {
     commandName !== 'agy' &&
     commandName !== 'gemini' &&
     commandName !== 'hermes' &&
+    commandName !== 'kimi' &&
     commandName !== 'opencode' &&
     commandName !== 'pi' &&
     commandName !== 'qwen'
@@ -479,6 +496,8 @@ const whenInteractiveInputReady = (
   rejectDone: (error: Error) => void
 ) => {
   const startedAt = Date.now()
+  const isKimi = getCommandName(command) === 'kimi'
+  let kimiReadyDeadline = startedAt + PROMPT_READY_HARD_TIMEOUT_MS
   let settleCandidate: { since: number; tail: string } | null = null
   const isReadyToWrite = (output: string) => {
     const promptReadyState = getInteractivePromptReadyState(output, command)
@@ -512,7 +531,11 @@ const whenInteractiveInputReady = (
       return
     }
     const firstRunSetupPromptVisible = hasFirstRunSetupPrompt(output)
-    const elapsed = Date.now() - startedAt
+    const now = Date.now()
+    const elapsed = now - startedAt
+    if (isKimi && firstRunSetupPromptVisible) {
+      kimiReadyDeadline = now + PROMPT_READY_HARD_TIMEOUT_MS
+    }
     // Fallback delivery so a readiness anchor that scrolls out of the tail
     // window (e.g. pi's one-shot startup banner) never strands a dispatch.
     // Commands with a soft fallback (codex/claude) deliver after the short
@@ -525,6 +548,10 @@ const whenInteractiveInputReady = (
       (hasPromptReadyHardTimeout(command) && elapsed >= PROMPT_READY_HARD_TIMEOUT_MS)
     if (!firstRunSetupPromptVisible && (isReadyToWrite(output) || fallbackDeliveryDue)) {
       onReady(output)
+      return
+    }
+    if (isKimi && now >= kimiReadyDeadline) {
+      rejectDone(new PromptReadinessTimeoutError(command, runId))
       return
     }
     setTimeout(tryReady, READY_CHECK_INTERVAL_MS)

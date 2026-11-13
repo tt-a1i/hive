@@ -168,6 +168,7 @@ Workspace 任务图：
 | Pi | `pi` | `--approve` | 暂未自动捕获 session id |
 | Cursor CLI | `cursor` | `--force` | 暂未自动捕获 session id |
 | Grok Build | `grok` | `--always-approve` | 暂未自动捕获 session id |
+| [Kimi Code](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html) | `kimi` | `--auto` | 暂未自动捕获 session id |
 | 自定义 | 任意可执行文件 | 自己配 | 自己配 |
 
 Hive 不替你安装这些 CLI。请在启动 Hive 的同一个 shell 环境里先装好、登录好。
@@ -177,7 +178,7 @@ Hive 不替你安装这些 CLI。请在启动 Hive 的同一个 shell 环境里�
 | 分级 | CLI | 承诺 |
 | --- | --- | --- |
 | Tier 1 | Claude Code、Codex | CI 生成最小兼容报告（`pnpm compat:cli:report`）：检查 Node 22.18+、内置 SQLite、预编译 PTY，并在本机已安装 CLI 时记录版本。 |
-| Tier 2 | Gemini、OpenCode、Qwen Code、Hermes、Pi、Cursor CLI、Grok Build、Antigravity CLI | 内置 preset + 手动 smoke 覆盖；上游 CLI 行为变化可能需要用户报告后再跟进。 |
+| Tier 2 | Gemini、OpenCode、Qwen Code、Hermes、Pi、Cursor CLI、Grok Build、Antigravity CLI、Kimi Code | 内置 preset + 手动 smoke 覆盖；上游 CLI 行为变化可能需要用户报告后再跟进。 |
 | Custom | 任意可执行命令 | 用户自己维护命令、参数和登录状态；Hive 只保证 PTY/session 包装，不承诺 CLI 专属兼容性。 |
 
 如果自定义启动命令包装的是已支持的 CLI，填写命令时请保留对应 CLI 预设，
