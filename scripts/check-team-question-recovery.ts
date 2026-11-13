@@ -6,8 +6,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { runHiveCommand } from '../src/cli/hive.js'
-import { createControllerStore } from '../src/server/controller-store.js'
-import { openRuntimeDatabase } from '../src/server/runtime-database.js'
 
 interface Message {
   id: string
@@ -393,92 +391,8 @@ try {
     'closed'
   )
 
-  // Configure real persisted binding state directly: exercise new HTTP entry
-  // points under a changed thread without invoking Codex host notifications.
-  await mkdir(join(root, 'external'))
-  const external = (
-    await (
-      await request(
-        '/api/workspaces',
-        {
-          name: 'Retired controller fixture',
-          path: join(root, 'external'),
-          controller_mode: 'codex_app',
-        },
-        201
-      )
-    ).json()
-  ).id as string
-  const externalActor = `${external}:orchestrator`
-  const externalWorker = (
-    await (
-      await request(
-        `/api/workspaces/${external}/workers`,
-        {
-          name: 'External worker',
-          role: 'coder',
-        },
-        201
-      )
-    ).json()
-  ).id as string
-  await start(externalWorker, passive, external)
-  const db = openRuntimeDatabase(root)
-  try {
-    const controllers = createControllerStore(db)
-    const bind = (thread: string) => {
-      controllers.request(external, thread)
-      const requestId = controllers.get(external).request_id
-      assert.ok(requestId)
-      controllers.confirm(external, requestId)
-    }
-    bind('old-thread')
-    const task = await runtime.store.dispatchTaskByWorkerName(
-      external,
-      'External worker',
-      'Bound task',
-      {
-        fromAgentId: externalActor,
-        hivePort: String(runtime.port),
-      }
-    )
-    const question = runtime.store.sendDispatchMessage(external, externalActor, {
-      dispatchId: task.id,
-      kind: 'question',
-      text: 'Old controller question',
-    })
-    const externalIdentity = {
-      project_id: external,
-      from_agent_id: externalWorker,
-      token: runtime.store.peekAgentToken(externalWorker),
-      question_id: question.id,
-    }
-    assert.equal(
-      (await (await request('/api/team/question', externalIdentity, 200)).json()).status,
-      'pending'
-    )
-    controllers.disconnect(external)
-    bind('new-thread')
-    assert.equal(
-      (await (await request('/api/team/question', externalIdentity, 200)).json()).status,
-      'closed'
-    )
-    const answerCount = () =>
-      runtime?.store
-        .listWorkspaceDispatchMessages(external)
-        .filter((item) => item.replyTo === question.id).length
-    assert.equal(answerCount(), 0)
-    await request(
-      '/api/team/reply',
-      { ...externalIdentity, text: 'Cannot cross controller binding' },
-      409
-    )
-    assert.equal(answerCount(), 0)
-  } finally {
-    db.close()
-  }
   console.log(
-    'PASS: short CLI reply routing; nonblocking ask; durable resume/list; bounded wait; sender/workspace/root authorization; cancellation/removal/controller closure; unchanged explicit seen barrier'
+    'PASS: short CLI reply routing; nonblocking ask; durable resume/list; bounded wait; sender/workspace/root authorization; cancellation/removal closure; unchanged explicit seen barrier'
   )
 } finally {
   await Promise.all(

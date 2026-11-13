@@ -59,21 +59,6 @@ export const createDispatchMessageStore = (db: Database) => {
   // A previous process could exit after writing the PTY but before recording it.
   // Stable message IDs make this explicit at-least-once redelivery recognizable.
   db.prepare("UPDATE dispatch_message_outbox SET state = 'queued' WHERE state = 'delivering'").run()
-  const controllerBinding = (workspaceId: string) => {
-    const row = db
-      .prepare(`SELECT w.controller_mode, c.thread_id FROM workspaces w
-      LEFT JOIN workspace_controllers c ON c.workspace_id = w.id WHERE w.id = ?`)
-      .get(workspaceId) as { controller_mode: string; thread_id: string | null } | undefined
-    return { external: row?.controller_mode === 'codex_app', threadId: row?.thread_id ?? null }
-  }
-  const messageControllerThread = (workspaceId: string, messageId: string) =>
-    (
-      db
-        .prepare(
-          'SELECT controller_thread_id FROM dispatch_messages WHERE workspace_id = ? AND id = ?'
-        )
-        .get(workspaceId, messageId) as { controller_thread_id: string | null } | undefined
-    )?.controller_thread_id ?? null
   const getMessage = (workspaceId: string, id: string) => readDispatchMessage(db, workspaceId, id)
   const listSentQuestions = (
     workspaceId: string,
@@ -236,8 +221,8 @@ export const createDispatchMessageStore = (db: Database) => {
     ).seq
     const createdAt = Date.now()
     db.prepare(`INSERT INTO dispatch_messages
-      (id, workspace_id, dispatch_id, source_dispatch_id, sequence, from_agent_id, recipient_agent_id, kind, reply_to, text, created_at, controller_thread_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      (id, workspace_id, dispatch_id, source_dispatch_id, sequence, from_agent_id, recipient_agent_id, kind, reply_to, text, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       id,
       input.workspaceId,
       input.dispatchId,
@@ -248,33 +233,12 @@ export const createDispatchMessageStore = (db: Database) => {
       input.kind,
       input.replyTo,
       input.text,
-      createdAt,
-      input.kind === 'question' && input.fromAgentId === `${input.workspaceId}:orchestrator`
-        ? controllerBinding(input.workspaceId).threadId
-        : null
+      createdAt
     )
     if (input.kind !== 'progress')
       db.prepare(
         "INSERT INTO dispatch_message_outbox (message_id, state) VALUES (?, 'queued')"
       ).run(id)
-    if (
-      input.kind !== 'progress' &&
-      input.recipientAgentId === `${input.workspaceId}:orchestrator`
-    ) {
-      db.prepare(`INSERT OR IGNORE INTO report_outbox
-        (workspace_id,target_agent_id,dispatch_id,payload,created_at,event_kind,source_dispatch_id)
-        SELECT ?, ?, ?, ?, ?, 'dispatch_message', ? WHERE EXISTS (
-          SELECT 1 FROM workspaces WHERE id = ? AND controller_mode = 'codex_app'
-        )`).run(
-        input.workspaceId,
-        input.recipientAgentId,
-        `message:${id}`,
-        input.text,
-        createdAt,
-        input.dispatchId,
-        input.workspaceId
-      )
-    }
     return getMessage(input.workspaceId, id) as DispatchMessageRecord
   }
   const listQueued = (workspaceId: string, targetAgentId?: string) =>
@@ -318,8 +282,6 @@ export const createDispatchMessageStore = (db: Database) => {
           )
           .all(workspaceId, questionId) as MessageRow[]
       ).map(toRecord),
-    controllerBinding,
-    messageControllerThread,
     isEligible: (messageId: string) => isDispatchMessageEligible(db, messageId),
     getMessage,
     listActionableWorkspaceMessages,

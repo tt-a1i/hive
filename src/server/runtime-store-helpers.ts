@@ -9,9 +9,7 @@ import { createAgentSessionStore } from './agent-session-store.js'
 import { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createDispatchMessageOperations } from './dispatch-message-operations.js'
 import { createDispatchMessageStore } from './dispatch-message-store.js'
-import { createExternalGoalStore } from './external-goal-store.js'
 import { readFeatureFlags } from './feature-flags.js'
-import { ConflictError } from './http-errors.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { hasFirstRunSetupPrompt, isInteractiveAgentCommand } from './post-start-input-writer.js'
@@ -72,7 +70,6 @@ export interface RuntimeStoreServices {
   agentRuntime: ReturnType<typeof createAgentRuntime>
   db: ReturnType<typeof openRuntimeDatabase>
   dispatchLedgerStore: ReturnType<typeof createDispatchLedgerStore>
-  externalGoalStore: ReturnType<typeof createExternalGoalStore>
   isRuntimeClosing: () => boolean
   markRuntimeClosing: () => void
   messageLogStore: ReturnType<typeof createMessageLogStore>
@@ -92,6 +89,7 @@ export interface RuntimeStoreServices {
   tasksFileService: ReturnType<typeof createTasksFileService>
   teamMemoryDreamRunner: ReturnType<typeof createTeamMemoryDreamRunner>
   teamMemoryDreamScheduler: ReturnType<typeof createTeamMemoryDreamScheduler>
+  removeWorkerCompletely: (workspaceId: string, workerId: string, reason?: string) => void
   protocolEventStats: ReturnType<typeof createProtocolEventStats>
   reportOutbox: ReturnType<typeof createReportOutboxStore>
   teamMemoryDreamStore: ReturnType<typeof createTeamMemoryDreamStore>
@@ -167,7 +165,6 @@ export const createRuntimeStoreServices = (
   const messageLogStore = createMessageLogStore(db)
   const dispatchLedgerStore = createDispatchLedgerStore(db)
   const dispatchMessageStore = createDispatchMessageStore(db)
-  const externalGoalStore = createExternalGoalStore(db)
   const teamMemoryStore = createTeamMemoryStore(db)
   const teamMemoryDreamStore = createTeamMemoryDreamStore(db)
   const teamRecallStore = createTeamRecallStore(db)
@@ -353,11 +350,12 @@ export const createRuntimeStoreServices = (
     settings,
   })
   teamMemoryDreamScheduler.start()
-  // Mirrors runtime-store.deleteWorker (drop dispatches + worker row
-  // transactionally → drop launch config → stop run). Hoisted `function` so the
-  // onAgentExit closure above can reference it; only invoked at runtime, after
-  // agentRuntime is assigned.
-  function removeWorkerCompletely(workspaceId: string, workerId: string) {
+  // Shared by explicit deletion and ephemeral-worker cleanup.
+  function removeWorkerCompletely(
+    workspaceId: string,
+    workerId: string,
+    reason = 'the worker was dismissed'
+  ) {
     const activeRun = agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
     const droppedNoticeTargets = new Set<string>()
     db.transaction(() => {
@@ -375,7 +373,7 @@ export const createRuntimeStoreServices = (
       for (const targetAgentId of teamOps.notifyIssuersOfDroppedDispatches(
         workspaceId,
         workerId,
-        'the worker was dismissed'
+        reason
       )) {
         droppedNoticeTargets.add(targetAgentId)
       }
@@ -448,7 +446,6 @@ export const createRuntimeStoreServices = (
     dispatchLedgerStore,
     dispatchMessageStore,
     dispatchMessageOps,
-    externalGoalStore,
     isRuntimeClosing: () => closing,
     markRuntimeClosing: () => {
       closing = true
@@ -466,6 +463,7 @@ export const createRuntimeStoreServices = (
     teamMemoryDreamRunner,
     teamMemoryDreamScheduler,
     protocolEventStats,
+    removeWorkerCompletely,
     reportOutbox,
     teamMemoryDreamStore,
     teamMemoryDiagnostics,
@@ -496,12 +494,6 @@ export const createRuntimeStoreLifecycle = ({
     agentId: string,
     input: { hivePort: string }
   ): Promise<LiveAgentRun> => {
-    if (
-      agentId === getOrchestratorId(workspaceId) &&
-      services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary.controller_mode ===
-        'codex_app'
-    )
-      throw new ConflictError('This workspace uses Codex App as its controller')
     services.workspaceStore.getAgent(workspaceId, agentId)
     services.workspaceStore.markAgentStarted(workspaceId, agentId)
     try {
@@ -553,16 +545,11 @@ export const createRuntimeStoreLifecycle = ({
   const autostartConfiguredAgents = async (input: { hivePort: string }) => {
     if (!agentManager) return []
     const starts = services.workspaceStore.listWorkspaces().flatMap((workspace) => {
-      if (workspace.controller_mode !== 'codex_app')
-        seedOrchestratorLaunchConfig(services.agentRuntime, services.settings, workspace.id)
+      seedOrchestratorLaunchConfig(services.agentRuntime, services.settings, workspace.id)
       return services.workspaceStore
         .getWorkspaceSnapshot(workspace.id)
         .agents.filter(
           (agent) =>
-            !(
-              workspace.controller_mode === 'codex_app' &&
-              agent.id === getOrchestratorId(workspace.id)
-            ) &&
             !services.agentRuntime.getActiveRunByAgentId(workspace.id, agent.id) &&
             services.agentRuntime.peekAgentLaunchConfig(workspace.id, agent.id)
         )

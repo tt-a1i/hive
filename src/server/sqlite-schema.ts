@@ -538,14 +538,14 @@ export const initializeRuntimeDatabase = (db: Database) => {
   if (!appliedVersions.has(40)) {
     db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(40, Date.now())
   }
-  db.transaction(() => {
-    applySchemaVersion41(db)
-    if (!appliedVersions.has(41))
+  if (!appliedVersions.has(41))
+    db.transaction(() => {
+      applySchemaVersion41(db)
       db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
         41,
         Date.now()
       )
-  })()
+    })()
   for (const [version, apply] of [
     [42, applySchemaVersion42],
     [43, applySchemaVersion43],

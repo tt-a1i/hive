@@ -23,7 +23,6 @@ import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useWorkspaceShellLauncher } from './terminal/useWorkspaceShellLauncher.js'
 import { useToast } from './ui/useToast.js'
 import { usePaneSplit } from './usePaneSplit.js'
-import { ExternalControllerPane } from './worker/ExternalControllerPane.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
 import { useOrchestratorPaneState } from './worker/useOrchestratorPaneState.js'
 import type { WorkerActions } from './worker/useWorkerActions.js'
@@ -274,28 +273,19 @@ export const WorkspaceDetail = ({
     setTerminalPanelHidden(false)
     startNewShell()
   }
-  const orchestratorPane =
-    workspace.controller_mode === 'codex_app' ? (
-      <ExternalControllerPane
-        key={workspace.id}
-        workspaceId={workspace.id}
-        workspaceName={workspace.name}
-        memberCount={workers.length}
-        onAddMember={() => setComposerOpen(true)}
-      />
-    ) : (
-      <OrchestratorPane
-        state={orchestrator.state}
-        onRemoveWorkspace={() => {
-          void onDeleteWorkspace(workspace).catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error)
-            toast.show({ kind: 'error', message: `Delete failed: ${message}` })
-          })
-        }}
-        onStart={orchestrator.start}
-        onRestart={orchestrator.restart}
-      />
-    )
+  const orchestratorPane = (
+    <OrchestratorPane
+      state={orchestrator.state}
+      onRemoveWorkspace={() => {
+        void onDeleteWorkspace(workspace).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          toast.show({ kind: 'error', message: `Delete failed: ${message}` })
+        })
+      }}
+      onStart={orchestrator.start}
+      onRestart={orchestrator.restart}
+    />
+  )
 
   const workersArea = (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -312,7 +302,7 @@ export const WorkspaceDetail = ({
         startingWorkerId={startingWorkerId}
         terminalRuns={terminalRuns}
         workers={workers}
-        {...(workspace.controller_mode === 'codex_app' ? {} : { workspaceId: workspace.id })}
+        workspaceId={workspace.id}
       />
       {terminalPanelHidden ? null : (
         <TerminalBottomPanel
@@ -389,9 +379,7 @@ export const WorkspaceDetail = ({
                 >
                   <span>
                     {pane === 'orchestrator'
-                      ? workspace.controller_mode === 'codex_app'
-                        ? t('controller.title')
-                        : t('mobile.team.orchestrator')
+                      ? t('mobile.team.orchestrator')
                       : t('mobile.team.workers')}
                   </span>
                   {pane === 'workers' && workers.length > 0 ? (

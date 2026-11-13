@@ -1,8 +1,6 @@
 import type { RuntimeStore, RuntimeStoreOptions } from './runtime-store-contract.js'
-import { createRuntimeStoreController } from './runtime-store-controller.js'
 import { createRuntimeStoreDiagnosticsMethods } from './runtime-store-diagnostics.js'
 import { createRuntimeStoreDreamMethods } from './runtime-store-dream.js'
-import { createRuntimeStoreExternalGoalMethods } from './runtime-store-external-goals.js'
 import {
   createRuntimeStoreLifecycle,
   createRuntimeStoreServices,
@@ -37,7 +35,6 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     return workflowRuntime
   }
   let store: RuntimeStore
-  const controller = createRuntimeStoreController(services, () => store)
   const workerMutations = createRuntimeStoreWorkerMutations({
     addWorker: (workspaceId, input) => store.addWorker(workspaceId, input),
     configureAgentLaunch: (workspaceId, agentId, input) =>
@@ -47,10 +44,9 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     services,
   })
   store = {
-    ...controller.methods,
-    close: createRuntimeStoreShutdown(services, controller, lifecycle, () => workflowRuntime),
-    createWorkspace: (path, name, controllerMode) => {
-      const workspace = services.workspaceStore.createWorkspace(path, name, controllerMode)
+    close: createRuntimeStoreShutdown(services, lifecycle, () => workflowRuntime),
+    createWorkspace: (path, name) => {
+      const workspace = services.workspaceStore.createWorkspace(path, name)
       void lifecycle
         .startWorkspaceWatch(workspace.id)
         .catch((error) => logTasksFileWatchStartError(workspace.id, error))
@@ -74,7 +70,6 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
       try {
         runDataMutation(() => {
           services.dispatchLedgerStore.deleteWorkspaceDispatches(workspaceId)
-          services.externalGoalStore.deleteWorkspaceGoals(workspaceId)
           services.teamMemoryStore.deleteWorkspaceMemories(workspaceId)
           services.teamMemoryDreamStore.deleteWorkspaceDreamRuns(workspaceId)
           services.workspaceStore.deleteWorkspaceData(workspaceId)
@@ -104,15 +99,14 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     cancelTask: services.teamOps.cancelTask,
     dispatchTask: services.teamOps.dispatchTask,
     dispatchTaskByWorkerName: services.teamOps.dispatchTaskByWorkerName,
-    reportTask: controller.reportTask,
+    reportTask: services.teamOps.reportTask,
     drainReportOutbox: services.teamOps.drainReportOutbox,
-    statusTask: controller.statusTask,
+    statusTask: services.teamOps.statusTask,
     ...services.dispatchMessageOps,
     listDispatches: services.dispatchLedgerStore.listWorkspaceDispatches,
     getDispatch: services.dispatchLedgerStore.getDispatch,
     listOpenDispatches: services.dispatchLedgerStore.listOpenWorkspaceDispatches,
     listRecentDispatches: services.dispatchLedgerStore.listRecentWorkspaceDispatches,
-    ...createRuntimeStoreExternalGoalMethods(services),
     listWorkers: (workspaceId) => services.workspaceStore.listWorkers(workspaceId),
     getLastPtyLineForAgent: (workspaceId, agentId) =>
       services.workerOutputTracker?.getLastPtyLine(workspaceId, agentId) ?? null,
@@ -149,12 +143,10 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     settings: services.settings,
     writeRunInput: lifecycle.writeRunInput,
     getUiToken: () => services.uiAuth.getToken(),
-    getSupervisorToken: () => services.uiAuth.getSupervisorToken(),
     stopAgentRun: lifecycle.stopTerminalRun,
     validateAgentToken: (agentId, token) =>
       services.agentRuntime.validateAgentToken(agentId, token),
     validateUiToken: (token) => services.uiAuth.validate(token),
-    validateSupervisorToken: (token) => services.uiAuth.validateSupervisorToken(token),
     ...createRuntimeStoreDiagnosticsMethods(services),
     ...createRuntimeStoreRemoteMethods(services),
     getWorkflowDispatchAwaiter: () => services.workflowDispatchAwaiter,

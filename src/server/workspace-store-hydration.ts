@@ -10,7 +10,6 @@ import {
   type MessageKindRecord,
   type WorkerRow,
   type WorkspaceRow,
-  type WorkspaceSummaryRow,
 } from './workspace-store-support.js'
 
 const createWorkerSummary = (
@@ -49,16 +48,6 @@ const buildWorkerSelect = (db: Database, whereClause: string): string => {
   return `SELECT ${columns} FROM workers ${where}ORDER BY created_at ASC`
 }
 
-// The workspace reader also supports legacy/shared schemas, just like the
-// worker-column projection above. Absence of controller_mode means internal.
-const buildWorkspaceSelect = (db: Database, suffix: string) => {
-  const columns = db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>
-  const mode = columns.some((column) => column.name === 'controller_mode')
-    ? 'controller_mode'
-    : "'internal' AS controller_mode"
-  return `SELECT id, name, path, ${mode} FROM workspaces ${suffix}`
-}
-
 const applyMessageKinds = (
   workspaces: Map<string, WorkspaceRecord>,
   messageKinds: MessageKindRecord[],
@@ -90,8 +79,8 @@ export const hydrateWorkspaceFromDb = (
     return
   }
 
-  const row = db.prepare(buildWorkspaceSelect(db, 'WHERE id = ?')).get(workspaceId) as
-    | WorkspaceSummaryRow
+  const row = db.prepare('SELECT id, name, path FROM workspaces WHERE id = ?').get(workspaceId) as
+    | WorkspaceRow
     | undefined
   if (!row) {
     return
@@ -102,7 +91,6 @@ export const hydrateWorkspaceFromDb = (
       id: row.id,
       name: row.name,
       path: row.path,
-      ...(row.controller_mode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
     },
     agents: [createOrchestrator(row.id), createWorkflowAgent(row.id)],
   })
@@ -122,14 +110,13 @@ export const seedWorkspacesFromDb = (
   messageKinds: MessageKindRecord[]
 ) => {
   for (const row of db
-    .prepare(buildWorkspaceSelect(db, 'ORDER BY created_at ASC'))
+    .prepare('SELECT id, name, path FROM workspaces ORDER BY created_at ASC')
     .all() as WorkspaceRow[]) {
     workspaces.set(row.id, {
       summary: {
         id: row.id,
         name: row.name,
         path: row.path,
-        ...(row.controller_mode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
       },
       agents: [createOrchestrator(row.id), createWorkflowAgent(row.id)],
     })

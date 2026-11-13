@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import { openRuntimeDatabase } from '../../src/server/runtime-database.js'
-import type { Database } from '../../src/server/sqlite.js'
+import { Database } from '../../src/server/sqlite.js'
 
 let db: Database
 let store: ReturnType<typeof createReportOutboxStore>
@@ -82,4 +82,36 @@ describe('report outbox store', () => {
     expect(store.pendingCount('ws-2', 'ws-2:orchestrator')).toBe(1)
     expect(store.pendingCount('ws-1', 'ws-1:other')).toBe(0)
   })
+})
+
+test.each([
+  false,
+  true,
+])('ignores legacy message receipts with optional metadata columns: %s', (metadata) => {
+  const legacy = new Database(':memory:')
+  try {
+    legacy.exec(`CREATE TABLE report_outbox (
+      id INTEGER PRIMARY KEY, workspace_id TEXT NOT NULL, target_agent_id TEXT NOT NULL,
+      dispatch_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, created_at INTEGER NOT NULL,
+      delivered_at INTEGER ${metadata ? ", event_kind TEXT DEFAULT 'dispatch_result', source_dispatch_id TEXT" : ''}
+    )`)
+    const outbox = createReportOutboxStore(legacy)
+    for (const id of [
+      'message:retired-question',
+      'message:queued-question',
+      'report-id',
+      'drop-id',
+      'exit:run:dispatch',
+    ]) {
+      outbox.enqueue({ workspaceId: 'ws-1', targetAgentId: ORCH, dispatchId: id, payload: id })
+    }
+    expect(outbox.listPending('ws-1', ORCH).map((entry) => entry.dispatchId)).toEqual([
+      'report-id',
+      'drop-id',
+      'exit:run:dispatch',
+    ])
+    expect(outbox.pendingCount('ws-1', ORCH)).toBe(3)
+  } finally {
+    legacy.close()
+  }
 })

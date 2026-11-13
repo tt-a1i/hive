@@ -1,9 +1,8 @@
-/** Real HTTP + SQLite + PTY + spawned CLI/MCP guide check; no paid models.
+/** Real HTTP + SQLite + PTY + spawned CLI guide check; no paid models.
  * Run: pnpm exec tsx scripts/check-team-guide.ts [--receipt /tmp/guide-receipt.json]
  */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -11,22 +10,10 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runHiveCommand } from '../src/cli/hive.js'
-import { callHiveMcpTool } from '../src/cli/hive-mcp.js'
-import BetterSqlite3 from '../src/server/sqlite.js'
 
 type Runtime = Awaited<ReturnType<typeof runHiveCommand>>
 type Workspace = { id: string; path: string }
 type Guide = { project_id: string; project_path: string; topic: string; guide: string }
-type ControllerGuide = { workspace_id: string; guide: string }
-type RpcReply = {
-  id: number
-  error?: { code: number }
-  result?: {
-    tools?: Array<{ name: string; inputSchema: { properties: { action?: { enum: string[] } } } }>
-    content?: Array<{ type: string; text: string }>
-    structuredContent?: ControllerGuide
-  }
-}
 const startedAt = Date.now()
 const receiptPath =
   process.argv[2] === '--receipt' && process.argv[3]
@@ -41,7 +28,6 @@ const oldDataDir = process.env.HIVE_DATA_DIR
 const oldPath = process.env.PATH
 process.env.HIVE_DATA_DIR = join(root, 'data')
 let runtime: Runtime | undefined
-let db: InstanceType<typeof BetterSqlite3> | undefined
 let cookie = ''
 const passed: string[] = []
 const pass = (name: string) => {
@@ -125,30 +111,7 @@ const guide = async (workspace: Workspace, actor: string, topic: string, extra =
     )
   )
 }
-const rpc = async (controllerMode: boolean, calls: object[]) => {
-  const result = await subprocess(
-    [
-      join(sourceRoot, 'src/cli/hive.ts'),
-      'mcp',
-      ...(controllerMode ? ['--controller'] : []),
-      '--base-url',
-      base(),
-    ],
-    root,
-    cleanEnv(),
-    `${calls
-      .map((call, index) => JSON.stringify({ jsonrpc: '2.0', id: index + 1, ...call }))
-      .join('\n')}\n`
-  )
-  assert.equal(result.code, 0, result.stderr)
-  const replies = result.stdout
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line)) as RpcReply[]
-  assert.equal(replies.length, calls.length)
-  return replies
-}
-const createWorkspace = async (name: string, external = false) => {
+const createWorkspace = async (name: string) => {
   const path = join(root, name)
   await mkdir(path)
   return json<Workspace>(
@@ -157,7 +120,6 @@ const createWorkspace = async (name: string, external = false) => {
         name,
         path,
         autostart_orchestrator: false,
-        ...(external ? { controller_mode: 'codex_app' } : {}),
       }),
       201
     )
@@ -311,146 +273,6 @@ try {
   assert.ok(!offline.includes('Workflow commands are disabled'))
   pass('offline saved and generated guides explicitly leave current capabilities unknown')
 
-  const external = await createWorkspace('external workspace', true)
-  const threadId = randomUUID()
-  const action = (name: string, extra = {}, caller = threadId) =>
-    callHiveMcpTool(
-      'hive.controller_action',
-      { workspace_id: external.id, action: name, ...extra },
-      {
-        baseUrl: base(),
-        metadata: { threadId: caller },
-      }
-    )
-  const supervisor = await json<{ token: string }>(
-    await status(await request('/api/external-goals/session'), 200)
-  )
-  const controllerHeaders = {
-    'x-hive-supervisor-token': supervisor.token,
-    'x-hive-controller-thread-id': threadId,
-  }
-  const guideAction = { workspace_id: external.id, action: 'guide' }
-  await status(await request('/api/controller/action', guideAction, 'POST', controllerHeaders), 403)
-  await callHiveMcpTool(
-    'hive.controller_connect',
-    { workspace_id: external.id },
-    {
-      baseUrl: base(),
-      metadata: { threadId },
-    }
-  )
-  const controllerPath = `/api/workspaces/${external.id}/controller`
-  const binding = await json<{ pending_request: { id: string } }>(
-    await status(await request(controllerPath), 200)
-  )
-  await status(
-    await request(`${controllerPath}/confirm`, { request_id: binding.pending_request.id }),
-    200
-  )
-  await status(await request('/api/controller/action', guideAction), 403)
-  await status(
-    await request('/api/controller/action', guideAction, 'POST', {
-      ...controllerHeaders,
-      'x-hive-controller-thread-id': randomUUID(),
-    }),
-    403
-  )
-  for (const extra of [{ topic: 'core' }, { operation_id: 'not-a-mutation' }])
-    await status(
-      await request(
-        '/api/controller/action',
-        { ...guideAction, ...extra },
-        'POST',
-        controllerHeaders
-      ),
-      400
-    )
-  pass('external guide requires a confirmed local controller and rejects mutation/topic arguments')
-
-  const externalMember = await member(external)
-  const dispatch = (await action('send', {
-    worker_name: 'GuideProbe',
-    text: 'Produce a pending receipt for guide isolation.',
-    operation_id: 'guide-receipt',
-  })) as { dispatch_id: string }
-  const deadline = Date.now() + 15000
-  while (
-    runtime.store.listRecentDispatches(external.id).find((row) => row.id === dispatch.dispatch_id)
-      ?.status !== 'submitted'
-  ) {
-    assert.ok(Date.now() < deadline, 'Real dispatch did not reach the member PTY')
-    await new Promise((resolve) => setTimeout(resolve, 40))
-  }
-  await cli(external.path, { ...cleanEnv(), ...identity(external, externalMember) }, [
-    'report',
-    'Guide isolation evidence',
-    '--dispatch',
-    dispatch.dispatch_id,
-  ])
-  db = new BetterSqlite3(join(root, 'data/runtime.sqlite'), { readOnly: true })
-  const snapshot = () => ({
-    receipts: db
-      ?.prepare(
-        'SELECT id, dispatch_id, read_at, delivered_at FROM report_outbox WHERE workspace_id = ? ORDER BY id'
-      )
-      .all(external.id),
-    operations: db
-      ?.prepare('SELECT * FROM controller_operations WHERE workspace_id = ? ORDER BY operation_id')
-      .all(external.id),
-    dispatches: db
-      ?.prepare(
-        'SELECT id, status, seen_seq FROM dispatches WHERE workspace_id = ? ORDER BY sequence'
-      )
-      .all(external.id),
-    runs: db?.prepare('SELECT run_id, agent_id, status FROM agent_runs ORDER BY run_id').all(),
-  })
-  const before = snapshot()
-  assert.equal(before.receipts?.length, 1)
-  const receiptRow = before.receipts?.[0] as {
-    id: number
-    dispatch_id: string
-    read_at: number | null
-    delivered_at: number | null
-  }
-  assert.ok(receiptRow.id > 0)
-  assert.equal(receiptRow.dispatch_id, dispatch.dispatch_id)
-  assert.equal(receiptRow.read_at, null)
-  assert.equal(receiptRow.delivered_at, null)
-  assert.equal(before.operations?.length, 1)
-  const controllerGuide = (await action('guide')) as ControllerGuide
-  assert.equal(controllerGuide.workspace_id, external.id)
-  for (const term of ['hive.controller_action', 'operation_id', 'reply_to', 'ack_reports'])
-    assert.ok(controllerGuide.guide.includes(term))
-  const replies = await rpc(true, [
-    { method: 'tools/list' },
-    {
-      method: 'tools/call',
-      params: { name: 'hive.controller_action', _meta: { threadId }, arguments: guideAction },
-    },
-    { method: 'tools/call', params: { name: 'hive.controller_action', arguments: guideAction } },
-  ])
-  const tool = replies[0]?.result?.tools?.find((item) => item.name === 'hive.controller_action')
-  assert.ok(tool?.inputSchema.properties.action?.enum.includes('guide'))
-  assert.deepEqual(replies[1]?.result?.structuredContent, controllerGuide)
-  assert.deepEqual(JSON.parse(replies[1]?.result?.content?.[0]?.text ?? ''), controllerGuide)
-  assert.equal(typeof replies[2]?.error?.code, 'number')
-  assert.deepEqual(await action('guide'), controllerGuide)
-  assert.deepEqual(snapshot(), before)
-  pass(
-    'MCP tools/list and tools/call deliver the guide without consuming a real unread report or creating work'
-  )
-
-  const standard = await rpc(false, [
-    { method: 'tools/list' },
-    {
-      method: 'tools/call',
-      params: { name: 'hive.controller_action', _meta: { threadId }, arguments: guideAction },
-    },
-  ])
-  assert.equal(standard[0]?.result?.tools?.length, 6)
-  assert.ok(!standard[0]?.result?.tools?.some((tool) => tool.name === 'hive.controller_action'))
-  assert.equal(typeof standard[1]?.error?.code, 'number')
-  pass('default Supervisor MCP mode retains its existing six-tool boundary')
   const receipt = {
     outcome: 'passed',
     checks: passed,
@@ -459,8 +281,7 @@ try {
     duration_ms: Date.now() - startedAt,
     node: process.version,
     command: 'pnpm exec tsx scripts/check-team-guide.ts',
-    scope:
-      'real HTTP SQLite PTY CLI and MCP transport; guide reading/understanding by real models is not measured',
+    scope: 'real HTTP SQLite PTY CLI; guide reading/understanding by real models is not measured',
   }
   await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`)
   console.log(JSON.stringify({ ...receipt, receipt_path: receiptPath }, null, 2))
@@ -471,7 +292,6 @@ try {
   )
   throw error
 } finally {
-  db?.close()
   try {
     await runtime?.close()
   } finally {

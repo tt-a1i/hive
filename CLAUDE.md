@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Hive 是什么
 
-**Hive** 是一个浏览器端的多 CLI agent 协作工作台。用户在 web UI 里组建一个 agent 团队：一个 **Orchestrator**（任意 CLI agent，如 Claude Code/Codex/OpenCode/Gemini）跟用户对话、维护任务图、给 worker 派单；多个 **Worker**（也是 CLI agent，可定义角色）执行任务并通过 `team report` 命令汇报。所有 agent 都跑在浏览器里的 xterm.js 终端中。
+**Hive** 是一个浏览器端的多 CLI agent 协作工作台。用户在 web UI 里组建一个 agent 团队：一个 **Orchestrator**（任意 CLI agent，如 Claude Code/Codex/OpenCode/Gemini）跟用户对话、维护任务图、给 worker 派单；多个 **Worker**（也是 CLI agent，可定义角色）执行任务并通过 `team report` 命令汇报。所有 agent 都运行在 Hive 管理的 PTY 中，由浏览器里的 xterm.js 显示。Codex CLI 可以担任这两种角色。
 
 核心隐喻是蜂巢：Orchestrator 是蜂后，Worker 是工蜂，任务图是蓝图。
 

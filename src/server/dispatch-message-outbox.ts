@@ -21,11 +21,6 @@ export const createDispatchMessageOutbox = (ports: {
     return true
   }
   const drainTarget = async (workspaceId: string, targetAgentId: string) => {
-    if (
-      targetAgentId === `${workspaceId}:orchestrator` &&
-      ports.messages.controllerBinding(workspaceId).external
-    )
-      return
     const key = `${workspaceId}:${targetAgentId}`
     if (draining.has(key)) {
       rerunRequested.add(key)

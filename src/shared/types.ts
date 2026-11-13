@@ -24,10 +24,7 @@ export const isTeamReviewRole = (value: unknown): value is TeamReviewRole =>
 export const TEAM_REVIEW_TASK_PREFIX =
   'Independent review. Scope: the current uncommitted changes in this workspace (`git status` / `git diff`) unless the focus below names other files or a commit range. Do not edit files. Report findings sorted by severity with file:line, trigger condition, and the smallest credible fix; state residual risk and what you did not verify.'
 
-export type ControllerMode = 'internal' | 'codex_app'
-
 export interface WorkspaceSummary {
-  controller_mode?: ControllerMode
   id: string
   name: string
   path: string
@@ -119,17 +116,6 @@ export interface TeamListItemPayload {
    *  orchestrator the ids + ages it needs for `team cancel`. Display-only:
    *  no timeouts or heartbeats are derived from this. */
   open_dispatches?: TeamListOpenDispatchPayload[]
-}
-
-export interface ControllerStatus {
-  /** Present in UI responses; the actual HTTP listener, independent of a browser proxy. */
-  runtime_port?: number
-  mode: ControllerMode
-  thread_id: string | null
-  pending_request: { id: string; thread_id: string } | null
-  pending_reports: number
-  notification_error: string | null
-  can_disconnect: boolean
 }
 
 /** Latency percentiles for local collaboration cost (issue #75). */

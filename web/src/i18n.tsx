@@ -3,58 +3,6 @@ import { createContext, type ReactNode, useContext, useMemo, useState } from 're
 import { isUiLanguage, UI_LANGUAGE_STORAGE_KEY, type UiLanguage } from './uiLanguage.js'
 
 const enMessages = {
-  'controller.mode': 'Controller',
-  'controller.localOnly':
-    'Open Hive on the Mac running this team to set up, confirm or disconnect the Codex App conversation. You can follow team progress here.',
-  'controller.setupIntro': 'Connect a Codex App conversation to coordinate this team.',
-  'controller.installStep': 'Add Hive to Codex App',
-  'controller.installHint':
-    'On this Mac, run the command once in a terminal, then reload MCP tools in Codex App. If Hive tools are already available, continue below.',
-  'controller.copyInstall': 'Copy setup command',
-  'controller.connectStep': 'Choose your controller conversation',
-  'controller.connectStepHint':
-    'Open your chosen conversation in Codex App. Copy the connection request below and send it there.',
-  'controller.returnToConfirm': 'Return here to confirm the conversation when its request appears.',
-  'controller.addFirstTitle': 'Add someone to the team',
-  'controller.addFirstHint':
-    'Choose a member’s role and CLI. Your Codex App conversation can then assign their first task.',
-  'controller.addFirstMember': 'Add first member',
-  'controller.teamReadyTitle': 'Give your team its next task',
-  'controller.teamReadyHint':
-    'Return to your connected Codex App conversation and describe the work. View member activity here.',
-  'controller.readReportsHint':
-    'Paste a request into the connected Codex App conversation to read saved results. Receipt does not mean the work has been approved.',
-  'controller.copyReadReports': 'Copy report-reading request',
-  'controller.readReportsPrompt':
-    'Read saved member reports for Hive workspace "{name}". Call hive.controller_action with workspace_id {id} and action read_reports. After receiving them, acknowledge their report_ids with ack_reports; receipt is not approval. Do not repeat dispatched work.',
-  'controller.connectionDetails': 'Connection details',
-  'controller.workspaceDescription':
-    'Hive will load .hive/tasks.md and wait for your Codex App conversation to connect.',
-  'controller.memberPermissions':
-    'Hive members run in auto-approve mode: they can execute commands and edit files without CLI permission prompts. Stop them from their member cards. Codex App retains its own permission settings.',
-  'controller.internal': 'Hive terminal',
-  'controller.internalHint': 'Talk to the controller and manage your team here in Hive.',
-  'controller.externalHint': 'Talk in Codex App. Manage members and follow progress in Hive.',
-  'controller.createHint':
-    'Talk in Codex App. Hive manages the members; connect your App conversation after creating this workspace.',
-  'controller.title': 'Codex App controller',
-  'controller.loading': 'Loading controller…',
-  'controller.bound': 'Conversation connected',
-  'controller.pendingReports': '{count} reports awaiting receipt',
-  'controller.notificationError': 'Controller notification needs attention: {message}',
-  'controller.connectPrompt':
-    'Connect this Codex App conversation as the controller of Hive workspace "{name}". Call hive.controller_connect with workspace_id {id}, then wait for me to confirm in the Hive panel.',
-  'controller.copy': 'Copy connection request',
-  'controller.copied': 'Copied',
-  'controller.request': 'Conversation requesting access',
-  'controller.confirmHint':
-    'Confirm only if this is the conversation you want to control this team.',
-  'controller.confirm': 'Connect this conversation',
-  'controller.cancelRequest': 'Cancel connection request',
-  'controller.disconnect': 'Disconnect conversation',
-  'controller.disconnectHint':
-    'Finish open tasks and receive pending reports before disconnecting.',
-
   'addWorker.agentCli': 'Agent CLI',
   'addWorker.agentNotFound': 'not found',
   'addWorker.agentExists': 'Member name already exists',
@@ -264,16 +212,14 @@ const enMessages = {
   'firstRun.optionDesc': 'Choose how you want to begin.',
   'firstRun.slide1Desc': 'Pick a project folder.',
   'firstRun.slide1Title': 'Add a Workspace',
-  'firstRun.slide2Desc': 'Run a CLI controller in Hive, or connect your Codex App conversation.',
-  'firstRun.slide2Title': 'Choose where to coordinate',
-  'firstRun.slide3Desc':
-    'Your controller dispatches work through Hive tools or team send; members report back.',
+  'firstRun.slide2Desc': 'Choose a CLI to run as the orchestrator in Hive.',
+  'firstRun.slide2Title': 'Choose an orchestrator',
+  'firstRun.slide3Desc': 'Your orchestrator assigns work with team send; members report back.',
   'firstRun.slide3Title': 'Dispatch tasks',
   'firstRun.skip': 'Skip',
   'firstRun.skipForNow': 'Skip for now',
   'firstRun.step': 'Step {current} of {total}',
-  'firstRun.subtitle':
-    'One controller coordinates each workspace’s members, from Hive or Codex App.',
+  'firstRun.subtitle': 'An orchestrator in Hive coordinates each workspace’s members.',
   'firstRun.title': 'Welcome to Hive',
   'firstRun.tryDemo': 'Try Demo',
   'language.aria': 'Switch language',
@@ -660,9 +606,9 @@ const enMessages = {
     'Coordinate Antigravity CLI, Claude Code, Codex, Gemini, OpenCode, Hermes, Qwen Code, Pi — locally.',
   'welcome.step1Desc': 'Pick a project folder.',
   'welcome.step1Title': 'Add a Workspace',
-  'welcome.step2Desc': 'Use a CLI in Hive or a conversation in Codex App.',
-  'welcome.step2Title': 'Choose where to coordinate',
-  'welcome.step3Desc': 'Your controller assigns work through Hive tools or team send.',
+  'welcome.step2Desc': 'Choose a CLI to run as the orchestrator in Hive.',
+  'welcome.step2Title': 'Choose an orchestrator',
+  'welcome.step3Desc': 'Your orchestrator assigns work with team send.',
   'welcome.step3Title': 'Dispatch tasks',
   'welcome.title': 'Welcome to Hive',
   'worker.deleteAria': 'Delete team member {name}',
@@ -907,52 +853,6 @@ const enMessages = {
 export type TranslationKey = keyof typeof enMessages
 
 const zhMessages: Record<TranslationKey, string> = {
-  'controller.mode': '主控位置',
-  'controller.localOnly':
-    '请在运行团队的 Mac 上打开 Hive，完成 Codex App 接入、确认或解绑。你可以在这里查看团队进展。',
-  'controller.setupIntro': '连接一个 Codex App 会话，用它来指挥这个团队。',
-  'controller.installStep': '将 Hive 接入 Codex App',
-  'controller.installHint':
-    '在这台 Mac 的终端执行一次命令，再在 Codex App 中重新加载 MCP 工具。已有 Hive 工具可直接进入下一步。',
-  'controller.copyInstall': '复制接入命令',
-  'controller.connectStep': '选择用来指挥团队的会话',
-  'controller.connectStepHint': '在 Codex App 中打开你选定的会话，将下方连接请求复制并发送到那里。',
-  'controller.returnToConfirm': '发送后回到这里，确认出现的会话连接申请。',
-  'controller.addFirstTitle': '给团队添加第一位成员',
-  'controller.addFirstHint': '选择成员的角色和 CLI，然后回到 Codex App 会话中派发第一个任务。',
-  'controller.addFirstMember': '添加首位成员',
-  'controller.teamReadyTitle': '在 App 中给团队派活',
-  'controller.teamReadyHint':
-    '回到已绑定的 Codex App 会话，告诉它要做什么。在这里查看成员的执行进展。',
-  'controller.readReportsHint':
-    '可将读取请求发送到已绑定的 Codex App 会话，读取保存的结果。接收汇报不代表验收通过。',
-  'controller.copyReadReports': '复制读取汇报请求',
-  'controller.readReportsPrompt':
-    '请读取 Hive 工作区「{name}」保存的成员汇报。调用 hive.controller_action，workspace_id 为 {id}，action 为 read_reports。收到后用 ack_reports 确认这些 report_ids；接收不代表验收。不要重复派发已有任务。',
-  'controller.connectionDetails': '连接详情',
-  'controller.workspaceDescription': 'Hive 会加载 .hive/tasks.md，并等待你的 Codex App 会话连接。',
-  'controller.memberPermissions':
-    'Hive 成员默认以自动批准模式运行，可跳过 CLI 权限确认来执行命令、修改文件。可在成员卡片上停止它们。Codex App 仍使用自己的权限设置。',
-  'controller.internal': 'Hive 终端',
-  'controller.internalHint': '在 Hive 中与主控对话、管理团队。',
-  'controller.externalHint': '在 Codex App 中对话，在 Hive 中管理成员、查看进展。',
-  'controller.createHint': '仅限同机 macOS，使用时保持 Codex App 运行。创建后连接一个 App 会话。',
-  'controller.title': 'Codex App 主控',
-  'controller.loading': '正在读取主控状态…',
-  'controller.bound': '已绑定会话',
-  'controller.pendingReports': '待接收汇报 {count} 条',
-  'controller.notificationError': '主控通知需要处理：{message}',
-  'controller.connectPrompt':
-    '将当前 Codex App 会话连接为 Hive 工作区「{name}」的主控。请调用 hive.controller_connect，workspace_id 为 {id}，然后等待我在 Hive 面板确认。',
-  'controller.copy': '复制连接请求',
-  'controller.copied': '已复制',
-  'controller.request': '请求接入的会话',
-  'controller.confirmHint': '请确认这是你希望用来控制团队的会话。',
-  'controller.confirm': '绑定此会话',
-  'controller.cancelRequest': '取消连接申请',
-  'controller.disconnect': '解除绑定',
-  'controller.disconnectHint': '完成进行中的任务并接收待处理汇报后，才能解除绑定。',
-
   'addWorker.agentCli': 'Agent CLI',
   'addWorker.agentNotFound': '未找到',
   'addWorker.agentExists': '成员名字已存在',
@@ -1155,14 +1055,14 @@ const zhMessages: Record<TranslationKey, string> = {
   'firstRun.optionDesc': '选择一个开始方式。',
   'firstRun.slide1Desc': '选择一个项目目录。',
   'firstRun.slide1Title': '添加 Workspace',
-  'firstRun.slide2Desc': '在 Hive 中运行 CLI 主控，或连接你的 Codex App 会话。',
-  'firstRun.slide2Title': '选择主控位置',
-  'firstRun.slide3Desc': '主控通过 Hive 工具或 team send 派活，成员执行后汇报。',
+  'firstRun.slide2Desc': '选择一个 CLI，在 Hive 中运行主控。',
+  'firstRun.slide2Title': '选择主控',
+  'firstRun.slide3Desc': '主控通过 team send 派活，成员执行后汇报。',
   'firstRun.slide3Title': '分派任务',
   'firstRun.skip': '跳过',
   'firstRun.skipForNow': '暂时跳过',
   'firstRun.step': '第 {current} / {total} 步',
-  'firstRun.subtitle': '每个工作区由一个主控协调成员，主控可以在 Hive 或 Codex App 中。',
+  'firstRun.subtitle': '每个工作区由 Hive 中的主控协调成员。',
   'firstRun.title': '欢迎使用 Hive',
   'firstRun.tryDemo': '试用演示',
   'language.aria': '切换语言',
@@ -1533,9 +1433,9 @@ const zhMessages: Record<TranslationKey, string> = {
     '在本地协调 Antigravity CLI、Claude Code、Codex、Gemini、OpenCode、Hermes、Qwen Code、Pi。',
   'welcome.step1Desc': '选择一个项目目录。',
   'welcome.step1Title': '添加 Workspace',
-  'welcome.step2Desc': '在 Hive 中使用 CLI，或连接 Codex App 会话。',
-  'welcome.step2Title': '选择主控位置',
-  'welcome.step3Desc': '主控通过 Hive 工具或 team send 向成员派活。',
+  'welcome.step2Desc': '选择一个 CLI，在 Hive 中运行主控。',
+  'welcome.step2Title': '选择主控',
+  'welcome.step3Desc': '主控通过 team send 向成员派活。',
   'welcome.step3Title': '分派任务',
   'welcome.title': '欢迎使用 Hive',
   'worker.deleteAria': '删除团队成员 {name}',

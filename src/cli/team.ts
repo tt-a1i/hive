@@ -83,8 +83,6 @@ const TEAM_USAGE = [
   `  team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`,
   '  team dismiss <member-name>',
   '  team cancel --dispatch <dispatch-id> "<reason>"',
-  '  team goal report --goal <goal-id> --status progress|done|blocked|failed "<body>"',
-  '  team goal report --goal <goal-id> --status progress|done|blocked|failed --stdin',
   '  team report "<result>" [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
   '  team report --stdin [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
   '  team status "<current status>" [--artifact <path>]  (optional readiness note; never closes a dispatch)',
@@ -190,13 +188,6 @@ interface TeamReportResponse {
   pending_warning?: string | null
 }
 
-interface TeamGoalReportResponse {
-  cursor: number
-  goal_id: string
-  ok: true
-  status: string
-}
-
 interface ParsedCancelArgs {
   dispatchId: string
   reason: string
@@ -217,11 +208,6 @@ const MEMORY_SEARCH_USAGE =
 const MEMORY_DREAM_SHOW_USAGE = 'Usage: team memory dream show <dream-run-id>'
 const MEMORY_APPLY_USAGE = 'Usage: team memory apply --run <dream-run-id> --stdin'
 const MEMORY_FORGET_USAGE = 'Usage: team memory forget <memory-id>'
-const GOAL_REPORT_USAGE =
-  'Usage: team goal report --goal <goal-id> --status progress|done|blocked|failed (<body> | --stdin) [--artifact <path>]'
-
-const GOAL_REPORT_STATUSES = new Set(['progress', 'done', 'blocked', 'failed'])
-
 const usageFor = (command: string) => (command === 'status' ? STATUS_USAGE : REPORT_USAGE)
 
 const withUsage = (message: string, command: string) => `${message}\n\n${usageFor(command)}`
@@ -524,101 +510,6 @@ export const parseReviewArgs = (args: string[]): ParsedReviewArgs => {
     ...(model ? { model } : {}),
     ...(name ? { name } : {}),
     ...(role ? { role } : {}),
-  }
-}
-
-export interface ParsedGoalReportArgs {
-  artifacts: string[]
-  goalId: string
-  result: string | null
-  status: 'progress' | 'done' | 'blocked' | 'failed'
-  useStdin: boolean
-}
-
-export const parseGoalReportArgs = (args: string[]): ParsedGoalReportArgs => {
-  const positionals: string[] = []
-  const artifacts: string[] = []
-  let goalId: string | undefined
-  let status: ParsedGoalReportArgs['status'] | undefined
-  let useStdin = false
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-
-    if (arg === '--goal') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--goal requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      goalId = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--status') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--status requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      if (!GOAL_REPORT_STATUSES.has(next)) {
-        throw new Error(
-          `--status must be one of: progress, done, blocked, failed\n\n${GOAL_REPORT_USAGE}`
-        )
-      }
-      status = next as ParsedGoalReportArgs['status']
-      index += 1
-      continue
-    }
-
-    if (arg === '--artifact') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--artifact requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      artifacts.push(next)
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${GOAL_REPORT_USAGE}`)
-    }
-
-    positionals.push(arg)
-  }
-
-  if (!goalId) throw new Error(`Missing --goal <goal-id>\n\n${GOAL_REPORT_USAGE}`)
-  if (!status) throw new Error(`Missing --status <status>\n\n${GOAL_REPORT_USAGE}`)
-  if (useStdin && positionals.length > 0) {
-    throw new Error(
-      `--stdin is mutually exclusive with a positional body; pass the body on stdin or as an argument, not both\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-  if (!useStdin && positionals.length === 0) {
-    throw new Error(
-      `Missing <body> (or pass --stdin to read it from stdin)\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-  if (positionals.length > 1) {
-    throw new Error(
-      `Expected exactly one body positional, got ${positionals.length}: ${positionals
-        .map((value) => JSON.stringify(value))
-        .join(', ')}\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-
-  return {
-    artifacts,
-    goalId,
-    result: useStdin ? null : (positionals[0] ?? null),
-    status,
-    useStdin,
   }
 }
 
@@ -1539,34 +1430,6 @@ export const runTeamCommand = async (argv: string[]) => {
         `Hive cancelled the dispatch in the ledger, but could not deliver the cancel notice to the member: ${payload.forward_error}. The member may still be acting on the task.`
       )
     }
-    return
-  }
-
-  if (command === 'goal') {
-    const [subcommand, ...goalArgs] = args
-    if (subcommand !== 'report') {
-      throw new Error(GOAL_REPORT_USAGE)
-    }
-    const report = parseGoalReportArgs(goalArgs)
-    const body = report.useStdin
-      ? await readStdinToString('goal report', GOAL_REPORT_USAGE)
-      : (report.result ?? '')
-
-    const env = getHiveEnv()
-    const baseUrl = getBaseUrl(env)
-    const response = await postJson(baseUrl, '/api/team/goal/report', {
-      artifacts: report.artifacts,
-      from_agent_id: env.HIVE_AGENT_ID,
-      goal_id: report.goalId,
-      project_id: env.HIVE_PROJECT_ID,
-      result: body,
-      status: report.status,
-      token: env.HIVE_AGENT_TOKEN,
-    })
-    const payload = (await response.json()) as TeamGoalReportResponse
-    console.log(
-      JSON.stringify({ goal_id: payload.goal_id, cursor: payload.cursor, status: payload.status })
-    )
     return
   }
 

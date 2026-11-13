@@ -18,7 +18,6 @@ import { createRuntimeStore, type RuntimeStore } from '../server/runtime-store.j
 import { createVersionService, type VersionService } from '../server/version-service.js'
 import { resolveDataDir } from './hive-data-dir.js'
 import { DEFAULT_HIVE_PORT } from './hive-defaults.js'
-import { runHiveMcpCommand } from './hive-mcp.js'
 import { runHiveRemoteCommand } from './hive-remote.js'
 import { runHiveUpdateCommand } from './hive-update.js'
 
@@ -83,8 +82,6 @@ export const HIVE_USAGE = [
   '  -v, --version   Print the installed Hive version.',
   '',
   'Commands:',
-  '  mcp             Run the local Supervisor MCP stdio adapter.',
-  '  mcp --controller  Connect Codex App directly to an external-mode Hive team.',
   '  update          Upgrade npm-installed Hive in place; otherwise use the matching package manager.',
   '  remote          Manage remote access (login / status / logout / devices / revoke).',
 ].join('\n')
@@ -387,11 +384,6 @@ if (isMainModule) {
         console.error(error instanceof Error ? error.message : error)
         process.exit(1)
       })
-  } else if (argv[0] === 'mcp') {
-    runHiveMcpCommand(argv.slice(1)).catch((error) => {
-      console.error(error instanceof Error ? error.message : error)
-      process.exit(1)
-    })
   } else if (handleHiveInfoCommand(argv)) {
     process.exit(0)
   } else {

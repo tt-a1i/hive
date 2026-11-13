@@ -50,10 +50,7 @@ export const useWorkspaceCreate = ({
         const response = await createWorkspace({
           name: input.name,
           path: input.path,
-          ...(input.controllerMode === 'codex_app'
-            ? { controller_mode: 'codex_app' as const }
-            : {}),
-          autostart_orchestrator: input.controllerMode !== 'codex_app',
+          autostart_orchestrator: true,
           command_preset_id: input.commandPresetId,
           startup_command: input.startupCommand ?? null,
           ui_language: language,
@@ -63,9 +60,6 @@ export const useWorkspaceCreate = ({
           id: response.id,
           name: response.name,
           path: response.path,
-          ...(input.controllerMode === 'codex_app'
-            ? { controller_mode: 'codex_app' as const }
-            : {}),
         })
         return response
       } catch (error) {

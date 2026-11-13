@@ -12,7 +12,6 @@ import type {
 } from '../../src/shared/team-memory.js'
 import type {
   AgentSummary,
-  ControllerStatus,
   TeamListItem,
   TeamListItemPayload,
   WorkerRole,
@@ -238,7 +237,6 @@ export interface CreateWorkspaceResponse extends WorkspaceSummary {
 export const createWorkspace = async (input: {
   name: string
   path: string
-  controller_mode?: 'internal' | 'codex_app'
   autostart_orchestrator?: boolean
   command_preset_id?: string | null
   startup_command?: string | null
@@ -2171,31 +2169,6 @@ export const getActionCenterArtifact = async (
   )
   if (!response.ok) return { ok: false, status: response.status }
   return { ok: true, data: await response.json() }
-}
-
-export type { ControllerStatus as ExternalControllerStatus } from '../../src/shared/types.js'
-
-export const getExternalController = async (workspaceId: string): Promise<ControllerStatus> => {
-  const response = await apiFetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/controller`)
-  if (!response.ok) throw new Error(await readErrorMessage(response, 'Failed to read controller'))
-  return response.json() as Promise<ControllerStatus>
-}
-
-export const updateExternalController = async (
-  workspaceId: string,
-  action: 'confirm' | 'disconnect',
-  requestId?: string
-): Promise<ControllerStatus> => {
-  const response = await apiFetch(
-    `/api/workspaces/${encodeURIComponent(workspaceId)}/controller/${action}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(requestId ? { request_id: requestId } : {}),
-    }
-  )
-  if (!response.ok) throw new Error(await readErrorMessage(response, 'Failed to update controller'))
-  return response.json() as Promise<ControllerStatus>
 }
 
 export interface ReportedDispatchNotification {

@@ -5,14 +5,6 @@ import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-stor
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import type { DispatchRecord, ListDispatchesOptions } from './dispatch-ledger-store.js'
 import type { DispatchMessageOperations } from './dispatch-message-operations.js'
-import type {
-  ExternalGoalBridge,
-  ExternalGoalCancelInput,
-  ExternalGoalContinueInput,
-  ExternalGoalReportInput,
-  ExternalGoalStartInput,
-  ExternalGoalWaitInput,
-} from './external-goal-bridge.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import type { RemoteAuditStore } from './remote-audit-store.js'
@@ -20,7 +12,6 @@ import type { DeviceSessionProvider } from './remote-device-session.js'
 import type { RemoteDeviceRecord, RemoteDeviceStore } from './remote-device-store.js'
 import type { RemotePairing } from './remote-pairing.js'
 import type { RemoteTunnel, TunnelStatus } from './remote-tunnel.js'
-import type { ControllerMethods } from './runtime-store-controller.js'
 import type { MemoryDreamInput } from './runtime-store-dream.js'
 import type { SettingsStore } from './settings-store.js'
 import type { BuildMemoryDiagnosticsInput, MemoryDiagnostics } from './team-memory-diagnostics.js'
@@ -50,13 +41,9 @@ import type { WorkflowScheduleRecord } from './workflow-schedule-store.js'
 import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 import type { SaveWorkspaceUploadInput, WorkspaceUploadRecord } from './workspace-upload-store.js'
 
-export interface RuntimeStore extends DispatchMessageOperations, ControllerMethods {
+export interface RuntimeStore extends DispatchMessageOperations {
   close: () => Promise<void>
-  createWorkspace: (
-    path: string,
-    name: string,
-    controllerMode?: 'internal' | 'codex_app'
-  ) => WorkspaceSummary
+  createWorkspace: (path: string, name: string) => WorkspaceSummary
   deleteWorkspace: (workspaceId: string) => Promise<void>
   listWorkspaces: () => WorkspaceSummary[]
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
@@ -101,19 +88,6 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   getDispatch: (workspaceId: string, dispatchId: string) => DispatchRecord | undefined
   listOpenDispatches: (workspaceId: string) => DispatchRecord[]
   listRecentDispatches: (workspaceId: string, limit?: number) => DispatchRecord[]
-  listExternalGoalWorkspaces: ExternalGoalBridge['listWorkspaces']
-  inspectExternalGoalWorkspace: ExternalGoalBridge['inspectWorkspace']
-  startExternalGoal: (input: ExternalGoalStartInput) => ReturnType<ExternalGoalBridge['startGoal']>
-  continueExternalGoal: (
-    input: ExternalGoalContinueInput
-  ) => ReturnType<ExternalGoalBridge['continueGoal']>
-  reportExternalGoal: (
-    input: ExternalGoalReportInput
-  ) => ReturnType<ExternalGoalBridge['reportGoal']>
-  waitExternalGoal: (input: ExternalGoalWaitInput) => ReturnType<ExternalGoalBridge['waitGoal']>
-  cancelExternalGoal: (
-    input: ExternalGoalCancelInput
-  ) => ReturnType<ExternalGoalBridge['cancelGoal']>
   listWorkers: (workspaceId: string) => TeamListItem[]
   getLastPtyLineForAgent: (workspaceId: string, agentId: string) => string | null
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
@@ -195,11 +169,9 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   settings: SettingsStore
   writeRunInput: (runId: string, input: Buffer | string) => void
   getUiToken: () => string
-  getSupervisorToken: () => string
   stopAgentRun: (runId: string) => void
   validateAgentToken: (agentId: string, token: string | undefined) => boolean
   validateUiToken: (token: string | undefined) => boolean
-  validateSupervisorToken: (token: string | undefined) => boolean
   // Remote tunnel (invariant 2): true iff the request carries the live per-boot
   // tunnel secret. The auth chokepoints pass this as the optional authorize-arg
   // so tunnel-originated loopback requests skip the cookie check.

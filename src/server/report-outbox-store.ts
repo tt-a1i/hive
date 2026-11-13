@@ -50,6 +50,11 @@ const rowToEntry = (row: OutboxRow): ReportOutboxEntry => ({
   deliveredAt: row.delivered_at,
 })
 
+// Legacy external controllers mirrored dispatch messages into this outbox.
+// Their canonical delivery and retirement are owned by dispatch_message_outbox.
+// Use the stable receipt key so older databases need no optional metadata columns.
+const internalReceiptSql = "dispatch_id NOT GLOB 'message:*'"
+
 export const createReportOutboxStore = (db: Database) => {
   // INSERT OR IGNORE on the UNIQUE dispatch_id: a dispatch reports once, so a
   // second enqueue for the same dispatch (e.g. a retry path) is a no-op rather
@@ -68,7 +73,7 @@ export const createReportOutboxStore = (db: Database) => {
         .prepare(
           `SELECT id, workspace_id, target_agent_id, dispatch_id, payload, created_at, delivered_at
            FROM report_outbox
-           WHERE workspace_id = ? AND target_agent_id = ? AND delivered_at IS NULL
+           WHERE workspace_id = ? AND target_agent_id = ? AND delivered_at IS NULL AND ${internalReceiptSql}
            ORDER BY created_at ASC, id ASC`
         )
         .all(workspaceId, targetAgentId) as OutboxRow[]
@@ -91,7 +96,7 @@ export const createReportOutboxStore = (db: Database) => {
       db
         .prepare(
           `SELECT COUNT(*) AS n FROM report_outbox
-           WHERE workspace_id = ? AND target_agent_id = ? AND delivered_at IS NULL`
+           WHERE workspace_id = ? AND target_agent_id = ? AND delivered_at IS NULL AND ${internalReceiptSql}`
         )
         .get(workspaceId, targetAgentId) as { n: number }
     ).n

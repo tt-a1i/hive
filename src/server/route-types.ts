@@ -80,16 +80,6 @@ export interface ReportTaskBody {
   artifacts?: unknown[]
 }
 
-export interface GoalReportBody {
-  artifacts?: unknown[]
-  goal_id?: string
-  project_id: string
-  from_agent_id: string
-  token?: string
-  result?: string
-  status?: string
-}
-
 export interface CancelTaskBody {
   dispatch_id?: string
   project_id: string
@@ -98,33 +88,7 @@ export interface CancelTaskBody {
   reason?: string
 }
 
-export interface ExternalGoalStartBody {
-  workspace_id?: string
-  goal?: string
-  context?: unknown
-  timeout_hint_ms?: number
-  source?: string
-}
-
-export interface ExternalGoalWaitBody {
-  goal_id?: string
-  cursor?: number
-  timeout_ms?: number
-}
-
-export interface ExternalGoalContinueBody {
-  goal_id?: string
-  message?: string
-  context?: unknown
-}
-
-export interface ExternalGoalCancelBody {
-  goal_id?: string
-  reason?: string
-}
-
 export interface CreateWorkspaceBody {
-  controller_mode?: 'internal' | 'codex_app'
   path: string
   name: string
   /** Default true. When false, skip orchestrator PTY spawn after creation. */

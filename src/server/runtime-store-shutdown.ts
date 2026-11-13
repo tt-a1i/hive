@@ -9,7 +9,6 @@ export const createRuntimeStoreShutdown = (
     ReturnType<typeof createRuntimeStoreServices>,
     'markRuntimeClosing' | 'teamMemoryDreamScheduler'
   >,
-  controller: Closeable,
   lifecycle: Closeable,
   getWorkflows: () => ReturnType<typeof createRuntimeStoreWorkflowRuntime> | undefined
 ): (() => Promise<void>) => {
@@ -19,11 +18,7 @@ export const createRuntimeStoreShutdown = (
       services.markRuntimeClosing()
       const workflows = getWorkflows()
       workflows?.scheduler.close()
-      await Promise.all([
-        controller.close(),
-        workflows?.runner.close(),
-        services.teamMemoryDreamScheduler.close(),
-      ])
+      await Promise.all([workflows?.runner.close(), services.teamMemoryDreamScheduler.close()])
       await lifecycle.close()
     })())
 }

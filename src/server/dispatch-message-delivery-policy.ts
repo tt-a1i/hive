@@ -6,10 +6,9 @@ export const dispatchMessageEligibilitySql = `EXISTS (
   SELECT 1 FROM dispatches target
   LEFT JOIN dispatches source ON source.id = m.source_dispatch_id
   WHERE target.id = m.dispatch_id
+    AND (m.kind != 'question' OR target.status != 'cancelled')
     AND (m.recipient_agent_id = m.workspace_id || ':orchestrator' OR EXISTS (
       SELECT 1 FROM workers recipient WHERE recipient.workspace_id = m.workspace_id AND recipient.id = m.recipient_agent_id
-    )) AND (m.controller_thread_id IS NULL OR EXISTS (
-      SELECT 1 FROM workspace_controllers c WHERE c.workspace_id = m.workspace_id AND c.thread_id = m.controller_thread_id
     )) AND (
       m.recipient_agent_id = m.workspace_id || ':orchestrator'
       OR target.status IN ('queued','submitted')

@@ -2,7 +2,7 @@
 
 状态：实施设计。用户已授权按会话确定的目标推进；实现、验证、真实 Agent 体验、发布分别记录，不以本文存在作为完成证据。
 
-基线：最初从 `9ca67fe` 开始，现已合入 `origin/main` 的 `950f04a`（包含 #58 外部 Codex App 控制器及 #60 原生依赖修复），整合提交为 `ef49556`。开发位于独立工作树，原仓未提交的 #56 等改动不纳入本轮基线。下述协作能力同时覆盖内部 PTY Orchestrator 与既有外部 Codex App 控制器。
+当前实现通过 Hive PTY 内的 Orchestrator 和 Worker 执行下述协议。
 
 ## 目标和边界
 
@@ -88,26 +88,7 @@ Orchestrator 也可以针对已 reported 成果提出 question；原作者仅能
 
 旧自由文本 status 保持现有投递兼容，不能因可能含阻塞而无条件静音。新 progress 才只记录。
 
-## 外部 Codex App 控制器
-
-沿用 #58 的单 workspace 单控制器绑定。`hive.controller_action` 的调用身份来自 MCP 宿主 metadata（`threadId` / `codex/turn.thread_id`），由服务端核对当前确认的绑定；模型参数不能自报 thread ID。桌面确认和现有连接流程保留，不隐式接管其他会话。
-
-- `action=send` 支持 `related_to_dispatch_id`，仍按 `worker_name` 分配新责任。
-- `action=message` 接受 `dispatch_id/kind/text/operation_id` 及可选 `reply_to`。kind 仅 `note|question|answer`，目的地是派单负责人；外部控制器不能冒充成员 source，也不发送 progress。
-- `action=messages` 接受 `dispatch_id` 和可选非负 `after_seq`，返回与内部查询相同的消息、水位、成员资料和关联责任。
-- `inspect` 返回当前成员、开放责任、近期消息及需处理消息。progress 保持可查，不唤醒模型。
-
-所有修改动作先持久保留 `operation_id`，绑定 workspace、宿主 thread 和规范化输入。同 ID、同输入的已完成操作重放原收据；不同输入/身份拒绝，pending 或 failed 无确认成功收据时拒绝盲重跑，要求先核对实际状态。内部 `team message` HTTP 写入没有这个操作级幂等承诺，不能把两种入口混为一谈。
-
-成员给外部协调者的任务消息进入持久收据流。`read_reports` 返回至多 100 条未确认收据及完整嵌套 message，记录读取时间，并把关联任务消息标为已交付外部输入通道；仍需 `ack_reports` 确认已读取收据。ack 只结束通知义务，不回答问题、不结算派单、不更新 Worker 的 `seen_seq`。`answer + reply_to` 是回答关联，Worker 的 `report --seen` 是提交时声明已考虑输入，三者均不等于成果验收。未答但已 ack 的问题仍可从消息/需处理事项查询。
-
-断连在同一数据库事务内检查开放责任、未确认收据、进行中操作、正在发送的通知和消息投递，再清除绑定。`delivering`（已开始注入）必须挡住断连，不能因历史派单已 reported 就放行。唯一可退役的 queued 例外，是当前绑定发给 reported 作者的历史 question：断连把这些尚未开始的消息标为 cancelled 后清除绑定，保留正文历史，避免永久等待一个已停止作者。
-
-问题保存创建时的 `controller_thread_id`。旧绑定问题不能改投新控制器；答复校验原 thread 和当前绑定，退役 question 也明确拒绝回答，即使后来重新绑定相同 thread 也不能复活。已开始的输入不可撤回；已交付问题在换绑后同样不授予向新绑定回答的权限。需要继续答疑时由当前控制器重新提出问题。
-
 ## 提示词层次
-
-内部 Orchestrator 与外部 Codex App 主控直接复用同一份 transport-neutral 协作原则，包括用户资源选择、项目基线、所有权、禁止宿主内建子代理替代 Hive、责任与证据验收。CLI/MCP 的命令语法、身份凭据、通知消费与恢复机制仍由各自入口提供；共同原则不代表工具集或宿主模型行为完全相同。
 
 启动：身份、workspace、用户配置角色、必要能力及按需 guide 入口。
 
@@ -131,13 +112,11 @@ Orchestrator 也可以针对已 reported 成果提出 question；原作者仅能
 
 ## 实跑后修订：上下文与证据
 
-主控在收到新目标时先核对当前团队、工作区路径与目标仓库，按实际收益选择现有成员，不要求每个请求都派单。绑定成功应主动提示已绑定会话读取 `inspect` 获取实时现场；提示不携带任务授权，不替用户确认，也不自动启动成员。团队配置未知项明确未知，不猜实际模型。
+主控在收到新目标时先核对当前团队、工作区路径与目标仓库，按实际收益选择现有成员，不要求每个请求都派单。团队配置未知项明确未知，不猜实际模型。
 
 主控给调查/实现任务共享必要的目标路径、执行 cwd、版本/dirty 范围和适用设计，避免各成员独立重建不同基线。跨目录任务必须明确范围；只读访问其他目录不等于跨工作区协议授权。简单问答无需机械搜集全部基线字段。
 
-报告区分观察、推断和未验证事项。审查发现给触发条件、证据、可观察影响与反证，不凑问题或无据评分。运行检查时记录命令、cwd、退出码与日志/产物路径，复用现有 artifacts。主控按风险复核，ack 仍不代表验收。
-
-报告通知附本批已选 `report_ids`，便于接收任务识别已处理的迟到提醒。当前会话已确认消费这些 ID 时不重复查询；查询为空则停止本次提醒，不持续轮询、不重新派单。此改动不宣称已查明实跑三次空读的内部时序，也不承诺撤回已进入宿主队列的通知。
+报告区分观察、推断和未验证事项。审查发现给触发条件、证据、可观察影响与反证，不凑问题或无据评分。运行检查时记录命令、cwd、退出码与日志/产物路径，复用现有 artifacts。主控按风险复核。
 
 ## 实施与验收
 
@@ -148,23 +127,22 @@ Orchestrator 也可以针对已 reported 成果提出 question；原作者仅能
 用户已授权改进提示传递和按需指引。保留上述权限、责任、报告水位与资源选择规则。
 
 - 内部 `team guide <topic>` 在存在 Hive 身份时调用 `POST /api/team/guide`，请求沿用 `project_id/from_agent_id/token` 并携带 `topic`。认证及工作区校验后，从当前 settings 生成指南，返回 `project_id/project_path/topic/guide`。目录切换不改变指南归属；身份缺失、不匹配或运行时错误不得静默退回本地文档。没有任何 Hive 身份时可读本地文档或通用帮助，明确为离线参考、当前能力未知。
-- 外部 `hive.controller_action` 增加 `action=guide`，仅接受既有 `workspace_id` 和 `action` 字段。它要求相同的宿主身份和已确认绑定，返回 `workspace_id/guide`；只读，不占用 operation_id、不消费收据、不改变责任。工具说明保留核心选择、幂等、收据和通知规则，详细动作参考可按需读取。
 - workflow 创建自定义角色时保留用户模板 description；启动说明与成员资料使用同一值。为已支持 CLI 编写包装命令时应关联对应命令预设；任意可执行程序的 PTY 支持不等于其交互规则已适配。
 - 普通 question 和恢复提示共用回复路由，直接给出对应的问题 ID 和 answer 命令。历史问题仍仅允许答疑，不重开实现责任。增量读取只能使用此前实际读过的游标，报告 seen 仍来自已检查的查询结果。
-- 事实缺口先读取当前上下文和证据，必要时询问相关责任人；范围、权限和归属冲突由主控决定。普通任务进度使用静默 progress。收据消费和回答问题分别进行；未答问题继续可查。
+- 事实缺口先读取当前上下文和证据，必要时询问相关责任人；范围、权限和归属冲突由主控决定。普通任务进度使用静默 progress。未答问题可查。
 - 工作流示例以交付物、证据和有界投入展示停止条件，不以空轮次数或票数代替验收。仓库贡献者审查要求仍仅用于开发 Hive。
 
 实施和验证记录见 [本轮计划](../plans/2026-09-08-collaboration-guidance.md)。
 
 ## 2026-10-23 问题恢复与短回复
 
-从独立协作实验分支提取便捷入口。用户授权基于最新 main 选择有价值的能力集成；本次不改变同 root 权限、责任生命周期、报告水位、控制器绑定或存储版本。
+从独立协作实验分支提取便捷入口。用户授权基于最新 main 选择有价值的能力集成；本次不改变同 root 权限、责任生命周期、报告水位或存储版本。
 
 - `team reply Q (<text> | --stdin)`：服务端从已保存的问题推导反向路由，再执行既有消息写入鉴权；原 `message --kind answer --reply-to` 入口继续可用。普通投递与恢复中的回复提示使用短命令。
 - `team ask --dispatch D [--from-dispatch S] [--to orchestrator] (<text> | --stdin) [--wait 0..60]`：只写一次 question，保存后立即向 stderr 输出 ID。默认 wait=0，仅查询一次并返回；显式正数等待仅适用于当前工作依赖答案的情形，以单调时钟约束只读轮询，不重试写入。
 - `team ask --resume Q [--wait 0..60]`：只读原问题。输出包含 question、answers、status、question_id、timed_out、resume；status 为 pending/answered/closed，是派生查询状态，不是新增持久状态机。wait=0 不宣称等待超时；读取失败仍报错，不编造成功快照。answered 只表示已有回答，不代表解决或验收。
 - `team ask --list [--dispatch D] [--before Q]`：仅查询当前认证成员发送的问题，每页最多 50 条，返回 next_before。用于写入回执丢失时找回 ID，找到后 resume，不能把丢回执当作未写入而盲目重发。
-- HTTP 入口为 POST `/api/team/reply`、`/api/team/question`、`/api/team/questions`，沿用身份字段、token 与既有角色鉴权；query/reply 使用 question_id，历史列表使用 dispatch_id/before_id。问题读取仅向原发送者或接收者开放，回复继续检查取消、成员删除、历史责任与控制器换绑边界。历史游标绑定当前工作区和发送者。
-- 问题读取不返回可用于 report 的水位，不自动确认其他输入；报告仍须读取并考虑完整消息后使用原 `--seen`。不增加邮箱 ACK、成员委派、跨 root 问答、报告 outcome 或 schema migration。外部控制器继续使用现有 message/messages 幂等接口，不能借用 CLI 身份绕过宿主绑定。
+- HTTP 入口为 POST `/api/team/reply`、`/api/team/question`、`/api/team/questions`，沿用身份字段、token 与既有角色鉴权；query/reply 使用 question_id，历史列表使用 dispatch_id/before_id。问题读取仅向原发送者或接收者开放，回复继续检查取消、成员删除、历史责任边界。历史游标绑定当前工作区和发送者。
+- 问题读取不返回可用于 report 的水位，不自动确认其他输入；报告仍须读取并考虑完整消息后使用原 `--seen`。不增加邮箱 ACK、成员委派、跨 root 问答、报告 outcome 或 schema migration。
 
 这些入口减少手工路由字段并支持找回持久问题，不据此声称真实模型速度、token 或成果质量已有改善。

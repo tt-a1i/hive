@@ -18,7 +18,6 @@ import { codexTeamEnvironmentArgs } from './codex-team-environment.js'
 import { ensureCodexDirectoryTrusted } from './codex-trust-store.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
-import { ConflictError } from './http-errors.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
 import {
   createPostStartInputWriter,
@@ -74,8 +73,6 @@ export const createAgentRunStarter =
     config: AgentLaunchConfigInput,
     hivePort: string
   ) => {
-    if (workspace.controller_mode === 'codex_app' && agentId === `${workspace.id}:orchestrator`)
-      throw new ConflictError('This workspace uses Codex App as its controller')
     if (!agentManager) throw new Error('Agent manager is required to start agents')
 
     const agent = getAgent?.(workspace.id, agentId)

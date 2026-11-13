@@ -137,7 +137,7 @@ export const createWorkspaceStore = (
       workspace.agents.push(worker)
       return worker
     },
-    createWorkspace(path, name, controllerMode = 'internal') {
+    createWorkspace(path, name) {
       const existing = Array.from(workspaces.values()).find((workspace) =>
         sameFilesystemPath(workspace.summary.path, path)
       )
@@ -146,11 +146,13 @@ export const createWorkspaceStore = (
         id: randomUUID(),
         name,
         path,
-        ...(controllerMode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
       }
-      db.prepare(
-        'INSERT INTO workspaces (id, name, path, created_at, controller_mode) VALUES (?, ?, ?, ?, ?)'
-      ).run(summary.id, name, path, Date.now(), controllerMode)
+      db.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
+        summary.id,
+        name,
+        path,
+        Date.now()
+      )
       workspaces.set(summary.id, {
         summary,
         agents: [createOrchestrator(summary.id), createWorkflowAgent(summary.id)],
