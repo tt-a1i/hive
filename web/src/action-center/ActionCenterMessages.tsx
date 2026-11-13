@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ActionCenterMessage } from '../../../src/shared/action-center.js'
+import { replyToQuestion } from '../api.js'
 import { useI18n } from '../i18n.js'
 import {
   type MessageSelection,
@@ -16,17 +17,27 @@ export const ActionCenterMessages = ({
   workspaceId,
   workers,
   request,
+  actionableQuestionIds,
+  onReply,
 }: {
   messages: ActionCenterMessage[]
   workspaceId: string
   workers: Array<{ id: string; name: string }>
   request?: MessageRequest | null
+  actionableQuestionIds: string[]
+  onReply: () => void
 }) => {
   const { t } = useI18n()
   const messagePrefix = useId()
   const heading = useRef<HTMLHeadingElement>(null)
   const responsibilityDetails = useRef<HTMLDetailsElement>(null)
   const [selection, setSelection] = useState<MessageSelection | null>(null)
+  const [replyingId, setReplyingId] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
+  const [replyBusy, setReplyBusy] = useState(false)
+  const replyInFlight = useRef(false)
+  const [replyError, setReplyError] = useState(false)
+  const [answeredIds, setAnsweredIds] = useState<string[]>([])
   const history = useActionCenterConversation(workspaceId, selection)
   const page = history?.page
   const handledFocus = useRef<MessageSelection | null>(null)
@@ -199,6 +210,85 @@ export const ActionCenterMessages = ({
               ) : null}
               {message.delivery_error ? (
                 <p className="mt-1 break-words text-xs text-sec">{message.delivery_error}</p>
+              ) : null}
+              {message.kind === 'question' &&
+              message.recipient_agent_id === `${workspaceId}:orchestrator` &&
+              actionableQuestionIds.includes(message.id) &&
+              !answeredIds.includes(message.id) ? (
+                replyingId === message.id ? (
+                  <form
+                    className="mt-2 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      const text = replyText.trim()
+                      if (!text || replyInFlight.current) return
+                      replyInFlight.current = true
+                      setReplyBusy(true)
+                      setReplyError(false)
+                      void replyToQuestion(workspaceId, message.id, text)
+                        .then(() => {
+                          setAnsweredIds((ids) => [...ids, message.id])
+                          setReplyText('')
+                          setReplyingId(null)
+                          retry()
+                          onReply()
+                        })
+                        .catch(() => setReplyError(true))
+                        .finally(() => {
+                          replyInFlight.current = false
+                          setReplyBusy(false)
+                        })
+                    }}
+                  >
+                    <label className="block text-xs text-sec">
+                      {t('actionCenter.message.answerLabel')}
+                      <textarea
+                        className="input mt-1 block w-full"
+                        value={replyText}
+                        onChange={(event) => setReplyText(event.target.value)}
+                        disabled={replyBusy}
+                      />
+                    </label>
+                    {replyError ? (
+                      <p role="alert" className="text-xs text-sec">
+                        {t('actionCenter.message.answerFailed')}
+                      </p>
+                    ) : null}
+                    <button
+                      type="submit"
+                      className="text-xs text-accent"
+                      disabled={replyBusy || !replyText.trim()}
+                    >
+                      {t('actionCenter.message.sendAnswer')}
+                    </button>{' '}
+                    <button
+                      type="button"
+                      className="text-xs text-sec"
+                      disabled={replyBusy}
+                      onClick={() => {
+                        setReplyingId(null)
+                        setReplyText('')
+                        setReplyError(false)
+                      }}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    className="mt-2 block text-xs text-accent"
+                    disabled={replyBusy}
+                    onClick={() => {
+                      if (replyInFlight.current) return
+                      setReplyingId(message.id)
+                      setReplyText('')
+                      setReplyError(false)
+                    }}
+                  >
+                    {t('actionCenter.message.answerQuestion')}
+                  </button>
+                )
               ) : null}
               {!selection ? (
                 <button

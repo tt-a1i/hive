@@ -124,6 +124,7 @@ const attentionKey = (item: ActionCenterAttention): string => {
 const useActionCenterSummary = (workspaceId: string) => {
   const [summary, setSummary] = useState<ActionCenterSummary | null>(null)
   const [error, setError] = useState(false)
+  const [revision, setRevision] = useState(0)
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -132,6 +133,7 @@ const useActionCenterSummary = (workspaceId: string) => {
     [workspaceId]
   )
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a successful reply triggers an immediate refresh.
   useEffect(() => {
     let cancelled = false
     let inFlight = false
@@ -178,9 +180,13 @@ const useActionCenterSummary = (workspaceId: string) => {
       if (timer) clearTimeout(timer)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [load])
+  }, [load, revision])
 
-  return { error, summary: summary?.workspaceId === workspaceId ? summary : null }
+  return {
+    error,
+    summary: summary?.workspaceId === workspaceId ? summary : null,
+    refresh: () => setRevision((value) => value + 1),
+  }
 }
 
 const useRecapCopy = (workspaceId: string) => {
@@ -240,11 +246,13 @@ const ActionCenterDetails = ({
   copyingRecap,
   onCopyRecap,
   onOpenWorker,
+  onReply,
   summary,
 }: {
   copyingRecap: boolean
   onCopyRecap: () => void
   onOpenWorker?: (workerId: string) => void
+  onReply: () => void
   summary: ActionCenterSummary
 }) => {
   const { t } = useI18n()
@@ -273,6 +281,10 @@ const ActionCenterDetails = ({
           messages={summary.recentDispatchMessages}
           workers={summary.workers}
           request={messageRequest}
+          actionableQuestionIds={summary.attention.flatMap((item) =>
+            'messageId' in item ? [item.messageId] : []
+          )}
+          onReply={onReply}
         />
       </div>
       <div className="flex min-w-0 justify-end md:col-span-2">
@@ -440,6 +452,7 @@ const ActionCenterDrawer = ({
   onClose,
   onCopyRecap,
   onOpenWorker,
+  onReply,
   open,
   summary,
 }: {
@@ -448,6 +461,7 @@ const ActionCenterDrawer = ({
   onClose: () => void
   onCopyRecap: () => void
   onOpenWorker?: (workerId: string) => void
+  onReply: () => void
   open: boolean
   summary: ActionCenterSummary | null
 }) => {
@@ -621,6 +635,10 @@ const ActionCenterDrawer = ({
                     messages={summary.recentDispatchMessages}
                     workers={summary.workers}
                     request={messageRequest}
+                    actionableQuestionIds={summary.attention.flatMap((item) =>
+                      'messageId' in item ? [item.messageId] : []
+                    )}
+                    onReply={onReply}
                   />
                   <section className="grid gap-3 lg:grid-cols-[1fr_1fr]">
                     <div className="action-center-panel lg:col-span-2">
@@ -776,7 +794,7 @@ const ActionCenterDrawer = ({
 
 export const ActionCenterTopbarButton = ({ onOpenWorker, workspaceId }: ActionCenterProps) => {
   const { t } = useI18n()
-  const { error, summary } = useActionCenterSummary(workspaceId)
+  const { error, summary, refresh } = useActionCenterSummary(workspaceId)
   const { copyingRecap, handleCopyRecap } = useRecapCopy(workspaceId)
   const [open, setOpen] = useState(false)
 
@@ -808,6 +826,7 @@ export const ActionCenterTopbarButton = ({ onOpenWorker, workspaceId }: ActionCe
         error={error}
         onClose={() => setOpen(false)}
         onCopyRecap={handleCopyRecap}
+        onReply={refresh}
         {...(onOpenWorker ? { onOpenWorker } : {})}
         open={open}
         summary={summary}
@@ -818,7 +837,7 @@ export const ActionCenterTopbarButton = ({ onOpenWorker, workspaceId }: ActionCe
 
 export const ActionCenterStrip = ({ onOpenWorker, workspaceId }: ActionCenterProps) => {
   const { t } = useI18n()
-  const { error, summary } = useActionCenterSummary(workspaceId)
+  const { error, summary, refresh } = useActionCenterSummary(workspaceId)
   const { copyingRecap, handleCopyRecap } = useRecapCopy(workspaceId)
   const [expanded, setExpanded] = useState(false)
   const { latest, latestDetail } = getActionCenterView(summary)
@@ -875,6 +894,7 @@ export const ActionCenterStrip = ({ onOpenWorker, workspaceId }: ActionCenterPro
           key={workspaceId}
           copyingRecap={copyingRecap}
           onCopyRecap={handleCopyRecap}
+          onReply={refresh}
           {...(onOpenWorker ? { onOpenWorker } : {})}
           summary={summary}
         />

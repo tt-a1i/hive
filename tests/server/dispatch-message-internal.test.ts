@@ -108,10 +108,15 @@ test('internal PTYs exchange questions and answers while preserving permissions,
       (await post('question', worker.id, { question_id: question.id, wait_ms: 60001 })).status
     ).toBe(400)
     const waiting = post('question', worker.id, { question_id: question.id, wait_ms: 5000 })
-    const answerResponse = await post('reply', orchestratorId, {
-      question_id: question.id,
-      text: 'Use main.',
-    })
+    const uiReply = (cookie = '') =>
+      fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/questions/${question.id}/reply`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ text: 'Use main.' }),
+      })
+    expect((await uiReply()).status).toBe(403)
+    const answerResponse = await uiReply(cookie)
+    expect((await uiReply(cookie)).status).toBe(409)
     expect(answerResponse.status).toBe(202)
     expect(await (await waiting).json()).toMatchObject({
       status: 'answered',

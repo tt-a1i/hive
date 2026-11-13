@@ -1613,6 +1613,18 @@ export const getActionCenterSummary = async (
   return fromActionCenterPayload((await response.json()) as ActionCenterPayload)
 }
 
+export const replyToQuestion = async (workspaceId: string, questionId: string, text: string) => {
+  const response = await apiFetch(
+    `/api/ui/workspaces/${encodeURIComponent(workspaceId)}/questions/${encodeURIComponent(questionId)}/reply`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text }),
+    }
+  )
+  if (!response.ok) throw new Error(await readErrorMessage(response, 'Failed to send reply'))
+}
+
 export interface TeamRecap {
   generatedAt: number
   markdown: string
