@@ -17,6 +17,7 @@ import {
   CONN_SALT_STREAM_ID,
   encodeConnSalt,
   encodeHeader,
+  encodeWsMessage,
   FrameKind,
   HEADER_BYTES,
 } from '../../src/shared/remote-protocol.js'
@@ -74,6 +75,9 @@ describe('frame-mux foreign-device frames', () => {
     })
     mux.beginChannel()
     mux.onFrame(daemonConnSaltFrame(daemonSalt))
+    const received: unknown[] = []
+    const socket = mux.openWebSocket('/ws/terminal')
+    socket.onmessage = (event) => received.push(event.data)
 
     const foreignHeader = encodeHeader({
       version: REMOTE_CRYPTO_VERSION,
@@ -82,10 +86,25 @@ describe('frame-mux foreign-device frames', () => {
       streamId: 1,
       seq: 0,
     })
-    const foreign = new Uint8Array(HEADER_BYTES + 32)
+    const foreignRoot = makeRoot(ids('device-A'))
+    const foreignKeys = deriveConnectionKeys({
+      rootD2p: foreignRoot.d2p,
+      rootP2d: foreignRoot.p2d,
+      phoneConnSalt: phoneSalt,
+      daemonConnSalt: daemonSalt,
+      ids: ids('device-A'),
+    })
+    const { ciphertext: foreignCiphertext } = sealNext(createSealer('d2p'), {
+      key: foreignKeys.d2p,
+      streamId: 1,
+      headerBytes: foreignHeader,
+      payload: encodeWsMessage(new TextEncoder().encode('foreign device payload'), true),
+    })
+    const foreign = new Uint8Array(HEADER_BYTES + foreignCiphertext.length)
     foreign.set(foreignHeader, 0)
-    foreign.set(randomBytes(32), HEADER_BYTES)
-    expect(() => mux.onFrame(foreign)).not.toThrow()
+    foreign.set(foreignCiphertext, HEADER_BYTES)
+    mux.onFrame(foreign)
+    expect(received).toEqual([])
 
     const connKeys = deriveConnectionKeys({
       rootD2p: root.d2p,
@@ -106,11 +125,12 @@ describe('frame-mux foreign-device frames', () => {
       key: connKeys.d2p,
       streamId: 1,
       headerBytes: ownHeader,
-      payload: new Uint8Array(0),
+      payload: encodeWsMessage(new TextEncoder().encode('own device payload'), true),
     })
     const own = new Uint8Array(ownHeader.length + ciphertext.length)
     own.set(ownHeader, 0)
     own.set(ciphertext, ownHeader.length)
-    expect(() => mux.onFrame(own)).not.toThrow()
+    mux.onFrame(own)
+    expect(received).toEqual(['own device payload'])
   })
 })

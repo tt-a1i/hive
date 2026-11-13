@@ -70,8 +70,7 @@
     "test:mobile-e2e": "node scripts/validate-mobile-runtime-e2e.mjs",
     "test:switch-layout": "node scripts/validate-settings-switch-layout.mjs",
     "test:windows": "node scripts/run-windows-tests.mjs",
-    "test:watch": "vitest",
-    "prototype:desktop": "vite --config web/vite.config.ts --open '/prototype-hive-desktop.html?variant=A'"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.15",

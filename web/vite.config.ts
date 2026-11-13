@@ -106,6 +106,27 @@ export default defineConfig(async () => ({
   root: 'web',
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      // This is a client-only bundle, so these dependencies' React Server Components
+      // directives have no effect. Keep all other Rollup warnings visible.
+      onwarn(warning, warn) {
+        if (
+          warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
+          warning.message.includes('"use client"') &&
+          /\/node_modules\/(?:@radix-ui\/|lucide-react\/)/.test(warning.id ?? '')
+        )
+          return
+        warn(warning)
+      },
+      output: {
+        manualChunks(id) {
+          if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(id)) return 'react'
+          if (/\/node_modules\/@radix-ui\//.test(id)) return 'radix'
+          if (/\/node_modules\/@noble\//.test(id)) return 'crypto'
+          if (/\/web\/src\/(?:i18n\.tsx|uiLanguage\.ts)$/.test(id)) return 'translations'
+        },
+      },
+    },
   },
   server: {
     host: '127.0.0.1',

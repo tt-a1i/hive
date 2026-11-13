@@ -397,7 +397,7 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
   // streamId -> deviceId binding, learned on the first successfully-opened frame for a stream.
   const streamOwner = new Map<number, string>()
 
-  const streamKey = (deviceId: string, streamId: number): string => `${deviceId} ${streamId}`
+  const streamKey = (deviceId: string, streamId: number): string => `${deviceId}\0${streamId}`
 
   // Derive a candidate DeviceState for (session, phoneConnSalt) WITHOUT caching it. Used to trial-open
   // an unbound frame against each (root × pending salt) pair; only the pair that opens gets committed
@@ -525,7 +525,7 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
     streamOwner.delete(extractStreamId(key))
   }
 
-  const extractStreamId = (key: string): number => Number(key.split(' ')[1])
+  const extractStreamId = (key: string): number => Number(key.split('\0')[1])
 
   const retirePhoneSalt = (deviceId: string, salt: Uint8Array): void => {
     const retired = retiredPhoneSalts.get(deviceId) ?? []

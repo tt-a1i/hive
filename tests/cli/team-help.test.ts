@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -108,64 +109,86 @@ describe('team cli help', () => {
     expect(output).toMatch(/Get-Content -Raw -Encoding utf8 body\.txt/)
   })
 
-  test('team report warns when Hive records the report but cannot live-deliver it', async () => {
-    process.env = {
-      HIVE_AGENT_ID: 'worker-1',
-      HIVE_AGENT_TOKEN: 'token-1',
-      HIVE_PORT: '12345',
-      HIVE_PROJECT_ID: 'workspace-1',
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              dispatch_id: 'dispatch-1',
-              forward_error: 'No active run for agent: workspace-1:orchestrator',
-              forwarded: false,
-              ok: true,
-            }),
-            { headers: { 'content-type': 'application/json' }, status: 202 }
-          )
+  test('help makes no HTTP requests when a runtime is available', async () => {
+    const requests: string[] = []
+    const server = createServer((request, response) => {
+      requests.push(`${request.method} ${request.url}`)
+      response.writeHead(202, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ ok: true, forwarded: true }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') throw new Error('Expected TCP address')
+      process.env = {
+        HIVE_AGENT_ID: 'worker-1',
+        HIVE_AGENT_TOKEN: 'token-1',
+        HIVE_PORT: String(address.port),
+        HIVE_PROJECT_ID: 'workspace-1',
+      }
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await runTeamCommand(['--help'])
+      expect(requests).toEqual([])
+
+      // A report is a positive control: it must reach the same server.
+      await runTeamCommand(['report', 'Done'])
+      expect(requests).toEqual(['POST /api/team/report'])
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
       )
-    )
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await runTeamCommand(['report', 'Done'])
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Hive recorded the report, but could not deliver it to Orchestrator in real time: No active run for agent: workspace-1:orchestrator'
-    )
+    }
   })
 
-  test('team report does not warn when Hive is durably delivering to an active Orchestrator', async () => {
-    process.env = {
-      HIVE_AGENT_ID: 'worker-1',
-      HIVE_AGENT_TOKEN: 'token-1',
-      HIVE_PORT: '12345',
-      HIVE_PROJECT_ID: 'workspace-1',
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              delivery_state: 'delivering',
-              dispatch_id: 'dispatch-1',
-              forward_error: null,
-              forwarded: false,
-              ok: true,
-            }),
-            { headers: { 'content-type': 'application/json' }, status: 202 }
-          )
+  test.each([
+    {
+      delivery_state: undefined,
+      forward_error: 'No active run for agent: workspace-1:orchestrator',
+      expectedWarning:
+        'Hive recorded the report, but could not deliver it to Orchestrator in real time: No active run for agent: workspace-1:orchestrator',
+    },
+    { delivery_state: 'delivering', forward_error: null, expectedWarning: undefined },
+  ])('team report warns only when live delivery fails: $delivery_state', async ({
+    delivery_state,
+    forward_error,
+    expectedWarning,
+  }) => {
+    const requests: string[] = []
+    const server = createServer((request, response) => {
+      requests.push(`${request.method} ${request.url}`)
+      response.writeHead(202, { 'content-type': 'application/json' })
+      response.end(
+        JSON.stringify({
+          delivery_state,
+          dispatch_id: 'dispatch-1',
+          forward_error,
+          forwarded: false,
+          ok: true,
+        })
       )
-    )
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') throw new Error('Expected TCP address')
+      process.env = {
+        HIVE_AGENT_ID: 'worker-1',
+        HIVE_AGENT_TOKEN: 'token-1',
+        HIVE_PORT: String(address.port),
+        HIVE_PROJECT_ID: 'workspace-1',
+      }
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await runTeamCommand(['report', 'Done'])
+      await runTeamCommand(['report', 'Done'])
 
-    expect(errorSpy).not.toHaveBeenCalled()
+      expect(requests).toEqual(['POST /api/team/report'])
+      if (expectedWarning) expect(errorSpy).toHaveBeenCalledWith(expectedWarning)
+      else expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
   })
 })
