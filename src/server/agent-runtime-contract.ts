@@ -12,6 +12,13 @@ interface StartAgentOptions {
 }
 
 export interface AgentRuntime {
+  isAgentSwitching: (workspaceId: string, agentId: string) => boolean
+  switchAgentLaunch: (
+    workspace: WorkspaceSummary,
+    agentId: string,
+    configure: () => void,
+    input: { hivePort: string; restart: boolean }
+  ) => Promise<LiveAgentRun | null>
   close: () => Promise<void>
   configureAgentLaunch: (
     workspaceId: string,

@@ -97,6 +97,10 @@ export const createWorkspaceStore = (
       ).run(workspaceId)
       db.prepare('DELETE FROM workflow_runs WHERE workspace_id = ?').run(workspaceId)
       db.prepare('DELETE FROM dispatches WHERE workspace_id = ?').run(workspaceId)
+      db.prepare('DELETE FROM app_state WHERE substr(key, 1, length(?)) = ?').run(
+        `agent_handover:${workspaceId}:`,
+        `agent_handover:${workspaceId}:`
+      )
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)
     })()
   }
@@ -290,6 +294,9 @@ export const createWorkspaceStore = (
           workerId
         )
         db.prepare('DELETE FROM agent_runs WHERE agent_id = ?').run(workerId)
+        db.prepare('DELETE FROM app_state WHERE key = ?').run(
+          `agent_handover:${workspaceId}:${workerId}`
+        )
         db.prepare('DELETE FROM workers WHERE workspace_id = ? AND id = ?').run(
           workspaceId,
           workerId

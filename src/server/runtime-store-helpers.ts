@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +13,7 @@ import { createDispatchMessageOperations } from './dispatch-message-operations.j
 import { createDispatchMessageStore } from './dispatch-message-store.js'
 import { readFeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
+import { ConflictError } from './http-errors.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { hasFirstRunSetupPrompt, isInteractiveAgentCommand } from './post-start-input-writer.js'
@@ -30,6 +32,7 @@ import { createReportOutboxStore } from './report-outbox-store.js'
 import { openRuntimeDatabase } from './runtime-database.js'
 import { buildRuntimeRestartPolicy } from './runtime-restart-policy.js'
 import { createSettingsStore } from './settings-store.js'
+import { commandVendorToken } from './startup-command-parser.js'
 import { createTasksFileService } from './tasks-file.js'
 import { createTasksFileWatcher } from './tasks-file-watcher.js'
 import { createTeamOperations } from './team-operations.js'
@@ -57,6 +60,7 @@ export interface RuntimeStoreServices {
   dispatchMessageStore: ReturnType<typeof createDispatchMessageStore>
   dispatchMessageOps: ReturnType<typeof createDispatchMessageOperations>
   agentRunStore: ReturnType<typeof createAgentRunStore>
+  agentSessionStore: ReturnType<typeof createAgentSessionStore>
   agentRuntime: ReturnType<typeof createAgentRuntime>
   db: ReturnType<typeof openRuntimeDatabase>
   dispatchLedgerStore: ReturnType<typeof createDispatchLedgerStore>
@@ -199,10 +203,13 @@ export const createRuntimeStoreServices = (
   }
   const restartPolicy = buildRuntimeRestartPolicy({
     listOpenDispatches: dispatchLedgerStore.listOpenWorkspaceDispatches,
+    listAllDispatches: (workspaceId) =>
+      dispatchLedgerStore.listWorkspaceDispatches(workspaceId, { limit: 20 }),
     listDispatchMessagesForRecovery: dispatchMessageStore.listRecoveryMessages,
     listActionableDispatchMessagesForRecovery: dispatchMessageStore.listActionableWorkspaceMessages,
     agentRunStore,
     messageLogStore,
+    settings,
     tasksFileService,
     workspaceStore,
     getFlags,
@@ -227,6 +234,7 @@ export const createRuntimeStoreServices = (
       workerOutputTracker?.detach(workspaceId, agentId)
       if (!workspaceStore.hasAgent(workspaceId, agentId)) return
       workspaceStore.markAgentStopped(workspaceId, agentId)
+      if (agentRuntime.isAgentSwitching(workspaceId, agentId)) return
       // TIER 1 #1 — if the exiting worker had any open workflow dispatches,
       // tell the workflow awaiter so the runner's `awaitReport` rejects
       // immediately instead of hanging until DEFAULT_TIMEOUT_MS (10 min).
@@ -396,6 +404,7 @@ export const createRuntimeStoreServices = (
 
   return {
     agentRunStore,
+    agentSessionStore,
     agentRuntime,
     db,
     dispatchLedgerStore,
@@ -443,6 +452,51 @@ export const createRuntimeStoreLifecycle = ({
   agentManager,
   services,
 }: CreateRuntimeStoreLifecycleOptions) => {
+  const completeAgentStart = (workspaceId: string, agentId: string, run: LiveAgentRun) => {
+    const current = services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId)
+    if (current?.runId !== run.runId) {
+      if (!current) services.workspaceStore.markAgentStopped(workspaceId, agentId)
+      return
+    }
+    if (run.status === 'error' || run.status === 'exited') {
+      services.workspaceStore.markAgentStopped(workspaceId, agentId)
+    } else {
+      services.workspaceStore.markAgentStarted(workspaceId, agentId)
+      services.workerOutputTracker?.attach(workspaceId, agentId, run.runId, run.output)
+      // #33: a freshly started worker may have dispatches parked from when
+      // it was stopped — deliver them now (single-shot via claims; no-op
+      // for orchestrator/workflow pseudo-agents, which never hold queued
+      // worker dispatches addressed to themselves). Wait for post-start
+      // guidance first so startup instructions never race the first task.
+      const deliverPostStartBacklog = () => {
+        if (
+          services.isRuntimeClosing() ||
+          services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId)?.runId !== run.runId
+        )
+          return
+        try {
+          services.teamOps.drainReportOutbox(workspaceId, agentId)
+        } catch (error) {
+          console.error('[hive] swallowed:startAgent.drainOutbox', error)
+        }
+        try {
+          services.teamOps.replayQueuedDispatches(workspaceId, agentId, {
+            createdBeforeMs: run.startedAt,
+          })
+          services.dispatchMessageOps.drainDispatchMessageOutbox(workspaceId, agentId)
+        } catch (error) {
+          console.error('[hive] swallowed:startAgent.replayQueued', error)
+        }
+      }
+      if (run.postStartInputReady) {
+        void run.postStartInputReady.then(deliverPostStartBacklog).catch((error) => {
+          console.error('[hive] swallowed:startAgent.replayAfterPostStart', error)
+        })
+      } else {
+        deliverPostStartBacklog()
+      }
+    }
+  }
   const startAgent = async (
     workspaceId: string,
     agentId: string,
@@ -455,40 +509,7 @@ export const createRuntimeStoreLifecycle = ({
         agentId,
         input
       )
-      if (run.status === 'error' || run.status === 'exited') {
-        services.workspaceStore.markAgentStopped(workspaceId, agentId)
-      } else {
-        services.workspaceStore.markAgentStarted(workspaceId, agentId)
-        services.workerOutputTracker?.attach(workspaceId, agentId, run.runId, run.output)
-        // #33: a freshly started worker may have dispatches parked from when
-        // it was stopped — deliver them now (single-shot via claims; no-op
-        // for orchestrator/workflow pseudo-agents, which never hold queued
-        // worker dispatches addressed to themselves). Wait for post-start
-        // guidance first so startup instructions never race the first task.
-        const deliverPostStartBacklog = () => {
-          if (services.isRuntimeClosing()) return
-          try {
-            services.teamOps.drainReportOutbox(workspaceId, agentId)
-          } catch (error) {
-            console.error('[hive] swallowed:startAgent.drainOutbox', error)
-          }
-          try {
-            services.teamOps.replayQueuedDispatches(workspaceId, agentId, {
-              createdBeforeMs: run.startedAt,
-            })
-            services.dispatchMessageOps.drainDispatchMessageOutbox(workspaceId, agentId)
-          } catch (error) {
-            console.error('[hive] swallowed:startAgent.replayQueued', error)
-          }
-        }
-        if (run.postStartInputReady) {
-          void run.postStartInputReady.then(deliverPostStartBacklog).catch((error) => {
-            console.error('[hive] swallowed:startAgent.replayAfterPostStart', error)
-          })
-        } else {
-          deliverPostStartBacklog()
-        }
-      }
+      completeAgentStart(workspaceId, agentId, run)
       return run
     } catch (error) {
       services.workspaceStore.markAgentStopped(workspaceId, agentId)
@@ -533,6 +554,46 @@ export const createRuntimeStoreLifecycle = ({
   const findLiveRun = (runId: string): LiveAgentRun | undefined =>
     services.shellRuntime.getLiveRun(runId) ?? services.agentRuntime.findLiveRun(runId)
 
+  const configureAgentLaunchUnlocked = (
+    workspaceId: string,
+    agentId: string,
+    input: AgentLaunchConfigInput
+  ) => {
+    services.workspaceStore.getAgent(workspaceId, agentId)
+    const previous = services.agentRuntime.peekAgentLaunchConfig(workspaceId, agentId)
+    const shellVendor = (config: AgentLaunchConfigInput) =>
+      config.presetAugmentationDisabled ? commandVendorToken(config.args?.at(-1)) : null
+    const oldVendor = previous ? shellVendor(previous) : null
+    const newVendor = shellVendor(input)
+    const changed =
+      previous !== undefined &&
+      (previous.command !== input.command ||
+        (previous.commandPresetId ?? null) !== (input.commandPresetId ?? null) ||
+        (previous.interactiveCommand ?? null) !== (input.interactiveCommand ?? null) ||
+        (oldVendor !== null && newVendor !== null && oldVendor !== newVendor))
+    if (!changed) {
+      services.agentRunStore.saveLaunchConfig(workspaceId, agentId, input)
+      services.agentRuntime.invalidateAgentLaunchConfig(workspaceId, agentId)
+      services.agentRuntime.peekAgentLaunchConfig(workspaceId, agentId)
+      return
+    }
+    const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, agentId)
+    services.db.transaction(() => {
+      services.agentRunStore.saveLaunchConfig(workspaceId, agentId, input)
+      services.db
+        .prepare('DELETE FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?')
+        .run(workspaceId, agentId)
+      services.db
+        .prepare('UPDATE workers SET last_session_id = NULL WHERE workspace_id = ? AND id = ?')
+        .run(workspaceId, agentId)
+      services.settings.setAppState(`agent_handover:${workspaceId}:${agentId}`, randomUUID())
+    })()
+    services.agentSessionStore.invalidateAfterConfigChange(workspaceId, agentId)
+    activeRun?.captureController?.abort()
+    services.agentRuntime.invalidateAgentLaunchConfig(workspaceId, agentId)
+    services.agentRuntime.peekAgentLaunchConfig(workspaceId, agentId)
+  }
+
   return {
     close: async () => {
       services.markRuntimeClosing()
@@ -561,9 +622,12 @@ export const createRuntimeStoreLifecycle = ({
         services.workspaceUploadStorageCleanup()
       }
     },
+    completeAgentStart,
+    configureAgentLaunchUnlocked,
     configureAgentLaunch: (workspaceId: string, agentId: string, input: AgentLaunchConfigInput) => {
-      services.workspaceStore.getAgent(workspaceId, agentId)
-      services.agentRuntime.configureAgentLaunch(workspaceId, agentId, input)
+      if (services.agentRuntime.isAgentSwitching(workspaceId, agentId))
+        throw new ConflictError('Agent switch is in progress')
+      configureAgentLaunchUnlocked(workspaceId, agentId, input)
     },
     peekAgentLaunchConfig: (workspaceId: string, agentId: string) =>
       services.agentRuntime.peekAgentLaunchConfig(workspaceId, agentId),

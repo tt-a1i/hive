@@ -1,3 +1,4 @@
+import { createRuntimeStoreAgentSwitch } from './runtime-store-agent-switch.js'
 import type { RuntimeStore, RuntimeStoreOptions } from './runtime-store-contract.js'
 import { createRuntimeStoreDiagnosticsMethods } from './runtime-store-diagnostics.js'
 import {
@@ -86,6 +87,7 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
     getPtyOutputBus: lifecycle.getPtyOutputBus,
     listTerminalRuns: lifecycle.listTerminalRuns,
     closeWorkspaceShell: lifecycle.closeWorkspaceShell,
+    switchAgentLaunch: createRuntimeStoreAgentSwitch(services, lifecycle),
     configureAgentLaunch: lifecycle.configureAgentLaunch,
     peekAgentLaunchConfig: lifecycle.peekAgentLaunchConfig,
     startAgent: lifecycle.startAgent,

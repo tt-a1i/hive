@@ -7,6 +7,9 @@ import type { MessageLogHandle, MessageLogRecord, RecoveryMessage } from './mess
 
 export interface RestartPolicyInput {
   deleteMessage: (handle: MessageLogHandle) => void
+  getHandover?: (workspaceId: string, agentId: string) => string | undefined
+  completeHandover?: (workspaceId: string, agentId: string, token: string) => void
+  listAllDispatches?: (workspaceId: string) => DispatchRecord[]
   getWorkspaceSnapshot: (workspaceId: string) => {
     agents: AgentSummary[]
     summary: WorkspaceSummary
@@ -36,7 +39,9 @@ export const writeSystemMessage = ({
   runId,
   text,
   writeToRun,
+  onDelivered,
 }: {
+  onDelivered?: () => void
   deleteMessage: RestartPolicyInput['deleteMessage']
   insertMessage: RestartPolicyInput['insertMessage']
   record: MessageLogRecord
@@ -46,14 +51,16 @@ export const writeSystemMessage = ({
 }) => {
   const handle = insertMessage(record)
   try {
-    void writeToRun(runId, text).catch(() => {
-      try {
-        deleteMessage(handle)
-      } catch {
-        // The runtime may already be closing; the failed post-start write is
-        // non-critical once the run is gone.
-      }
-    })
+    void writeToRun(runId, text)
+      .then(() => onDelivered?.())
+      .catch(() => {
+        try {
+          deleteMessage(handle)
+        } catch {
+          // The runtime may already be closing; the failed post-start write is
+          // non-critical once the run is gone.
+        }
+      })
   } catch (error) {
     deleteMessage(handle)
     throw error

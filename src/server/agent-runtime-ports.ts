@@ -31,6 +31,7 @@ export interface AgentRunStorePort {
 }
 
 export interface AgentSessionStorePort {
+  getRevision?: (workspaceId: string, agentId: string) => number
   clearLastSessionId: (workspaceId: string, agentId: string) => void
   getLastSessionId: (workspaceId: string, agentId: string) => string | undefined
   setLastSessionId: (workspaceId: string, agentId: string, sessionId: string) => void

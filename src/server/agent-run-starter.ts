@@ -60,7 +60,7 @@ export const createAgentRunStarter =
     registry,
     onAgentExit,
     store,
-    sessionStore,
+    sessionStore: baseSessionStore,
     tokenRegistry,
     getCommandPreset,
     getAgent,
@@ -75,6 +75,19 @@ export const createAgentRunStarter =
     hivePort: string
   ) => {
     if (!agentManager) throw new Error('Agent manager is required to start agents')
+
+    const revision = baseSessionStore.getRevision?.(workspace.id, agentId)
+    const isCurrentConfig = () => revision === baseSessionStore.getRevision?.(workspace.id, agentId)
+    const sessionStore = {
+      getLastSessionId: (ws: string, id: string) =>
+        isCurrentConfig() ? baseSessionStore.getLastSessionId(ws, id) : undefined,
+      clearLastSessionId: (ws: string, id: string) => {
+        if (isCurrentConfig()) baseSessionStore.clearLastSessionId(ws, id)
+      },
+      setLastSessionId: (ws: string, id: string, sessionId: string) => {
+        if (isCurrentConfig()) baseSessionStore.setLastSessionId(ws, id, sessionId)
+      },
+    }
 
     const agent = getAgent?.(workspace.id, agentId)
     const { sessionCaptureDiscriminator, sessionCaptureSnapshot, startConfig, startEnv } =

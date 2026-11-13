@@ -119,7 +119,8 @@ export interface UserInputBody {
 }
 
 export interface ConfigureAgentLaunchBody {
-  command: string
+  startup_command?: string
+  command?: string
   args?: string[]
   command_preset_id?: string | null
 }

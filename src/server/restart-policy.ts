@@ -36,6 +36,9 @@ export const createNoopRestartPolicy = (): RestartPolicy => ({
 export const createRestartPolicy = ({
   deleteMessage,
   getWorkspaceSnapshot,
+  getHandover,
+  completeHandover,
+  listAllDispatches,
   insertMessage,
   listAgentRuns,
   listMessagesForRecovery,
@@ -57,10 +60,11 @@ export const createRestartPolicy = ({
     },
     injectPostStartMessage({ agentId, runId, startConfig, workspace, writeToRun }) {
       const previousRun = findPreviousRun(listAgentRuns(agentId), runId)
-      if (!previousRun) return false
+      const handoverToken = getHandover?.(workspace.id, agentId)
+      if (!previousRun && !handoverToken) return false
       // Consume the marker whether or not we end up skipping, so it never
       // lingers to suppress a later genuine crash on the same run id.
-      const wasUserStopped = userStoppedRuns.delete(previousRun.runId)
+      const wasUserStopped = previousRun ? userStoppedRuns.delete(previousRun.runId) : false
 
       const snapshot = getWorkspaceSnapshot(workspace.id)
       const agent = snapshot.agents.find((item) => item.id === agentId)
@@ -78,7 +82,13 @@ export const createRestartPolicy = ({
       )
       // Stopping a process does not cancel a responsibility or retire a question.
       // A deliberate restart without outstanding protocol work can start fresh.
-      if (wasUserStopped && !ownsOpenWork && actionableDispatchMessages.length === 0) return false
+      if (
+        !handoverToken &&
+        wasUserStopped &&
+        !ownsOpenWork &&
+        actionableDispatchMessages.length === 0
+      )
+        return false
 
       const text = buildRecoverySummary({
         agent,
@@ -87,6 +97,7 @@ export const createRestartPolicy = ({
         actionableDispatchMessages,
         ...(openDispatches ? { openDispatches } : {}),
         messages: listMessagesForRecovery(workspace.id, Date.now() - RECOVERY_WINDOW_MS),
+        ...(handoverToken ? { allDispatches: listAllDispatches?.(workspace.id) ?? [] } : {}),
         tasksContent,
         workers,
         workspace,
@@ -99,6 +110,9 @@ export const createRestartPolicy = ({
         runId,
         text,
         writeToRun,
+        ...(handoverToken
+          ? { onDelivered: () => completeHandover?.(workspace.id, agentId, handoverToken) }
+          : {}),
       })
       return true
     },

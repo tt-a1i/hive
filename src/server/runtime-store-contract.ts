@@ -85,6 +85,12 @@ export interface RuntimeStore extends DispatchMessageOperations {
   listTerminalRuns: (workspaceId: string) => TerminalRunSummary[]
   closeWorkspaceShell: (workspaceId: string, runId: string) => boolean
   startWorkspaceShell: (workspaceId: string) => Promise<LiveAgentRun>
+  switchAgentLaunch: (
+    workspaceId: string,
+    agentId: string,
+    config: AgentLaunchConfigInput,
+    input: { hivePort: string; restart: boolean }
+  ) => Promise<LiveAgentRun | null>
   configureAgentLaunch: (
     workspaceId: string,
     agentId: string,

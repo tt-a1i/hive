@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { listTerminalRuns, type TerminalRunSummary } from '../api.js'
 
 const STARTING_REFRESH_INTERVAL_MS = 500
 const STEADY_REFRESH_INTERVAL_MS = 2500
 const MAX_REFRESH_INTERVAL_MS = 5000
+const HIDDEN_REFRESH_INTERVAL_MS = 15000
 
 const isStartingTerminalRun = (run: TerminalRunSummary) => run.status === 'starting'
 
@@ -35,36 +36,55 @@ const areTerminalRunsEqual = (a: TerminalRunSummary[], b: TerminalRunSummary[]):
 }
 
 export const useTerminalRuns = (workspaceId: string | null): TerminalRunSummary[] => {
-  const [terminalRuns, setTerminalRuns] = useState<TerminalRunSummary[]>([])
+  const scope = useMemo(() => ({ workspaceId }), [workspaceId])
+  const currentScope = useRef<typeof scope | null>(scope)
+  useLayoutEffect(() => {
+    currentScope.current = scope
+    return () => {
+      if (currentScope.current === scope) currentScope.current = null
+    }
+  }, [scope])
+  const [result, setResult] = useState({ scope, runs: [] as TerminalRunSummary[] })
 
   useEffect(() => {
     if (!workspaceId) {
-      setTerminalRuns([])
+      setResult({ scope, runs: [] })
       return
     }
     let cancelled = false
+    setResult({ scope, runs: [] })
+    const isCurrent = () => !cancelled && currentScope.current === scope
     let failureCount = 0
     let inFlight = false
     let lastRuns: TerminalRunSummary[] = []
     let timeout: number | undefined
     const scheduleNextLoad = () => {
-      if (!cancelled) timeout = window.setTimeout(loadRuns, getRefreshDelay(failureCount, lastRuns))
+      if (timeout !== undefined) window.clearTimeout(timeout)
+      if (isCurrent())
+        timeout = window.setTimeout(
+          loadRuns,
+          document.visibilityState === 'hidden'
+            ? HIDDEN_REFRESH_INTERVAL_MS
+            : getRefreshDelay(failureCount, lastRuns)
+        )
     }
     const loadRuns = () => {
-      if (inFlight) return
+      if (inFlight || !isCurrent()) return
       inFlight = true
       void listTerminalRuns(workspaceId)
         .then((runs) => {
-          if (cancelled) return
+          if (!isCurrent()) return
           failureCount = 0
           lastRuns = runs
-          setTerminalRuns((current) => (areTerminalRunsEqual(current, runs) ? current : runs))
+          setResult((current) =>
+            current.scope === scope && areTerminalRunsEqual(current.runs, runs)
+              ? current
+              : { scope, runs }
+          )
         })
         .catch((error: unknown) => {
-          if (!cancelled) {
-            failureCount = Math.min(failureCount + 1, 4)
-            setTerminalRuns((current) => (current.length === 0 ? current : []))
-          }
+          if (!isCurrent()) return
+          failureCount = Math.min(failureCount + 1, 4)
           console.error('[hive] swallowed:terminalRuns.list', error)
         })
         .finally(() => {
@@ -72,14 +92,24 @@ export const useTerminalRuns = (workspaceId: string | null): TerminalRunSummary[
           scheduleNextLoad()
         })
     }
+    const onVisibilityChange = () => {
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout)
+        timeout = undefined
+      }
+      if (document.visibilityState === 'visible') loadRuns()
+      else if (!inFlight) scheduleNextLoad()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
     loadRuns()
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       cancelled = true
       if (timeout !== undefined) window.clearTimeout(timeout)
     }
-  }, [workspaceId])
+  }, [workspaceId, scope])
 
-  return terminalRuns
+  return result.scope === scope ? result.runs : []
 }
 
 export const findOrchestratorRun = (

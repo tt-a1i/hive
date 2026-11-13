@@ -118,6 +118,7 @@ const getTaskSectionTitle = (agent: AgentSummary) =>
 export const buildRecoverySummary = ({
   agent,
   openDispatches,
+  allDispatches,
   dispatchMessages = [],
   actionableDispatchMessages = [],
   resumedSession = false,
@@ -129,6 +130,7 @@ export const buildRecoverySummary = ({
 }: {
   agent: AgentSummary
   allTaskMessages?: RecoveryMessage[]
+  allDispatches?: DispatchRecord[]
   openDispatches?: DispatchRecord[]
   dispatchMessages?: DispatchMessageRecord[]
   actionableDispatchMessages?: DispatchMessageRecord[]
@@ -155,6 +157,23 @@ export const buildRecoverySummary = ({
       getTaskSectionTitle(agent),
       ...formatTaskEvents(messages, agent),
       '',
+      ...(allDispatches
+        ? [
+            '## Recent dispatch history (use team recall for older history)',
+            ...allDispatches
+              .filter(
+                (item) =>
+                  agent.role === 'orchestrator' ||
+                  item.toAgentId === agent.id ||
+                  item.fromAgentId === agent.id
+              )
+              .map(
+                (item) =>
+                  `- dispatch ${item.id} (${item.status}, owner ${escapeHiveEnvelopeText(item.toAgentId)}): ${escapeHiveEnvelopeText(item.text.slice(0, 500))}${item.reportText ? `; report: ${escapeHiveEnvelopeText(item.reportText.slice(0, 500))}` : ''}`
+              ),
+            '',
+          ]
+        : []),
       '## Open tasks (dispatch ledger)',
       ...formatOpenTasks(openDispatches, agent),
       ...formatDispatchMessages(openDispatches, dispatchMessages, agent),

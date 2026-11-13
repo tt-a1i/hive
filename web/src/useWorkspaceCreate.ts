@@ -16,7 +16,7 @@ interface UseWorkspaceCreateInput {
   onOrchestratorRunStarted?: (workspaceId: string, runId: string) => void
 }
 
-interface UseWorkspaceCreateOutput {
+export interface UseWorkspaceCreateOutput {
   /** workspaceId → sticky autostart error (cleared on Retry). */
   orchestratorAutostartErrors: Record<string, string | null>
   recordOrchestratorResult: (workspaceId: string, result: OrchestratorStartResult) => void

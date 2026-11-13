@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { getApiTransport, getWorkspaceTasks, saveWorkspaceTasks } from '../api.js'
 import type { TransportSocket } from '../transport/api-transport.js'
@@ -17,6 +17,17 @@ const shouldIgnoreRemoteUpdate = (
 ) => nextContent === savedContent || nextContent === currentContent
 
 export const useTasksFile = (workspaceId: string | null, demoContent?: string) => {
+  const scope = useMemo(() => ({ workspaceId }), [workspaceId])
+  const currentScope = useRef<typeof scope | null>(scope)
+  const editRevision = useRef(0)
+  const saveRevision = useRef(0)
+  const [contentScope, setContentScope] = useState(scope)
+  useLayoutEffect(() => {
+    currentScope.current = scope
+    return () => {
+      if (currentScope.current === scope) currentScope.current = null
+    }
+  }, [scope])
   const [content, setContent] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [hasConflict, setHasConflict] = useState(false)
@@ -29,6 +40,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
     if (!dirtyRef.current) {
       savedContentRef.current = nextContent
       contentRef.current = nextContent
+      editRevision.current += 1
       setContent(nextContent)
       setHasConflict(false)
       setRemoteContent(null)
@@ -42,6 +54,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
   }, [])
 
   useEffect(() => {
+    setContentScope(scope)
     if (!workspaceId) {
       setContent('')
       setLoaded(false)
@@ -62,7 +75,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
     contentRef.current = ''
     void getWorkspaceTasks(workspaceId)
       .then(({ content: nextContent }) => {
-        if (cancelled) return
+        if (cancelled || currentScope.current !== scope) return
         savedContentRef.current = nextContent
         dirtyRef.current = false
         contentRef.current = nextContent
@@ -72,7 +85,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
         setRemoteContent(null)
       })
       .catch((error: unknown) => {
-        if (cancelled) return
+        if (cancelled || currentScope.current !== scope) return
         savedContentRef.current = ''
         dirtyRef.current = false
         contentRef.current = ''
@@ -85,7 +98,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
     return () => {
       cancelled = true
     }
-  }, [workspaceId])
+  }, [workspaceId, scope])
 
   useEffect(() => {
     if (!workspaceId) return
@@ -96,11 +109,11 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
     let activeSocket: TransportSocket | null = null
 
     const openSocket = (): void => {
-      if (closed) return
+      if (closed || currentScope.current !== scope) return
       const socket = getApiTransport().openWebSocket(`/ws/tasks/${workspaceId}`)
       activeSocket = socket
       socket.onmessage = (event) => {
-        if (closed) return
+        if (closed || currentScope.current !== scope) return
         // The tasks channel is text-only (JSON snapshots); coerce since the transport socket's
         // message type is the broader string | binary union.
         const payload = JSON.parse(String(event.data)) as { content?: string; type: string }
@@ -110,7 +123,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
         applyRemoteContent(payload.content, contentRef.current)
       }
       socket.onclose = () => {
-        if (closed) return
+        if (closed || currentScope.current !== scope) return
         // Capped exponential backoff: 500ms, 1s, 2s, 4s … up to 30s.
         attempt += 1
         const delay = Math.min(30_000, 500 * 2 ** (attempt - 1))
@@ -127,7 +140,7 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       }
       activeSocket?.close()
     }
-  }, [applyRemoteContent, workspaceId])
+  }, [applyRemoteContent, workspaceId, scope])
 
   // Demo short-circuit: all hooks have run above; now return static fixture data.
   // workspaceId is null when demoContent is provided, so no server calls were made.
@@ -148,47 +161,78 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
     }
   }
 
+  const isCurrent = () => currentScope.current === scope
+  const saveContent = async (next: string, previous?: string) => {
+    if (!workspaceId || !isCurrent()) return
+    const request = ++saveRevision.current
+    const revision = editRevision.current
+    try {
+      const response = await saveWorkspaceTasks(workspaceId, { content: next })
+      if (!isCurrent() || request !== saveRevision.current) return
+      savedContentRef.current = response.content
+      if (editRevision.current === revision) {
+        contentRef.current = response.content
+        dirtyRef.current = false
+        setContent(response.content)
+        setHasConflict(false)
+        setRemoteContent(null)
+      } else dirtyRef.current = contentRef.current !== response.content
+    } catch (error) {
+      if (!isCurrent()) return
+      if (
+        request === saveRevision.current &&
+        editRevision.current === revision &&
+        previous !== undefined
+      ) {
+        savedContentRef.current = previous
+        contentRef.current = previous
+        dirtyRef.current = false
+        setContent(previous)
+      }
+      throw error
+    }
+  }
   const persistTransform = async (
     transform: (current: string) => string,
     operationLabel: string
   ) => {
-    if (!workspaceId) return
+    if (!workspaceId || !isCurrent()) return
     const previous = contentRef.current
     const next = transform(previous)
     if (next === previous) return
     savedContentRef.current = next
     contentRef.current = next
+    editRevision.current += 1
     dirtyRef.current = false
     setContent(next)
     try {
-      const response = await saveWorkspaceTasks(workspaceId, { content: next })
-      savedContentRef.current = response.content
-      contentRef.current = response.content
-      setContent(response.content)
+      await saveContent(next, previous)
     } catch (error) {
-      savedContentRef.current = previous
-      contentRef.current = previous
-      setContent(previous)
       console.error(`[hive] swallowed:tasks.${operationLabel}`, error)
       throw error
     }
   }
-
   return {
-    content,
-    hasConflict,
-    loaded,
+    content: contentScope === scope ? content : '',
+    hasConflict: contentScope === scope && hasConflict,
+    loaded: contentScope === scope && loaded,
     onChange: (value: string) => {
+      if (!isCurrent()) return
+      editRevision.current += 1
       dirtyRef.current = value !== savedContentRef.current
       contentRef.current = value
       setContent(value)
     },
     onKeepLocal: () => {
-      setHasConflict(false)
-      setRemoteContent(null)
+      if (isCurrent()) {
+        setHasConflict(false)
+        setRemoteContent(null)
+      }
     },
     onReload: () => {
+      if (!isCurrent()) return
       const nextContent = remoteContent ?? savedContentRef.current
+      editRevision.current += 1
       savedContentRef.current = nextContent
       dirtyRef.current = false
       contentRef.current = nextContent
@@ -197,56 +241,15 @@ export const useTasksFile = (workspaceId: string | null, demoContent?: string) =
       setRemoteContent(null)
     },
     onSave: async () => {
-      if (!workspaceId) return
-      const response = await saveWorkspaceTasks(workspaceId, { content })
-      savedContentRef.current = response.content
-      dirtyRef.current = false
-      contentRef.current = response.content
-      setContent(response.content)
-      setHasConflict(false)
-      setRemoteContent(null)
+      await saveContent(contentRef.current)
     },
     toggleTaskAtLine: async (lineIndex: number) => {
-      if (!workspaceId) return
-      const previous = contentRef.current
-      const next = toggleTaskLine(previous, lineIndex)
-      if (next === previous) return
-      savedContentRef.current = next
-      contentRef.current = next
-      dirtyRef.current = false
-      setContent(next)
-      try {
-        const response = await saveWorkspaceTasks(workspaceId, { content: next })
-        savedContentRef.current = response.content
-        contentRef.current = response.content
-        setContent(response.content)
-      } catch (error) {
-        savedContentRef.current = previous
-        contentRef.current = previous
-        setContent(previous)
-        throw error
-      }
+      await persistTransform((current) => toggleTaskLine(current, lineIndex), 'toggleTask')
     },
     appendTask: async (text: string) => {
       const trimmed = text.trim()
-      if (!workspaceId || !trimmed) return
-      const previous = contentRef.current
-      const next = appendTaskToContent(previous, trimmed)
-      savedContentRef.current = next
-      contentRef.current = next
-      dirtyRef.current = false
-      setContent(next)
-      try {
-        const response = await saveWorkspaceTasks(workspaceId, { content: next })
-        savedContentRef.current = response.content
-        contentRef.current = response.content
-        setContent(response.content)
-      } catch (error) {
-        savedContentRef.current = previous
-        contentRef.current = previous
-        setContent(previous)
-        throw error
-      }
+      if (trimmed)
+        await persistTransform((current) => appendTaskToContent(current, trimmed), 'appendTask')
     },
     appendSubtask: async (parentLine: number, text: string) => {
       const trimmed = text.trim()

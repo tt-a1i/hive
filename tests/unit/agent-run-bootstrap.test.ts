@@ -4,7 +4,7 @@ import {
   buildAgentRunBootstrap,
   buildSpawnPathEnvEntry,
 } from '../../src/server/agent-run-bootstrap.js'
-import type { AgentSessionStore } from '../../src/server/agent-session-store.js'
+import type { AgentSessionStorePort } from '../../src/server/agent-runtime-ports.js'
 import type { CommandPresetRecord } from '../../src/server/command-preset-store.js'
 
 const codexPreset: CommandPresetRecord = {
@@ -34,7 +34,7 @@ const piPreset: CommandPresetRecord = {
   yoloArgsTemplate: ['--approve'],
 }
 
-const createSessionStore = (sessionId: string): AgentSessionStore => ({
+const createSessionStore = (sessionId: string): AgentSessionStorePort => ({
   clearLastSessionId: () => {},
   getLastSessionId: () => sessionId,
   setLastSessionId: () => {},

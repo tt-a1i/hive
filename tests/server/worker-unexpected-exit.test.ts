@@ -5,6 +5,7 @@ import { expect, test } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 test.each([
@@ -118,11 +119,7 @@ test.each([
       args: [orchScript, output],
     })
     await hive.store.startAgent(workspace.id, orch, { hivePort: String(hive.port) })
-    const delivered = () => {
-      const text = readFileSync(output, 'utf8')
-      const pointer = /Read ("[^"]+")/.exec(text)?.[1]
-      return pointer ? readFileSync(JSON.parse(pointer) as string, 'utf8') : text
-    }
+    const delivered = () => expandInboxReferences(readFileSync(output, 'utf8'))
     await expect.poll(delivered).toContain('exited before reporting')
     expect(delivered()).toContain(dispatch.id)
   } finally {

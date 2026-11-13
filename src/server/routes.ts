@@ -9,6 +9,7 @@ import type {
   WorkerRole,
 } from './route-types.js'
 import { actionCenterRoutes } from './routes-action-center.js'
+import { agentSwitchRoutes } from './routes-agent-switch.js'
 import { diagnosticsRoutes } from './routes-diagnostics.js'
 import { dispatchRoutes } from './routes-dispatches.js'
 import { fsRoutes } from './routes-fs.js'
@@ -32,6 +33,7 @@ import { workspaceUploadRoutes } from './routes-workspace-uploads.js'
 import { workspaceRoutes } from './routes-workspaces.js'
 
 const routes: RouteDefinition[] = [
+  ...agentSwitchRoutes,
   ...workspaceRoutes,
   ...workerRoutes,
   ...scenarioRoutes,

@@ -12,6 +12,7 @@ import { createAgentRuntimeFlowAdapter } from './agent-runtime-flow-adapter.js'
 import { listRunsWithFallback } from './agent-runtime-list-runs.js'
 import type { AgentRunStorePort, AgentSessionStorePort } from './agent-runtime-ports.js'
 import { stopLiveRun } from './agent-runtime-stop-run.js'
+import { createAgentRuntimeSwitch } from './agent-runtime-switch.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { createAgentStdinDispatcher } from './agent-stdin-dispatcher.js'
 import { createAgentTokenRegistry } from './agent-tokens.js'
@@ -93,6 +94,67 @@ export const createAgentRuntime = (
     ...(getFlags ? { getFlags } : {}),
   })
 
+  const startAgent: AgentRuntime['startAgent'] = async (workspace, agentId, input) => {
+    if (closing) throw new Error('Agent runtime is closing')
+    launchCache.setWorkspaceId(agentId, workspace.id)
+    const key = `${workspace.id}:${agentId}`
+    const activeRun = getActiveRunByAgent(
+      registry,
+      launchCache.getWorkspaceId,
+      syncRun,
+      workspace.id,
+      agentId
+    )
+    if (activeRun) return activeRun
+    const pendingStart = startPromises.get(key)
+    if (pendingStart) return pendingStart
+    const startPromise = startLiveRun(
+      workspace,
+      agentId,
+      launchCache.get(workspace.id, agentId),
+      input.hivePort
+    )
+      .then((run) => {
+        if (run.status !== 'error' && run.status !== 'exited') {
+          for (const previous of registry.list()) {
+            if (previous.agentId === agentId && previous.runId !== run.runId) discardRun(previous)
+          }
+        }
+        return run
+      })
+      .finally(() => {
+        if (startPromises.get(key) === startPromise) {
+          startPromises.delete(key)
+        }
+      })
+    startPromises.set(key, startPromise)
+    return startPromise
+  }
+  const switcher = createAgentRuntimeSwitch({
+    startAgent,
+    peekAgentLaunchConfig: launchCache.peek,
+    getLiveRun: (runId) => {
+      const run = registry.get(runId)
+      if (!run) throw new Error(`Live run not found: ${runId}`)
+      return syncRun(run)
+    },
+    waitForRunExit: (runId, timeoutMs) => {
+      const entry = registry.getExitEntry(runId)
+      return entry ? waitForExitEntry(entry.promise, timeoutMs) : Promise.resolve(false)
+    },
+    stopAgentRun: (runId) =>
+      stopLiveRun(agentManager, registry, syncRun, runId, () => {
+        const run = registry.get(runId)
+        if (run) {
+          run.userStopped = true
+          run.captureController?.abort()
+        }
+        restartPolicy.markUserStopped(runId)
+      }),
+    listLiveRuns: registry.list,
+    pendingStart: (workspaceId, agentId) => startPromises.get(`${workspaceId}:${agentId}`),
+    isClosing: () => closing,
+  })
   return {
     async close() {
       closing = true
@@ -104,6 +166,7 @@ export const createAgentRuntime = (
       }
     },
     configureAgentLaunch(workspaceId, agentId, input) {
+      switcher.assertAvailable(workspaceId, agentId)
       launchCache.save(workspaceId, agentId, input)
     },
     discardAgentRuns(agentId) {
@@ -119,6 +182,7 @@ export const createAgentRuntime = (
       return launchCache.peek(workspaceId, agentId)
     },
     getActiveRunByAgentId(workspaceId, agentId) {
+      if (switcher.isAgentSwitching(workspaceId, agentId)) return undefined
       return getActiveRunByAgent(
         registry,
         launchCache.getWorkspaceId,
@@ -159,41 +223,11 @@ export const createAgentRuntime = (
     resumeRun(runId) {
       flowAdapter.resumeRun(runId)
     },
-    async startAgent(workspace, agentId, input) {
-      if (closing) throw new Error('Agent runtime is closing')
-      launchCache.setWorkspaceId(agentId, workspace.id)
-      const key = `${workspace.id}:${agentId}`
-      const activeRun = getActiveRunByAgent(
-        registry,
-        launchCache.getWorkspaceId,
-        syncRun,
-        workspace.id,
-        agentId
-      )
-      if (activeRun) return activeRun
-      const pendingStart = startPromises.get(key)
-      if (pendingStart) return pendingStart
-      const startPromise = startLiveRun(
-        workspace,
-        agentId,
-        launchCache.get(workspace.id, agentId),
-        input.hivePort
-      )
-        .then((run) => {
-          if (run.status !== 'error' && run.status !== 'exited') {
-            for (const previous of registry.list()) {
-              if (previous.agentId === agentId && previous.runId !== run.runId) discardRun(previous)
-            }
-          }
-          return run
-        })
-        .finally(() => {
-          if (startPromises.get(key) === startPromise) {
-            startPromises.delete(key)
-          }
-        })
-      startPromises.set(key, startPromise)
-      return startPromise
+    isAgentSwitching: switcher.isAgentSwitching,
+    switchAgentLaunch: switcher.switchAgentLaunch,
+    startAgent(workspace, agentId, input) {
+      switcher.assertAvailable(workspace.id, agentId)
+      return startAgent(workspace, agentId, input)
     },
     stopAgentRun(runId) {
       stopLiveRun(agentManager, registry, syncRun, runId, (stoppedRunId) => {

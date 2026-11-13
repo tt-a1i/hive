@@ -11,6 +11,8 @@ import type { WorkspaceStore } from './workspace-store.js'
 export const buildRuntimeRestartPolicy = ({
   agentRunStore,
   messageLogStore,
+  settings,
+  listAllDispatches,
   listOpenDispatches,
   listDispatchMessagesForRecovery,
   listActionableDispatchMessagesForRecovery,
@@ -19,6 +21,11 @@ export const buildRuntimeRestartPolicy = ({
   getFlags,
 }: {
   agentRunStore: Pick<AgentRunStorePort, 'listAgentRuns'>
+  settings: {
+    getAppState: (key: string) => { value: string | null } | undefined
+    setAppState: (key: string, value: string | null) => void
+  }
+  listAllDispatches: (workspaceId: string) => DispatchRecord[]
   listActionableDispatchMessagesForRecovery?: (
     workspaceId: string,
     agentId: string
@@ -37,6 +44,13 @@ export const buildRuntimeRestartPolicy = ({
   createRestartPolicy({
     deleteMessage: messageLogStore.deleteMessage,
     getWorkspaceSnapshot: workspaceStore.getWorkspaceSnapshot,
+    getHandover: (workspaceId, agentId) =>
+      settings.getAppState(`agent_handover:${workspaceId}:${agentId}`)?.value ?? undefined,
+    completeHandover: (workspaceId, agentId, token) => {
+      const key = `agent_handover:${workspaceId}:${agentId}`
+      if (settings.getAppState(key)?.value === token) settings.setAppState(key, null)
+    },
+    listAllDispatches,
     insertMessage: messageLogStore.insertMessage,
     listAgentRuns: agentRunStore.listAgentRuns,
     listMessagesForRecovery: messageLogStore.listMessagesForRecovery,

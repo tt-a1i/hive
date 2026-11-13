@@ -132,6 +132,8 @@ const assertAppStateKeyAllowed = (
   key: string,
   write: boolean
 ): void => {
+  if (key.startsWith('agent_handover:'))
+    throw new ForbiddenError('Internal app state is not available')
   if (!write && key === REMOTE_DAEMON_TOKEN_KEY) {
     throw new ForbiddenError('Remote daemon token is not available through app state')
   }

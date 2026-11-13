@@ -8,12 +8,15 @@ interface AgentSessionRow {
 
 export interface AgentSessionStore {
   clearLastSessionId: (workspaceId: string, agentId: string) => void
+  invalidateAfterConfigChange: (workspaceId: string, agentId: string) => void
+  getRevision: (workspaceId: string, agentId: string) => number
   getLastSessionId: (workspaceId: string, agentId: string) => string | undefined
   setLastSessionId: (workspaceId: string, agentId: string, sessionId: string) => void
 }
 
 export const createAgentSessionStore = (db: Database): AgentSessionStore => {
   const lastSessionIds = new Map<string, string>()
+  const revisions = new Map<string, number>()
 
   for (const row of db
     .prepare(
@@ -24,6 +27,12 @@ export const createAgentSessionStore = (db: Database): AgentSessionStore => {
   }
 
   return {
+    getRevision: (workspaceId, agentId) => revisions.get(`${workspaceId}:${agentId}`) ?? 0,
+    invalidateAfterConfigChange(workspaceId, agentId) {
+      const key = `${workspaceId}:${agentId}`
+      lastSessionIds.delete(key)
+      revisions.set(key, (revisions.get(key) ?? 0) + 1)
+    },
     clearLastSessionId(workspaceId, agentId) {
       db.transaction(() => {
         db.prepare('DELETE FROM agent_sessions WHERE workspace_id = ? AND agent_id = ?').run(
