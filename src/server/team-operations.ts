@@ -1,4 +1,5 @@
 import type { TeamListItem } from '../shared/types.js'
+import { InboxWriteError } from './agent-inbox.js'
 import type { AgentRuntime } from './agent-runtime.js'
 import { buildOrchestratorReportPayload, type SendPromptWrite } from './agent-stdin-dispatcher.js'
 import type { DispatchRecord } from './dispatch-ledger-store.js'
@@ -601,6 +602,33 @@ export const createTeamOperations = ({
         }
         const isWorkflowDispatch =
           input.workflowRunId !== undefined || input.fromAgentId === getWorkflowAgentId(workspaceId)
+        const failClaimedWrite = (error: unknown) => {
+          if (runtimeClosing()) return
+          if (error instanceof InboxWriteError) {
+            // No PTY bytes were written. Keep the accepted responsibility and
+            // its send evidence queued so the next explicit start can replay it.
+            reparkClaimedDispatch(dispatchId)
+            console.error(
+              '[hive] dispatch inbox write failed; responsibility remains queued',
+              error
+            )
+            return
+          }
+          try {
+            cancelUndeliveredDispatch(
+              workspaceId,
+              workerId,
+              dispatchId,
+              reportForwardErrorMessage(error),
+              input.workflowRunId,
+              isWorkflowDispatch ? undefined : fromAgentId
+            )
+          } catch (cancelError) {
+            if (!isWorkflowDispatch)
+              console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
+          }
+          if (!isWorkflowDispatch) console.error('[hive] swallowed:teamDispatch.writePrompt', error)
+        }
         const writeClaimedDispatch = (currentWorker: typeof worker) => {
           try {
             const writePrompt = agentRuntime.writeSendPrompt(
@@ -617,43 +645,9 @@ export const createTeamOperations = ({
               }
             )
             recordDispatchDelivery(dispatchId, writePrompt)
-            void writePrompt.write.catch((error) => {
-              if (runtimeClosing()) return
-              // `team send` is intentionally asynchronous (§3.3). A worker that
-              // exits during paste-submit did not receive actionable work, so
-              // close the open dispatch instead of leaving a fake pending task.
-              try {
-                cancelUndeliveredDispatch(
-                  workspaceId,
-                  workerId,
-                  dispatchId,
-                  reportForwardErrorMessage(error),
-                  input.workflowRunId,
-                  isWorkflowDispatch ? undefined : fromAgentId
-                )
-              } catch (cancelError) {
-                if (!isWorkflowDispatch)
-                  console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
-              }
-              if (!isWorkflowDispatch)
-                console.error('[hive] swallowed:teamDispatch.writePrompt', error)
-            })
+            void writePrompt.write.catch(failClaimedWrite)
           } catch (error) {
-            try {
-              cancelUndeliveredDispatch(
-                workspaceId,
-                workerId,
-                dispatchId,
-                reportForwardErrorMessage(error),
-                input.workflowRunId,
-                isWorkflowDispatch ? undefined : fromAgentId
-              )
-            } catch (cancelError) {
-              if (!isWorkflowDispatch)
-                console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
-            }
-            if (!isWorkflowDispatch)
-              console.error('[hive] swallowed:teamDispatch.writePrompt', error)
+            failClaimedWrite(error)
           }
         }
         const claimAndWriteDispatch = () => {

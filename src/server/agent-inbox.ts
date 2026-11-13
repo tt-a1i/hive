@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+
+export class InboxWriteError extends Error {
+  constructor(cause: unknown) {
+    super('Hive could not persist the system message in its inbox', { cause })
+    this.name = 'InboxWriteError'
+  }
+}
 
 export interface InboxMessageMetadata {
   kind: string
@@ -10,7 +17,9 @@ export interface InboxMessageMetadata {
 
 export const createAgentInbox = (dataDir?: string) => {
   const ephemeral = dataDir === undefined
-  const root = ephemeral ? mkdtempSync(join(tmpdir(), 'hive-inbox-')) : join(dataDir, 'inbox')
+  const root = resolve(
+    ephemeral ? mkdtempSync(join(tmpdir(), 'hive-inbox-')) : join(dataDir, 'inbox')
+  )
   const workspacePath = (workspaceId: string) => {
     if (!/^[a-zA-Z0-9_-]+$/.test(workspaceId)) throw new Error('Invalid inbox workspace ID')
     return join(root, workspaceId)
@@ -28,17 +37,21 @@ export const createAgentInbox = (dataDir?: string) => {
         throw new Error('Invalid inbox metadata')
       if (payload.length <= 400 && !/[\r\n]/.test(payload)) return payload
       const directory = workspacePath(workspaceId)
-      mkdirSync(directory, { recursive: true, mode: 0o700 })
-      chmodSync(root, 0o700)
-      chmodSync(directory, 0o700)
       const id = randomUUID()
       const path = join(directory, `${id}.md`)
-      const temporary = join(directory, `.${id}.tmp`)
       try {
-        writeFileSync(temporary, payload, { flag: 'wx', mode: 0o600 })
-        renameSync(temporary, path)
-      } finally {
-        rmSync(temporary, { force: true })
+        mkdirSync(directory, { recursive: true, mode: 0o700 })
+        chmodSync(root, 0o700)
+        chmodSync(directory, 0o700)
+        const temporary = join(directory, `.${id}.tmp`)
+        try {
+          writeFileSync(temporary, payload, { flag: 'wx', mode: 0o600 })
+          renameSync(temporary, path)
+        } finally {
+          rmSync(temporary, { force: true })
+        }
+      } catch (error) {
+        throw new InboxWriteError(error)
       }
       const dispatches = metadata.dispatchIds ?? []
       const summary = dispatches.length
