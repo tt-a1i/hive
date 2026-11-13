@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,9 +9,6 @@ import { getUiCookie } from '../helpers/ui-session.js'
 
 const servers: Array<Awaited<ReturnType<typeof startTestServer>>> = []
 const tempDirs: string[] = []
-
-const protocolTextHas = (protocolPath: string, text: string) =>
-  readFileSync(protocolPath, 'utf8').includes(text)
 
 afterEach(async () => {
   while (servers.length > 0) {
@@ -410,20 +407,23 @@ describe('settings api', () => {
     expect(bad.status).toBe(400)
   })
 
-  test('toggling the workflow feature immediately refreshes .hive/PROTOCOL.md for open workspaces', async () => {
+  test('opening a workspace and changing workflow settings preserves an existing protocol file', async () => {
     const server = await startTestServer()
     servers.push(server)
     const cookie = await getUiCookie(server.baseUrl)
     const workspacePath = mkdtempSync(join(tmpdir(), 'hive-protocol-'))
     tempDirs.push(workspacePath)
 
+    const protocolPath = join(workspacePath, '.hive', 'PROTOCOL.md')
+    mkdirSync(join(workspacePath, '.hive'))
+    writeFileSync(protocolPath, 'user-owned content')
     const wsResp = await fetch(`${server.baseUrl}/api/workspaces`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie },
       body: JSON.stringify({ autostart_orchestrator: false, name: 'WS', path: workspacePath }),
     })
     expect(wsResp.status).toBe(201)
-    const protocolPath = join(workspacePath, '.hive', 'PROTOCOL.md')
+    expect(readFileSync(protocolPath, 'utf8')).toBe('user-owned content')
 
     const setEnabled = async (enabled: boolean) => {
       const resp = await fetch(`${server.baseUrl}/api/settings/workflow-feature`, {
@@ -434,15 +434,11 @@ describe('settings api', () => {
       expect(resp.status).toBe(200)
     }
 
-    // Enabling rewrites the doc to include the workflow DSL right away — no
-    // need to reopen the workspace.
     await setEnabled(true)
-    expect(protocolTextHas(protocolPath, 'team workflow run')).toBe(true)
+    expect(readFileSync(protocolPath, 'utf8')).toBe('user-owned content')
 
-    // Disabling strips the executable workflow command back out; the doc may
-    // still keep a negative "do not call team workflow" guard.
     await setEnabled(false)
-    expect(protocolTextHas(protocolPath, 'team workflow run')).toBe(false)
+    expect(readFileSync(protocolPath, 'utf8')).toBe('user-owned content')
   })
 
   test('command preset responses expose executable availability', async () => {

@@ -105,7 +105,7 @@ describe('workspace delete API', () => {
         worker.id,
         scriptPath
       )
-      server.store.recordUserInput(workspace.id, orchestratorId, 'delete me')
+      await server.store.recordUserInput(workspace.id, orchestratorId, 'delete me')
       await server.store.dispatchTask(workspace.id, worker.id, 'queued work')
       server.store.settings.setAppState('active_workspace_id', workspace.id)
 
@@ -126,12 +126,12 @@ describe('workspace delete API', () => {
         const orchestratorState = await fetch(
           `${server.baseUrl}/api/runtime/runs/${orchestratorRun.runId}`,
           { headers: { cookie } }
-        ).then((response) => response.json() as Promise<{ status: string }>)
+        )
         const workerState = await fetch(`${server.baseUrl}/api/runtime/runs/${workerRun.runId}`, {
           headers: { cookie },
-        }).then((response) => response.json() as Promise<{ status: string }>)
-        expect(orchestratorState.status).toBe('exited')
-        expect(workerState.status).toBe('exited')
+        })
+        expect(orchestratorState.status).toBe(404)
+        expect(workerState.status).toBe(404)
       })
 
       const listResponse = await fetch(`${server.baseUrl}/api/workspaces`, { headers: { cookie } })

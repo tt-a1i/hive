@@ -1,6 +1,8 @@
 import type { AgentSummary } from '../shared/types.js'
+import { createAgentInbox } from './agent-inbox.js'
 import { createAgentLaunchCache } from './agent-launch-cache.js'
 import type { AgentManager } from './agent-manager.js'
+import type { AgentExitListener } from './agent-run-start-context.js'
 import { createAgentRunStarter } from './agent-run-starter.js'
 import { syncPersistedRun } from './agent-run-sync.js'
 import { getActiveRunByAgent } from './agent-runtime-active-run.js'
@@ -39,10 +41,11 @@ export const createAgentRuntime = (
   agentRunStore: AgentRunStorePort,
   sessionStore: AgentSessionStorePort,
   getCommandPreset: (id: string) => CommandPresetRecord | undefined,
-  onAgentExit: (workspaceId: string, agentId: string) => void,
+  onAgentExit: AgentExitListener,
   restartPolicy: RestartPolicy = createNoopRestartPolicy(),
   getAgent?: (workspaceId: string, agentId: string) => AgentSummary | undefined,
-  getFlags?: () => FeatureFlags
+  getFlags?: () => FeatureFlags,
+  inbox = createAgentInbox()
 ): AgentRuntime => {
   const registry = createLiveRunRegistry()
   const launchCache = createAgentLaunchCache(agentRunStore)
@@ -52,6 +55,16 @@ export const createAgentRuntime = (
   const requireManager = () => {
     if (!agentManager) throw new Error('Agent manager is required for PTY terminal operations')
     return agentManager
+  }
+  const discardRun = (run: LiveAgentRun) => {
+    const remove = () => {
+      if (!registry.get(run.runId)) return
+      agentManager?.removeRun(run.runId)
+      registry.remove(run.runId)
+    }
+    const entry = registry.getExitEntry(run.runId)
+    if (entry) void entry.promise.then(remove)
+    else remove()
   }
   const flowAdapter = createAgentRuntimeFlowAdapter(requireManager)
 
@@ -63,6 +76,7 @@ export const createAgentRuntime = (
     getWorkspaceId: launchCache.getWorkspaceId,
     registry,
     syncRun,
+    inbox,
     ...(getFlags ? { getFlags } : {}),
   })
   const startLiveRun = createAgentRunStarter({
@@ -75,6 +89,7 @@ export const createAgentRuntime = (
     getCommandPreset,
     getAgent,
     restartPolicy,
+    inbox,
     ...(getFlags ? { getFlags } : {}),
   })
 
@@ -82,10 +97,20 @@ export const createAgentRuntime = (
     async close() {
       closing = true
       await Promise.allSettled([...startPromises.values()])
-      await closeAgentRuntime(agentManager, registry, syncRun)
+      try {
+        await closeAgentRuntime(agentManager, registry, syncRun)
+      } finally {
+        inbox.close()
+      }
     },
     configureAgentLaunch(workspaceId, agentId, input) {
       launchCache.save(workspaceId, agentId, input)
+    },
+    discardAgentRuns(agentId) {
+      for (const run of registry.list()) if (run.agentId === agentId) discardRun(run)
+    },
+    invalidateAgentLaunchConfig(workspaceId, agentId) {
+      launchCache.invalidate(workspaceId, agentId)
     },
     deleteAgentLaunchConfig(workspaceId, agentId) {
       launchCache.remove(workspaceId, agentId)
@@ -153,18 +178,30 @@ export const createAgentRuntime = (
         agentId,
         launchCache.get(workspace.id, agentId),
         input.hivePort
-      ).finally(() => {
-        if (startPromises.get(key) === startPromise) {
-          startPromises.delete(key)
-        }
-      })
+      )
+        .then((run) => {
+          if (run.status !== 'error' && run.status !== 'exited') {
+            for (const previous of registry.list()) {
+              if (previous.agentId === agentId && previous.runId !== run.runId) discardRun(previous)
+            }
+          }
+          return run
+        })
+        .finally(() => {
+          if (startPromises.get(key) === startPromise) {
+            startPromises.delete(key)
+          }
+        })
       startPromises.set(key, startPromise)
       return startPromise
     },
     stopAgentRun(runId) {
       stopLiveRun(agentManager, registry, syncRun, runId, (stoppedRunId) => {
         const liveRun = registry.get(stoppedRunId)
-        if (liveRun) liveRun.userStopped = true
+        if (liveRun) {
+          liveRun.userStopped = true
+          liveRun.captureController?.abort()
+        }
         restartPolicy.markUserStopped(stoppedRunId)
       })
     },

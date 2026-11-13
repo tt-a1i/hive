@@ -338,6 +338,23 @@ describe('terminal websocket server', () => {
     }
   })
 
+  test('rejects a different local origin port before run lookup', async () => {
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const other = new URL(server.baseUrl)
+      other.port = other.port === '65535' ? '65534' : String(Number(other.port) + 1)
+      await expectUpgradeStatus(
+        toWsUrl(server.baseUrl, '/ws/terminal/missing-run/io'),
+        cookie,
+        403,
+        { Origin: other.origin }
+      )
+    } finally {
+      await server.close()
+    }
+  })
+
   test('allows terminal websocket upgrades from a local origin before run lookup', async () => {
     const server = await startTestServer()
     try {

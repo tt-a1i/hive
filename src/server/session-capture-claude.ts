@@ -122,10 +122,12 @@ export const captureClaudeSessionId = async (
   timeoutMs = 5000,
   intervalMs = 100,
   projectsRoot = getDefaultProjectsRoot(),
-  discriminator: ClaudeSessionCaptureDiscriminator = {}
+  discriminator: ClaudeSessionCaptureDiscriminator = {},
+  signal?: AbortSignal
 ) => {
   const contentIncludes = discriminator.contentIncludes
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, projectsRoot),

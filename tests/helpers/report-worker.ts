@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { expect, onTestFinished } from 'vitest'
 import { requireAgentToken } from './auth.js'
 import { removeTestPath } from './fs-cleanup.js'
+import { expandInboxReferences } from './inbox.js'
 import { startTestServer } from './test-server.js'
 
 // Isolated real PTY receiver; never launches a user's installed agent CLI.
@@ -44,7 +45,9 @@ process.stdin.resume()
   })
   const run = await store.startAgent(workspace.id, worker.id, { hivePort: new URL(baseUrl).port })
   await expect
-    .poll(() => store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .poll(() =>
+      expandInboxReferences(store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? '')
+    )
     .toContain('REPORT_RECEIVER_READY')
   const token = requireAgentToken(store, worker.id)
   const send = async (text: string) => {
@@ -52,7 +55,9 @@ process.stdin.resume()
       fromAgentId: `${workspace.id}:orchestrator`,
     })
     await expect
-      .poll(() => store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+      .poll(() =>
+        expandInboxReferences(store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? '')
+      )
       .toContain(text)
     expect(store.listDispatches(workspace.id)).toContainEqual(
       expect.objectContaining({ id: dispatch.id, status: 'submitted' })

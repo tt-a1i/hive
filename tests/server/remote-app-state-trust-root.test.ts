@@ -98,8 +98,7 @@ describe('remote app-state trust root', () => {
       `${srv.baseUrl}/api/settings/app-state/${REMOTE_DAEMON_TOKEN_KEY}`,
       { headers: { cookie } }
     )
-    expect(localGet.status).toBe(200)
-    expect(((await localGet.json()) as { value: string | null }).value).toBe(TOKEN)
+    expect(localGet.status).toBe(403)
 
     const localPutEnabled = await fetch(
       `${srv.baseUrl}/api/settings/app-state/${REMOTE_ENABLED_KEY}`,

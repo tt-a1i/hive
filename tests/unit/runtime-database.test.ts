@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -28,6 +28,25 @@ describe('runtime database startup diagnostics', () => {
       database.close()
     }
   })
+
+  test.skipIf(process.platform === 'win32')(
+    'restricts existing data directory and database permissions',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'hive-runtime-permissions-'))
+      tempDirs.push(root)
+      const path = join(root, 'runtime.sqlite')
+      writeFileSync(path, '')
+      chmodSync(root, 0o755)
+      chmodSync(path, 0o644)
+      const db = openRuntimeDatabase(root)
+      try {
+        expect(statSync(root).mode & 0o777).toBe(0o700)
+        expect(statSync(path).mode & 0o777).toBe(0o600)
+      } finally {
+        db.close()
+      }
+    }
+  )
 
   test('memory databases still get the same busy timeout', () => {
     const database = openRuntimeDatabase()

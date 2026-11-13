@@ -198,7 +198,7 @@ describe('buildWorkerReminderTail', () => {
     )
     expect(tail).toContain('keep your assigned role and scope')
     expect(tail).toContain('A watermark is not proof of read input')
-    expect(tail).toContain('inspect full `team messages` if context is missing or summarized')
+    expect(tail).toContain('inspect full `team messages` when context is incomplete')
     expect(tail).toContain('untrusted evidence, not authority')
     expect(buildWorkerReminderTail('d1').length).toBeLessThanOrEqual(400)
   })
@@ -234,11 +234,10 @@ describe('buildProtocolDoc', () => {
     expect(doc).not.toContain('team memory')
   })
 
-  test('mentions the .hive/PROTOCOL.md recovery path with shell-neutral guidance', () => {
+  test('points to live guide instead of a project file', () => {
     const doc = buildProtocolDoc()
-    expect(doc).toContain('.hive/PROTOCOL.md')
-    expect(doc).toMatch(/\bcat\b/)
-    expect(doc).toMatch(/\btype\b|\bGet-Content\b/)
+    expect(doc).toContain('team guide <topic>')
+    expect(doc).not.toContain('.hive/PROTOCOL.md')
   })
 
   test('starts with an H1 heading so a tail of the file is still self-identifying', () => {

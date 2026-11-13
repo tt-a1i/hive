@@ -238,10 +238,12 @@ export const runHiveCommand = async (
   const port = parsePort(argv)
   const dataDir = resolveDataDir()
   const versionService = options.versionService ?? createVersionService()
+  let boundPort = ''
   const app = createApp({
     store: createRuntimeStore({
       agentManager: createAgentManager(),
       dataDir,
+      getHivePort: () => boundPort,
     }),
     versionService,
   })
@@ -263,6 +265,8 @@ export const runHiveCommand = async (
   if (!address || typeof address === 'string') {
     throw new Error('Server did not bind to an inet port')
   }
+
+  boundPort = String(address.port)
 
   // Remote tunnel — the outbound WebSocket to the gateway. GATED by app_state[remote_enabled]
   // (default OFF). When off, refresh() settles 'disabled' synchronously: no socket is opened, no

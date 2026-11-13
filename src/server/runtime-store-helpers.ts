@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { type AgentInbox, createAgentInbox } from './agent-inbox.js'
 import type { AgentManager } from './agent-manager.js'
 import { type AgentLaunchConfigInput, createAgentRunStore } from './agent-run-store.js'
 import { createAgentRuntime } from './agent-runtime.js'
@@ -10,6 +11,7 @@ import { createDispatchLedgerStore } from './dispatch-ledger-store.js'
 import { createDispatchMessageOperations } from './dispatch-message-operations.js'
 import { createDispatchMessageStore } from './dispatch-message-store.js'
 import { readFeatureFlags } from './feature-flags.js'
+import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
 import { createMessageLogStore } from './message-log-store.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { hasFirstRunSetupPrompt, isInteractiveAgentCommand } from './post-start-input-writer.js'
@@ -36,7 +38,6 @@ import { resolveTerminalInputProfile } from './terminal-input-profile.js'
 import { createUiAuth } from './ui-auth.js'
 import { createWebhookNotifier, WEBHOOK_URL_KEY } from './webhook-notifier.js'
 import { createWorkerOutputTracker, type WorkerOutputTracker } from './worker-output-tracker.js'
-import { readWorkflowCliPolicy, WORKFLOW_CLI_POLICY_KEY } from './workflow-cli-policy.js'
 import {
   createWorkflowDispatchAwaiter,
   type WorkflowDispatchAwaiter,
@@ -51,6 +52,8 @@ import { getOrchestratorId } from './workspace-store-support.js'
 import { createWorkspaceUploadStore } from './workspace-upload-store.js'
 
 export interface RuntimeStoreServices {
+  getHivePort: () => string
+  agentInbox: AgentInbox
   dispatchMessageStore: ReturnType<typeof createDispatchMessageStore>
   dispatchMessageOps: ReturnType<typeof createDispatchMessageOperations>
   agentRunStore: ReturnType<typeof createAgentRunStore>
@@ -92,6 +95,7 @@ export interface RuntimeStoreServices {
 }
 
 interface CreateRuntimeStoreServicesOptions {
+  getHivePort?: () => string
   agentManager?: AgentManager
   dataDir?: string
 }
@@ -141,6 +145,7 @@ export const createRuntimeStoreServices = (
 ): RuntimeStoreServices => {
   const db = openRuntimeDatabase(options.dataDir)
   let closing = false
+  const agentInbox = createAgentInbox(options.dataDir)
   const uploadStorage = createWorkspaceUploadStorage(options.dataDir)
   const messageLogStore = createMessageLogStore(db)
   const dispatchLedgerStore = createDispatchLedgerStore(db)
@@ -164,9 +169,6 @@ export const createRuntimeStoreServices = (
     onTasksUpdated: (workspaceId, content) => {
       notifyTasksUpdated(tasksFileWatchCallbacks, workspaceId, content)
     },
-    getWorkflowCliPolicy: () =>
-      readWorkflowCliPolicy(settings.getAppState(WORKFLOW_CLI_POLICY_KEY)?.value ?? null),
-    getFlags,
   })
   const uiAuth = createUiAuth()
   const remoteAuditStore = createRemoteAuditStore(db)
@@ -213,7 +215,8 @@ export const createRuntimeStoreServices = (
     agentRunStore,
     agentSessionStore,
     settings.getCommandPreset,
-    (workspaceId, agentId) => {
+    (workspaceId, agentId, exit) => {
+      if (closing) return
       // #81 follow-up: stop() leaves the old PTY draining (up to the
       // force-kill window) while startAgent has already spawned a replacement
       // run. The dying run's late onExit must not stop the agent, tear down
@@ -251,6 +254,32 @@ export const createRuntimeStoreServices = (
           console.error('[hive] onAgentExit.markCancelled failed', dispatchId, error)
         }
       }
+      const worker = workspaceStore.getAgent(workspaceId, agentId)
+      if (exit && !exit.userStopped && worker.role !== 'orchestrator') {
+        const open = dispatchLedgerStore
+          .listOpenWorkspaceDispatches(workspaceId)
+          .filter((dispatch) => dispatch.toAgentId === agentId && dispatch.workflowRunId === null)
+        if (open.length && worker.ephemeral && worker.spawnedBy === 'orchestrator') {
+          removeWorkerCompletely(
+            workspaceId,
+            agentId,
+            `the worker process exited before reporting (run ${exit.runId}, exit code ${exit.exitCode ?? 'unknown'})`
+          )
+        } else if (open.length) {
+          db.transaction(() => {
+            for (const dispatch of open) {
+              const text = `Worker @${worker.name} exited before reporting on dispatch ${dispatch.id} (run ${exit.runId}, exit code ${exit.exitCode ?? 'unknown'}). The dispatch remains open; explicitly restart the worker or cancel the dispatch.`
+              reportOutbox.enqueue({
+                workspaceId,
+                targetAgentId: getOrchestratorId(workspaceId),
+                dispatchId: `exit:${exit.runId}:${dispatch.id}`,
+                payload: `<hive-system-reminder>\n${escapeHiveEnvelopeText(text)}\n</hive-system-reminder>\n`,
+              })
+            }
+          })()
+          teamOps.drainReportOutbox(workspaceId)
+        }
+      }
       // Cascade: when the orchestrator's PTY exits, dismiss the ephemeral
       // workers it spawned via `team spawn` (spec §6.3). Workflow-spawned
       // workers are owned by the runner, not the orchestrator.
@@ -263,7 +292,8 @@ export const createRuntimeStoreServices = (
     },
     restartPolicy,
     (workspaceId, agentId) => workspaceStore.getAgent(workspaceId, agentId),
-    getFlags
+    getFlags,
+    agentInbox
   )
   const dispatchMessageOps = createDispatchMessageOperations({
     db,
@@ -309,6 +339,7 @@ export const createRuntimeStoreServices = (
     dispatchMessageOps.notifyDispatchQuestionChange(workspaceId)
     agentRuntime.deleteAgentLaunchConfig(workspaceId, workerId)
     if (activeRun) agentRuntime.stopAgentRun(activeRun.runId)
+    agentRuntime.discardAgentRuns(workerId)
   }
 
   // Boot cleanup: after a runtime restart every ephemeral worker is an orphan
@@ -371,8 +402,10 @@ export const createRuntimeStoreServices = (
     dispatchMessageStore,
     dispatchMessageOps,
     isRuntimeClosing: () => closing,
+    getHivePort: options.getHivePort ?? (() => ''),
     markRuntimeClosing: () => {
       closing = true
+      dispatchMessageOps.closeDispatchMessageOutbox()
     },
     messageLogStore,
     remoteAuditStore,
@@ -398,7 +431,11 @@ export const createRuntimeStoreServices = (
     workflowScheduleStore,
     workspaceStore,
     workspaceUploadStore,
-    workspaceUploadStorageCleanup: uploadStorage.cleanup,
+    agentInbox,
+    workspaceUploadStorageCleanup: () => {
+      uploadStorage.cleanup()
+      agentInbox.close()
+    },
   }
 }
 
@@ -412,16 +449,16 @@ export const createRuntimeStoreLifecycle = ({
     input: { hivePort: string }
   ): Promise<LiveAgentRun> => {
     services.workspaceStore.getAgent(workspaceId, agentId)
-    services.workspaceStore.markAgentStarted(workspaceId, agentId)
     try {
       const run = await services.agentRuntime.startAgent(
         services.workspaceStore.getWorkspaceSnapshot(workspaceId).summary,
         agentId,
         input
       )
-      if (run.status === 'error') {
+      if (run.status === 'error' || run.status === 'exited') {
         services.workspaceStore.markAgentStopped(workspaceId, agentId)
       } else {
+        services.workspaceStore.markAgentStarted(workspaceId, agentId)
         services.workerOutputTracker?.attach(workspaceId, agentId, run.runId, run.output)
         // #33: a freshly started worker may have dispatches parked from when
         // it was stopped — deliver them now (single-shot via claims; no-op

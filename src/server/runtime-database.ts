@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { chmodSync, closeSync, mkdirSync, openSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Database } from './sqlite.js'
 import SqliteDatabase from './sqlite.js'
@@ -131,12 +131,17 @@ export const openRuntimeDatabase = (dataDir?: string): Database => {
   try {
     if (dataDir) {
       try {
-        mkdirSync(dataDir, { recursive: true })
+        mkdirSync(dataDir, { recursive: true, mode: 0o700 })
+        if (process.platform !== 'win32') chmodSync(dataDir, 0o700)
       } catch (error) {
         throw createRuntimeDataDirOpenError(dataDir, error)
       }
       try {
-        database = new SqliteDatabase(join(dataDir, 'runtime.sqlite'))
+        const databasePath = join(dataDir, 'runtime.sqlite')
+        const fd = openSync(databasePath, 'a', 0o600)
+        closeSync(fd)
+        if (process.platform !== 'win32') chmodSync(databasePath, 0o600)
+        database = new SqliteDatabase(databasePath)
       } catch (error) {
         throw classifyDatabaseOpenError(dataDir, error)
       }

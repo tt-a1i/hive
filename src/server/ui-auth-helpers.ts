@@ -9,9 +9,10 @@ export const readCookie = (cookieHeader: string | undefined, name: string) => {
   }
 
   for (const part of cookieHeader.split(';')) {
-    const [key, value] = part.trim().split('=')
-    if (key === name) {
-      return value
+    const entry = part.trim()
+    const separator = entry.indexOf('=')
+    if (separator >= 0 && entry.slice(0, separator) === name) {
+      return entry.slice(separator + 1)
     }
   }
 

@@ -80,6 +80,12 @@ export const createAgentLaunchCache = (store: AgentLaunchCacheStore) => {
       missingLaunchConfigs.add(key)
       workspaceByAgentId.delete(agentId)
     },
+    invalidate(workspaceId: string, agentId: string) {
+      const key = cacheKey(workspaceId, agentId)
+      launchConfigs.delete(key)
+      missingLaunchConfigs.delete(key)
+      workspaceByAgentId.delete(agentId)
+    },
     setWorkspaceId(agentId: string, workspaceId: string) {
       workspaceByAgentId.set(agentId, workspaceId)
     },

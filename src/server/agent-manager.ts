@@ -23,6 +23,7 @@ interface AgentRunSnapshot {
   pid: number | null
   status: RunStatus
   output: string
+  totalOutputLength?: number
   exitCode: number | null
 }
 
@@ -132,6 +133,7 @@ export const createAgentManager = ({
         pid: null,
         status: 'starting',
         output: '',
+        totalOutputLength: 0,
         exitCode: null,
         process: {
           isStopped() {
@@ -183,7 +185,7 @@ export const createAgentManager = ({
     },
 
     removeRun(runId) {
-      runs.delete(runId)
+      if (runs.delete(runId)) ptyOutputBus.remove?.(runId)
     },
 
     stopRun(runId) {

@@ -130,7 +130,7 @@ describe('scenario apply route', () => {
     const scenario = getScenarioPreset('build_review_test')
     if (!scenario) throw new Error('missing scenario preset')
 
-    const created = applyScenarioDirect(
+    const created = await applyScenarioDirect(
       store,
       workspace.id,
       scenario,
@@ -172,7 +172,7 @@ describe('scenario apply route', () => {
     const scenario = getScenarioPreset('research_factcheck')
     if (!scenario) throw new Error('missing scenario preset')
 
-    const created = applyScenarioDirect(
+    const created = await applyScenarioDirect(
       store,
       workspace.id,
       scenario,

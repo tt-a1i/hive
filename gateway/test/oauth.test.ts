@@ -130,8 +130,14 @@ function mockGithub(opts: {
     )
 }
 
-// Google token endpoint returns the id_token the signer minted. JWKS verification is done in-process
-// via the getKey seam (no JWKS fetch needed), but we still serve the mock token endpoint.
+// Callback tests use the configured JWKS URL and a locally signed token.
+function mockGoogleJwks(signer: GoogleSigner): void {
+  fetchMock
+    .get('https://mock.test')
+    .intercept({ path: '/google/certs', method: 'GET' })
+    .reply(200, JSON.stringify(signer.jwks), { headers: { 'content-type': 'application/json' } })
+}
+
 function mockGoogleToken(idToken: string, reply?: { status: number; body: unknown }): void {
   fetchMock
     .get('https://mock.test')
@@ -366,8 +372,9 @@ describe('A — account identity keying', () => {
       nonce,
     })
     mockGoogleToken(idToken)
+    mockGoogleJwks(signer)
     await gw(`${ORIGIN}/auth/google/callback?code=g&state=${a.params.get('state')}`, {
-      headers: { Cookie: a.flowCookie, 'x-test-google-getkey': signerToHeader(signer) },
+      headers: { Cookie: a.flowCookie },
       redirect: 'manual',
     })
 
@@ -495,13 +502,12 @@ describe('B — Google end-to-end + injected URLs honored', () => {
     // interceptor on the injected mock token URL — if production hardcoded oauth2.googleapis.com this
     // interceptor would stay pending (assertNoPendingInterceptors fails) AND disableNetConnect throws.
     mockGoogleToken(idToken)
+    mockGoogleJwks(signer)
 
     const cb = await gw(
       `${ORIGIN}/auth/google/callback?code=gcode&state=${a.params.get('state')}`,
-      // x-test-google-getkey tells the route to use a local JWKS so we don't need a JWKS fetch mock;
-      // the token endpoint mock still proves GOOGLE_TOKEN_URL is honored.
       {
-        headers: { Cookie: a.flowCookie, 'x-test-google-getkey': signerToHeader(signer) },
+        headers: { Cookie: a.flowCookie },
         redirect: 'manual',
       }
     )
@@ -512,13 +518,6 @@ describe('B — Google end-to-end + injected URLs honored', () => {
     expect(claims).not.toBeNull()
   })
 })
-
-// The route reads a JWKS from env.GOOGLE_JWKS_URL in production. For the e2e test we want zero JWKS
-// network, so we pass the signer's public JWK as a header the route uses ONLY under a test flag to
-// build a local resolver. This keeps the security checks (jwtVerify options) on the real code path.
-function signerToHeader(signer: GoogleSigner): string {
-  return btoa(JSON.stringify(signer.jwks))
-}
 
 describe('sha256Base64url (PKCE S256 primitive)', () => {
   test('produces RFC7636-style 43-char base64url with no padding/+//', async () => {

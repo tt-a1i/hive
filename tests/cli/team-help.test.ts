@@ -53,7 +53,7 @@ describe('team cli help', () => {
     expect(output).toContain('Preserve configured CLI, model, and role constraints')
   })
 
-  test('team guide prefers the generated protocol slice when present', async () => {
+  test('team guide ignores an existing protocol file', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'hive-team-guide-'))
     tempDirs.push(dir)
     // Resolve the Windows temp directory before removing the CLI environment.
@@ -79,9 +79,9 @@ describe('team cli help', () => {
     await expect(runTeamCommand(['guide', 'workflow'])).resolves.toBeUndefined()
 
     const output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n')
-    expect(output).toContain('generated workflow guide')
-    expect(output).toContain('team workflow run --stdin')
-    expect(output).not.toContain('Workflow commands are disabled')
+    expect(output).not.toContain('generated workflow guide')
+    expect(output).toContain('Offline reference only')
+    expect(output).toContain('Workflow availability and CLI policy are unknown')
   })
 
   test('--stdin guidance covers both POSIX and Windows shells', async () => {

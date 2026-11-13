@@ -102,7 +102,7 @@ export const createWorkspaceStore = (
   }
 
   return {
-    addWorker(workspaceId, input) {
+    addWorker(workspaceId, input, deferPublish = false) {
       const workspace = getWorkspace(workspaceId)
       const name = normalizeWorkerName(input.name)
       const avatar = normalizeWorkerAvatar(input.avatar)
@@ -134,8 +134,11 @@ export const createWorkspaceStore = (
         worker.spawnedBy ?? null,
         Date.now()
       )
-      workspace.agents.push(worker)
+      if (!deferPublish) workspace.agents.push(worker)
       return worker
+    },
+    publishWorker(workspaceId, worker) {
+      getWorkspace(workspaceId).agents.push(worker)
     },
     createWorkspace(path, name) {
       const existing = Array.from(workspaces.values()).find((workspace) =>

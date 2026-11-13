@@ -218,7 +218,11 @@ describe('remote tunnel — E2E bridge over a real runtime', () => {
     const token = h.server.store.peekAgentToken(orchestratorId)
     if (!token) throw new Error('Expected orchestrator token after start')
 
-    h.server.store.recordUserInput(workspace.id, orchestratorId, '手机端 recall 验证：远程访问链路')
+    await h.server.store.recordUserInput(
+      workspace.id,
+      orchestratorId,
+      '手机端 recall 验证：远程访问链路'
+    )
 
     const res = await h.gateway.openHttp({
       method: 'POST',

@@ -4,15 +4,7 @@ import { basename, dirname, normalize, win32 } from 'node:path'
 
 import chokidar, { type ChokidarOptions, type FSWatcher } from 'chokidar'
 
-import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
-import {
-  ensureProtocolFile,
-  ensureTasksFile,
-  getTasksFilePath,
-  HIVE_DIR_NAME,
-  TASKS_FILE_NAME,
-} from './tasks-file.js'
-import type { WorkflowCliPolicy } from './workflow-cli-policy.js'
+import { ensureTasksFile, getTasksFilePath, HIVE_DIR_NAME, TASKS_FILE_NAME } from './tasks-file.js'
 
 const DEBOUNCE_MS = 100
 const WATCHER_RETRY_MS = 5000
@@ -145,18 +137,8 @@ export interface TasksFileWatcher {
 
 export const createTasksFileWatcher = ({
   onTasksUpdated,
-  getWorkflowCliPolicy,
-  getFlags,
 }: {
   onTasksUpdated: (workspaceId: string, content: string) => void
-  /** Lets the freshly-written `.hive/PROTOCOL.md` state the workspace's
-   *  workflow CLI default + allowlist. Optional: omitted → the doc renders
-   *  the unrestricted default. */
-  getWorkflowCliPolicy?: () => WorkflowCliPolicy
-  /** Resolves the live experimental flags. PROTOCOL.md omits the workflow DSL
-   *  + `team workflow` commands when `workflowsEnabled` is off. Omitted → all
-   *  off. */
-  getFlags?: () => FeatureFlags
 }): TasksFileWatcher => {
   const watchers = new Map<string, FSWatcher>()
   const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -242,11 +224,6 @@ export const createTasksFileWatcher = ({
     await stop(workspaceId)
     if (closed) return
     ensureTasksFile(workspacePath)
-    ensureProtocolFile(
-      workspacePath,
-      getWorkflowCliPolicy?.(),
-      getFlags?.() ?? FEATURE_FLAGS_ALL_OFF
-    )
     if (closed) return
     const tasksPath = getTasksFilePath(workspacePath)
     const watcher = chokidar.watch(dirname(tasksPath), buildTasksWatcherOptions(workspacePath))

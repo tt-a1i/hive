@@ -60,11 +60,15 @@ const formatFilesystemError = (error: unknown): string => {
   return error.message
 }
 
-const resolveGitDirPath = async (repoPath: string): Promise<string | null> => {
+const resolveGitDirPath = async (
+  repoPath: string,
+  sandboxRoot?: string
+): Promise<string | null> => {
   const dotGitPath = resolve(repoPath, '.git')
   try {
     const info = await stat(dotGitPath)
-    if (info.isDirectory()) return dotGitPath
+    if (info.isDirectory())
+      return !sandboxRoot || isPathWithinRoot(sandboxRoot, dotGitPath) ? dotGitPath : null
     if (!info.isFile()) return null
 
     const text = await readFile(dotGitPath, 'utf8')
@@ -72,17 +76,21 @@ const resolveGitDirPath = async (repoPath: string): Promise<string | null> => {
     const match = /^gitdir:\s*(?<path>.+)$/iu.exec(firstLine)
     const gitDirPath = match?.groups?.path?.trim()
     if (!gitDirPath) return null
-    return isAbsolute(gitDirPath) ? gitDirPath : resolve(repoPath, gitDirPath)
+    const target = isAbsolute(gitDirPath) ? gitDirPath : resolve(repoPath, gitDirPath)
+    return !sandboxRoot || isPathWithinRoot(sandboxRoot, target) ? target : null
   } catch {
     return null
   }
 }
 
-const detectGitRepository = async (entryPath: string): Promise<boolean> =>
-  (await resolveGitDirPath(entryPath)) !== null
+const detectGitRepository = async (entryPath: string, sandboxRoot?: string): Promise<boolean> =>
+  (await resolveGitDirPath(entryPath, sandboxRoot)) !== null
 
-const readCurrentBranch = async (repoPath: string): Promise<string | null> => {
-  const gitDirPath = await resolveGitDirPath(repoPath)
+const readCurrentBranch = async (
+  repoPath: string,
+  sandboxRoot?: string
+): Promise<string | null> => {
+  const gitDirPath = await resolveGitDirPath(repoPath, sandboxRoot)
   if (!gitDirPath) return null
 
   try {
@@ -224,7 +232,7 @@ export const browseDirectory = async (requestedPath: string): Promise<FsBrowseRe
       const entryPath = resolve(candidate, entry.name)
       return {
         is_dir: true as const,
-        is_git_repository: await detectGitRepository(entryPath),
+        is_git_repository: await detectGitRepository(entryPath, rootPath),
         name: entry.name,
         path: entryPath,
       }
@@ -368,8 +376,11 @@ export const probeDirectory = async (
     if (!info.isDirectory()) {
       return { ...base, exists: true, is_dir: false, ok: true }
     }
-    const is_git_repository = await detectGitRepository(candidate)
-    const current_branch = is_git_repository ? await readCurrentBranch(candidate) : null
+    const sandboxRoot = enforceSandbox && !fullWindowsBrowse ? rootPath : undefined
+    const is_git_repository = await detectGitRepository(candidate, sandboxRoot)
+    const current_branch = is_git_repository
+      ? await readCurrentBranch(candidate, sandboxRoot)
+      : null
     return {
       current_branch,
       exists: true,

@@ -1,4 +1,5 @@
 import type { WorkspaceSummary } from '../shared/types.js'
+import type { InboxMessageMetadata } from './agent-inbox.js'
 
 import type { PersistedAgentRun } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
@@ -17,6 +18,8 @@ export interface AgentRuntime {
     agentId: string,
     input: import('./agent-run-store.js').AgentLaunchConfigInput
   ) => void
+  discardAgentRuns: (agentId: string) => void
+  invalidateAgentLaunchConfig: (workspaceId: string, agentId: string) => void
   deleteAgentLaunchConfig: (workspaceId: string, agentId: string) => void
   getActiveRunByAgentId: (workspaceId: string, agentId: string) => LiveAgentRun | undefined
   peekAgentLaunchConfig: (
@@ -76,8 +79,13 @@ export interface AgentRuntime {
   deliverSystemMessageToAgent: (
     workspaceId: string,
     agentId: string,
-    text: string,
-    input?: { requireActiveRun?: boolean; beforeWrite?: () => boolean }
+    text: string | (() => string | undefined),
+    input?: {
+      requireActiveRun?: boolean
+      beforeWrite?: () => boolean
+      onWrittenBytes?: (bytes: number) => void
+      metadata?: InboxMessageMetadata | (() => InboxMessageMetadata)
+    }
   ) => Promise<void>
 }
 

@@ -98,9 +98,11 @@ export const captureOpenCodeSessionId = async (
   timeoutMs = 5000,
   intervalMs = 100,
   dbPath = getDefaultOpenCodeDbPath(),
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  signal?: AbortSignal
 ) => {
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, dbPath, platform),

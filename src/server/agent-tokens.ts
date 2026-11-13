@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 
 export interface AgentTokenRegistry {
   /**
@@ -34,7 +34,12 @@ export const createAgentTokenRegistry = (): AgentTokenRegistry => {
     validate(agentId, token) {
       if (!token) return false
       const expected = tokens.get(agentId)
-      return expected !== undefined && expected === token
+      if (expected === undefined) return false
+      const actualBytes = Buffer.from(token)
+      const expectedBytes = Buffer.from(expected)
+      return (
+        actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
+      )
     },
   }
 }

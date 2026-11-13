@@ -32,6 +32,23 @@ describe('stampLoopbackHeaders', () => {
     expect(out[HIVE_REMOTE_DEVICE_HEADER]).toBe('device-2')
   })
 
+  test('drops all incoming internal headers before stamping trusted identity', () => {
+    const out = stampLoopbackHeaders(
+      [
+        ['X-Hive-Extra', 'external'],
+        ['X-Hive-Remote-Device', 'wrong'],
+        ['accept', 'application/json'],
+      ],
+      'trusted-secret',
+      'trusted-device'
+    )
+    expect(out).toEqual({
+      accept: 'application/json',
+      [HIVE_REMOTE_SECRET_HEADER]: 'trusted-secret',
+      [HIVE_REMOTE_DEVICE_HEADER]: 'trusted-device',
+    })
+  })
+
   test('strips any client-supplied copy of BOTH tunnel headers (spoof defense)', () => {
     // A phone must not be able to spoof the device tag or smuggle a guessed
     // secret — we drop its copies and stamp ours, regardless of casing.

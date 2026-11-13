@@ -140,3 +140,23 @@ test('multiline member names cannot replace the actual session binding', () => {
     )
   ).toBe(false)
 })
+
+test('file-backed startup identifies the right member without opening the payload', () => {
+  const f = fixture()
+  const a = f.member('author')
+  const wake = `${buildAgentSessionBindingMarker({ agent: a, workspace: f.workspace })} [hive-inbox 01234567-89ab-cdef-0123-456789abcdef type=startup] Read "/tmp/hive-inbox.md" for the complete Hive system message.`
+  f.write('own', wake)
+  expect(
+    getCodexSessionExistence(f.root, 'own', undefined, process.platform, f.root, f.discriminator(a))
+  ).toBe(true)
+  expect(
+    getCodexSessionExistence(
+      f.root,
+      'own',
+      undefined,
+      process.platform,
+      f.root,
+      f.discriminator(f.member('other'))
+    )
+  ).toBe(false)
+})

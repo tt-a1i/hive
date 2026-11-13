@@ -52,7 +52,7 @@
     "clean": "node scripts/clean-build.mjs",
     "dev": "pnpm dev:all",
     "dev:all": "concurrently \"pnpm dev:runtime\" \"pnpm dev:web\"",
-    "dev:runtime": "tsx src/cli/hive.ts",
+    "dev:runtime": "node scripts/dev-runtime.mjs",
     "dev:web": "vite --config web/vite.config.ts",
     "build": "pnpm clean && tsc -p tsconfig.build.json && node scripts/prepare-build-artifacts.mjs && pnpm build:web",
     "build:web": "vite build --config web/vite.config.ts",

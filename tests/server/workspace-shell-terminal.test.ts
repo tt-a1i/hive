@@ -231,11 +231,20 @@ describe('workspace shell terminal', () => {
       expect(runs).toContainEqual(expect.objectContaining({ run_id: secondShell.run_id }))
       expect(runs.map((run) => run.agent_name)).toEqual(expect.arrayContaining(['Shell', 'Shell']))
 
+      const closingSocket = await openSocket(
+        toWsUrl(server.baseUrl, `/ws/terminal/${shell.run_id}/io`),
+        cookie
+      )
+      const socketClosed = new Promise<void>((resolve) =>
+        closingSocket.once('close', () => resolve())
+      )
       const closeResponse = await fetch(
         `${server.baseUrl}/api/workspaces/${workspace.id}/shell/${shell.run_id}`,
         { method: 'DELETE', headers: { cookie } }
       )
       expect(closeResponse.status).toBe(204)
+      await socketClosed
+      expect(closingSocket.readyState).toBe(WebSocket.CLOSED)
 
       const afterCloseResponse = await fetch(
         `${server.baseUrl}/api/ui/workspaces/${workspace.id}/runs`,

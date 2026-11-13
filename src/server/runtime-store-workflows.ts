@@ -144,6 +144,7 @@ export const createRuntimeStoreWorkflowRuntime = (
     },
   })
   const scheduler = createWorkflowScheduler({
+    getHivePort: services.getHivePort,
     schedules: services.workflowScheduleStore,
     startWorkflow: (input) => store.startWorkflow(input),
     workspaceExists: (workspaceId) => services.workspaceStore.hasWorkspace(workspaceId),

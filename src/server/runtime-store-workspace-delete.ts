@@ -13,7 +13,6 @@ export const createRuntimeStoreWorkspaceDelete = (
     for (const agent of workspace.agents) {
       const activeRun = services.agentRuntime.getActiveRunByAgentId(workspaceId, agent.id)
       if (activeRun) services.agentRuntime.stopAgentRun(activeRun.runId)
-      services.agentRuntime.deleteAgentLaunchConfig(workspaceId, agent.id)
     }
     await services.tasksFileWatcher.stop(workspaceId)
     // Upload blobs are only tombstoned (renamed) inside the transaction and
@@ -30,11 +29,16 @@ export const createRuntimeStoreWorkspaceDelete = (
       stagedUploads?.rollback()
       throw error
     }
-    stagedUploads?.commit()
+    for (const agent of workspace.agents) {
+      services.agentRuntime.invalidateAgentLaunchConfig(workspaceId, agent.id)
+      services.agentRuntime.discardAgentRuns(agent.id)
+    }
     services.workspaceStore.forgetWorkspace(workspaceId)
     services.dispatchMessageOps.notifyDispatchQuestionChange(workspaceId)
     if (services.settings.getAppState('active_workspace_id')?.value === workspaceId) {
       services.settings.setAppState('active_workspace_id', null)
     }
+    stagedUploads?.commit()
+    services.agentInbox.deleteWorkspace(workspaceId)
   }
 }

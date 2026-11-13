@@ -10,6 +10,7 @@ import { runHiveCommand } from '../src/cli/hive.js'
 import { PtyInactiveError } from '../src/server/http-errors.js'
 import BetterSqlite3 from '../src/server/sqlite.js'
 import { CURRENT_SCHEMA_VERSION } from '../src/server/sqlite-schema.js'
+import { expandInboxReferences } from '../tests/helpers/inbox.js'
 
 type Runtime = Awaited<ReturnType<typeof runHiveCommand>>
 type Row = { id: string; state: string; text: string; report_text: string | null }
@@ -113,7 +114,10 @@ const outputHas = async (actor: string, text: string) =>
     const output = await json<{ output: string }>(
       await expectStatus(await request(`/api/runtime/runs/${runs.get(actor)}`), 200)
     )
-    assert.ok(output.output.includes(text), `PTY ${actor} did not receive ${text}`)
+    assert.ok(
+      expandInboxReferences(output.output).includes(text),
+      `PTY ${actor} did not receive ${text}`
+    )
   })
 // Read persisted identity without calling messages(), which would itself request a drain.
 // Match the delivery-only envelope: recovery summaries can repeat message body text.
@@ -549,7 +553,7 @@ try {
   const freshOutput = await json<{ output: string }>(
     await expectStatus(await request(`/api/runtime/runs/${runs.get(alice)}`), 200)
   )
-  assert.ok(!freshOutput.output.includes(obsoleteQuestion.id))
+  assert.ok(!expandInboxReferences(freshOutput.output).includes(obsoleteQuestion.id))
   const actions = await json<{ attention: Array<{ message_id?: string }> }>(
     await expectStatus(await request(`/api/ui/workspaces/${workspaceId}/action-center`), 200)
   )

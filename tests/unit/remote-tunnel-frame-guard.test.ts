@@ -9,11 +9,14 @@ import Database from '../../src/server/sqlite.js'
 import { applySchemaVersion23 } from '../../src/server/sqlite-schema-v23.js'
 import { REMOTE_CRYPTO_VERSION } from '../../src/shared/remote-crypto.js'
 import {
+  decodeResetPayload,
   encodeHeader,
   encodeOpenPayload,
   FrameKind,
+  ResetCode,
   StreamTransport,
 } from '../../src/shared/remote-protocol.js'
+import { unwrapRelayRoute } from '../../src/shared/remote-relay-route.js'
 import { createTestSession } from '../helpers/remote-test-session.js'
 
 // Unit-level adversarial tests for THE cardinal demux invariant (invariant 5): the bridge must OPEN
@@ -29,6 +32,8 @@ describe('remote frame bridge — open-before-route guard (invariant 5)', () => 
   const outbound: Uint8Array[] = []
   const wsOpenPaths: string[] = []
   let dispatchCount: number
+  let failHttpOpen: boolean
+  let abortCount: number
 
   beforeEach(() => {
     db = new Database(':memory:')
@@ -37,6 +42,8 @@ describe('remote frame bridge — open-before-route guard (invariant 5)', () => 
     outbound.length = 0
     wsOpenPaths.length = 0
     dispatchCount = 0
+    failHttpOpen = false
+    abortCount = 0
   })
 
   afterEach(() => {
@@ -57,12 +64,25 @@ describe('remote frame bridge — open-before-route guard (invariant 5)', () => 
       loopbackTransports: {
         openHttp: () => {
           dispatchCount += 1
-          return { onData: () => {}, onEnd: () => {}, abort: () => {} }
+          if (failHttpOpen) throw new Error('loopback unavailable')
+          return {
+            onData: () => {},
+            onEnd: () => {},
+            abort: () => {
+              abortCount += 1
+            },
+          }
         },
         openWs: (args) => {
           dispatchCount += 1
           wsOpenPaths.push(args.path)
-          return { onData: () => {}, onClose: () => {}, abort: () => {} }
+          return {
+            onData: () => {},
+            onClose: () => {},
+            abort: () => {
+              abortCount += 1
+            },
+          }
         },
       },
     })
@@ -100,6 +120,98 @@ describe('remote frame bridge — open-before-route guard (invariant 5)', () => 
     u[idx] = (u[idx] ?? 0) ^ 0xff
     return u
   }
+
+  it('resets a failed HTTP open and accepts the next stream', () => {
+    const session = createTestSession({ daemonId: DAEMON_ID })
+    const bridge = build(session.provider)
+    handshake(bridge, session.device)
+    const open = (sid: number) =>
+      session.device.seal({
+        kind: FrameKind.Open,
+        streamId: sid,
+        payload: encodeOpenPayload({
+          transport: StreamTransport.Http,
+          http: { method: 'GET', path: '/api/workspaces', headers: [], hasBody: false },
+        }),
+      })
+    const sid = session.device.nextStreamId()
+    failHttpOpen = true
+    bridge.onInbound(toArrayBuffer(open(sid)))
+    const reset = session.device.open(unwrapRelayRoute(outbound.at(-1) as Uint8Array).frame)
+    expect('header' in reset && reset.header).toMatchObject({
+      kind: FrameKind.Reset,
+      streamId: sid,
+    })
+    if ('plaintext' in reset)
+      expect(decodeResetPayload(reset.plaintext)).toBe(ResetCode.InternalError)
+    failHttpOpen = false
+    bridge.onInbound(toArrayBuffer(open(session.device.nextStreamId())))
+    expect(dispatchCount).toBe(2)
+  })
+
+  it('resets malformed data, aborts the stream, and accepts a subsequent stream', () => {
+    const session = createTestSession({ daemonId: DAEMON_ID })
+    const bridge = build(session.provider)
+    handshake(bridge, session.device)
+    const sid = session.device.nextStreamId()
+    const open = (streamId: number) =>
+      session.device.seal({
+        kind: FrameKind.Open,
+        streamId,
+        payload: encodeOpenPayload({
+          transport: StreamTransport.Http,
+          http: { method: 'POST', path: '/api/workspaces', headers: [], hasBody: true },
+        }),
+      })
+    bridge.onInbound(toArrayBuffer(open(sid)))
+    bridge.onInbound(
+      toArrayBuffer(
+        session.device.seal({ kind: FrameKind.Data, streamId: sid, payload: new Uint8Array(0) })
+      )
+    )
+    const reset = session.device.open(unwrapRelayRoute(outbound.at(-1) as Uint8Array).frame)
+    expect('header' in reset && reset.header).toMatchObject({
+      kind: FrameKind.Reset,
+      streamId: sid,
+    })
+    if ('plaintext' in reset)
+      expect(decodeResetPayload(reset.plaintext)).toBe(ResetCode.ProtocolError)
+    expect(abortCount).toBe(1)
+    bridge.onInbound(toArrayBuffer(open(session.device.nextStreamId())))
+    expect(dispatchCount).toBe(2)
+  })
+
+  it('resets malformed WebSocket data and aborts the stream', () => {
+    const session = createTestSession({ daemonId: DAEMON_ID })
+    const bridge = build(session.provider)
+    handshake(bridge, session.device)
+    const sid = session.device.nextStreamId()
+    bridge.onInbound(
+      toArrayBuffer(
+        session.device.seal({
+          kind: FrameKind.Open,
+          streamId: sid,
+          payload: encodeOpenPayload({
+            transport: StreamTransport.Ws,
+            ws: { path: '/ws/terminal/run-9/control' },
+          }),
+        })
+      )
+    )
+    bridge.onInbound(
+      toArrayBuffer(
+        session.device.seal({ kind: FrameKind.Data, streamId: sid, payload: new Uint8Array(0) })
+      )
+    )
+    const reset = session.device.open(unwrapRelayRoute(outbound.at(-1) as Uint8Array).frame)
+    expect('header' in reset && reset.header).toMatchObject({
+      kind: FrameKind.Reset,
+      streamId: sid,
+    })
+    if ('plaintext' in reset)
+      expect(decodeResetPayload(reset.plaintext)).toBe(ResetCode.ProtocolError)
+    expect(abortCount).toBe(1)
+  })
 
   it('drops + audits a frame with flipped ciphertext (AEAD tamper), never dispatches', async () => {
     const session = createTestSession({ daemonId: DAEMON_ID })

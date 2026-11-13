@@ -27,6 +27,8 @@ interface RunState {
   exitInterval: ReturnType<typeof setInterval> | null
   mirror: TerminalStateMirror
   outputUnsubscribe: (() => void) | null
+  removalUnsubscribe: (() => void) | null
+  exitUnsubscribe: (() => void) | null
   viewers: Map<string, ViewerState>
   size: TerminalMirrorSize
   inputOwner: string | null
@@ -106,6 +108,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     const state = runStates.get(runId)
     if (!state?.exited || state.viewers.size > 0) return
     state.outputUnsubscribe?.()
+    state.removalUnsubscribe?.()
+    state.exitUnsubscribe?.()
     if (state.exitInterval) clearInterval(state.exitInterval)
     state.mirror.dispose()
     runStates.delete(runId)
@@ -139,6 +143,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
         // to reinterpret bytes already emitted at the PTY's original size.
         mirror: new TerminalStateMirror(),
         outputUnsubscribe: null,
+        removalUnsubscribe: null,
+        exitUnsubscribe: null,
         viewers: new Map(),
         size: { cols: 80, rows: 24 },
         inputOwner: null,
@@ -147,6 +153,33 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
       const liveRun = store.getLiveRun(runId)
       if (liveRun.output.length > 0) state.mirror.write(liveRun.output)
       const nextState = state
+      nextState.exitUnsubscribe =
+        store.getPtyOutputBus().subscribeExit?.(runId, () => {
+          if (nextState.exited) return
+          nextState.exited = true
+          nextState.outputUnsubscribe?.()
+          nextState.outputUnsubscribe = null
+          const run = store.findLiveRun(runId)
+          const payload = serializeTerminalExit(run?.exitCode ?? null)
+          for (const viewer of nextState.viewers.values()) {
+            if (viewer.controlSocket)
+              sendWebSocketMessage(viewer.controlSocket, payload, `terminal ${runId} exit`)
+          }
+          if (nextState.exitInterval) clearInterval(nextState.exitInterval)
+          nextState.exitInterval = null
+          cleanupRun(runId)
+        }) ?? null
+      nextState.removalUnsubscribe =
+        store.getPtyOutputBus().subscribeRemoval?.(runId, () => {
+          nextState.exited = true
+          for (const viewer of nextState.viewers.values()) {
+            viewer.flowState?.close()
+            viewer.ioSocket?.terminate()
+            viewer.controlSocket?.terminate()
+          }
+          nextState.viewers.clear()
+          cleanupRun(runId)
+        }) ?? null
       nextState.outputUnsubscribe = store.getPtyOutputBus().subscribe(runId, (chunk) => {
         nextState.mirror.write(chunk)
         for (const viewer of nextState.viewers.values()) {
@@ -166,6 +199,10 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     state.viewers.delete(clientId)
     if (state.inputOwner === clientId) state.inputOwner = null
     maybeResumeRun(runId, state, clientId)
+    if (state.viewers.size === 0 && state.exitInterval) {
+      clearInterval(state.exitInterval)
+      state.exitInterval = null
+    }
     cleanupRun(runId)
   }
 
@@ -336,6 +373,8 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
     close() {
       for (const [runId, state] of runStates) {
         state.outputUnsubscribe?.()
+        state.removalUnsubscribe?.()
+        state.exitUnsubscribe?.()
         if (state.exitInterval) clearInterval(state.exitInterval)
         state.mirror.dispose()
         for (const viewer of state.viewers.values()) {

@@ -1,10 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -87,9 +86,13 @@ describe('/api/team/recall', () => {
       hivePort: new URL(runtime.baseUrl).port,
     })
     await expect
-      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .poll(() =>
+        expandInboxReferences(
+          runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output ?? ''
+        )
+      )
       .toContain('RECALL_READY')
-    server.store.recordUserInput(
+    await server.store.recordUserInput(
       workspaceId,
       orchestratorId,
       'User asked for a relay recall smoke marker.'
@@ -104,7 +107,11 @@ describe('/api/team/recall', () => {
       }
     )
     await expect
-      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .poll(() =>
+        expandInboxReferences(
+          runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output ?? ''
+        )
+      )
       .toContain('Investigate relay recall smoke.')
     await expect
       .poll(() => runtime.store.listDispatches(workspaceId).find((item) => item.id === dispatch.id))

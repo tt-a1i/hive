@@ -59,7 +59,7 @@ export const buildAgentStartupInstructions = ({
   }
   lines.push(
     '',
-    'For an assigned task with missing context, read `team guide core` or `.hive/PROTOCOL.md`; query messages using its dispatch ID. Native CLI compaction is not assumed detectable by Hive.'
+    'For an assigned task with missing context, read `team guide core`; query messages using its dispatch ID. Native CLI compaction is not assumed detectable by Hive.'
   )
 
   lines.push('', '</hive-message>', '')

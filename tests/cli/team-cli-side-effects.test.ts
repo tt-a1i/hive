@@ -3,12 +3,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const runTeamBinary = promisify(execFile)
@@ -137,12 +136,14 @@ describe('team send CLI side effects (R1.3)', () => {
       )
       await waitFor(async () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        expect(run?.output).toContain('WRK:')
-        expect(run?.output).toContain('@Orchestrator')
-        expect(run?.output).toContain('Hive member; keep your assigned role and scope')
-        expect(run?.output).toContain('实现登录')
-        expect(run?.output).toContain(`dispatch_id: ${dispatch?.id}`)
-        expect(run?.output).toContain(
+        expect(expandInboxReferences(run?.output ?? '')).toContain('WRK:')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('@Orchestrator')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(
+          'Hive member; keep your assigned role and scope'
+        )
+        expect(expandInboxReferences(run?.output ?? '')).toContain('实现登录')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(`dispatch_id: ${dispatch?.id}`)
+        expect(expandInboxReferences(run?.output ?? '')).toContain(
           `team report --dispatch ${dispatch?.id} --seen <required_seen_seq> --stdin`
         )
       })
@@ -244,8 +245,8 @@ describe('team send CLI side effects (R1.3)', () => {
       expect(JSON.parse(second.stdout)).toEqual(expect.objectContaining({ ok: true }))
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        expect(run?.output).toContain('评估项目结构')
-        expect(run?.output).toContain('第二次任务')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('评估项目结构')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('第二次任务')
         expect(
           hive.store.listDispatches(workspace.id).filter((item) => item.deliveredAt !== null)
         ).toHaveLength(2)
@@ -333,8 +334,8 @@ describe('team send CLI side effects (R1.3)', () => {
       )
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, unconfigured.id)
-        expect(run?.output).toContain('task')
-        expect(run?.output).toContain('new after configuration')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('task')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('new after configuration')
         const delivered = hive.store
           .listDispatches(workspace.id)
           .filter((item) => item.toAgentId === unconfigured.id && item.deliveredAt !== null)

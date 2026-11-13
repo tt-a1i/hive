@@ -29,7 +29,10 @@ export const createUiAuth = (): UiAuth => {
       return token
     },
     validate(input) {
-      return input === token
+      if (typeof input !== 'string') return false
+      const actual = Buffer.from(input)
+      const reference = Buffer.from(token)
+      return actual.length === reference.length && timingSafeEqual(actual, reference)
     },
     isTunnelRequest(request) {
       const raw = request.headers[HIVE_REMOTE_SECRET_HEADER]

@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BUILTIN_COMMAND_PRESET_CLI_LIST } from '../server/command-preset-defaults.js'
 import {
@@ -74,7 +72,7 @@ const TEAM_USAGE = [
   '  PowerShell:   Get-Content -Raw -Encoding utf8 body.txt | team report --stdin --dispatch <id>',
   '  Portable:     team report --stdin --dispatch <id> < body.txt',
   '',
-  'For focused runtime guidance, use team guide <topic>. For the full generated protocol, see .hive/PROTOCOL.md',
+  'For focused runtime guidance, use team guide <topic>.',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -196,20 +194,6 @@ const printOrchestratorDeliveryWarning = (
       `Hive recorded the ${action}, but could not deliver it to Orchestrator in real time: ${payload.forward_error}`
     )
   }
-}
-
-const readGeneratedProtocolGuide = (topic: string): string | null => {
-  const protocolPath = join(process.cwd(), '.hive', 'PROTOCOL.md')
-  if (!existsSync(protocolPath)) return null
-  const doc = readFileSync(protocolPath, 'utf8')
-  const marker = `## Guide: ${topic}`
-  const start = doc.indexOf(marker)
-  if (start === -1) return null
-  const nextGuide = doc.indexOf('\n## Guide:', start + marker.length)
-  const reminders = doc.indexOf('\n## In-message reminders', start + marker.length)
-  const candidates = [nextGuide, reminders].filter((index) => index !== -1)
-  const end = candidates.length === 0 ? doc.length : Math.min(...candidates)
-  return doc.slice(start, end).trimEnd()
 }
 
 export interface ParsedReportArgs {
@@ -557,14 +541,12 @@ export const runTeamCommand = async (argv: string[]) => {
         `Live Hive guide — project_id: ${result.project_id}\nProject path: ${JSON.stringify(result.project_path)}\n\n${result.guide}`
       )
     } else {
-      const saved = readGeneratedProtocolGuide(topic)
       const reference =
-        saved ??
-        (topic === 'workflow'
+        topic === 'workflow'
           ? '## Guide: workflow\nWorkflow availability and CLI policy are unknown. Run `team guide workflow` inside a Hive member terminal to read the current configuration before authoring or running a workflow.'
-          : buildProtocolGuide(topic))
+          : buildProtocolGuide(topic)
       console.log(
-        `${saved ? 'Saved' : 'Offline'} reference only: no authenticated Hive workspace. Any saved feature state may be stale; current capabilities are unknown. Run this command inside a Hive member terminal for live guidance.\n\n${reference}`
+        `Offline reference only: no authenticated Hive workspace. Current capabilities are unknown. Run this command inside a Hive member terminal for live guidance.\n\n${reference}`
       )
     }
     return
@@ -860,7 +842,7 @@ export const runTeamCommand = async (argv: string[]) => {
         '  team workflow stop <run-id>                     (cancel a running workflow)\n' +
         '  team workflow show <run-id>                     (full per-agent transcript)\n' +
         '  team workflow schedule --cron "<cron>" --name <n> --stdin   (register a recurring run)\n' +
-        '  Note: workflow commands are experimental and may be disabled in this workspace; re-read .hive/PROTOCOL.md for the enabled command set.'
+        '  Note: workflow commands are experimental and may be disabled in this workspace; run team guide workflow for the enabled command set.'
     )
   }
 

@@ -5,13 +5,7 @@
 // the nonce matched to the one we put in the flow cookie. Only after ALL checks do we read claims.
 
 import type { Context } from 'hono'
-import {
-  createLocalJWKSet,
-  createRemoteJWKSet,
-  type JWK,
-  type JWTVerifyGetKey,
-  jwtVerify,
-} from 'jose'
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from 'jose'
 import type { Env } from './env.js'
 import {
   FLOW_TTL_MS,
@@ -102,11 +96,7 @@ export async function googleCallback(c: Ctx): Promise<Response> {
 
   try {
     const { idToken } = await googleExchangeCode(env, code, flow.codeVerifier)
-    // Test seam (HARDEN testability): in prod the key resolver is the remote JWKS at GOOGLE_JWKS_URL.
-    // Tests pass a base64(JSON jwks) in x-test-google-getkey so the verifier runs over a LOCAL JWKS
-    // with zero network — the security-critical jwtVerify options stay on the real code path.
-    const getKey = localJwksFromTestHeader(req)
-    const verified = await googleVerifyIdToken(env, idToken, flow.nonce, getKey)
+    const verified = await googleVerifyIdToken(env, idToken, flow.nonce)
 
     const { userId } = await upsertIdentity(env, {
       provider: 'google',
@@ -197,19 +187,4 @@ export async function googleVerifyIdToken(
   const email = typeof rec.email === 'string' ? rec.email : null
   const name = typeof rec.name === 'string' ? rec.name : null
   return { sub, email, emailVerified: true, name }
-}
-
-// Build a local JWKS key resolver from a test-only header, else undefined (prod uses remote JWKS).
-// The header is never sent in production; a malformed value yields undefined (falls back to remote).
-function localJwksFromTestHeader(req: Request): JWTVerifyGetKey | undefined {
-  const raw = req.headers.get('x-test-google-getkey')
-  if (raw === null || raw === '1') return undefined
-  try {
-    const bin = atob(raw)
-    const json = JSON.parse(bin) as { keys?: JWK[] }
-    if (!json || !Array.isArray(json.keys)) return undefined
-    return createLocalJWKSet({ keys: json.keys })
-  } catch {
-    return undefined
-  }
 }

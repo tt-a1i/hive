@@ -133,6 +133,11 @@ const getCodexStartupOwnership = (
               )
               .map((item: { text: string }) => item.text)
               .join('')
+            // File-backed startup keeps only the machine binding on the wakeup line.
+            const wake = text.match(
+              /^(Hive session binding: workspace_id=[a-zA-Z0-9_:-]+; agent_id=[a-zA-Z0-9_:-]+) \[hive-inbox [a-f0-9-]+ type=(?:startup|recovery)\] Read "(?:[^"\\]|\\.)*" for the complete Hive system message\.$/u
+            )
+            if (wake) return needles.includes(wake[1] ?? '')
             if (text.startsWith('<hive-message kind="startup">')) {
               // Only the complete generated header establishes ownership. Old
               // multiline metadata cannot be distinguished reliably from fields.
@@ -234,9 +239,11 @@ export const captureCodexSessionId = async (
   timeoutMs = 5000,
   intervalMs = 100,
   codexHome = getDefaultCodexHome(),
-  discriminator?: SessionCaptureSnapshot['discriminator']
+  discriminator?: SessionCaptureSnapshot['discriminator'],
+  signal?: AbortSignal
 ) => {
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, codexHome),

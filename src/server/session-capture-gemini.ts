@@ -76,9 +76,11 @@ export const captureGeminiSessionId = async (
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
   intervalMs = 100,
-  geminiHome = getDefaultGeminiHome()
+  geminiHome = getDefaultGeminiHome(),
+  signal?: AbortSignal
 ) => {
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, geminiHome),

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, test } from 'vitest'
-import { getProtocolFilePath, getTasksFilePath } from '../../src/server/tasks-file.js'
+import { getTasksFilePath } from '../../src/server/tasks-file.js'
 import { createTasksFileWatcher } from '../../src/server/tasks-file-watcher.js'
 
 const tempDirs: string[] = []
@@ -28,7 +28,7 @@ const waitFor = async (assertion: () => void, timeoutMs = 4000, intervalMs = 25)
 }
 
 // Drain startup emits by waiting until the count stops growing for `quietMs`,
-// rather than a fixed sleep. `start()` creates tasks.md + PROTOCOL.md and only
+// rather than a fixed sleep. `start()` creates tasks.md and only
 // awaits chokidar 'ready'; under full-suite load a straggler fs event for those
 // just-created files can land shortly AFTER 'ready' (and after a fixed drain),
 // firing one spurious emit. Resetting the window on each emit absorbs that
@@ -69,7 +69,7 @@ describe('tasks file watcher real filesystem events', () => {
       await watcher.start('ws-1', workspacePath)
       await waitForQuiescence(() => updates.length)
       updates.length = 0
-      writeFileSync(getProtocolFilePath(workspacePath), 'changed protocol\n')
+      writeFileSync(join(workspacePath, '.hive', 'PROTOCOL.md'), 'changed protocol\n')
       await new Promise((resolve) => setTimeout(resolve, 250))
       expect(updates).toEqual([])
 

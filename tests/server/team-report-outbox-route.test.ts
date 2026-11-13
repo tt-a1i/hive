@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import Database from '../../src/server/sqlite.js'
-
 import { requireAgentToken } from '../helpers/auth.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -146,7 +146,11 @@ const setupOfflineReportHarness = async () => {
   )
   expect(startResponse.status).toBe(201)
   await expect
-    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .poll(() =>
+      expandInboxReferences(
+        server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? ''
+      )
+    )
     .toContain('OUTBOX_WORKER_READY')
   const workerToken = requireAgentToken(server.store, worker.id)
   expect(server.store.validateAgentToken(worker.id, workerToken)).toBe(true)
@@ -155,7 +159,11 @@ const setupOfflineReportHarness = async () => {
     fromAgentId: `${workspace.id}:orchestrator`,
   })
   await expect
-    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .poll(() =>
+      expandInboxReferences(
+        server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? ''
+      )
+    )
     .toContain('Implement login')
   await expect
     .poll(() => server.store.listDispatches(workspace.id).find((item) => item.id === dispatch.id))
@@ -295,7 +303,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
             headers,
           })
           expect(response.status).toBe(200)
-          return ((await response.json()) as { output: string }).output
+          return expandInboxReferences(((await response.json()) as { output: string }).output)
         },
         { timeout: 5000 }
       )
@@ -303,7 +311,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
     const received = await fetch(`${harness.server.baseUrl}/api/runtime/runs/${run.run_id}`, {
       headers,
     })
-    const output = ((await received.json()) as { output: string }).output
+    const output = expandInboxReferences(((await received.json()) as { output: string }).output)
     expect(output).toContain(`dispatch_id: ${harness.dispatch.id}`)
     expect(output).toContain('Done')
     expect(output).toContain('artifact: login-result.txt')
@@ -418,8 +426,10 @@ test('legacy question receipts cannot bypass retirement or duplicate live questi
       )
       .toEqual({ state: 'delivered' })
     await expect.poll(() => outbox.pendingCount(workspace.id, orchestratorId)).toBe(0)
-    await expect.poll(() => readFileSync(receivedPath, 'utf8')).toContain('REAL_REPORT_SURVIVES')
-    const received = readFileSync(receivedPath, 'utf8')
+    await expect
+      .poll(() => expandInboxReferences(readFileSync(receivedPath, 'utf8')))
+      .toContain('REAL_REPORT_SURVIVES')
+    const received = expandInboxReferences(readFileSync(receivedPath, 'utf8'))
     expect(received).not.toContain('RETIRED_QUESTION_MUST_STAY_RETIRED')
     expect(
       received.match(new RegExp(`<hive-message kind="question" message="${liveId}"`, 'g'))

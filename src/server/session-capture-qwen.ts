@@ -115,9 +115,11 @@ export const captureQwenSessionId = async (
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
   intervalMs = 100,
-  qwenHome = getDefaultQwenHome()
+  qwenHome = getDefaultQwenHome(),
+  signal?: AbortSignal
 ) => {
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, qwenHome),

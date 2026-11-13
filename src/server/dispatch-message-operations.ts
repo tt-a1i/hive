@@ -58,6 +58,7 @@ export const createDispatchMessageOperations = (ports: {
       messages: ports.messages,
     }),
     drainDispatchMessageOutbox,
+    closeDispatchMessageOutbox: drainDispatchMessageOutbox.close,
     notifyDispatchQuestionChange: (workspaceId?: string) => changes.emit(workspaceId ?? 'closing'),
     isDispatchQuestionClosing: ports.isClosing,
     subscribeDispatchQuestionChanges: (workspaceId: string, listener: () => void) => {

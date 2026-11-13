@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { runHiveCommand } from '../src/cli/hive.js'
+import { expandInboxReferences } from '../tests/helpers/inbox.js'
 
 interface Message {
   id: string
@@ -200,9 +201,9 @@ try {
   assert.deepEqual(pending.answers, [])
   await until(
     async () =>
-      (await readFile(join(root, `${encodeURIComponent(alice)}.stdin`), 'utf8')).includes(
-        `Reply: team reply ${firstId} --stdin`
-      ),
+      expandInboxReferences(
+        await readFile(join(root, `${encodeURIComponent(alice)}.stdin`), 'utf8')
+      ).includes(`Reply: team reply ${firstId} --stdin`),
     'short executable reply command in actual PTY input'
   )
   await team(carol, 'question', { question_id: firstId }, 403)

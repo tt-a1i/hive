@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-
 import { createAgentStdinDispatcher } from '../../src/server/agent-stdin-dispatcher.js'
 import { PtyInactiveError } from '../../src/server/http-errors.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 
 type FakeRun = {
   agentId: string
@@ -74,7 +74,7 @@ describe('per-agent stdin write queue', () => {
     // Let both the paste→submit setTimeouts and the queue-draining microtasks run.
     await vi.advanceTimersByTimeAsync(2000)
 
-    const texts = writes.map((w) => w.text)
+    const texts = writes.map((w) => expandInboxReferences(w.text))
     const firstPaste = texts.findIndex(
       (t) => t.includes(BRACKET_OPEN) && t.includes('PAYLOAD_FIRST')
     )

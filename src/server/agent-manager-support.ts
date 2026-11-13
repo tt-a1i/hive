@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { createRequire } from 'node:module'
 
 import type { IPty } from '@lydell/node-pty'
@@ -145,6 +145,7 @@ export const toAgentRunSnapshot = (run: AgentRunRecord): AgentRunSnapshot => ({
       ? 'error'
       : run.status,
   output: run.output,
+  totalOutputLength: run.totalOutputLength ?? run.output.length,
   exitCode: run.exitCode,
 })
 
@@ -159,6 +160,7 @@ export const finishAgentRun = (
   try {
     run.onExit?.({ runId: run.runId, exitCode })
   } finally {
+    ptyOutputBus.notifyExit?.(run.runId)
     ptyOutputBus.clear(run.runId)
   }
 }
@@ -174,26 +176,22 @@ export const attachAgentPty = (
   let stopRequested = false
   let forceKillTimer: ReturnType<typeof setTimeout> | undefined
   let ptyReadEofTimer: ReturnType<typeof setTimeout> | undefined
-  const resolveProcessGroupId = () => {
-    if (platform === 'win32' || pty.pid <= 0) return null
-    try {
-      const value = execFileSync('ps', ['-o', 'pgid=', '-p', String(pty.pid)], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim()
-      const groupId = Number(value)
-      if (Number.isInteger(groupId) && groupId > 0) return groupId
-    } catch {
-      return pty.pid
-    }
-    return pty.pid
-  }
-  let processGroupId: number | null | undefined
-  const getProcessGroupId = () => {
-    if (processGroupId !== undefined) return processGroupId
-    processGroupId = resolveProcessGroupId()
-    return processGroupId
-  }
+  // Resolve while the session leader is alive, without blocking PTY exit or stop.
+  // node-pty creates a new POSIX session whose initial process group is its PID.
+  const processGroupId =
+    platform === 'win32' || pty.pid <= 0
+      ? Promise.resolve(null)
+      : new Promise<number>((resolve) => {
+          execFile(
+            'ps',
+            ['-o', 'pgid=', '-p', String(pty.pid)],
+            { encoding: 'utf8', timeout: 1000, maxBuffer: 1024 },
+            (error, output) => {
+              const groupId = Number(output.trim())
+              resolve(!error && Number.isInteger(groupId) && groupId > 0 ? groupId : pty.pid)
+            }
+          )
+        })
   const stopped = () => run.status === 'exited' || run.status === 'error'
   const ignoreMissingProcess = (error: unknown) => {
     if ((error as NodeJS.ErrnoException | null)?.code !== 'ESRCH') throw error
@@ -203,13 +201,18 @@ export const attachAgentPty = (
     if (code !== 'ESRCH' && code !== 'EPERM') throw error
   }
   const killProcessGroup = (signal: NodeJS.Signals) => {
-    const groupId = getProcessGroupId()
-    if (platform === 'win32' || groupId === null) return
-    try {
-      process.kill(-groupId, signal)
-    } catch (error) {
-      ignoreBestEffortGroupKillError(error)
-    }
+    void processGroupId
+      .then((groupId) => {
+        if (groupId === null) return
+        try {
+          process.kill(-groupId, signal)
+        } catch (error) {
+          ignoreBestEffortGroupKillError(error)
+        }
+      })
+      .catch((error) =>
+        console.error(`[hive] process group cleanup failed for ${run.runId}`, error)
+      )
   }
   const killPtyDirect = (signal?: NodeJS.Signals) => {
     try {
@@ -346,6 +349,7 @@ export const attachAgentPty = (
     const chunk = filterStartup(data)
     if (!chunk) return
     if (run.status === 'starting') run.status = 'running'
+    run.totalOutputLength = (run.totalOutputLength ?? run.output.length) + chunk.length
     run.output += chunk
     if (run.output.length > MAX_RUN_OUTPUT_LENGTH)
       run.output = run.output.slice(-MAX_RUN_OUTPUT_LENGTH)

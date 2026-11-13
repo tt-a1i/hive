@@ -13,6 +13,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { getClaudeSessionFilePath } from '../../src/server/session-capture-claude.js'
 import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences, inboxReaderSource } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -68,6 +69,7 @@ const writeFakeClaude = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -87,10 +89,11 @@ if (!args.includes('--resume') || !existsSync(sessionPath)) {
   writeFileSync(sessionPath, '{}\\n')
 }
 let pasteOpen = false
+process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: expandReceivedInbox(chunk) } }) + '\\n')
   if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
     pasteOpen = false
@@ -127,6 +130,7 @@ const writeFakeCodex = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -153,6 +157,7 @@ process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
   inputBuffer += chunk
+  inputBuffer = expandReceivedInbox(inputBuffer)
   const frames = /<(hive-message|hive-system-message)(?: [^>]*)?>[\\s\\S]*?<\\/\\1>/g
   let frame
   let consumed = 0
@@ -321,7 +326,7 @@ describe('Layer A resume recovery integration', () => {
       })) as { dispatch_id: string }
       await waitFor(async () => {
         const run = await getRunOutputViaHttp(server.baseUrl, cookie, firstRun.runId)
-        expect(run.output).toContain(dispatched.dispatch_id)
+        expect(expandInboxReferences(run.output)).toContain(dispatched.dispatch_id)
         // Wait for startup and dispatch to be submitted, not merely pasted.
         expect(run.output.match(/ENTER_SUBMITTED/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
       })
@@ -364,6 +369,7 @@ describe('Layer A resume recovery integration', () => {
           .filter(Boolean)
           .map((line) => JSON.parse(line) as { payload?: { content?: Array<{ text?: string }> } })
           .flatMap((record) => record.payload?.content?.map((part) => part.text ?? '') ?? [])
+          .map(expandInboxReferences)
           .join('')
         const synchronizations = [
           ...received.matchAll(/<hive-system-message>([\s\S]*?)<\/hive-system-message>/g),

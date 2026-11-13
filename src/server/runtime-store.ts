@@ -20,28 +20,22 @@ export const createRuntimeStore = (options: RuntimeStoreOptions = {}): RuntimeSt
   const lifecycle = createRuntimeStoreLifecycle(
     options.agentManager ? { agentManager: options.agentManager, services } : { services }
   )
-  const runDataMutation = (mutation: () => void) => {
+  const runDataMutation = <T>(mutation: () => T): T => {
     if (!services.db) {
-      mutation()
-      return
+      return mutation()
     }
-    services.db.transaction(mutation)()
+    return services.db.transaction(mutation)()
   }
   let workflowRuntime: ReturnType<typeof createRuntimeStoreWorkflowRuntime> | undefined
   const getWorkflowRuntime = () => {
     if (!workflowRuntime) throw new Error('Workflow runtime not initialized')
     return workflowRuntime
   }
-  let store: RuntimeStore
   const workerMutations = createRuntimeStoreWorkerMutations({
-    addWorker: (workspaceId, input) => store.addWorker(workspaceId, input),
-    configureAgentLaunch: (workspaceId, agentId, input) =>
-      store.configureAgentLaunch(workspaceId, agentId, input),
-    deleteWorker: (workspaceId, workerId) => store.deleteWorker(workspaceId, workerId),
     runDataMutation,
     services,
   })
-  store = {
+  const store: RuntimeStore = {
     close: createRuntimeStoreShutdown(services, lifecycle, () => workflowRuntime),
     createWorkspace: (path, name) => {
       const workspace = services.workspaceStore.createWorkspace(path, name)

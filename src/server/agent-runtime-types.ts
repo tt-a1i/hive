@@ -7,6 +7,7 @@ export interface LiveAgentRun extends AgentRunSnapshot {
   postStartInputReady?: Promise<void>
   startedAt: number
   userStopped?: boolean
+  captureController?: AbortController
   /** Epoch ms of successful live-run startup; null on pending or failed startup. */
   startupReadyAt?: number | null
 }

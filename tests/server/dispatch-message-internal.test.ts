@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, expect, test } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const originalDataDir = process.env.HIVE_DATA_DIR
@@ -95,7 +96,9 @@ test('internal PTYs exchange questions and answers while preserving permissions,
     expect(questionResponse.status).toBe(202)
     const { message: question } = (await questionResponse.json()) as { message: { id: string } }
     await expect
-      .poll(() => readFileSync(receivedFiles.get(orchestratorId) as string, 'utf8'))
+      .poll(() =>
+        expandInboxReferences(readFileSync(receivedFiles.get(orchestratorId) as string, 'utf8'))
+      )
       .toContain('Which branch should I use?')
     expect(
       (await post('reply', outsider.id, { question_id: question.id, text: 'Wrong owner' })).status
@@ -124,7 +127,9 @@ test('internal PTYs exchange questions and answers while preserving permissions,
     })
     const { message: answer } = (await answerResponse.json()) as { message: { sequence: number } }
     await expect
-      .poll(() => readFileSync(receivedFiles.get(worker.id) as string, 'utf8'))
+      .poll(() =>
+        expandInboxReferences(readFileSync(receivedFiles.get(worker.id) as string, 'utf8'))
+      )
       .toContain('Use main.')
     const questionState = await post('question', worker.id, { question_id: question.id })
     expect(await questionState.json()).toMatchObject({
@@ -147,7 +152,9 @@ test('internal PTYs exchange questions and answers while preserving permissions,
     })
     expect(report.status).toBe(202)
     await expect
-      .poll(() => readFileSync(receivedFiles.get(orchestratorId) as string, 'utf8'))
+      .poll(() =>
+        expandInboxReferences(readFileSync(receivedFiles.get(orchestratorId) as string, 'utf8'))
+      )
       .toContain('Done')
     expect(
       hive.store.listDispatches(workspace.id).find((row) => row.id === dispatch.id)?.status

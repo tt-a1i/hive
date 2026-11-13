@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { PayloadTooLargeError } from './http-errors.js'
+import { PayloadTooLargeError, UnsupportedMediaTypeError } from './http-errors.js'
 import type { RouteDefinition } from './route-types.js'
 
 const DEFAULT_JSON_BODY_LIMIT_BYTES = 1024 * 1024
@@ -11,10 +11,21 @@ export const sendJson = (response: ServerResponse, statusCode: number, body: unk
   response.end(JSON.stringify(body))
 }
 
+export const requireJsonContentType = (request: IncomingMessage) => {
+  const type = request.headers['content-type']
+  if (
+    typeof type !== 'string' ||
+    type.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json'
+  ) {
+    throw new UnsupportedMediaTypeError('Content-Type must be application/json')
+  }
+}
+
 export const readJsonBody = async <T>(
   request: IncomingMessage,
   options: { limitBytes?: number } = {}
 ): Promise<T> => {
+  requireJsonContentType(request)
   const limitBytes = options.limitBytes ?? DEFAULT_JSON_BODY_LIMIT_BYTES
   const rawContentLength = request.headers['content-length']
   const contentLength = Array.isArray(rawContentLength) ? rawContentLength[0] : rawContentLength

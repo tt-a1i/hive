@@ -1,11 +1,13 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
+import { inboxReaderCommonJsSource } from './inbox.js'
 
 export const writePassiveWorkflowCli = (binDir: string, name: string) => {
   const scriptPath = join(binDir, `${name}-workflow-fake.js`)
   writeFileSync(
     scriptPath,
     [
+      inboxReaderCommonJsSource,
       "process.stdin.setEncoding('utf8')",
       'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
       "const PASTE_OPEN = '\\u001b[200~'",
@@ -16,6 +18,7 @@ export const writePassiveWorkflowCli = (binDir: string, name: string) => {
       "process.stdout.write('› ')",
       "process.stdin.on('data', (chunk) => {",
       '  pasteBuffer += chunk',
+      '  pasteBuffer = expandReceivedInbox(pasteBuffer)',
       '  const sawPasteStart = pasteBuffer.includes(PASTE_OPEN) || pasteBuffer.includes("<hive-message")',
       '  const sawPasteEnd = pasteBuffer.includes(PASTE_END) || (process.platform === "win32" && sawPasteStart && pasteBuffer.includes("</hive-message>"))',
       '  if (sawPasteEnd) {',

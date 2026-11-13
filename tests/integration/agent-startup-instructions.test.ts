@@ -4,6 +4,7 @@ import { basename, delimiter, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -169,9 +170,8 @@ describe('agent startup instructions', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        const output = readFileSync(
-          join(dataDir, `${encodeURIComponent(orchestratorId)}.stdin.txt`),
-          'utf8'
+        const output = expandInboxReferences(
+          readFileSync(join(dataDir, `${encodeURIComponent(orchestratorId)}.stdin.txt`), 'utf8')
         )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('You are Orchestrator (orchestrator) in workspace Alpha.')
@@ -205,9 +205,8 @@ describe('agent startup instructions', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await response.json()) as { output: string }
-        const output = readFileSync(
-          join(dataDir, `${encodeURIComponent(worker.id)}.stdin.txt`),
-          'utf8'
+        const output = expandInboxReferences(
+          readFileSync(join(dataDir, `${encodeURIComponent(worker.id)}.stdin.txt`), 'utf8')
         )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')

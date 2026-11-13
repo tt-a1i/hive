@@ -1,12 +1,11 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 
 const tempDirs: string[] = []
 
@@ -167,8 +166,8 @@ describe('team protocol end to end', () => {
           { headers: { cookie } }
         )
         const body = (await workerRunResponse.json()) as { output: string }
-        expect(body.output).toContain(`dispatch_id: ${sendBody.dispatch_id}`)
-        expect(body.output).toContain(
+        expect(expandInboxReferences(body.output)).toContain(`dispatch_id: ${sendBody.dispatch_id}`)
+        expect(expandInboxReferences(body.output)).toContain(
           `team report --dispatch ${sendBody.dispatch_id} --seen <required_seen_seq> --stdin`
         )
       })

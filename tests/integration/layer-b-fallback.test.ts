@@ -11,8 +11,8 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import Database from '../../src/server/sqlite.js'
-
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences, inboxReaderSource } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -53,7 +53,7 @@ const compactTerminalText = (text: string) =>
   text.replace(TERMINAL_CONTROL_PATTERN, '').replace(/\s+/gu, '')
 
 const expectOutputToContainTerminalText = (output: string, text: string) => {
-  expect(compactTerminalText(output)).toContain(compactTerminalText(text))
+  expect(compactTerminalText(expandInboxReferences(output))).toContain(compactTerminalText(text))
 }
 
 const listSystemMessages = (
@@ -123,6 +123,7 @@ const writeResumableClaudeEcho = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -146,7 +147,7 @@ process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: expandReceivedInbox(chunk) } }) + '\\n')
   if (chunk.includes('__HIVE_TEST_EXIT__')) {
     process.stdout.write('\\nEXITING\\n')
     setTimeout(() => process.exit(0), 100)
@@ -193,12 +194,13 @@ const createWorkerViaHttp = async (
   cookie: string,
   workspaceId: string,
   name: string,
-  role: 'coder' | 'tester' = 'coder'
+  role: 'coder' | 'tester' = 'coder',
+  startupCommand?: string
 ) => {
   const response = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/workers`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ name, role }),
+    body: JSON.stringify({ name, role, startup_command: startupCommand }),
   })
   expect(response.status).toBe(201)
   return (await response.json()) as { id: string }
@@ -248,7 +250,7 @@ const getRunViaHttp = async (baseUrl: string, cookie: string, runId: string) => 
 const waitForRunOutput = async (baseUrl: string, cookie: string, runId: string, text: string) => {
   await waitFor(async () => {
     const state = await getRunViaHttp(baseUrl, cookie, runId)
-    expect(state.output).toContain(text)
+    expect(expandInboxReferences(state.output)).toContain(text)
   })
 }
 
@@ -278,6 +280,52 @@ afterEach(() => {
 })
 
 describe('Layer B fallback integration', () => {
+  test('explicit resume startup command receives native session synchronization', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hive-explicit-resume-home-'))
+    const workspacePathRaw = join(root, 'workspace')
+    tempDirs.push(root)
+    mkdirSync(workspacePathRaw, { recursive: true })
+    const workspacePath = realpathSync(workspacePathRaw)
+    const aliceScript = writeEchoAgent(workspacePath, 'alice-explicit-resume.js')
+    const startupCommand = `node ${JSON.stringify(aliceScript)} --resume explicit-session`
+
+    const server = await startTestServer()
+    try {
+      const cookie = await getUiCookie(server.baseUrl)
+      const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+      const alice = await createWorkerViaHttp(
+        server.baseUrl,
+        cookie,
+        workspace.id,
+        'Alice',
+        'coder',
+        startupCommand
+      )
+
+      const firstRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
+      await waitForRunOutput(server.baseUrl, cookie, firstRun.runId, 'ARGS:')
+      server.store.writeRunInput(firstRun.runId, '__HIVE_TEST_EXIT__\r')
+      await waitFor(async () => {
+        expect((await getRunViaHttp(server.baseUrl, cookie, firstRun.runId)).status).toBe('exited')
+      })
+
+      const secondRun = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, alice.id)
+      await waitFor(async () => {
+        const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+        expect(state.status).toBe('running')
+        expect(expandInboxReferences(state.output)).toContain('Your native session resumed')
+        expect(expandInboxReferences(state.output)).not.toContain('These are current responsibility facts')
+      })
+
+      const recoverySummaries = listSystemMessages(server.dataDir, 'system_recovery_summary')
+      expect(recoverySummaries).toHaveLength(1)
+      expect(recoverySummaries[0]?.text).toContain('Your native session resumed')
+      await stopRunViaHttp(server.baseUrl, cookie, secondRun.runId)
+    } finally {
+      await server.close()
+    }
+  }, 15_000)
+
   test('orchestrator recovery summary preserves Hive worker dispatch rules', async () => {
     const root = mkdtempSync(join(tmpdir(), 'hive-orch-layer-b-home-'))
     const workspacePathRaw = join(root, 'workspace')
@@ -342,7 +390,7 @@ describe('Layer B fallback integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        const received = readFileSync(`${orchestratorScript}.stdin`, 'utf8')
+        const received = expandInboxReferences(readFileSync(`${orchestratorScript}.stdin`, 'utf8'))
         expect(received).toContain('让 worker 评估一下项目目标')
         expect(received).toContain('Bob')
         expect(received).toContain('Use existing members from `team list` by name.')
@@ -420,16 +468,18 @@ describe('Layer B fallback integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain('STDIN:<hive-system-message>')
-        expect(state.output).toContain('These are current responsibility facts')
+        expect(expandInboxReferences(state.output)).toContain('STDIN:<hive-system-message>')
+        expect(expandInboxReferences(state.output)).toContain(
+          'These are current responsibility facts'
+        )
         // §3.5.1 scenario C (clean exit) also uses Layer B; copy must not claim a crash
-        expect(state.output).not.toContain('crash')
-        expect(state.output).toContain('请继续修复 restart bug')
-        expect(state.output).toContain('layer b fallback')
-        expect(state.output).toContain('Bob')
+        expect(expandInboxReferences(state.output)).not.toContain('crash')
+        expect(expandInboxReferences(state.output)).toContain('请继续修复 restart bug')
+        expect(expandInboxReferences(state.output)).toContain('layer b fallback')
+        expect(expandInboxReferences(state.output)).toContain('Bob')
         // Raw ConPTY output can split a sentence with wrapping/cursor sequences.
         // Verify the actual receiver input, without stripping or guessing text.
-        const received = readFileSync(`${aliceScript}.stdin`, 'utf8')
+        const received = expandInboxReferences(readFileSync(`${aliceScript}.stdin`, 'utf8'))
         expect(received).toContain('请继续修复 restart bug')
         expect(received).toContain('layer b fallback')
       })
@@ -511,9 +561,9 @@ describe('Layer B fallback integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain('## Open tasks')
-        expect(state.output).toContain('Bob')
-        expect(state.output).toContain('审查 Phase 3 SSE schema 缺口')
+        expect(expandInboxReferences(state.output)).toContain('## Open tasks')
+        expect(expandInboxReferences(state.output)).toContain('Bob')
+        expect(expandInboxReferences(state.output)).toContain('审查 Phase 3 SSE schema 缺口')
       })
       server.store.writeRunInput(secondRun.runId, '__HIVE_TEST_EXIT__\r')
       await waitFor(async () => {
@@ -611,15 +661,17 @@ describe('Layer B fallback integration', () => {
         const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
         expect(argvLine?.[1]).toBeDefined()
         expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
-        expect(state.output).toContain('<hive-system-message>')
+        expect(expandInboxReferences(state.output)).toContain('<hive-system-message>')
         if (process.platform !== 'win32') {
-          expect(state.output).toContain('STDIN:\u001b[200~<hive-system-message>')
+          expect(expandInboxReferences(state.output)).toContain(
+            'STDIN:\u001b[200~<hive-system-message>'
+          )
           expect(state.output).toContain('\u001b[201~')
         }
-        expect(state.output).toContain('recover after failed resume')
+        expect(expandInboxReferences(state.output)).toContain('recover after failed resume')
         expectOutputToContainTerminalText(state.output, '恢复后检查 Layer B 摘要')
-        expect(state.output).toContain('Bob')
-        const recoveryEnvelope = state.output.match(
+        expect(expandInboxReferences(state.output)).toContain('Bob')
+        const recoveryEnvelope = expandInboxReferences(state.output).match(
           /<hive-system-message>[\s\S]*?<\/hive-system-message>/
         )?.[0]
         expect(recoveryEnvelope).toBeDefined()

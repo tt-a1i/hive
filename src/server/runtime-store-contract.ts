@@ -48,7 +48,7 @@ export interface RuntimeStore extends DispatchMessageOperations {
   ) => AgentSummary
   updateWorkerAvatar: (workspaceId: string, workerId: string, avatar: string | null) => AgentSummary
   renameWorker: (workspaceId: string, workerId: string, name: string) => AgentSummary
-  recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => void
+  recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => Promise<void>
   deliverUserInput: (workspaceId: string, orchestratorId: string, text: string) => Promise<void>
   dispatchTask: (
     workspaceId: string,
@@ -222,6 +222,7 @@ export interface RuntimeStore extends DispatchMessageOperations {
 }
 
 export interface RuntimeStoreOptions {
+  getHivePort?: () => string
   dataDir?: string
   agentManager?: AgentManager
 }

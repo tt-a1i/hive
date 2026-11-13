@@ -1,14 +1,20 @@
 import type { AgentSummary, WorkspaceSummary } from '../shared/types.js'
 import { classifyCompletedRunStatus } from './agent-exit-classification.js'
+import type { AgentInbox } from './agent-inbox.js'
 import type { AgentManager } from './agent-manager.js'
 import { buildAgentRunBootstrap, startAgentRunCapture } from './agent-run-bootstrap.js'
 import { handleAgentRunExit } from './agent-run-exit-handler.js'
-import type { AgentRunExitContext, AgentRunStarterStorePort } from './agent-run-start-context.js'
+import type {
+  AgentExitListener,
+  AgentRunExitContext,
+  AgentRunStarterStorePort,
+} from './agent-run-start-context.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { AgentSessionStorePort } from './agent-runtime-ports.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import { logAgentStartupFailure } from './agent-startup-diagnostics.js'
 import {
+  buildAgentSessionBindingMarker,
   buildAgentStartupInstructions,
   buildWorkflowAgentStartupInstructions,
 } from './agent-startup-instructions.js'
@@ -19,6 +25,7 @@ import { ensureCodexDirectoryTrusted } from './codex-trust-store.js'
 import type { CommandPresetRecord } from './command-preset-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
+import { nativeIdentityArgs } from './native-agent-identity.js'
 import {
   createPostStartInputWriter,
   isInteractiveAgentCommand,
@@ -33,12 +40,13 @@ import { normalizeExecutableToken } from './startup-command-parser.js'
 interface AgentRunStarterInput {
   agentManager: AgentManager | undefined
   registry: LiveRunRegistry
-  onAgentExit: (workspaceId: string, agentId: string) => void
+  onAgentExit: AgentExitListener
   store: AgentRunStarterStorePort
   sessionStore: AgentSessionStorePort
   tokenRegistry: AgentTokenRegistry
   getCommandPreset: (id: string) => CommandPresetRecord | undefined
   getAgent: ((workspaceId: string, agentId: string) => AgentSummary | undefined) | undefined
+  inbox: AgentInbox
   restartPolicy: RestartPolicy
   /** Resolves the live experimental flags for the orchestrator's startup
    *  prompt (`workflowsEnabled` gates the `team workflow` line + authoring
@@ -57,6 +65,7 @@ export const createAgentRunStarter =
     getCommandPreset,
     getAgent,
     restartPolicy,
+    inbox,
     getFlags,
   }: AgentRunStarterInput) =>
   async (
@@ -129,11 +138,18 @@ export const createAgentRunStarter =
       },
     }
 
+    const nativeArgs = await nativeIdentityArgs(
+      config,
+      config.commandPresetId ? getCommandPreset(config.commandPresetId) : undefined,
+      agent,
+      { ...process.env, ...startEnv },
+      isResumeLaunchConfig(startConfig)
+    )
     let run: Awaited<ReturnType<AgentManager['startAgent']>>
     try {
       run = await agentManager.startAgent({
         ...startInput,
-        args: codexTeamEnvironmentArgs(commandBrand, startConfig.args),
+        args: [...codexTeamEnvironmentArgs(commandBrand, startConfig.args), ...nativeArgs],
       })
     } catch (error) {
       tokenRegistry.revokeIfMatches(agentId, token)
@@ -227,14 +243,22 @@ export const createAgentRunStarter =
       })
       tokenRegistry.revokeIfMatches(agentId, token)
       // Ensure §12 three-state: failed spawn must flip AgentSummary to stopped.
-      onAgentExit(workspace.id, agentId)
+      onAgentExit(workspace.id, agentId, {
+        runId: run.runId,
+        exitCode: run.exitCode,
+        userStopped: false,
+      })
       registry.resolveExit(run.runId)
       registry.clearPendingExitCode(run.runId)
       failPostStartInput(new Error('Agent failed to start'))
       return liveRun
     }
 
+    const captureController = new AbortController()
+    liveRun.captureController = captureController
+    void registry.getExitEntry(run.runId)?.promise.then(() => captureController.abort())
     startAgentRunCapture({
+      signal: captureController.signal,
       agentId,
       getRunOutput: () => {
         try {
@@ -248,10 +272,22 @@ export const createAgentRunStarter =
       startConfig,
       workspace,
     })
-    const postStartWriter = createPostStartInputWriter(
+    const writePostStartInput = createPostStartInputWriter(
       agentManager,
       startConfig.interactiveCommand ?? startConfig.command
     )
+    const postStartWriter = (targetRunId: string, text: string, kind = 'startup') => {
+      const prepared = inbox.prepare(workspace.id, text, { kind })
+      if (!agent || prepared === text) return writePostStartInput(targetRunId, prepared)
+      // Session capture matches this canonical marker in the native CLI transcript.
+      // IDs are the only data placed on the wakeup line; reject line injection.
+      if (!/^[a-zA-Z0-9_:-]+$/.test(workspace.id) || !/^[a-zA-Z0-9_:-]+$/.test(agent.id))
+        return writePostStartInput(targetRunId, text)
+      return writePostStartInput(
+        targetRunId,
+        `${buildAgentSessionBindingMarker({ agent, workspace })} ${prepared}`
+      )
+    }
     queueMicrotask(() => {
       try {
         let restartWrite: Promise<void> | null = null
@@ -261,7 +297,7 @@ export const createAgentRunStarter =
           startConfig,
           workspace,
           writeToRun: (targetRunId, text) => {
-            restartWrite = postStartWriter(targetRunId, text)
+            restartWrite = postStartWriter(targetRunId, text, 'recovery')
             return restartWrite
           },
         })

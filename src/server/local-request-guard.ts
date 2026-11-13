@@ -18,19 +18,21 @@ const normalizeRemoteAddress = (address: string) =>
 const isLocalRemoteAddress = (address: string) =>
   LOCAL_REMOTE_ADDRESSES.has(normalizeRemoteAddress(address))
 
-const isLocalAuthority = (authority: string) => {
+const parseLocalAuthority = (authority: string): URL | null => {
   try {
-    return isLocalHostname(new URL(`http://${authority}`).hostname)
+    const url = new URL(`http://${authority}`)
+    if (
+      !isLocalHostname(url.hostname) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    )
+      return null
+    return url
   } catch {
-    return false
-  }
-}
-
-const isLocalOrigin = (origin: string) => {
-  try {
-    return isLocalHostname(new URL(origin).hostname)
-  } catch {
-    return false
+    return null
   }
 }
 
@@ -39,11 +41,36 @@ export const getLocalRequestRejection = (request: IncomingMessage): string | nul
   if (remoteAddress && !isLocalRemoteAddress(remoteAddress)) return 'non-local remote address'
 
   const host = firstHeader(request.headers.host)
-  if (host && !isLocalAuthority(host)) return 'non-local Host header'
+  const authority = host ? parseLocalAuthority(host) : null
+  if (!authority) return host ? 'non-local Host header' : 'missing Host header'
+  const boundPort = request.socket.localPort
+  const configuredPort = process.env.HIVE_WEB_PORT
+  const devPort =
+    configuredPort && /^\d+$/.test(configuredPort) && Number(configuredPort) <= 65535
+      ? Number(configuredPort)
+      : undefined
+  const hostPort = Number(authority.port || 80)
+  if (hostPort !== boundPort && hostPort !== devPort) return 'invalid Host port'
 
   const origin = firstHeader(request.headers.origin)
-  if (origin && !isLocalOrigin(origin)) return 'non-local Origin header'
-
+  if (origin) {
+    try {
+      const parsed = new URL(origin)
+      if (!isLocalHostname(parsed.hostname)) return 'non-local Origin header'
+      const configuredDevOrigin =
+        devPort !== undefined &&
+        isLocalHostname(parsed.hostname) &&
+        Number(parsed.port || 80) === devPort
+      if (
+        parsed.protocol !== 'http:' ||
+        origin !== parsed.origin ||
+        (parsed.origin !== authority.origin && !configuredDevOrigin)
+      )
+        return 'invalid Origin header'
+    } catch {
+      return 'invalid Origin header'
+    }
+  }
   return null
 }
 

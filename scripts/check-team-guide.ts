@@ -264,14 +264,14 @@ try {
   pass('an HTTP runtime without the guide endpoint fails explicitly despite a local snapshot')
 
   const saved = await cli(nested, cleanEnv(), ['guide', 'workflow'])
-  assert.match(saved, /Saved reference only/u)
-  assert.match(saved, /current capabilities are unknown/u)
-  assert.ok(saved.includes(staleMarker))
+  assert.match(saved, /Offline reference only/u)
+  assert.match(saved, /current capabilities are unknown/iu)
+  assert.ok(!saved.includes(staleMarker))
   const offline = await cli(root, cleanEnv(), ['guide', 'workflow'])
   assert.match(offline, /Offline reference only/u)
   assert.match(offline, /availability and CLI policy are unknown/u)
   assert.ok(!offline.includes('Workflow commands are disabled'))
-  pass('offline saved and generated guides explicitly leave current capabilities unknown')
+  pass('offline guides ignore project files and leave current capabilities unknown')
 
   const receipt = {
     outcome: 'passed',

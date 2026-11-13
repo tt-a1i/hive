@@ -1,12 +1,11 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import type { TeamListItemPayload } from '../../src/shared/types.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences, inboxReaderCommonJsSource } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 import { prependPassiveWorkflowCliPath } from '../helpers/workflow-fake-cli.js'
 
@@ -19,6 +18,7 @@ const writeSlowHermesCli = (binDir: string, promptDelayMs = 350) => {
   writeFileSync(
     scriptPath,
     [
+      inboxReaderCommonJsSource,
       "process.stdin.setEncoding('utf8')",
       'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
       "const PASTE_END = '\\u001b[201~'",
@@ -28,6 +28,7 @@ const writeSlowHermesCli = (binDir: string, promptDelayMs = 350) => {
       `setTimeout(() => process.stdout.write('Welcome to Hermes Agent! Type your message or /help for commands.\\n❯ '), ${promptDelayMs})`,
       "process.stdin.on('data', (chunk) => {",
       '  buffer += chunk',
+      '  buffer = expandReceivedInbox(buffer)',
       "  process.stdout.write('IN:' + chunk)",
       '  const pasteEnd = buffer.indexOf(PASTE_END)',
       "  if (!pasted && (pasteEnd >= 0 || (process.platform === 'win32' && buffer.includes('</hive-message>')))) {",
@@ -179,8 +180,8 @@ describe('queued dispatch to a stopped worker (#33)', () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         // The passive worker echoes injected stdin; the dispatch payload
         // carries the dispatch id and the task text.
-        expect(run?.output).toContain(sent.dispatch_id)
-        expect(run?.output).toContain('implement login')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(sent.dispatch_id)
+        expect(expandInboxReferences(run?.output ?? '')).toContain('implement login')
       })
       const delivered = hive.store
         .listDispatches(workspace.id)
@@ -273,7 +274,7 @@ describe('queued dispatch to a stopped worker (#33)', () => {
 
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        const output = run?.output ?? ''
+        const output = expandInboxReferences(run?.output ?? '')
         const startupIndex = output.indexOf('KIND:startup')
         const firstSubmitIndex = output.indexOf('SUBMITTED')
         const dispatchIndex = output.indexOf(`KIND:dispatch:${sent.dispatch_id}`)
@@ -354,8 +355,10 @@ describe('queued dispatch to a stopped worker (#33)', () => {
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
         expect(run?.status).toBe('running')
-        expect(run?.output).toContain('Hermes booting before prompt readiness')
-        expect(run?.output).not.toContain('KIND:startup')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(
+          'Hermes booting before prompt readiness'
+        )
+        expect(expandInboxReferences(run?.output ?? '')).not.toContain('KIND:startup')
       }, 4000)
 
       const sendResponse = await fetch(`${baseUrl}/api/team/send`, {
@@ -380,7 +383,7 @@ describe('queued dispatch to a stopped worker (#33)', () => {
 
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        const output = run?.output ?? ''
+        const output = expandInboxReferences(run?.output ?? '')
         const startupIndex = output.indexOf('KIND:startup')
         const firstSubmitIndex = output.indexOf('SUBMITTED')
         const dispatchIndex = output.indexOf(`KIND:dispatch:${sent.dispatch_id}`)
@@ -453,8 +456,8 @@ describe('queued dispatch to a stopped worker (#33)', () => {
       // orchestrator echoes its stdin into the run output).
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
-        expect(run?.output).toContain('DROPPED')
-        expect(run?.output).toContain(dispatch.id)
+        expect(expandInboxReferences(run?.output ?? '')).toContain('DROPPED')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(dispatch.id)
       })
     } finally {
       await hive.close()
