@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { runHiveCommand } from '../src/cli/hive.js'
+import { expandInboxReferences } from '../tests/helpers/inbox.js'
 
 const root = await mkdtemp(join(tmpdir(), 'hive-event-guidance-'))
 const previousDataDir = process.env.HIVE_DATA_DIR
@@ -40,7 +41,7 @@ const answerQuestion = async (messageId: string, recipientId: string) => {
   const deadline = Date.now() + 10000
   while (!command && Date.now() < deadline) {
     const { output } = await (await request(`/api/runtime/runs/${runs.get(recipientId)}`)).json()
-    const tail = String(output).split(`message="${messageId}"`)[1]
+    const tail = expandInboxReferences(String(output)).split(`message="${messageId}"`)[1]
     const envelope = tail?.includes('</hive-message>')
       ? tail.split('</hive-message>')[0]
       : undefined

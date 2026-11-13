@@ -1,12 +1,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 
 const tempDirs: string[] = []
 const servers: Array<{ close: (callback?: (error?: Error) => void) => unknown }> = []
@@ -96,7 +96,9 @@ describe('team runtime flow with real PTYs', () => {
       hivePort: '4010',
     })
     await waitFor(() => {
-      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain('FLOW_READY')
+      expect(
+        expandInboxReferences(store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? '')
+      ).toContain('FLOW_READY')
     })
 
     const app = createApp({ store })
@@ -128,9 +130,9 @@ describe('team runtime flow with real PTYs', () => {
 
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, worker.id)
-      expect(run?.output).toContain('PROMPT:')
-      expect(run?.output).toContain('实现登录')
-      expect(run?.output).toContain('并补测试')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('PROMPT:')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('实现登录')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('并补测试')
     })
 
     expect(store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(
@@ -190,7 +192,9 @@ describe('team runtime flow with real PTYs', () => {
       hivePort: '4010',
     })
     await waitFor(() => {
-      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain('FLOW_READY')
+      expect(
+        expandInboxReferences(store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? '')
+      ).toContain('FLOW_READY')
       expect(store.getActiveRunByAgentId(workspace.id, orchestrator.id)?.output).toContain(
         'FLOW_READY'
       )
@@ -205,9 +209,9 @@ describe('team runtime flow with real PTYs', () => {
         status: 'submitted',
         deliveredAt: expect.any(Number),
       })
-      expect(store.getActiveRunByAgentId(workspace.id, worker.id)?.output).toContain(
-        'Report this task'
-      )
+      expect(
+        expandInboxReferences(store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? '')
+      ).toContain('Report this task')
     })
 
     const app = createApp({ store })
@@ -241,9 +245,9 @@ describe('team runtime flow with real PTYs', () => {
 
     await waitFor(() => {
       const run = store.getActiveRunByAgentId(workspace.id, orchestrator.id)
-      expect(run?.output).toContain('ORCH:')
-      expect(run?.output).toContain('登录接口已完成')
-      expect(run?.output).toContain('src/auth.ts')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('ORCH:')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('登录接口已完成')
+      expect(expandInboxReferences(run?.output ?? '')).toContain('src/auth.ts')
     })
 
     expect(store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(

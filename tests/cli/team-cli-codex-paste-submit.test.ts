@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -42,11 +43,6 @@ const waitFor = async (
 const countSubmitted = (output: string | undefined) => output?.match(/SUBMITTED:/g)?.length ?? 0
 const readCounter = (filePath: string) =>
   existsSync(filePath) ? Number(readFileSync(filePath, 'utf8')) : 0
-const outputFromMarker = (output: string | undefined, marker: string) => {
-  const index = output?.indexOf(marker) ?? -1
-  return index >= 0 ? output?.slice(index) : ''
-}
-
 const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number } = {}) => {
   const scriptPath = join(binDir, 'codex-node.js')
   writeFileSync(
@@ -55,7 +51,7 @@ const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number }
       "process.stdin.setEncoding('utf8')",
       'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
       `const ACK_DELAY_MS = ${fakeCodexPasteAckDelayMs}`,
-      "const ACK_MIN_CHARS = Number(process.env.HIVE_FAKE_CODEX_ACK_MIN_CHARS || '0')",
+      "const ACK_MIN_CHARS = Number(process.env.HIVE_FAKE_CODEX_ACK_MIN_CHARS || '2000')",
       "const ACK_FIRST_ONLY = process.env.HIVE_FAKE_CODEX_ACK_FIRST_ONLY === '1'",
       "const ACK_FILE = process.env.HIVE_FAKE_CODEX_ACK_FILE || ''",
       "const PASTE_FILE = process.env.HIVE_FAKE_CODEX_PASTE_FILE || ''",
@@ -101,7 +97,7 @@ const writeFakeCodexCli = (binDir: string, input: { exitOnPasteNumber?: number }
       '  inputBuffer += chunk',
       '  while (inputBuffer.length) {',
       '    const terminators = WINDOWS_CONPTY_STRIPS_PASTE_BOUNDARIES && !inputBuffer.includes(PASTE_START)',
-      "      ? [PASTE_END, '</hive-message>', '</hive-system-message>'] : [PASTE_END]",
+      "      ? [PASTE_END, '</hive-message>', '</hive-system-message>', 'for the complete Hive system message.'] : [PASTE_END]",
       '    const boundary = terminators.map(marker => ({ marker, index: inputBuffer.indexOf(marker) }))',
       '      .filter(item => item.index >= 0).sort((a, b) => a.index - b.index)[0]',
       '    if (!boundary) break',
@@ -131,7 +127,7 @@ afterEach(() => {
 })
 
 describe('team send Codex pasted-content submit regression', () => {
-  test('team send through the CLI waits for Codex pasted-content acknowledgement before submit', async () => {
+  test('team send submits a short file wakeup and preserves the complete dispatch', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-codex-paste-'))
     const workspacePath = join(dataDir, 'workspace')
     const binDir = join(dataDir, 'bin')
@@ -231,9 +227,11 @@ describe('team send Codex pasted-content submit regression', () => {
 
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        const dispatchOutput = outputFromMarker(run?.output, marker)
-        expect(dispatchOutput).toContain('[Pasted Content ')
-        expect(countSubmitted(dispatchOutput)).toBe(1)
+        const output = run?.output ?? ''
+        expect(output).toContain('type=dispatch')
+        expect(output).not.toContain(marker)
+        expect(expandInboxReferences(output)).toContain(mediumTask)
+        expect(output).not.toContain('EARLY_ENTER_IGNORED')
         expect(countSubmitted(run?.output)).toBeGreaterThanOrEqual(submittedBeforeSend + 1)
         expect(readCounter(pasteFile)).toBeGreaterThanOrEqual(pasteBeforeSend + 1)
       }, 7000)
@@ -261,9 +259,7 @@ describe('team send Codex pasted-content submit regression', () => {
       HIVE_DATA_DIR: dataDir,
       HIVE_FAKE_CODEX_ACK_FILE: ackFile,
       HIVE_FAKE_CODEX_PASTE_FILE: pasteFile,
-      // Simulate real Codex behavior for short report pastes: startup still
-      // gets the collapsed-paste ack, but the report is rendered literally in
-      // the input box and never emits "[Pasted Content]".
+      // Short inbox wakeups render literally without a collapsed-paste ack.
       HIVE_FAKE_CODEX_ACK_FIRST_ONLY: '1',
       PATH: `${binDir}${delimiter}${originalEnv.PATH ?? ''}`,
     }
@@ -328,7 +324,7 @@ describe('team send Codex pasted-content submit regression', () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
         submittedBeforeReport = countSubmitted(run?.output)
         expect(submittedBeforeReport).toBeGreaterThanOrEqual(1)
-        expect(readCounter(ackFile)).toBeGreaterThanOrEqual(1)
+        expect(readCounter(pasteFile)).toBeGreaterThanOrEqual(1)
         expect(run?.output).not.toContain('EARLY_ENTER_IGNORED')
       }, 7000)
 
@@ -351,8 +347,10 @@ describe('team send Codex pasted-content submit regression', () => {
 
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
-        const reportOutput = outputFromMarker(run?.output, marker)
-        expect(reportOutput).toContain(marker)
+        const output = run?.output ?? ''
+        expect(output).toContain('type=report')
+        expect(output).not.toContain(marker)
+        expect(expandInboxReferences(output)).toContain(marker)
         expect(countSubmitted(run?.output)).toBeGreaterThanOrEqual(submittedBeforeReport + 1)
         expect(run?.output).not.toContain('EARLY_ENTER_IGNORED')
       }, 2500)
