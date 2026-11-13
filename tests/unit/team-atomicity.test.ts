@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import type { AgentRuntime } from '../../src/server/agent-runtime-contract.js'
 import {
   createDispatchLedgerStore,
   type DispatchRecord,
 } from '../../src/server/dispatch-ledger-store.js'
+import { createReportOutboxDelivery } from '../../src/server/report-outbox-delivery.js'
 import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
@@ -12,6 +14,7 @@ import { createWorkflowDispatchAwaiter } from '../../src/server/workflow-dispatc
 
 const operationDatabases: Database[] = []
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   for (const db of operationDatabases.splice(0)) db.close()
 })
@@ -735,553 +738,6 @@ describe('team atomicity', () => {
     )
   })
 
-  test('reportTask does not write orchestrator stdin when dispatch ledger update fails', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteMessage = vi.fn()
-    const markTaskReported = vi.fn()
-    const deliverSystemMessageToAgent = vi.fn(() => Promise.resolve())
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
-        deliverSystemMessageToAgent,
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker: vi.fn(() => {
-        throw new Error('dispatch ledger failed')
-      }),
-      reportOutbox: {
-        deletePendingForDispatch: vi.fn(),
-        enqueue: vi.fn(),
-        listPending: vi.fn(() => []),
-        markDelivered: vi.fn(),
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported,
-      } as never,
-    })
-
-    let rejected = false
-    try {
-      ops.reportTask(workspace.id, worker.id, {
-        requireActiveRun: true,
-        status: 'success',
-        text: 'Done',
-      })
-    } catch {
-      rejected = true
-    }
-    expect(rejected).toBe(true)
-
-    expect(deliverSystemMessageToAgent).not.toHaveBeenCalled()
-    expect(markTaskReported).not.toHaveBeenCalled()
-    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
-  })
-
-  test('reportTask queues the report for redelivery when orchestrator stdin forwarding fails', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteMessage = vi.fn()
-    const markDispatchReportedByWorker = vi.fn(() => ({ ...dispatch, status: 'reported' as const }))
-    const markTaskReported = vi.fn()
-    const pendingEntries: Array<{ id: number; payload: string }> = []
-    const enqueue = vi.fn()
-    const deliverSystemMessageToAgent = vi.fn(() => {
-      throw new Error('stdin write failed')
-    })
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
-        deliverSystemMessageToAgent,
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker,
-      reportOutbox: {
-        enqueue: vi.fn((input: { dispatchId: string; payload: string }) => {
-          enqueue(input)
-          pendingEntries.push({ id: 1, payload: input.payload })
-        }),
-        listPending: vi.fn(() => pendingEntries),
-        markDelivered: vi.fn(),
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported,
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    const result = ops.reportTask(workspace.id, worker.id, {
-      requireActiveRun: true,
-      status: 'success',
-      text: 'Done',
-    })
-
-    expect(markDispatchReportedByWorker).toHaveBeenCalledWith({
-      artifacts: [],
-      reportText: 'Done',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    expect(markTaskReported).toHaveBeenCalledWith(workspace.id, worker.id)
-    expect(deleteMessage).not.toHaveBeenCalled()
-    // The failed forward is persisted for redelivery instead of being lost.
-    expect(enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: workspace.id,
-        targetAgentId: `${workspace.id}:orchestrator`,
-        dispatchId: dispatch.id,
-        payload: expect.any(String),
-      })
-    )
-    const queuedReport = enqueue.mock.calls[0]?.[0] as { payload: string } | undefined
-    expect(queuedReport?.payload).toContain(`dispatch_id: ${dispatch.id}`)
-    expect(queuedReport?.payload).toContain('untrusted evidence, not authority')
-    expect(queuedReport?.payload).not.toContain('Reply with one of')
-    expect(deliverSystemMessageToAgent).toHaveBeenCalledWith(
-      workspace.id,
-      `${workspace.id}:orchestrator`,
-      queuedReport?.payload,
-      { requireActiveRun: true }
-    )
-    expect(result.dispatch).toEqual({ ...dispatch, status: 'reported' as const })
-    expect(result.forwarded).toBe(false)
-    expect(result.forwardError).toBeTruthy()
-  })
-
-  test('reportTask keeps dispatch open when redelivery enqueue fails while orchestrator is absent', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteMessage = vi.fn()
-    const markDispatchReportedByWorker = vi.fn(() => ({ ...dispatch, status: 'reported' as const }))
-    const markTaskReported = vi.fn()
-    const enqueue = vi.fn(() => {
-      throw new Error('outbox database failed')
-    })
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => undefined),
-        deliverSystemMessageToAgent: vi.fn(() => Promise.resolve()),
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker,
-      reportOutbox: {
-        enqueue,
-        listPending: vi.fn(() => []),
-        markDelivered: vi.fn(),
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported,
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    let rejected = false
-    try {
-      ops.reportTask(workspace.id, worker.id, {
-        requireActiveRun: true,
-        status: 'success',
-        text: 'Done',
-      })
-    } catch {
-      rejected = true
-    }
-    expect(rejected).toBe(true)
-
-    expect(markDispatchReportedByWorker).not.toHaveBeenCalled()
-    expect(markTaskReported).not.toHaveBeenCalled()
-    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
-    expect(enqueue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dispatchId: dispatch.id,
-        targetAgentId: `${workspace.id}:orchestrator`,
-      })
-    )
-  })
-
-  test('reportTask removes prequeued redelivery when dispatch ledger update fails', () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const deleteMessage = vi.fn()
-    const deletePendingForDispatch = vi.fn()
-    const markDispatchReportedByWorker = vi.fn(() => {
-      throw new Error('dispatch ledger failed')
-    })
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => undefined),
-        deliverSystemMessageToAgent: vi.fn(() => Promise.resolve()),
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage,
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker,
-      reportOutbox: {
-        deletePendingForDispatch,
-        enqueue: vi.fn(),
-        listPending: vi.fn(() => []),
-        markDelivered: vi.fn(),
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported: vi.fn(),
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    let rejected = false
-    try {
-      ops.reportTask(workspace.id, worker.id, {
-        requireActiveRun: true,
-        status: 'success',
-        text: 'Done',
-      })
-    } catch {
-      rejected = true
-    }
-    expect(rejected).toBe(true)
-
-    expect(markDispatchReportedByWorker).toHaveBeenCalled()
-    expect(deletePendingForDispatch).toHaveBeenCalledWith(dispatch.id)
-    expect(deleteMessage).toHaveBeenCalledWith({ sequence: 1 })
-  })
-
-  test('reportTask leaves prequeued redelivery pending when async forward fails', async () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const pendingEntries: Array<{ id: number; payload: string }> = []
-    const enqueue = vi.fn()
-    const markDelivered = vi.fn()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
-        deliverSystemMessageToAgent: vi.fn(() => Promise.reject(new Error('stdin write failed'))),
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage: vi.fn(),
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker: vi.fn(() => ({ ...dispatch, status: 'reported' as const })),
-      reportOutbox: {
-        enqueue: vi.fn((input: { dispatchId: string; payload: string }) => {
-          enqueue(input)
-          pendingEntries.push({ id: 1, payload: input.payload })
-        }),
-        listPending: vi.fn(() => pendingEntries),
-        markDelivered,
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported: vi.fn(),
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    const result = ops.reportTask(workspace.id, worker.id, {
-      requireActiveRun: true,
-      status: 'success',
-      text: 'Done',
-    })
-    expect(result.forwarded).toBe(false)
-    expect(result.forwardError).toBeNull()
-    expect(result.deliveryState).toBe('delivering')
-
-    await tick()
-
-    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ dispatchId: dispatch.id }))
-    expect(markDelivered).not.toHaveBeenCalled()
-  })
-
-  test('reportTask marks prequeued redelivery delivered when async forward succeeds', async () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const pendingEntries: Array<{ id: number; payload: string }> = []
-    const enqueue = vi.fn()
-    const markDelivered = vi.fn()
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
-        deliverSystemMessageToAgent: vi.fn(() => Promise.resolve()),
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage: vi.fn(),
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker: vi.fn(() => ({ ...dispatch, status: 'reported' as const })),
-      reportOutbox: {
-        enqueue: vi.fn((input: { dispatchId: string; payload: string }) => {
-          enqueue(input)
-          pendingEntries.push({ id: 1, payload: input.payload })
-        }),
-        listPending: vi.fn(() => pendingEntries),
-        markDelivered,
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported: vi.fn(),
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    const result = ops.reportTask(workspace.id, worker.id, {
-      requireActiveRun: true,
-      status: 'success',
-      text: 'Done',
-    })
-    expect(result.forwarded).toBe(false)
-
-    await tick()
-
-    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ dispatchId: dispatch.id }))
-    expect(markDelivered).toHaveBeenCalledWith(1)
-  })
-
-  test('reportTask does not redeliver its pending report when outbox drain re-enters before the write settles', async () => {
-    const store = createRuntimeStore()
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
-    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
-    const dispatch = makeDispatch({
-      artifacts: [],
-      createdAt: Date.now(),
-      deliveredAt: null,
-      fromAgentId: `${workspace.id}:orchestrator`,
-      id: 'dispatch-1',
-      reportedAt: null,
-      reportText: null,
-      sequence: 1,
-      status: 'queued',
-      submittedAt: null,
-      text: 'Implement login',
-      toAgentId: worker.id,
-      workspaceId: workspace.id,
-    })
-    const pendingEntries: Array<{ id: number; payload: string }> = []
-    const enqueue = vi.fn((input: { dispatchId: string; payload: string }) => {
-      pendingEntries.push({ id: 1, payload: input.payload })
-    })
-    const markDelivered = vi.fn()
-    let resolveDelivery!: () => void
-    const delivery = new Promise<void>((resolve) => {
-      resolveDelivery = resolve
-    })
-    const deliverSystemMessageToAgent = vi.fn(() => delivery)
-
-    const ops = createTeamOperations({
-      ...operationDependencies(),
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'run-1' })),
-        deliverSystemMessageToAgent,
-        writeSendPrompt: vi.fn(),
-        writeUserInputPrompt: vi.fn(),
-      } as never,
-      createDispatch: vi.fn(),
-      deleteDispatch: vi.fn(),
-      deleteMessage: vi.fn(),
-      findOpenDispatch: vi.fn(() => dispatch),
-      insertMessage: vi.fn(() => ({ sequence: 1 })),
-      markDispatchCancelled: vi.fn(),
-      claimQueuedDispatch: vi.fn(() => true),
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => []),
-      markDispatchReportedByWorker: vi.fn(() => ({ ...dispatch, status: 'reported' as const })),
-      reportOutbox: {
-        enqueue,
-        listPending: vi.fn(() => pendingEntries),
-        markDelivered,
-        pendingCount: vi.fn(() => 0),
-      } as never,
-      workspaceStore: {
-        getWorker: store.getWorker,
-        markTaskReported: vi.fn(),
-      } as never,
-      getFlags: () => ({ workflowsEnabled: true }),
-    })
-
-    const result = ops.reportTask(workspace.id, worker.id, {
-      requireActiveRun: true,
-      status: 'success',
-      text: 'Done',
-    })
-    ops.drainReportOutbox(workspace.id)
-
-    expect(result.forwarded).toBe(false)
-    expect(deliverSystemMessageToAgent).toHaveBeenCalledTimes(1)
-
-    resolveDelivery()
-    await tick()
-
-    expect(markDelivered).toHaveBeenCalledWith(1)
-  })
-
   test('statusTask returns delivering before writeStatusPrompt settles', async () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
@@ -1469,146 +925,111 @@ describe('team atomicity', () => {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-const makeDrainOps = (overrides: {
-  agentRuntime: Record<string, unknown>
-  reportOutbox: Record<string, unknown>
-}) =>
-  createTeamOperations({
-    agentRuntime: overrides.agentRuntime as never,
-    createDispatch: vi.fn(),
-    deleteDispatch: vi.fn(),
-    deleteMessage: vi.fn(),
-    findOpenDispatch: vi.fn(),
-    findOpenDispatchById: vi.fn(),
-    listOpenWorkspaceDispatches: vi.fn(() => []),
-    insertMessage: vi.fn(),
-    markDispatchCancelled: vi.fn(),
-    claimQueuedDispatch: vi.fn(() => true),
-    reparkClaimedDispatch: vi.fn(() => true),
-    markDispatchReportedByWorker: vi.fn(),
-    reportOutbox: overrides.reportOutbox as never,
-    workflowDispatchAwaiter: { notifyReport: vi.fn(), notifyCancel: vi.fn() } as never,
-    workspaceStore: {} as never,
+// Report acceptance/ledger rollback and real PTY delivery are covered by
+// tests/server/team-report-outbox-route.test.ts and agent-inbox-{delivery,failure}.test.ts.
+// These unit tests isolate batching against a real SQLite queue and observable output.
+const reportDeliveryHarness = () => {
+  const outbox = createReportOutboxStore(operationDatabase())
+  const received: Array<{ workspaceId: string; target: string; payload: string }> = []
+  let active = true
+  let failure: Error | undefined
+  let acknowledgement: Promise<void> | undefined
+  const runtime = {
+    getActiveRunByAgentId: () => (active ? { runId: 'real-queue-sink' } : undefined),
+    deliverSystemMessageToAgent: async (workspaceId, target, payload) => {
+      const text = typeof payload === 'function' ? payload() : payload
+      if (text === undefined) return
+      if (failure) throw failure
+      if (acknowledgement) await acknowledgement
+      received.push({ workspaceId, target, payload: text })
+    },
+  } as Pick<AgentRuntime, 'getActiveRunByAgentId' | 'deliverSystemMessageToAgent'>
+  const drain = createReportOutboxDelivery({
+    outbox,
+    runtime: runtime as AgentRuntime,
+    isClosing: () => false,
   })
+  return {
+    outbox,
+    received,
+    drain,
+    setActive: (value: boolean) => {
+      active = value
+    },
+    setFailure: (value: Error | undefined) => {
+      failure = value
+    },
+    setAcknowledgement: (value: Promise<void>) => {
+      acknowledgement = value
+    },
+    enqueue: (id: string, payload: string, target = 'ws-1:orchestrator') =>
+      outbox.enqueue({ workspaceId: 'ws-1', targetAgentId: target, dispatchId: id, payload }),
+  }
+}
 
-describe('report outbox drain', () => {
-  test('delivers each pending report to an active orchestrator and marks it delivered', async () => {
-    const deliver = vi.fn(() => Promise.resolve())
-    const markDelivered = vi.fn()
-    const ops = makeDrainOps({
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'orch-run' })),
-        deliverSystemMessageToAgent: deliver,
-      },
-      reportOutbox: {
-        listPending: vi.fn(() => [
-          { id: 1, payload: 'report-one' },
-          { id: 2, payload: 'report-two' },
-        ]),
-        markDelivered,
-      },
-    })
-
-    ops.drainReportOutbox('ws-1')
-    await tick()
-
-    expect(deliver).toHaveBeenNthCalledWith(1, 'ws-1', 'ws-1:orchestrator', 'report-one', {
-      requireActiveRun: true,
-    })
-    expect(deliver).toHaveBeenNthCalledWith(2, 'ws-1', 'ws-1:orchestrator', 'report-two', {
-      requireActiveRun: true,
-    })
-    expect(markDelivered).toHaveBeenCalledWith(1)
-    expect(markDelivered).toHaveBeenCalledWith(2)
-  })
-
-  test('delivers pending notices to the requested active agent target', async () => {
-    const deliver = vi.fn(() => Promise.resolve())
-    const listPending = vi.fn(() => [{ id: 9, payload: 'issuer-notice' }])
-    const markDelivered = vi.fn()
-    const ops = makeDrainOps({
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'worker-run' })),
-        deliverSystemMessageToAgent: deliver,
-      },
-      reportOutbox: {
-        listPending,
-        markDelivered,
-      },
-    })
-
-    ops.drainReportOutbox('ws-1', 'worker-1')
-    await tick()
-
-    expect(listPending).toHaveBeenCalledWith('ws-1', 'worker-1')
-    expect(deliver).toHaveBeenCalledWith('ws-1', 'worker-1', 'issuer-notice', {
-      requireActiveRun: true,
-    })
-    expect(markDelivered).toHaveBeenCalledWith(9)
-  })
-
-  test('does nothing when the orchestrator is not running', async () => {
-    const deliver = vi.fn(() => Promise.resolve())
-    const listPending = vi.fn(() => [{ id: 1, payload: 'report-one' }])
-    const markDelivered = vi.fn()
-    const ops = makeDrainOps({
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => undefined),
-        deliverSystemMessageToAgent: deliver,
-      },
-      reportOutbox: { listPending, markDelivered },
-    })
-
-    ops.drainReportOutbox('ws-1')
-    await tick()
-
-    expect(deliver).not.toHaveBeenCalled()
-    expect(markDelivered).not.toHaveBeenCalled()
-  })
-
-  test('keeps an entry pending when its redelivery write rejects', async () => {
-    const deliver = vi.fn(() => Promise.reject(new Error('PTY gone again')))
-    const markDelivered = vi.fn()
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const createdAt = Date.now() - 5000
-    const ops = makeDrainOps({
-      agentRuntime: {
-        getActiveRunByAgentId: vi.fn(() => ({ runId: 'orch-run' })),
-        deliverSystemMessageToAgent: deliver,
-      },
-      reportOutbox: {
-        listPending: vi.fn(() => [
-          {
-            id: 1,
-            workspaceId: 'ws-1',
-            targetAgentId: 'ws-1:orchestrator',
-            payload: 'report-one',
-            createdAt,
-          },
-        ]),
-        markDelivered,
-      },
-    })
-
-    ops.drainReportOutbox('ws-1')
-    await tick()
-
-    expect(deliver).toHaveBeenCalledTimes(1)
-    expect(markDelivered).not.toHaveBeenCalled()
-    expect(consoleError).toHaveBeenCalledWith(
-      '[hive] swallowed:teamReport.outboxDrain',
-      expect.objectContaining({
+describe('report outbox batching with durable queue', () => {
+  test('combines queued reports and marks their SQLite rows delivered only after the batch window', async () => {
+    vi.useFakeTimers()
+    const harness = reportDeliveryHarness()
+    harness.enqueue('d1', 'First accepted report')
+    harness.enqueue('d2', 'Second accepted report')
+    harness.drain('ws-1')
+    await vi.advanceTimersByTimeAsync(349)
+    expect(harness.outbox.pendingCount('ws-1', 'ws-1:orchestrator')).toBe(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(harness.received).toEqual([
+      {
         workspaceId: 'ws-1',
-        targetAgentId: 'ws-1:orchestrator',
-        pendingCount: 1,
-        oldestPendingWaitMs: expect.any(Number),
-        error: 'PTY gone again',
+        target: 'ws-1:orchestrator',
+        payload: 'First accepted report\n\nSecond accepted report',
+      },
+    ])
+    expect(harness.outbox.pendingCount('ws-1', 'ws-1:orchestrator')).toBe(0)
+  })
+
+  test('a reentrant drain cannot duplicate a batch whose downstream acknowledgement is pending', async () => {
+    vi.useFakeTimers()
+    const harness = reportDeliveryHarness()
+    let acknowledge!: () => void
+    harness.setAcknowledgement(
+      new Promise<void>((resolve) => {
+        acknowledge = resolve
       })
     )
-    const logArg = consoleError.mock.calls.find(
-      (call) => call[0] === '[hive] swallowed:teamReport.outboxDrain'
-    )?.[1] as { oldestPendingWaitMs: number; error: string }
-    expect(logArg.oldestPendingWaitMs).toBeGreaterThanOrEqual(5000)
-    expect(JSON.stringify(logArg)).not.toContain('report-one')
+    harness.enqueue('d1', 'Retain until acknowledged')
+    harness.drain('ws-1')
+    await vi.advanceTimersByTimeAsync(350)
+    harness.drain('ws-1')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(harness.outbox.pendingCount('ws-1', 'ws-1:orchestrator')).toBe(1)
+    acknowledge()
+    await vi.advanceTimersByTimeAsync(0)
+    harness.drain('ws-1')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(harness.received.map((entry) => entry.payload)).toEqual(['Retain until acknowledged'])
+    expect(harness.outbox.pendingCount('ws-1', 'ws-1:orchestrator')).toBe(0)
+  })
+
+  test('offline and failed output leave durable notices pending for a later successful targeted drain', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const harness = reportDeliveryHarness()
+    harness.enqueue('notice', 'Durable issuer notice', 'worker-1')
+    harness.setActive(false)
+    harness.drain('ws-1', 'worker-1')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(harness.outbox.pendingCount('ws-1', 'worker-1')).toBe(1)
+    harness.setActive(true)
+    harness.setFailure(new Error('Downstream is unavailable'))
+    harness.drain('ws-1', 'worker-1')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(harness.outbox.pendingCount('ws-1', 'worker-1')).toBe(1)
+    harness.setFailure(undefined)
+    harness.drain('ws-1', 'worker-1')
+    await vi.advanceTimersByTimeAsync(350)
+    expect(harness.received).toEqual([
+      { workspaceId: 'ws-1', target: 'worker-1', payload: 'Durable issuer notice' },
+    ])
+    expect(harness.outbox.pendingCount('ws-1', 'worker-1')).toBe(0)
   })
 })
