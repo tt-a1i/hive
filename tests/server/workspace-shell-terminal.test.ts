@@ -2,9 +2,10 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import WebSocket from 'ws'
 
+import { TerminalStateMirror } from '../../src/server/terminal-state-mirror.js'
 import { getWorkspaceShellAgentId } from '../../src/server/workspace-shell-runtime.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { startTestServer } from '../helpers/test-server.js'
@@ -123,13 +124,15 @@ describe('workspace shell terminal', () => {
     tempDirs.push(workspacePath)
     tempDirs.push(binDir)
     const fakeShell = join(binDir, 'fake-shell')
-    const sendExitAfterStart = process.platform === 'win32'
     if (process.platform === 'win32') {
       // Real Windows shells are launched through ComSpec=cmd.exe. Keep that
       // shape and ask the shell to exit after it starts, so this still covers
       // the PTY onExit cleanup path without pretending a .cmd file is cmd.exe.
     } else {
-      writeFileSync(fakeShell, ['#!/bin/sh', 'echo shell exiting', 'exit 0'].join('\n'))
+      writeFileSync(
+        fakeShell,
+        ['#!/bin/sh', 'read line', 'echo shell exiting', 'exit 0'].join('\n')
+      )
       chmodSync(fakeShell, 0o755)
       setEnv('SHELL', fakeShell)
     }
@@ -156,7 +159,18 @@ describe('workspace shell terminal', () => {
       expect(startResponse.status).toBe(201)
       const shell = (await startResponse.json()) as { agent_name: string; run_id: string }
       expect(shell.agent_name).toBe('Shell')
-      if (sendExitAfterStart) server.store.writeRunInput(shell.run_id, 'exit\r')
+      const dispose = vi.spyOn(TerminalStateMirror.prototype, 'dispose')
+      const control = await openSocket(
+        toWsUrl(server.baseUrl, `/ws/terminal/${shell.run_id}/control`),
+        cookie
+      )
+      const closed = new Promise<void>((resolve) => control.once('close', () => resolve()))
+      control.close()
+      await closed
+      expect(dispose).not.toHaveBeenCalled()
+      server.store.writeRunInput(shell.run_id, 'exit\r')
+      await waitFor(() => expect(dispose).toHaveBeenCalledOnce())
+      dispose.mockRestore()
 
       await waitFor(async () => {
         const runsResponse = await fetch(

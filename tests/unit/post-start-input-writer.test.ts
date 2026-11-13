@@ -66,49 +66,66 @@ describe('post-start input writer', () => {
     vi.useRealTimers()
   })
 
-  test.each(['agy', 'gemini', 'qwen'])(
-    '%s startup falls back after 30 seconds when no setup prompt is visible',
-    async (command) => {
-      vi.useFakeTimers()
-      const writes: string[] = []
-      const manager = {
-        getRun: () => ({ output: 'The old prompt anchor is no longer in scrollback', status: 'running' }),
-        writeInput: (_runId: string, text: string) => writes.push(text),
-      }
-      const done = createPostStartInputWriter(manager as never, command)('run-1', 'hello')
-      await vi.advanceTimersByTimeAsync(29999)
-      expect(writes).toEqual([])
-      await vi.advanceTimersByTimeAsync(1)
-      expect(writes).toEqual([command === 'agy' ? '\u001b[200~hello\u001b[201~' : 'hello'])
-      await vi.advanceTimersByTimeAsync(1000)
-      await done
-      expect(writes.at(-1)).toBe('\r')
+  test.each([
+    'agy',
+    'gemini',
+    'qwen',
+  ])('%s startup falls back after 30 seconds when no setup prompt is visible', async (command) => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const manager = {
+      getRun: () => ({
+        output: 'The old prompt anchor is no longer in scrollback',
+        status: 'running',
+      }),
+      writeInput: (_runId: string, text: string) => writes.push(text),
     }
-  )
+    const done = createPostStartInputWriter(manager as never, command)('run-1', 'hello')
+    await vi.advanceTimersByTimeAsync(29999)
+    expect(writes).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(writes).toEqual([command === 'agy' ? '\u001b[200~hello\u001b[201~' : 'hello'])
+    await vi.advanceTimersByTimeAsync(1000)
+    await done
+    expect(writes.at(-1)).toBe('\r')
+  })
 
-  test.each(['agy', 'claude', 'codex', 'gemini', 'qwen', 'opencode', 'hermes', 'pi', 'grok'])(
-    '%s startup rejects at the hard deadline while a trust or login prompt stays visible',
-    async (command) => {
-      vi.useFakeTimers()
-      const writes: string[] = []
-      const manager = {
-        getRun: () => ({ output: 'Sign in to continue. Do you trust this directory?', status: 'running' }),
-        writeInput: (_runId: string, text: string) => writes.push(text),
-      }
-      let failure: unknown
-      const done = createPostStartInputWriter(manager as never, command)('run-1', 'hello')
-        .catch((error) => { failure = error })
-      await vi.advanceTimersByTimeAsync(29999)
-      expect(failure).toBeUndefined()
-      expect(writes).toEqual([])
-      await vi.advanceTimersByTimeAsync(1)
-      expect(failure).toBeInstanceOf(PromptReadinessTimeoutError)
-      expect(failure).toMatchObject({ code: 'PROMPT_READINESS_TIMEOUT', command, runId: 'run-1' })
-      expect(writes).toEqual([])
-      expect(vi.getTimerCount()).toBe(0)
-      await done
+  test.each([
+    'agy',
+    'claude',
+    'codex',
+    'gemini',
+    'qwen',
+    'opencode',
+    'hermes',
+    'pi',
+    'grok',
+  ])('%s startup rejects at the hard deadline while a trust or login prompt stays visible', async (command) => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const manager = {
+      getRun: () => ({
+        output: 'Sign in to continue. Do you trust this directory?',
+        status: 'running',
+      }),
+      writeInput: (_runId: string, text: string) => writes.push(text),
     }
-  )
+    let failure: unknown
+    const done = createPostStartInputWriter(manager as never, command)('run-1', 'hello').catch(
+      (error) => {
+        failure = error
+      }
+    )
+    await vi.advanceTimersByTimeAsync(29999)
+    expect(failure).toBeUndefined()
+    expect(writes).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(failure).toBeInstanceOf(PromptReadinessTimeoutError)
+    expect(failure).toMatchObject({ code: 'PROMPT_READINESS_TIMEOUT', command, runId: 'run-1' })
+    expect(writes).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+    await done
+  })
 
   test('recognizes interactive TUI prompts', () => {
     const esc = String.fromCharCode(27)

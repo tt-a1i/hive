@@ -122,4 +122,35 @@ describe('terminal stream hub', () => {
       vi.useRealTimers()
     }
   })
+  test('natural exit releases the disconnected mirror and allows restoring the retained run', async () => {
+    const bus = createPtyOutputBus()
+    const dispose = vi.spyOn(TerminalStateMirror.prototype, 'dispose')
+    const socket = new FakeSocket()
+    const store = {
+      getLiveRun: () => ({
+        agentId: 'agent',
+        exitCode: 0,
+        output: 'retained output',
+        pid: 1,
+        runId: 'run',
+        startedAt: Date.now(),
+        status: 'exited',
+      }),
+      getPtyOutputBus: () => bus,
+      pauseTerminalRun: () => {},
+      resumeTerminalRun: () => {},
+    } as unknown as RuntimeStore
+    const hub = createTerminalStreamHub(store)
+    try {
+      hub.attachControl('run', 'client', socket as unknown as WebSocket)
+      socket.emit('close')
+      bus.notifyExit?.('run')
+      expect(dispose).toHaveBeenCalledOnce()
+      const reattached = new FakeSocket()
+      hub.attachControl('run', 'legacy', reattached as unknown as WebSocket)
+      await vi.waitFor(() => expect(reattached.sent.join('')).toContain('retained output'))
+    } finally {
+      hub.close()
+    }
+  })
 })

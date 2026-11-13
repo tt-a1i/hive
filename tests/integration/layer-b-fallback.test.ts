@@ -286,8 +286,9 @@ describe('Layer B fallback integration', () => {
     tempDirs.push(root)
     mkdirSync(workspacePathRaw, { recursive: true })
     const workspacePath = realpathSync(workspacePathRaw)
-    const aliceScript = writeEchoAgent(workspacePath, 'alice-explicit-resume.js')
-    const startupCommand = `node ${JSON.stringify(aliceScript)} --resume explicit-session`
+    process.env.HIVE_CLAUDE_PROJECTS_DIR = join(root, 'projects')
+    const claude = writeResumableClaudeEcho(workspacePath)
+    const startupCommand = `"${claude}" --resume explicit-session`
 
     const server = await startTestServer()
     try {
@@ -314,7 +315,9 @@ describe('Layer B fallback integration', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
         expect(expandInboxReferences(state.output)).toContain('Your native session resumed')
-        expect(expandInboxReferences(state.output)).not.toContain('These are current responsibility facts')
+        expect(expandInboxReferences(state.output)).not.toContain(
+          'These are current responsibility facts'
+        )
       })
 
       const recoverySummaries = listSystemMessages(server.dataDir, 'system_recovery_summary')
@@ -468,7 +471,9 @@ describe('Layer B fallback integration', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(expandInboxReferences(state.output)).toContain('STDIN:<hive-system-message>')
+        expect(state.output).toContain(
+          `STDIN:Hive session binding: workspace_id=${workspace.id}; agent_id=${alice.id} [hive-inbox `
+        )
         expect(expandInboxReferences(state.output)).toContain(
           'These are current responsibility facts'
         )
@@ -663,8 +668,8 @@ describe('Layer B fallback integration', () => {
         expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
         expect(expandInboxReferences(state.output)).toContain('<hive-system-message>')
         if (process.platform !== 'win32') {
-          expect(expandInboxReferences(state.output)).toContain(
-            'STDIN:\u001b[200~<hive-system-message>'
+          expect(state.output).toContain(
+            `STDIN:\u001b[200~Hive session binding: workspace_id=${workspace.id}; agent_id=${alice.id} [hive-inbox `
           )
           expect(state.output).toContain('\u001b[201~')
         }

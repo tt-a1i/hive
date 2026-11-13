@@ -159,7 +159,7 @@ export const createTerminalStreamHub = (store: RuntimeStore): TerminalStreamHub 
           nextState.exited = true
           nextState.outputUnsubscribe?.()
           nextState.outputUnsubscribe = null
-          const run = store.findLiveRun(runId)
+          const run = nextState.viewers.size ? store.findLiveRun(runId) : undefined
           const payload = serializeTerminalExit(run?.exitCode ?? null)
           for (const viewer of nextState.viewers.values()) {
             if (viewer.controlSocket)

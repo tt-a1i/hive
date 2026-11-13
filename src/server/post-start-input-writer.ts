@@ -575,7 +575,8 @@ const whenInteractiveInputReady = (
     // READY_TIMEOUT_MS; the other interactive presets use the longer hard
     // timeout, matching the original universal "detect-then-timeout" safety
     // net. The firstRunSetupPrompt guard below still blocks delivery while a
-    // genuine trust/login/setup prompt is on screen.
+    // genuine trust/login/setup prompt is on screen; such a blocked startup
+    // fails at the hard deadline instead of leaving its polling timer alive.
     const fallbackDeliveryDue =
       (canTimeoutBeforePromptReady(command) && elapsed >= READY_TIMEOUT_MS) ||
       (hasPromptReadyHardTimeout(command) && elapsed >= PROMPT_READY_HARD_TIMEOUT_MS)
@@ -583,7 +584,10 @@ const whenInteractiveInputReady = (
       onReady(baselineLength)
       return
     }
-    if (isKimi && now >= kimiReadyDeadline) {
+    if (
+      (isKimi && now >= kimiReadyDeadline) ||
+      (!isKimi && firstRunSetupPromptVisible && elapsed >= PROMPT_READY_HARD_TIMEOUT_MS)
+    ) {
       rejectDone(new PromptReadinessTimeoutError(command, runId))
       return
     }
