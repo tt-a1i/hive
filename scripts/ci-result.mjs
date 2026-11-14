@@ -8,12 +8,14 @@ const selected = (name) => {
   return value === 'true'
 }
 const code = selected('code')
+const gatewayPolicy = selected('gateway_policy')
 const tests = selected('tests')
 const full = selected('full')
 const native = selected('native')
 const extended = selected('extended')
 const legacy = selected('legacy')
 if (
+  (gatewayPolicy && code) ||
   (tests && !code) ||
   (legacy && !code) ||
   (full && (!tests || !native || !legacy)) ||
@@ -23,6 +25,7 @@ if (
 }
 const required = {
   verify: code,
+  'gateway-policy': gatewayPolicy,
   tests,
   platforms: native,
   extended,

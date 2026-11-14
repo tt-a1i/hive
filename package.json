@@ -70,7 +70,7 @@
     "test:mobile-e2e": "node scripts/validate-mobile-runtime-e2e.mjs",
     "test:switch-layout": "node scripts/validate-settings-switch-layout.mjs",
     "test:windows": "node scripts/run-windows-tests.mjs",
-    "test:watch": "vitest"
+    "test:watch": "node scripts/run-tests.mjs --watch"
   },
   "dependencies": {
     "@lydell/node-pty": "1.2.0-beta.15",

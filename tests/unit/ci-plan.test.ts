@@ -62,11 +62,12 @@ const planChange = (
   )
 }
 
-test('documentation and gateway-only changes do not install the desktop runtime', () => {
+test('gateway-only changes select policy checks without installing the desktop runtime', () => {
   expect(
     planChange({ 'docs/guide.md': 'text', 'gateway/src/index.ts': 'export {}' })
   ).toMatchObject({
     code: false,
+    gateway_policy: true,
     full: false,
     native: false,
     extended: false,
@@ -77,16 +78,49 @@ test('documentation and gateway-only changes do not install the desktop runtime'
   })
 })
 
-test('UI changes only need static checks and build', () => {
+test('documentation changes do not select gateway policy checks', () => {
+  expect(planChange({ 'docs/guide.md': 'text' })).toMatchObject({
+    code: false,
+    gateway_policy: false,
+  })
+})
+
+test.each([
+  'CONTEXT.md',
+  '.codex/agents/code-reviewer.toml',
+])('%s changes use the documentation-only plan', (file) => {
+  expect(planChange({ [file]: 'guidance' })).toMatchObject({
+    code: false,
+    gateway_policy: false,
+    full: false,
+    native: false,
+    tests: false,
+    inputs: [],
+  })
+})
+
+test.each([
+  '.codex/config.toml',
+  '.codex/agents/nested/config.toml',
+  'CONTEXT.md.ts',
+])('%s remains an unclassified configuration input', (file) => {
+  expect(planChange({ [file]: 'configuration' })).toMatchObject({
+    code: true,
+    full: true,
+    native: true,
+  })
+})
+
+test('web source changes select related tests', () => {
   expect(planChange({ 'web/src/example.tsx': 'export {}' })).toMatchObject({
     code: true,
     full: false,
     native: false,
     extended: false,
-    tests: false,
+    tests: true,
     legacy: false,
     shards: [1],
-    inputs: [],
+    inputs: ['web/src/example.tsx'],
   })
 })
 
@@ -191,6 +225,11 @@ test('source deletions force full validation, while removed test files are not e
     full: true,
     native: true,
   })
+  expect(planChange({ 'web/src/removed.ts': null })).toMatchObject({
+    full: true,
+    native: true,
+    tests: true,
+  })
   expect(planChange({ 'tests/unit/removed.test.ts': null })).toMatchObject({
     code: true,
     full: false,
@@ -210,6 +249,13 @@ test.each([
   })
 })
 
+test('engineering checker changes select its regression tests', () => {
+  expect(planChange({ 'scripts/check-engineering.mjs': 'export {}' })).toMatchObject({
+    full: false,
+    inputs: ['tests/unit/check-engineering.test.ts'],
+  })
+})
+
 test('unclassified scripts retain full validation', () => {
   expect(planChange({ 'scripts/new-release-step.mjs': 'export {}' })).toMatchObject({
     full: true,
@@ -222,6 +268,7 @@ test('the real runner isolates user data, selects tests, and covers full-suite s
   roots.push(root)
   mkdirSync(join(root, 'scripts'))
   mkdirSync(join(root, 'src'))
+  mkdirSync(join(root, 'web', 'src'), { recursive: true })
   mkdirSync(join(root, 'tests'))
   for (const file of ['ci-plan.mjs', 'run-tests.mjs'])
     copyFileSync(resolve('scripts', file), join(root, 'scripts', file))
@@ -236,11 +283,13 @@ test('the real runner isolates user data, selects tests, and covers full-suite s
     "export default { test: { include: ['tests/*.test.js'] } }"
   )
   writeFileSync(join(root, 'src/value.js'), 'export const value = 42')
+  writeFileSync(join(root, 'web/src/value.js'), 'export const value = 42')
+  writeFileSync(join(root, 'web/src/unrelated.js'), 'export const value = 1')
   writeFileSync(
     join(root, 'tests/selected.test.js'),
     `import { test, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
-import { value } from '../src/value.js';
+import { value } from '../web/src/value.js';
 test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', JSON.stringify({ data:process.env.HIVE_DATA_DIR, home:process.env.HOME, codex:process.env.CODEX_HOME, profile:process.env.USERPROFILE, local:process.env.LOCALAPPDATA, roaming:process.env.APPDATA, opencode:process.env.HIVE_OPENCODE_DB_PATH, gemini:process.env.HIVE_GEMINI_HOME, qwen:process.env.HIVE_QWEN_HOME })); });`
   )
   writeFileSync(
@@ -253,6 +302,7 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
       encoding: 'utf8',
       env: {
         ...process.env,
+        CI: 'true',
         CI_FULL: 'false',
         CI_TEST_INPUTS: JSON.stringify(inputs),
         CI_TEST_SHARD: '',
@@ -267,7 +317,7 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
         ...env,
       },
     })
-  const selected = run(['src/value.js'])
+  const selected = run(['web/src/value.js'])
   expect(selected.status, selected.stdout + selected.stderr).toBe(0)
   const first = JSON.parse(readFileSync(join(root, 'selected.json'), 'utf8'))
   expect(first.data).not.toBe(join(root, 'user-data'))
@@ -280,8 +330,12 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
   expect(first.gemini).toBeUndefined()
   expect(first.qwen).toBeUndefined()
   expect(existsSync(first.data)).toBe(false)
-  const mixed = run(['src/value.js', 'tests/unrelated.test.js'])
+  const mixed = run(['web/src/value.js', 'tests/unrelated.test.js'])
   expect(mixed.status, mixed.stdout + mixed.stderr).toBe(1)
+  const noRelated = run(['web/src/unrelated.js'])
+  expect(noRelated.status, noRelated.stdout + noRelated.stderr).toBe(0)
+  const missingDirect = run(['tests/missing.test.js'])
+  expect(missingDirect.status, missingDirect.stdout + missingDirect.stderr).toBe(1)
   const failed = run(['tests/unrelated.test.js'])
   expect(failed.status, failed.stdout + failed.stderr).toBe(1)
   const inventory: string[] = []
@@ -321,6 +375,7 @@ test('CI result requires all selected jobs and accepts only intentional skips', 
       result: 'success',
       outputs: {
         code: 'true',
+        gateway_policy: 'false',
         tests: 'true',
         full: 'true',
         native: 'true',
@@ -329,6 +384,7 @@ test('CI result requires all selected jobs and accepts only intentional skips', 
       },
     },
     ...Object.fromEntries(names.map((name) => [name, { result: 'success' }])),
+    'gateway-policy': { result: 'skipped' },
   }
   expect(status(full)).toBe(0)
   for (const name of names) {
@@ -341,6 +397,7 @@ test('CI result requires all selected jobs and accepts only intentional skips', 
       result: 'success',
       outputs: {
         code: 'false',
+        gateway_policy: 'false',
         tests: 'false',
         full: 'false',
         native: 'false',
@@ -349,8 +406,18 @@ test('CI result requires all selected jobs and accepts only intentional skips', 
       },
     },
     ...Object.fromEntries(names.map((name) => [name, { result: 'skipped' }])),
+    'gateway-policy': { result: 'skipped' },
   }
   expect(status(docs)).toBe(0)
+  const gateway = {
+    ...docs,
+    plan: { ...docs.plan, outputs: { ...docs.plan.outputs, gateway_policy: 'true' } },
+    'gateway-policy': { result: 'success' },
+  }
+  expect(status(gateway)).toBe(0)
+  for (const result of ['skipped', 'failure', 'cancelled', undefined]) {
+    expect(status({ ...gateway, 'gateway-policy': result ? { result } : undefined })).toBe(1)
+  }
   const backend = {
     ...docs,
     plan: {

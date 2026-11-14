@@ -13,6 +13,7 @@ const scriptTests = {
   'scripts/ci-plan.mjs': ['tests/unit/ci-plan.test.ts'],
   'scripts/run-tests.mjs': ['tests/unit/ci-plan.test.ts'],
   'scripts/ci-result.mjs': ['tests/unit/ci-plan.test.ts'],
+  'scripts/check-engineering.mjs': ['tests/unit/check-engineering.test.ts'],
   'scripts/prepare-build-artifacts.mjs': ['tests/unit/prepare-build-artifacts.test.js'],
   // Executed directly by the build or platform installation jobs.
   'scripts/clean-build.mjs': [],
@@ -61,7 +62,7 @@ if (process.argv[2] === '--run') {
         .split('\0')
         .filter(Boolean)
   const docs = (file) =>
-    /^(docs\/|README[^/]*$|CHANGELOG\.md$|AGENTS\.md$|CLAUDE\.md$|LICENSE[^/]*$|NOTICE$|TRADEMARK\.md$|SECURITY\.md$)/u.test(
+    /^(docs\/|README[^/]*$|CHANGELOG\.md$|AGENTS\.md$|CLAUDE\.md$|CONTEXT\.md$|\.codex\/agents\/[^/]+\.toml$|LICENSE[^/]*$|NOTICE$|TRADEMARK\.md$|SECURITY\.md$)/u.test(
       file
     )
   // Gateway is separately deployed and tested by Gateway Deploy; don't install the desktop app.
@@ -69,7 +70,7 @@ if (process.argv[2] === '--run') {
   let full = forced
   let native = forced
   for (const file of relevant) {
-    if (file.startsWith('src/') && !existsSync(file)) full = true
+    if ((file.startsWith('src/') || file.startsWith('web/src/')) && !existsSync(file)) full = true
     if (file.startsWith('scripts/') && !Object.hasOwn(scriptTests, file)) full = true
     if (file === '.github/workflows/ci.yml') full = true
     if (file === 'package.json') {
@@ -106,7 +107,9 @@ if (process.argv[2] === '--run') {
       full = native = true
     }
   }
-  const inputs = relevant.filter((file) => /^(src\/|tests\/)/u.test(file) && existsSync(file))
+  const inputs = relevant.filter(
+    (file) => /^(src\/|web\/src\/|tests\/)/u.test(file) && existsSync(file)
+  )
   for (const file of relevant) inputs.push(...(scriptTests[file] ?? []))
   if (relevant.includes('package.json') || relevant.includes('web/src/whats-new/changelog.ts')) {
     inputs.push('tests/unit/whats-new-select.test.ts')
@@ -117,6 +120,10 @@ if (process.argv[2] === '--run') {
   }
   const plan = {
     code: forced || relevant.length > 0,
+    gateway_policy:
+      !forced &&
+      relevant.length === 0 &&
+      files.some((file) => /^gateway\/src\/.*\.[cm]?[jt]sx?$/u.test(file)),
     full,
     native: native || full,
     extended: forced,
