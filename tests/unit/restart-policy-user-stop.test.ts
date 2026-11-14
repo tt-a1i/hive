@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
-
 import { createRestartPolicy } from '../../src/server/restart-policy.js'
+import type { AgentSummary } from '../../src/shared/types.js'
 
 const AGENT_ID = 'ws-1:orchestrator'
 const PREV_RUN = 'run-prev'
@@ -17,7 +17,7 @@ const run = (runId: string) =>
     endedAt: 2,
   }) as never
 
-const agentSummary = {
+const agentSummary: AgentSummary = {
   id: AGENT_ID,
   workspaceId: 'ws-1',
   name: 'Orchestrator',
@@ -25,7 +25,7 @@ const agentSummary = {
   role: 'orchestrator',
   status: 'stopped',
   pendingTaskCount: 0,
-} as never
+}
 
 const workspace = { id: 'ws-1', name: 'Alpha', path: '/tmp/alpha' } as never
 
@@ -87,7 +87,20 @@ describe('restart policy — crash vs deliberate stop', () => {
     const writeToRun = vi.fn(() => Promise.resolve())
     const policy = createRestartPolicy({
       deleteMessage: vi.fn(),
-      getWorkspaceSnapshot: () => ({ agents: [agentSummary], summary: workspace }),
+      getWorkspaceSnapshot: () => ({
+        agents: [
+          { ...agentSummary, description: 'CURRENT_ROLE_SCOPE' },
+          {
+            ...agentSummary,
+            id: 'ws-1:new-member',
+            name: 'New teammate',
+            role: 'coder',
+            status: 'working',
+            pendingTaskCount: 1,
+          },
+        ],
+        summary: workspace,
+      }),
       insertMessage,
       listAgentRuns: () => [run(PREV_RUN), run(CURRENT_RUN)],
       listMessagesForRecovery: () => [
@@ -111,7 +124,7 @@ describe('restart policy — crash vs deliberate stop', () => {
     expect(writeToRun).not.toHaveBeenCalled()
   })
 
-  test('injects only compact ledger delta on native session resume when open protocol work exists', () => {
+  test('refreshes current workspace context without repeating history on a busy native resume', () => {
     let writtenText = ''
     const insertMessage = vi.fn(() => ({ sequence: 1 }) as never)
     const writeToRun = vi.fn((_runId: string, text: string) => {
@@ -120,7 +133,20 @@ describe('restart policy — crash vs deliberate stop', () => {
     })
     const policy = createRestartPolicy({
       deleteMessage: vi.fn(),
-      getWorkspaceSnapshot: () => ({ agents: [agentSummary], summary: workspace }),
+      getWorkspaceSnapshot: () => ({
+        agents: [
+          { ...agentSummary, description: 'CURRENT_ROLE_SCOPE' },
+          {
+            ...agentSummary,
+            id: 'ws-1:new-member',
+            name: 'New teammate',
+            role: 'coder',
+            status: 'working',
+            pendingTaskCount: 1,
+          },
+        ],
+        summary: workspace,
+      }),
       insertMessage,
       listAgentRuns: () => [run(PREV_RUN), run(CURRENT_RUN)],
       listMessagesForRecovery: () => [
@@ -141,7 +167,7 @@ describe('restart policy — crash vs deliberate stop', () => {
         } as never,
       ],
       listActionableDispatchMessagesForRecovery: () => [],
-      readTasks: () => 'SHOULD_NOT_REPEAT_TASKS_MD',
+      readTasks: () => 'CURRENT_TASKS_CONTENT',
     })
 
     const injected = policy.injectPostStartMessage({
@@ -156,7 +182,9 @@ describe('restart policy — crash vs deliberate stop', () => {
     expect(writtenText).toContain('Your native session resumed.')
     expect(writtenText).toContain('disp-open-1')
     expect(writtenText).not.toContain('SHOULD_NOT_REPEAT_CHAT_HISTORY')
-    expect(writtenText).not.toContain('SHOULD_NOT_REPEAT_TASKS_MD')
+    expect(writtenText).toContain('CURRENT_TASKS_CONTENT')
+    expect(writtenText).toContain('CURRENT_ROLE_SCOPE')
+    expect(writtenText).toContain('New teammate (coder, working, pending_task_count: 1)')
     expect(writtenText).not.toContain('## Hive member dispatch rules')
   })
 })

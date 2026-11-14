@@ -147,12 +147,19 @@ export const buildRecoverySummary = ({
     ? wrapRawSystemMessage(
         [
           `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`,
-          'Your native session resumed. Reconcile open Hive protocol state below (PTY delivery is not proof inputs were read):',
+          `Current member profile: ${escapeHiveEnvelopeText(agent.description)}`,
+          'Your native session resumed. Reconcile current Hive state below (PTY delivery is not proof inputs were read):',
           '',
           '## Open tasks (dispatch ledger)',
           ...formatOpenTasks(openDispatches, agent),
           ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
           ...formatPendingQuestions(actionableDispatchMessages, agent),
+          '',
+          `## Current ${TASKS_RELATIVE_PATH}`,
+          escapeHiveEnvelopeText(tasksContent.slice(0, TASKS_HEAD_LIMIT)) || '(empty)',
+          '',
+          '## Active members',
+          ...formatWorkers(workers),
         ].join('\n')
       )
     : wrapRawSystemMessage(
