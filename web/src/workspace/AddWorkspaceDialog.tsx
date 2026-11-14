@@ -68,6 +68,7 @@ export const AddWorkspaceDialog = ({
     tRef.current = t
   }, [t])
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
+  const cancelPendingPickRef = useRef<(() => void) | null>(null)
   const [commandPresets, setCommandPresets] = useState<CommandPreset[]>([])
   const [commandPresetId, setCommandPresetId] = useState(DEFAULT_COMMAND_PRESET_ID)
   const [commandPresetError, setCommandPresetError] = useState<string | null>(null)
@@ -88,6 +89,9 @@ export const AddWorkspaceDialog = ({
   useEffect(() => {
     if (trigger === 0) return
     let cancelled = false
+    cancelPendingPickRef.current = () => {
+      cancelled = true
+    }
     setCommandPresetError(null)
     const presetsReady = listCommandPresets()
       .then((presets) => {
@@ -162,6 +166,7 @@ export const AddWorkspaceDialog = ({
   }, [trigger])
 
   const handleCancel = () => {
+    cancelPendingPickRef.current?.()
     setStage({ kind: 'idle' })
     onClose()
   }
@@ -170,8 +175,7 @@ export const AddWorkspaceDialog = ({
   // linger on top of the demo workspace view.
   const handleTryDemo = onTryDemo
     ? () => {
-        setStage({ kind: 'idle' })
-        onClose()
+        handleCancel()
         onTryDemo()
       }
     : undefined
@@ -207,11 +211,10 @@ export const AddWorkspaceDialog = ({
 
   if (stage.kind === 'idle') return null
   if (stage.kind === 'picking') {
-    // Esc / click-outside cancels the in-flight picker; without onOpenChange
-    // the dialog was unkillable until the native picker resolved.
-    const cancelPicking = () => setStage({ kind: 'idle' })
+    // Dismiss pending results too: the native picker may have returned while
+    // presets are still loading, and this component stays mounted after close.
     return (
-      <Dialog.Root open onOpenChange={(next) => !next && cancelPicking()}>
+      <Dialog.Root open onOpenChange={(next) => !next && handleCancel()}>
         <Dialog.Portal>
           <Dialog.Overlay className="app-overlay fixed inset-0 z-40" />
           <Dialog.Content
