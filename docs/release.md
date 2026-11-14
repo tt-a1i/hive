@@ -75,7 +75,11 @@ existing frontend tests selected by dependency. Core changes
 use dependency-aware tests, with full Linux validation for shared runtime,
 SQLite/schema, dispatch, PTY, workflow, protocol, remote security, dependencies,
 and test/build configuration changes. Packaging changes also use the platform
-installation matrix. The nightly/manual workflow runs the extended matrix.
+installation matrix. The nightly/manual workflow runs the extended matrix. Fast unit/component tests
+run with bounded parallelism; real runtime/PTY workflows run serially afterward.
+The default test runner excludes the duplicate package-tarball installation suite;
+run `pnpm test tests/integration/package-tarball.test.ts` to request it explicitly.
+Release smoke checks and the CI platform installation matrix remain required.
 Gateway-only source changes run the engineering policy check without starting
 desktop build or test jobs.
 `CI / result` is the aggregate check to require when configuring branch protection.

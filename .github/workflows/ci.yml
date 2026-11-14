@@ -277,7 +277,7 @@ jobs:
           cp -R package/dist .
           mkdir -p web
           cp -R package/web/dist web/
-      - run: node scripts/run-tests.mjs --no-file-parallelism --maxWorkers=1 --testTimeout=60000 --hookTimeout=60000 --exclude=tests/integration/package-tarball.test.ts
+      - run: node scripts/run-tests.mjs
         if: runner.os != 'Windows'
       - run: pnpm test:windows
         if: runner.os == 'Windows'

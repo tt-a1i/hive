@@ -11,7 +11,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import { App } from '../../web/src/app.js'
-import { startTestServer } from '../helpers/test-server.js'
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -36,11 +35,6 @@ vi.mock('@xterm/addon-fit', () => ({
   },
 }))
 
-let cleanupServer: (() => Promise<void>) | undefined
-const nativeFetch = globalThis.fetch
-let serverBaseUrl = ''
-let uiCookie = ''
-
 // Force the mobile breakpoint so <App/>'s matchMedia-derived LayoutModeProvider
 // resolves to { mode: 'mobile' } and AppInner takes the MobileShell branch.
 const stubMobileMatchMedia = () => {
@@ -62,23 +56,34 @@ const stubMobileMatchMedia = () => {
   )
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   window.localStorage?.clear?.()
   window.localStorage.setItem('hive.first-run-seen', '1')
   stubMobileMatchMedia()
-  const server = await startTestServer()
-  cleanupServer = server.close
-  serverBaseUrl = server.baseUrl
-  await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
-    uiCookie = response.headers.get('set-cookie') ?? ''
-  })
-  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-    const value =
-      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-    const url = value.startsWith('http') ? value : `${serverBaseUrl}${value}`
-    const headers = new Headers(init?.headers)
-    headers.set('cookie', uiCookie)
-    return nativeFetch(url, { ...init, headers })
+  vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
+    const path =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.pathname
+          : new URL(input.url).pathname
+    const bodies: Record<string, unknown> = {
+      '/api/ui/session': {},
+      '/api/workspaces': [],
+      '/api/settings/app-state/active_workspace_id': { key: 'active_workspace_id', value: null },
+      '/api/settings/workflow-feature': { enabled: false },
+      '/api/version': {
+        current_version: '0.0.0',
+        latest_version: '0.0.0',
+        update_available: false,
+      },
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(bodies[path] ?? {}), {
+        status: path in bodies ? 200 : 404,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
   })
   vi.stubGlobal(
     'WebSocket',
@@ -95,12 +100,10 @@ beforeEach(async () => {
   )
 })
 
-afterEach(async () => {
+afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  await cleanupServer?.()
-  cleanupServer = undefined
   window.localStorage?.clear?.()
 })
 

@@ -40,7 +40,7 @@ beforeEach(async () => {
   window.localStorage?.clear?.()
   // Suppress first-run wizard in these tests — demo mode has its own entry point (Try Demo button)
   window.localStorage.setItem('hive.first-run-seen', '1')
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = server.close
   serverBaseUrl = server.baseUrl
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {

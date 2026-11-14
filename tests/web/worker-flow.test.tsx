@@ -115,7 +115,7 @@ beforeEach(async () => {
         removeListener: () => {},
       }) as MediaQueryList)
 
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   serverContext = server
   cleanupServer = server.close
   let cookie = ''

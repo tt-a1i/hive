@@ -5,19 +5,18 @@ import { join } from 'node:path'
 
 const vitestBin = 'node_modules/vitest/vitest.mjs'
 const passthrough = process.argv.slice(2)
-const stableFullSuiteVitestFlags = [
-  '--no-file-parallelism',
-  '--maxWorkers=1',
-  '--testTimeout=60000',
-  '--hookTimeout=60000',
-]
+const packageTest = 'tests/integration/package-tarball.test.ts'
+const packageFlags = passthrough.some((arg) => arg.replaceAll('\\', '/').endsWith(packageTest))
+  ? []
+  : [`--exclude=${packageTest}`]
+const stableFullSuiteVitestFlags = ['--testTimeout=60000', '--hookTimeout=60000']
 
 const runVitest = async (filesOrArgs = [], extraArgs = []) => {
   const command =
     filesOrArgs[0] === '--related'
       ? ['related', '--run', ...filesOrArgs.slice(1)]
       : ['run', ...filesOrArgs]
-  const vitestArgs = [vitestBin, ...command, ...extraArgs]
+  const vitestArgs = [vitestBin, ...command, ...extraArgs, ...packageFlags]
 
   // The test entry point must never inherit a user's live runtime database.
   const dataDir = mkdtempSync(join(tmpdir(), 'hive-test-data-'))
@@ -121,7 +120,11 @@ const collectTestFiles = (dir) => {
       files.push(...collectTestFiles(childPath))
       continue
     }
-    if (entry.isFile() && isTestFile(childPath)) {
+    if (
+      entry.isFile() &&
+      isTestFile(childPath) &&
+      childPath.replaceAll('\\', '/') !== packageTest
+    ) {
       files.push(childPath.replaceAll('\\', '/'))
     }
   }

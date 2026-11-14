@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { runHiveCommand } from '../../src/cli/hive.js'
 import type { TeamListItemPayload } from '../../src/shared/types.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
@@ -210,7 +210,7 @@ describe('queued dispatch to a stopped worker (#33)', () => {
     }
   }, 30_000)
 
-  test('starting an interactive worker replays parked dispatches after startup input finishes', async () => {
+  test('starting an interactive worker replays same-millisecond parked dispatches after startup input finishes', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-queued-replay-post-start-'))
     const workspacePath = join(dataDir, 'workspace')
     const binDir = join(dataDir, 'bin')
@@ -260,17 +260,36 @@ describe('queued dispatch to a stopped worker (#33)', () => {
       const orchToken = hive.store.peekAgentToken(orchestratorId)
       if (!orchToken) throw new Error('Expected orchestrator token after start')
 
-      const parked = await hive.store.dispatchTask(workspace.id, worker.id, 'manual replay task', {
-        fromAgentId: orchestratorId,
-        autoStartWorker: false,
-      })
-      const sent = { dispatch_id: parked.id }
-
-      await fetch(`${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ hive_port: String(hive.port) }),
-      })
+      // Date.now only controls the boundary under test; the HTTP server,
+      // SQLite ledger, PTY and readiness timers remain real.
+      const now = Date.now()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+      let sent: { dispatch_id: string }
+      try {
+        const parked = await hive.store.dispatchTask(
+          workspace.id,
+          worker.id,
+          'manual replay task',
+          {
+            fromAgentId: orchestratorId,
+            autoStartWorker: false,
+          }
+        )
+        sent = { dispatch_id: parked.id }
+        const response = await fetch(
+          `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/start`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', cookie: uiCookie },
+            body: JSON.stringify({ hive_port: String(hive.port) }),
+          }
+        )
+        expect(response.status).toBe(201)
+        expect(parked.createdAt).toBe(now)
+        expect(hive.store.getActiveRunByAgentId(workspace.id, worker.id)?.startedAt).toBe(now)
+      } finally {
+        clock.mockRestore()
+      }
 
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)

@@ -142,7 +142,10 @@ beforeEach(async () => {
   tempDirs.push(sandboxRoot)
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
 
-  const server = await startTestServer({ pickFolderPath: join(sandboxRoot, 'placeholder') })
+  const server = await startTestServer({
+    offlineVersionCheck: true,
+    pickFolderPath: join(sandboxRoot, 'placeholder'),
+  })
   serverContext = server
   cleanupServer = server.close
   let cookie = ''

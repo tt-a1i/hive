@@ -127,7 +127,7 @@ beforeEach(async () => {
   tempDirs.push(workspacePath)
   process.env.HIVE_FS_BROWSE_ROOT = workspacePath
 
-  const server = await startTestServer({ pickFolderPath: workspacePath })
+  const server = await startTestServer({ offlineVersionCheck: true, pickFolderPath: workspacePath })
   cleanupServer = server.close
   baseUrl = server.baseUrl
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {

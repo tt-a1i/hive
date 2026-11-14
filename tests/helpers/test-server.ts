@@ -6,8 +6,10 @@ import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createApp } from '../../src/server/app.js'
 import { probeDirectory } from '../../src/server/fs-browse.js'
 import type { PickFolderResponse } from '../../src/server/fs-pick-folder.js'
+import { readPackageVersion } from '../../src/server/package-version.js'
 import type { OpenWorkspaceService } from '../../src/server/route-types.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
+import { createVersionService } from '../../src/server/version-service.js'
 import { removeTestPath } from './fs-cleanup.js'
 
 interface TestServerContext {
@@ -22,6 +24,8 @@ export const startTestServer = async (
     dataDir?: string
     openWorkspaceService?: OpenWorkspaceService
     pickFolderPath?: string
+    // Resolve the latest version locally instead of contacting the external registry.
+    offlineVersionCheck?: boolean
     pickFolderService?: () => Promise<PickFolderResponse>
   } = {}
 ): Promise<TestServerContext> => {
@@ -43,6 +47,13 @@ export const startTestServer = async (
     ...(input.openWorkspaceService ? { openWorkspaceService: input.openWorkspaceService } : {}),
     ...(pickFolderService ? { pickFolderService } : {}),
     store,
+    ...(input.offlineVersionCheck
+      ? {
+          versionService: createVersionService({
+            fetchLatestVersion: async () => readPackageVersion(),
+          }),
+        }
+      : {}),
   })
 
   await new Promise<void>((resolve) => {

@@ -450,13 +450,13 @@ export const createTeamOperations = ({
       item.toAgentId === workerId &&
       item.workflowRunId === null &&
       item.fromAgentId !== getWorkflowAgentId(workspaceId) &&
-      (options.createdBeforeMs === undefined || item.createdAt < options.createdBeforeMs) &&
+      (options.createdBeforeMs === undefined ||
+        item.createdAt < options.createdBeforeMs ||
+        (item.status === 'queued' && item.createdAt === options.createdBeforeMs)) &&
       (options.beforeSequence === undefined ||
         (item.sequence !== null && item.sequence < options.beforeSequence)) &&
       item.id !== options.excludeDispatchId
-    // Worker start passes createdBeforeMs. Re-park submitted rows whose PTY
-    // write never completed so the queued replay below can deliver them.
-    // Live send-path replay omits createdBeforeMs and must not touch in-flight claims.
+    // Equal-time queued rows are claim-safe; submitted recovery must exclude possible live writes.
     if (options.createdBeforeMs !== undefined) {
       for (const item of listOpenWorkspaceDispatches(workspaceId)) {
         if (item.status !== 'submitted' || item.deliveredAt !== null || !inReplayScope(item)) {

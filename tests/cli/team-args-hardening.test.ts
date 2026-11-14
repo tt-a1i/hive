@@ -93,12 +93,14 @@ test('CLI rejects malformed requests without settling a real dispatch or creatin
     expect(dispatch?.status).toBe('submitted')
     if (!dispatch) throw new Error('Expected dispatch')
 
-    for (const args of [
-      ['report', '-h'],
-      ['report', 'Done', '--help'],
-      ['report', '--dispatch', dispatch.id, '-h'],
-    ]) {
-      const result = await runTeam(args, envFor(worker.id))
+    const helpResults = await Promise.all(
+      [
+        ['report', '-h'],
+        ['report', 'Done', '--help'],
+        ['report', '--dispatch', dispatch.id, '-h'],
+      ].map((args) => runTeam(args, envFor(worker.id)))
+    )
+    for (const result of helpResults) {
       expect(result.code).toBe(0)
       expect(result.stdout).toMatch(/usage/i)
       expect(hive.store.listDispatches(workspace.id)[0]).toMatchObject({
@@ -107,14 +109,16 @@ test('CLI rejects malformed requests without settling a real dispatch or creatin
         reportText: null,
       })
     }
-    for (const args of [
-      ['report', 'Done', '--bad'],
-      ['report', 'Done', '--dispatch'],
-      ['spawn', '--name', 'Unexpected', '--ephemral'],
-      ['workflow', 'run', '--inline', 'return 1', '--bad'],
-      ['workflow', 'schedule', '--cron'],
-    ]) {
-      const result = await runTeam(args, envFor(args[0] === 'report' ? worker.id : orchestratorId))
+    const invalidResults = await Promise.all(
+      [
+        ['report', 'Done', '--bad'],
+        ['report', 'Done', '--dispatch'],
+        ['spawn', '--name', 'Unexpected', '--ephemral'],
+        ['workflow', 'run', '--inline', 'return 1', '--bad'],
+        ['workflow', 'schedule', '--cron'],
+      ].map((args) => runTeam(args, envFor(args[0] === 'report' ? worker.id : orchestratorId)))
+    )
+    for (const result of invalidResults) {
       expect(result.code).not.toBe(0)
       expect(result.stderr.length).toBeGreaterThan(0)
     }

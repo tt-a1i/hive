@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -30,6 +30,7 @@ beforeEach(async () => {
   tempDirs.push(sandboxRoot)
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
   const server = await startTestServer({
+    offlineVersionCheck: true,
     pickFolderPath: join(sandboxRoot, 'alpha-project'),
   })
   serverContext = server
@@ -106,6 +107,14 @@ describe('workspace flow with real server', () => {
     // Workspace name + path live in the sidebar (workspace row); the canvas
     // sub-header was removed in M6-A polish. Assert the orchestrator slot
     // mounted as the canonical "workspace canvas is loaded" signal.
+    const row = screen
+      .getAllByRole('button', { name: 'Alpha' })
+      .find((button) => button.classList.contains('ws-row'))
+    expect(row).toHaveAttribute(
+      'data-workspace-path',
+      realpathSync.native(join(sandboxRoot, 'alpha-project'))
+    )
+    expect(screen.queryByRole('contentinfo')).toBeNull()
     expect(screen.getByTestId('orchestrator-terminal-slot')).toBeInTheDocument()
     // After autostart the pane should land in the running state — PTY slot
     // mounted, idle/failed bodies absent. Stop/Restart actions are no longer
@@ -138,7 +147,9 @@ describe('workspace flow with real server', () => {
     expect(screen.getByTestId('topbar-blueprint')).toBeInTheDocument()
     expect(screen.queryByTestId('task-graph-drawer')).toBeNull()
     fireEvent.click(screen.getByTestId('topbar-blueprint'))
-    expect(await screen.findByTestId('task-graph-drawer')).toBeInTheDocument()
+    const drawer = await screen.findByTestId('task-graph-drawer')
+    expect(within(drawer).queryByTestId('task-graph-list')).toBeNull()
+    expect(within(drawer).getByText(/No tasks yet/i)).toBeInTheDocument()
   }, 20_000)
 
   test('existing workspace stays stopped until the user starts Queen', async () => {

@@ -1,0 +1,136 @@
+{
+  "baselineCommit": "d1693a1",
+  "nodeVersion": "v22.23.3",
+  "method": "Single same-machine samples. Unit then Web sequentially; no other test runs during timing. Baseline detached worktree shares installed dependencies. Full/package checks are validation, not baseline comparisons.",
+  "groups": {
+    "unit": {
+      "before": {
+        "seconds": 39.115,
+        "exitCode": 0,
+        "command": [
+          "node",
+          "scripts/run-tests.mjs",
+          "tests/unit",
+          "--reporter=json",
+          "--outputFile=/tmp/hive-test-evidence.hfjy71/before-unit.json"
+        ],
+        "files": 140,
+        "tests": 1207,
+        "passed": 1206,
+        "failed": 0,
+        "skipped": 1
+      },
+      "after": {
+        "seconds": 8.774,
+        "exitCode": 0,
+        "command": [
+          "node",
+          "scripts/run-tests.mjs",
+          "tests/unit",
+          "--reporter=json",
+          "--outputFile=/tmp/hive-test-evidence.hfjy71/verified-unit.json"
+        ],
+        "files": 146,
+        "tests": 1223,
+        "passed": 1222,
+        "failed": 0,
+        "skipped": 1
+      }
+    },
+    "web": {
+      "before": {
+        "seconds": 200.158,
+        "exitCode": 0,
+        "command": [
+          "node",
+          "scripts/run-tests.mjs",
+          "tests/web",
+          "--reporter=json",
+          "--outputFile=/tmp/hive-test-evidence.hfjy71/before-web.json"
+        ],
+        "files": 120,
+        "tests": 746,
+        "passed": 746,
+        "failed": 0,
+        "skipped": 0
+      },
+      "after": {
+        "seconds": 68.79,
+        "exitCode": 0,
+        "command": [
+          "node",
+          "scripts/run-tests.mjs",
+          "tests/web",
+          "--reporter=json",
+          "--outputFile=/tmp/hive-test-evidence.hfjy71/verified-web.json"
+        ],
+        "files": 114,
+        "tests": 736,
+        "passed": 736,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  },
+  "validation": {
+    "full": {
+      "seconds": 442.592,
+      "exitCode": 0,
+      "command": [
+        "node",
+        "scripts/run-tests.mjs",
+        "--reporter=json",
+        "--outputFile=/tmp/hive-test-evidence.hfjy71/verified-full.json"
+      ],
+      "files": 398,
+      "tests": 2639,
+      "passed": 2634,
+      "failed": 0,
+      "skipped": 5,
+      "skippedCases": [
+        {
+          "file": "tests/cli/hive-update-preflight.test.ts",
+          "test": "Windows hive update passes a space-bearing prefix intact through npm.cmd"
+        },
+        {
+          "file": "tests/server/agent-manager-windows-stop-real.test.ts",
+          "test": "agent manager Windows PTY stop (real node-pty) stopping a real PTY does not leak node-pty AttachConsole helper stderr"
+        },
+        {
+          "file": "tests/server/fs-browse.test.ts",
+          "test": "GET /api/fs/browse Windows full browser starts at This PC and can enter HOME when no sandbox override is set"
+        },
+        {
+          "file": "tests/server/tasks-file-watcher-real.test.ts",
+          "test": "tasks file watcher real filesystem events Windows emits updates when the tasks file is written through uppercase TASKS.md"
+        },
+        {
+          "file": "tests/unit/sqlite.test.ts",
+          "test": "built-in SQLite storage contract preserves legacy files across migrations, FTS queries and reverse driver reads"
+        }
+      ]
+    },
+    "package": {
+      "seconds": 11.475,
+      "exitCode": 0,
+      "command": [
+        "node",
+        "scripts/run-tests.mjs",
+        "tests/integration/package-tarball.test.ts",
+        "--reporter=json",
+        "--outputFile=/tmp/hive-test-evidence.hfjy71/verified-package.json"
+      ],
+      "files": 1,
+      "tests": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "skippedCases": []
+    },
+    "legacySqlite": {
+      "command": "HIVE_TEST_LEGACY_SQLITE=1 pnpm test tests/unit/sqlite.test.ts",
+      "passed": 4,
+      "failed": 0
+    }
+  }
+}

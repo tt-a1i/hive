@@ -26,7 +26,7 @@ beforeEach(async () => {
   mkdirSync(project)
   process.env.HIVE_FS_BROWSE_ROOT = root
   pickerRequests = 0
-  server = await startTestServer({ pickFolderPath: project })
+  server = await startTestServer({ offlineVersionCheck: true, pickFolderPath: project })
   server.store.settings.createCommandPreset({
     command: process.execPath,
     args: [],

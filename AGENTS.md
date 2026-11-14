@@ -57,6 +57,8 @@ Hive 是浏览器中的本地 CLI agent 协作工作台：Orchestrator 与 Worke
 
 所有 Vitest 测试经 `pnpm test <file...>`（`scripts/run-tests.mjs`）运行，隔离 `HIVE_DATA_DIR`、HOME 与 CLI 配置目录并清理进程组。禁止裸跑 vitest 或 `pnpm exec vitest`；监听模式用 `pnpm test <file> --watch`。
 
+- Vitest 的 `fast` project 用最多 4 个隔离线程并行跑单元与组件测试；`runtime` project 在其后用逐文件隔离、并发为 1 的进程池跑真服务/PTY 测试。新增启动真实后端的 Web 测试时，加入 `vitest.config.ts` 的 `runtimeWebTests`。通用开发与 CI 默认保留快池并行；平台专项确需全局串行时显式传参并说明。
+- 默认 `pnpm test` 排除重复的安装烟测 `tests/integration/package-tarball.test.ts`；需要时用 `pnpm test tests/integration/package-tarball.test.ts` 显式运行。发版仍执行 `pnpm release:dry`，CI 平台矩阵保留安装验证。
 - 本地默认跑相关测试；静态检查为 `pnpm check`（Biome）与 `pnpm exec tsc --noEmit`，按改动需要跑 `pnpm build`。仅改文档可不跑构建或产品测试，但需检查链接与过时指令并说明。
 - 核心协议、dispatch ledger、SQLite migration、PTY 生命周期、workflow、remote/gateway 安全与 release packaging 改动，必须有相应真实集成/回归测试，不能只靠 build。
 - 纯样式/布局改动不补脆弱 DOM 测试，以静态检查、build 与实际交互走查为主。保留已有有效 `tests/web/` 覆盖；前端状态、协议解析、恢复或 Hook 行为改动跑相关测试，CI 按依赖选择已有测试。
