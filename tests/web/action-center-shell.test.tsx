@@ -157,10 +157,9 @@ const ControlledTopbarAndWorkspace = () => {
 }
 
 describe('desktop Action Center topbar placement', () => {
-  test('renders Action Center in the topbar immediately before Memory', () => {
+  test('renders Action Center in the topbar after the workspace action', () => {
     renderProviders(
       <MainLayout
-        onToggleMemory={vi.fn()}
         sidebar={<div data-testid="sidebar-content">sidebar</div>}
         sidebarResize={sidebarResize}
         topbarActions={
@@ -178,14 +177,10 @@ describe('desktop Action Center topbar placement', () => {
 
     const open = screen.getByTestId('topbar-open-probe')
     const actionCenter = screen.getByTestId('topbar-action-center')
-    const memory = screen.getByTestId('topbar-memory')
     expect(actionCenter.closest('header')).toBe(screen.getByRole('banner'))
     expect(open.compareDocumentPosition(actionCenter) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(
       0
     )
-    expect(
-      actionCenter.compareDocumentPosition(memory) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).not.toBe(0)
     expect(screen.getByRole('complementary', { name: 'Workspace sidebar' })).not.toContainElement(
       actionCenter
     )

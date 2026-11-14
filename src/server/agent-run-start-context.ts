@@ -25,10 +25,16 @@ export interface AgentRunStarterStorePort {
   ) => void
 }
 
+export type AgentExitListener = (
+  workspaceId: string,
+  agentId: string,
+  exit: { runId: string; exitCode: number | null; userStopped: boolean }
+) => void
+
 export interface AgentRunExitContext {
   agentId: string
   handledRunExits: Set<string>
-  onAgentExit: (workspaceId: string, agentId: string) => void
+  onAgentExit: AgentExitListener
   registry: LiveRunRegistry
   sessionCaptureDiscriminator?: SessionCaptureSnapshot['discriminator']
   sessionStore: AgentSessionStorePort

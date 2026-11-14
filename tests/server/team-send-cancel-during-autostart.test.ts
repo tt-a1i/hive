@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import { ConflictError } from '../../src/server/http-errors.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -57,8 +58,9 @@ describe('team send vs cancel during auto-start (#78)', () => {
       await rejected
       const later = await store.dispatchTask(workspace.id, worker.id, barrier, { fromAgentId })
       // Positive receipt proves the actual spawned process and input queue ran.
-      await expect.poll(() => readFileSync(receipt, 'utf8'), { timeout: 10000 }).toContain(barrier)
-      const received = readFileSync(receipt, 'utf8')
+      const receivedBody = () => expandInboxReferences(readFileSync(receipt, 'utf8'))
+      await expect.poll(receivedBody, { timeout: 10000 }).toContain(barrier)
+      const received = receivedBody()
       expect(received).not.toContain(marker)
       expect(received.split(barrier).length - 1).toBe(1)
       await expect

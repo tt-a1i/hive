@@ -18,7 +18,6 @@ import { createRuntimeStore, type RuntimeStore } from '../server/runtime-store.j
 import { createVersionService, type VersionService } from '../server/version-service.js'
 import { resolveDataDir } from './hive-data-dir.js'
 import { DEFAULT_HIVE_PORT } from './hive-defaults.js'
-import { runHiveMcpCommand } from './hive-mcp.js'
 import { runHiveRemoteCommand } from './hive-remote.js'
 import { runHiveUpdateCommand } from './hive-update.js'
 
@@ -83,8 +82,6 @@ export const HIVE_USAGE = [
   '  -v, --version   Print the installed Hive version.',
   '',
   'Commands:',
-  '  mcp             Run the local Supervisor MCP stdio adapter.',
-  '  mcp --controller  Connect Codex App directly to an external-mode Hive team.',
   '  update          Upgrade npm-installed Hive in place; otherwise use the matching package manager.',
   '  remote          Manage remote access (login / status / logout / devices / revoke).',
 ].join('\n')
@@ -118,8 +115,8 @@ const parsePort = (argv: string[]) => {
       throw new Error('Usage: hive [--port <port>]')
     }
 
-    const port = Number.parseInt(value, 10)
-    if (Number.isNaN(port) || port < 0) {
+    const port = Number(value)
+    if (!/^\d+$/.test(value) || port > 65535) {
       throw new Error(`Invalid port: ${value}`)
     }
 
@@ -181,7 +178,7 @@ export const formatPortInUseMessage = (
     '  - Open the existing Hive window.',
     ...stopHint,
     '  - Start Hive on another port:',
-    `      hive --port ${port + 1}`,
+    `      hive --port ${port === 65535 ? 65534 : port + 1}`,
   ].join('\n')
 }
 
@@ -241,10 +238,12 @@ export const runHiveCommand = async (
   const port = parsePort(argv)
   const dataDir = resolveDataDir()
   const versionService = options.versionService ?? createVersionService()
+  let boundPort = ''
   const app = createApp({
     store: createRuntimeStore({
       agentManager: createAgentManager(),
       dataDir,
+      getHivePort: () => boundPort,
     }),
     versionService,
   })
@@ -266,6 +265,8 @@ export const runHiveCommand = async (
   if (!address || typeof address === 'string') {
     throw new Error('Server did not bind to an inet port')
   }
+
+  boundPort = String(address.port)
 
   // Remote tunnel — the outbound WebSocket to the gateway. GATED by app_state[remote_enabled]
   // (default OFF). When off, refresh() settles 'disabled' synchronously: no socket is opened, no
@@ -387,11 +388,6 @@ if (isMainModule) {
         console.error(error instanceof Error ? error.message : error)
         process.exit(1)
       })
-  } else if (argv[0] === 'mcp') {
-    runHiveMcpCommand(argv.slice(1)).catch((error) => {
-      console.error(error instanceof Error ? error.message : error)
-      process.exit(1)
-    })
   } else if (handleHiveInfoCommand(argv)) {
     process.exit(0)
   } else {

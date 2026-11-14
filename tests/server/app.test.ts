@@ -619,7 +619,7 @@ describe('runtime http app', () => {
       role: 'coder',
     })
 
-    store.recordUserInput(workspace.id, orchestrator.id, 'bootstrap')
+    await store.recordUserInput(workspace.id, orchestrator.id, 'bootstrap')
 
     const workerStartResponse = await fetch(
       `${baseUrl}/api/workspaces/${workspace.id}/agents/${worker.id}/config`,

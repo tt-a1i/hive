@@ -114,6 +114,7 @@ export const createTerminalClient = ({
   const pendingInput: Array<{ chunk: string; binary: boolean; userInput: boolean }> = []
   let disposed = false
   let closeSurfaced = false
+  let pendingAckBytes = 0
   const pendingOutput: Array<{ chunk: string; acknowledge: (bytes: number) => void }> = []
   let pendingResize: {
     cols: number
@@ -129,6 +130,7 @@ export const createTerminalClient = ({
   const surfaceClose = (): void => {
     if (disposed || closeSurfaced) return
     closeSurfaced = true
+    pendingAckBytes = 0
     onClose?.()
   }
   ioSocket.onclose = surfaceClose
@@ -192,12 +194,25 @@ export const createTerminalClient = ({
     }
   }
 
+  const flushAck = () => {
+    if (
+      disposed ||
+      closeSurfaced ||
+      pendingAckBytes === 0 ||
+      controlSocket.readyState !== controlSocket.OPEN
+    )
+      return
+    controlSocket.send(JSON.stringify({ type: 'output_ack', bytes: pendingAckBytes }))
+    pendingAckBytes = 0
+  }
+  const acknowledge = (bytes: number) => {
+    if (disposed || closeSurfaced || bytes <= 0) return
+    pendingAckBytes += bytes
+    flushAck()
+  }
+
   ioSocket.onmessage = (event) => {
     const chunk = typeof event.data === 'string' ? event.data : ''
-    const acknowledge = (bytes: number) => {
-      if (controlSocket.readyState !== controlSocket.OPEN) return
-      controlSocket.send(JSON.stringify({ type: 'output_ack', bytes }))
-    }
     if (!restored) {
       pendingOutput.push({ chunk, acknowledge })
       return
@@ -205,6 +220,7 @@ export const createTerminalClient = ({
     deliverOutput(chunk, acknowledge)
   }
   controlSocket.onopen = () => {
+    flushAck()
     sendResize()
   }
   controlSocket.onmessage = (event) => {
@@ -246,6 +262,8 @@ export const createTerminalClient = ({
     dispose() {
       disposed = true
       pendingInput.length = 0
+      pendingOutput.length = 0
+      pendingAckBytes = 0
       ioSocket.close()
       controlSocket.close()
     },

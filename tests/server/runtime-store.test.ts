@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import type { AgentManager, AgentRunSnapshot } from '../../src/server/agent-manager.js'
+import { createAgentManager } from '../../src/server/agent-manager.js'
 import { CODER_ROLE_DESCRIPTION, TESTER_ROLE_DESCRIPTION } from '../../src/server/role-templates.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database from '../../src/server/sqlite.js'
@@ -14,51 +14,11 @@ import { startReportWorker } from '../helpers/report-worker.js'
 const tempDirs: string[] = []
 const tinyAvatar =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
-const outputBus = {
-  clear: () => {},
-  publish: () => {},
-  subscribe: () => () => {},
-}
+const runningStores: Array<ReturnType<typeof createRuntimeStore>> = []
 
-const createFakeAgentManager = (): AgentManager => {
-  const runs = new Map<string, AgentRunSnapshot>()
-
-  return {
-    getOutputBus() {
-      return outputBus
-    },
-    pauseRun() {},
-    resizeRun() {},
-    resumeRun() {},
-    getRun(runId) {
-      const run = runs.get(runId)
-      if (!run) {
-        throw new Error(`Run not found: ${runId}`)
-      }
-      return run
-    },
-    removeRun(runId) {
-      runs.delete(runId)
-    },
-    async startAgent(input) {
-      const run = {
-        agentId: input.agentId,
-        exitCode: null,
-        output: '',
-        pid: 1,
-        runId: `run-${input.agentId}`,
-        status: 'starting' as const,
-      }
-      runs.set(run.runId, run)
-      return run
-    },
-    stopRun() {},
-    writeInput() {},
-  }
-}
-
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
+  for (const store of runningStores.splice(0)) await store.close()
   for (const dir of tempDirs.splice(0)) removeTestPath(dir)
 })
 
@@ -250,13 +210,19 @@ describe('runtime store', () => {
   })
 
   test('startAgent success promotes a fresh worker from stopped to idle', async () => {
-    const store = createRuntimeStore({ agentManager: createFakeAgentManager() })
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const dir = mkdtempSync(join(tmpdir(), 'hive-runtime-start-'))
+    tempDirs.push(dir)
+    const store = createRuntimeStore({ agentManager: createAgentManager() })
+    runningStores.push(store)
+    const workspace = store.createWorkspace(dir, 'Alpha')
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
     })
-    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 
@@ -264,8 +230,11 @@ describe('runtime store', () => {
   })
 
   test('startAgent keeps a queued worker working while backlog remains', async () => {
-    const store = createRuntimeStore({ agentManager: createFakeAgentManager() })
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const dir = mkdtempSync(join(tmpdir(), 'hive-runtime-start-'))
+    tempDirs.push(dir)
+    const store = createRuntimeStore({ agentManager: createAgentManager() })
+    runningStores.push(store)
+    const workspace = store.createWorkspace(dir, 'Alpha')
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
@@ -275,7 +244,10 @@ describe('runtime store', () => {
     // worker status from the remaining pending_task_count.
     store.getWorker(workspace.id, worker.id).status = 'idle'
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
-    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 
@@ -285,8 +257,11 @@ describe('runtime store', () => {
   })
 
   test('startAgent transitions a stopped worker with pending backlog to working', async () => {
-    const store = createRuntimeStore({ agentManager: createFakeAgentManager() })
-    const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
+    const dir = mkdtempSync(join(tmpdir(), 'hive-runtime-start-'))
+    tempDirs.push(dir)
+    const store = createRuntimeStore({ agentManager: createAgentManager() })
+    runningStores.push(store)
+    const workspace = store.createWorkspace(dir, 'Alpha')
     const worker = store.addWorker(workspace.id, {
       name: 'Alice',
       role: 'coder',
@@ -299,7 +274,10 @@ describe('runtime store', () => {
     store.dispatchTask(workspace.id, worker.id, 'Implement feature')
     expect(store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(1)
     expect(store.getWorker(workspace.id, worker.id).status).toBe('stopped')
-    store.configureAgentLaunch(workspace.id, worker.id, { command: process.execPath, args: [] })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: ['-e', 'setInterval(() => {}, 1000)'],
+    })
 
     await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
 

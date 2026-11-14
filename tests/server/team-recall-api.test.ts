@@ -1,10 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -87,9 +86,13 @@ describe('/api/team/recall', () => {
       hivePort: new URL(runtime.baseUrl).port,
     })
     await expect
-      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .poll(() =>
+        expandInboxReferences(
+          runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output ?? ''
+        )
+      )
       .toContain('RECALL_READY')
-    server.store.recordUserInput(
+    await server.store.recordUserInput(
       workspaceId,
       orchestratorId,
       'User asked for a relay recall smoke marker.'
@@ -104,7 +107,11 @@ describe('/api/team/recall', () => {
       }
     )
     await expect
-      .poll(() => runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output)
+      .poll(() =>
+        expandInboxReferences(
+          runtime.store.getActiveRunByAgentId(workspaceId, worker.id)?.output ?? ''
+        )
+      )
       .toContain('Investigate relay recall smoke.')
     await expect
       .poll(() => runtime.store.listDispatches(workspaceId).find((item) => item.id === dispatch.id))
@@ -150,54 +157,6 @@ describe('/api/team/recall', () => {
         }),
       ])
     )
-  })
-
-  test('returns low-confidence active memory through recall without requiring dispatch injection', async () => {
-    if (!server) throw new Error('Expected test server')
-    const memory = server.store.addMemoryEntry({
-      actor: { id: orchestratorId, name: 'Queen', role: 'orchestrator' },
-      body: 'Low confidence pull-only marker: zeta retry policy is still unverified.',
-      confidence: 0.2,
-      kind: 'pitfall',
-      source: 'dream',
-      tags: ['zeta'],
-      workspaceId,
-    })
-
-    const response = await postRecall({
-      project_id: workspaceId,
-      from_agent_id: orchestratorId,
-      token,
-      query: 'zeta retry policy',
-      limit: 10,
-      window: 1,
-    })
-
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as {
-      ok: boolean
-      results: Array<{
-        memory_confidence: number | null
-        memory_id: string | null
-        memory_kind: string | null
-        memory_status: string | null
-        memory_tags: string[]
-        source_type: string
-        text: string
-      }>
-    }
-    expect(body.ok).toBe(true)
-    expect(body.results).toEqual([
-      expect.objectContaining({
-        memory_confidence: 0.2,
-        memory_id: memory.id,
-        memory_kind: 'pitfall',
-        memory_status: 'active',
-        memory_tags: ['zeta'],
-        source_type: 'memory',
-        text: 'Low confidence pull-only marker: zeta retry policy is still unverified.',
-      }),
-    ])
   })
 
   test('rejects missing token before reading recall data', async () => {

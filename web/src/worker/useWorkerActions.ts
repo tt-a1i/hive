@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 
 import type { TeamListItem, WorkerRole } from '../../../src/shared/types.js'
 import {
@@ -87,6 +87,14 @@ export const useWorkerActions = ({
   setWorkersByWorkspaceId,
   workers,
 }: UseWorkerActionsInput): WorkerActions => {
+  const scope = useMemo(() => ({ activeWorkspaceId }), [activeWorkspaceId])
+  const currentScope = useRef<typeof scope | null>(scope)
+  useLayoutEffect(() => {
+    currentScope.current = scope
+    return () => {
+      if (currentScope.current === scope) currentScope.current = null
+    }
+  }, [scope])
   const { language } = useI18n()
   const createWorkerAction = useCallback<WorkerActions['createWorker']>(
     async ({ avatar, commandPresetId, name, role, roleDescription, startupCommand }) => {
@@ -101,17 +109,23 @@ export const useWorkerActions = ({
         role,
         startup_command: startupClean || null,
         ui_language: language,
+      }).catch((error) => {
+        if (currentScope.current !== scope) return null
+        throw error
       })
-      setWorkersByWorkspaceId((current) => ({
-        ...current,
-        [activeWorkspaceId]: upsertWorker(current[activeWorkspaceId] ?? [], {
-          ...result.worker,
-          status: 'idle',
-        }),
-      }))
+      if (!result) return { error: null, runId: null }
+      if (currentScope.current === scope)
+        setWorkersByWorkspaceId((current) => ({
+          ...current,
+          [activeWorkspaceId]: upsertWorker(current[activeWorkspaceId] ?? [], {
+            ...result.worker,
+            status: 'idle',
+          }),
+        }))
       const workspaceId = activeWorkspaceId
       void startAgentRun(workspaceId, result.worker.id)
         .then((startResult) => {
+          if (currentScope.current !== scope) return
           onWorkerRunStarted?.({
             agentId: result.worker.id,
             agentName: result.worker.name,
@@ -121,6 +135,7 @@ export const useWorkerActions = ({
           })
         })
         .catch((error) => {
+          if (currentScope.current !== scope) return
           const message = errorMessage(error)
           console.error('[hive] swallowed:createWorker.start', error)
           setWorkersByWorkspaceId((current) => ({
@@ -134,13 +149,26 @@ export const useWorkerActions = ({
         })
       return { error: null, runId: null }
     },
-    [activeWorkspaceId, language, onWorkerRunStarted, onWorkerStartFailed, setWorkersByWorkspaceId]
+    [
+      activeWorkspaceId,
+      language,
+      onWorkerRunStarted,
+      onWorkerStartFailed,
+      setWorkersByWorkspaceId,
+      scope,
+    ]
   )
 
   const deleteWorkerAction = useCallback<WorkerActions['deleteWorker']>(
     async (workerId) => {
       if (!activeWorkspaceId) throw new Error('No active workspace')
-      await deleteWorker(activeWorkspaceId, workerId)
+      try {
+        await deleteWorker(activeWorkspaceId, workerId)
+      } catch (error) {
+        if (currentScope.current !== scope) return
+        throw error
+      }
+      if (currentScope.current !== scope) return
       setWorkersByWorkspaceId((current) => ({
         ...current,
         [activeWorkspaceId]: (current[activeWorkspaceId] ?? []).filter(
@@ -149,7 +177,7 @@ export const useWorkerActions = ({
       }))
       onWorkerDeleted?.(activeWorkspaceId, workerId)
     },
-    [activeWorkspaceId, onWorkerDeleted, setWorkersByWorkspaceId]
+    [activeWorkspaceId, onWorkerDeleted, setWorkersByWorkspaceId, scope]
   )
 
   const updateWorkerAvatarAction = useCallback<WorkerActions['updateWorkerAvatar']>(
@@ -157,16 +185,18 @@ export const useWorkerActions = ({
       if (!activeWorkspaceId) return { error: 'No active workspace' }
       try {
         const worker = await updateWorkerAvatar(activeWorkspaceId, workerId, avatar)
+        if (currentScope.current !== scope) return { error: null }
         setWorkersByWorkspaceId((current) => ({
           ...current,
           [activeWorkspaceId]: upsertWorker(current[activeWorkspaceId] ?? [], worker),
         }))
         return { error: null }
       } catch (error) {
+        if (currentScope.current !== scope) return { error: null }
         return { error: errorMessage(error) }
       }
     },
-    [activeWorkspaceId, setWorkersByWorkspaceId]
+    [activeWorkspaceId, setWorkersByWorkspaceId, scope]
   )
 
   const startWorkerAction = useCallback<WorkerActions['startWorker']>(
@@ -174,9 +204,10 @@ export const useWorkerActions = ({
       if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       try {
         const result = await startAgentRun(activeWorkspaceId, workerId)
+        if (currentScope.current !== scope) return { error: null, runId: null }
         onWorkerRunStarted?.({
           agentId: workerId,
-          agentName: workerId,
+          agentName: workers.find((worker) => worker.id === workerId)?.name ?? workerId,
           runId: result.runId,
           terminalInputProfile: getWorkerTerminalInputProfile(workers, workerId),
           workspaceId: activeWorkspaceId,
@@ -186,13 +217,14 @@ export const useWorkerActions = ({
         // 'idle' would lie when worker had pending dispatches.
         return { error: null, runId: result.runId }
       } catch (error) {
+        if (currentScope.current !== scope) return { error: null, runId: null }
         return {
           error: errorMessage(error),
           runId: null,
         }
       }
     },
-    [activeWorkspaceId, onWorkerRunStarted, workers]
+    [activeWorkspaceId, onWorkerRunStarted, workers, scope]
   )
 
   const stopWorkerRunAction = useCallback<WorkerActions['stopWorkerRun']>(
@@ -200,13 +232,15 @@ export const useWorkerActions = ({
       if (!activeWorkspaceId) return { error: 'No active workspace' }
       try {
         await stopAgentRun(runId)
+        if (currentScope.current !== scope) return { error: null }
         onWorkerRunClosed?.(activeWorkspaceId, runId)
         return { error: null }
       } catch (error) {
+        if (currentScope.current !== scope) return { error: null }
         return { error: errorMessage(error) }
       }
     },
-    [activeWorkspaceId, onWorkerRunClosed]
+    [activeWorkspaceId, onWorkerRunClosed, scope]
   )
 
   const restartWorkerRunAction = useCallback<WorkerActions['restartWorkerRun']>(
@@ -214,23 +248,25 @@ export const useWorkerActions = ({
       if (!activeWorkspaceId) return { error: 'No active workspace', runId: null }
       try {
         const result = await restartAgentRun(activeWorkspaceId, workerId, runId)
+        if (currentScope.current !== scope) return { error: null, runId: null }
         onWorkerRunClosed?.(activeWorkspaceId, runId)
         onWorkerRunStarted?.({
           agentId: workerId,
-          agentName: workerId,
+          agentName: workers.find((worker) => worker.id === workerId)?.name ?? workerId,
           runId: result.runId,
           terminalInputProfile: getWorkerTerminalInputProfile(workers, workerId),
           workspaceId: activeWorkspaceId,
         })
         return { error: null, runId: result.runId }
       } catch (error) {
+        if (currentScope.current !== scope) return { error: null, runId: null }
         return {
           error: errorMessage(error),
           runId: null,
         }
       }
     },
-    [activeWorkspaceId, onWorkerRunClosed, onWorkerRunStarted, workers]
+    [activeWorkspaceId, onWorkerRunClosed, onWorkerRunStarted, workers, scope]
   )
 
   return {

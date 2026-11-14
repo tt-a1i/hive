@@ -97,12 +97,16 @@ export const createWorkspaceStore = (
       ).run(workspaceId)
       db.prepare('DELETE FROM workflow_runs WHERE workspace_id = ?').run(workspaceId)
       db.prepare('DELETE FROM dispatches WHERE workspace_id = ?').run(workspaceId)
+      db.prepare('DELETE FROM app_state WHERE substr(key, 1, length(?)) = ?').run(
+        `agent_handover:${workspaceId}:`,
+        `agent_handover:${workspaceId}:`
+      )
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)
     })()
   }
 
   return {
-    addWorker(workspaceId, input) {
+    addWorker(workspaceId, input, deferPublish = false) {
       const workspace = getWorkspace(workspaceId)
       const name = normalizeWorkerName(input.name)
       const avatar = normalizeWorkerAvatar(input.avatar)
@@ -134,10 +138,13 @@ export const createWorkspaceStore = (
         worker.spawnedBy ?? null,
         Date.now()
       )
-      workspace.agents.push(worker)
+      if (!deferPublish) workspace.agents.push(worker)
       return worker
     },
-    createWorkspace(path, name, controllerMode = 'internal') {
+    publishWorker(workspaceId, worker) {
+      getWorkspace(workspaceId).agents.push(worker)
+    },
+    createWorkspace(path, name) {
       const existing = Array.from(workspaces.values()).find((workspace) =>
         sameFilesystemPath(workspace.summary.path, path)
       )
@@ -146,11 +153,24 @@ export const createWorkspaceStore = (
         id: randomUUID(),
         name,
         path,
-        ...(controllerMode === 'codex_app' ? { controller_mode: 'codex_app' as const } : {}),
       }
-      db.prepare(
-        'INSERT INTO workspaces (id, name, path, created_at, controller_mode) VALUES (?, ?, ?, ?, ?)'
-      ).run(summary.id, name, path, Date.now(), controllerMode)
+      db.transaction(() => {
+        db.prepare('INSERT INTO workspaces (id, name, path, created_at) VALUES (?, ?, ?, ?)').run(
+          summary.id,
+          name,
+          path,
+          Date.now()
+        )
+        db.prepare(`INSERT INTO workers (id, workspace_id, name, description, role, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)`).run(
+          `${summary.id}:orchestrator`,
+          summary.id,
+          'Orchestrator',
+          null,
+          'orchestrator',
+          Date.now()
+        )
+      })()
       workspaces.set(summary.id, {
         summary,
         agents: [createOrchestrator(summary.id), createWorkflowAgent(summary.id)],
@@ -274,6 +294,9 @@ export const createWorkspaceStore = (
           workerId
         )
         db.prepare('DELETE FROM agent_runs WHERE agent_id = ?').run(workerId)
+        db.prepare('DELETE FROM app_state WHERE key = ?').run(
+          `agent_handover:${workspaceId}:${workerId}`
+        )
         db.prepare('DELETE FROM workers WHERE workspace_id = ? AND id = ?').run(
           workspaceId,
           workerId

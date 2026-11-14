@@ -21,12 +21,9 @@ export interface WorkerInput {
 }
 
 export interface WorkspaceStore {
-  addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
-  createWorkspace: (
-    path: string,
-    name: string,
-    controllerMode?: 'internal' | 'codex_app'
-  ) => WorkspaceSummary
+  addWorker: (workspaceId: string, input: WorkerInput, deferPublish?: boolean) => AgentSummary
+  publishWorker: (workspaceId: string, worker: AgentSummary) => void
+  createWorkspace: (path: string, name: string) => WorkspaceSummary
   deleteWorkspace: (workspaceId: string) => void
   deleteWorkspaceData: (workspaceId: string) => void
   forgetWorkspace: (workspaceId: string) => void

@@ -1,11 +1,12 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
+import { createReportOutboxStore } from '../../src/server/report-outbox-store.js'
 import Database from '../../src/server/sqlite.js'
-
 import { requireAgentToken } from '../helpers/auth.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -145,7 +146,11 @@ const setupOfflineReportHarness = async () => {
   )
   expect(startResponse.status).toBe(201)
   await expect
-    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .poll(() =>
+      expandInboxReferences(
+        server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? ''
+      )
+    )
     .toContain('OUTBOX_WORKER_READY')
   const workerToken = requireAgentToken(server.store, worker.id)
   expect(server.store.validateAgentToken(worker.id, workerToken)).toBe(true)
@@ -154,7 +159,11 @@ const setupOfflineReportHarness = async () => {
     fromAgentId: `${workspace.id}:orchestrator`,
   })
   await expect
-    .poll(() => server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output)
+    .poll(() =>
+      expandInboxReferences(
+        server.store.getActiveRunByAgentId(workspace.id, worker.id)?.output ?? ''
+      )
+    )
     .toContain('Implement login')
   await expect
     .poll(() => server.store.listDispatches(workspace.id).find((item) => item.id === dispatch.id))
@@ -294,7 +303,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
             headers,
           })
           expect(response.status).toBe(200)
-          return ((await response.json()) as { output: string }).output
+          return expandInboxReferences(((await response.json()) as { output: string }).output)
         },
         { timeout: 5000 }
       )
@@ -302,7 +311,7 @@ describe('POST /api/team/report redelivery outbox failure', () => {
     const received = await fetch(`${harness.server.baseUrl}/api/runtime/runs/${run.run_id}`, {
       headers,
     })
-    const output = ((await received.json()) as { output: string }).output
+    const output = expandInboxReferences(((await received.json()) as { output: string }).output)
     expect(output).toContain(`dispatch_id: ${harness.dispatch.id}`)
     expect(output).toContain('Done')
     expect(output).toContain('artifact: login-result.txt')
@@ -337,3 +346,95 @@ describe('POST /api/team/report redelivery outbox failure', () => {
     )
   })
 })
+
+test('legacy question receipts cannot bypass retirement or duplicate live question delivery', async () => {
+  const harness = await setupOfflineReportHarness()
+  const { server, workspace, worker, workerToken, dataDir, dispatch, workspacePath } = harness
+  const orchestratorId = `${workspace.id}:orchestrator`
+  const ask = async (dispatchId: string, text: string) => {
+    const response = await fetch(`${server.baseUrl}/api/team/message`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        project_id: workspace.id,
+        from_agent_id: worker.id,
+        token: workerToken,
+        dispatch_id: dispatchId,
+        recipient: 'orchestrator',
+        kind: 'question',
+        text,
+      }),
+    })
+    expect(response.status).toBe(202)
+    const { message } = (await response.json()) as { message: { id: string } }
+    insertPendingOutboxRow(dataDir, {
+      workspaceId: workspace.id,
+      targetAgentId: orchestratorId,
+      dispatchId: `message:${message.id}`,
+      payload: text,
+    })
+    return message.id
+  }
+  const retiredId = await ask(dispatch.id, 'RETIRED_QUESTION_MUST_STAY_RETIRED')
+  await server.store.cancelTask(workspace.id, dispatch.id, {
+    fromAgentId: orchestratorId,
+    reason: 'Withdrawn',
+  })
+  const live = await server.store.dispatchTask(workspace.id, worker.id, 'Still active', {
+    fromAgentId: orchestratorId,
+  })
+  const liveId = await ask(live.id, 'LIVE_QUESTION_DELIVERS_ONCE')
+  const reported = await server.store.dispatchTask(workspace.id, worker.id, 'Report separately', {
+    fromAgentId: orchestratorId,
+  })
+  server.store.reportTask(workspace.id, worker.id, {
+    dispatchId: reported.id,
+    requireActiveRun: true,
+    text: 'REAL_REPORT_SURVIVES',
+  })
+
+  const db = new Database(join(dataDir, 'runtime.sqlite'))
+  try {
+    const outbox = createReportOutboxStore(db)
+    expect(outbox.pendingCount(workspace.id, orchestratorId)).toBe(1)
+    expect(outbox.listPending(workspace.id, orchestratorId).map((row) => row.dispatchId)).toEqual([
+      reported.id,
+    ])
+    expect(
+      db.prepare('SELECT state FROM dispatch_message_outbox WHERE message_id = ?').get(retiredId)
+    ).toEqual({ state: 'cancelled' })
+    expect(
+      db.prepare('SELECT state FROM dispatch_message_outbox WHERE message_id = ?').get(liveId)
+    ).toEqual({ state: 'queued' })
+    const receivedPath = join(workspacePath, 'received.txt')
+    writeFileSync(receivedPath, '')
+    const script = join(workspacePath, 'orchestrator-receive.cjs')
+    writeFileSync(
+      script,
+      `const { appendFileSync } = require('node:fs'); process.stdin.setRawMode(true); process.stdin.on('data', data => appendFileSync(${JSON.stringify(receivedPath)}, data)); process.stdout.write('READY')`
+    )
+    server.store.configureAgentLaunch(workspace.id, orchestratorId, {
+      command: process.execPath,
+      args: [script],
+    })
+    await server.store.startAgent(workspace.id, orchestratorId, {
+      hivePort: new URL(server.baseUrl).port,
+    })
+    await expect
+      .poll(() =>
+        db.prepare('SELECT state FROM dispatch_message_outbox WHERE message_id = ?').get(liveId)
+      )
+      .toEqual({ state: 'delivered' })
+    await expect.poll(() => outbox.pendingCount(workspace.id, orchestratorId)).toBe(0)
+    await expect
+      .poll(() => expandInboxReferences(readFileSync(receivedPath, 'utf8')))
+      .toContain('REAL_REPORT_SURVIVES')
+    const received = expandInboxReferences(readFileSync(receivedPath, 'utf8'))
+    expect(received).not.toContain('RETIRED_QUESTION_MUST_STAY_RETIRED')
+    expect(
+      received.match(new RegExp(`<hive-message kind="question" message="${liveId}"`, 'g'))
+    ).toHaveLength(1)
+  } finally {
+    db.close()
+  }
+}, 15000)

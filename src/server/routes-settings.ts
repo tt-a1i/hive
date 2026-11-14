@@ -1,11 +1,13 @@
 import { isCommandAvailableOnPath } from './agent-command-resolver.js'
-import { readFeatureFlags } from './feature-flags.js'
 import { BadRequestError, ForbiddenError } from './http-errors.js'
-import { isRemoteConfigKey, REMOTE_ENABLED_KEY } from './remote-config-keys.js'
+import {
+  isRemoteConfigKey,
+  REMOTE_DAEMON_TOKEN_KEY,
+  REMOTE_ENABLED_KEY,
+} from './remote-config-keys.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteContext, RouteDefinition } from './route-types.js'
 import type { SessionIdCaptureConfig } from './session-capture.js'
-import { ensureProtocolFile } from './tasks-file.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
 import {
   assertValidWorkflowCliPolicy,
@@ -88,30 +90,6 @@ const serializeRoleTemplate = (template: {
   is_builtin: template.isBuiltin,
 })
 
-/**
- * Rewrite every open workspace's `.hive/PROTOCOL.md` to match the just-saved
- * workflow feature flag + CLI policy. Without this the doc only refreshes on
- * the next workspace open / watcher start, so toggling the feature would leave
- * stale guidance (workflow DSL still present after disabling, or absent right
- * after enabling). Idempotent: ensureProtocolFile only rewrites on change.
- */
-const refreshWorkflowProtocolDocs = (store: {
-  settings: { getAppState: (key: string) => { value: string | null } | undefined }
-  listWorkspaces: () => Array<{ path: string }>
-}) => {
-  const policy = readWorkflowCliPolicy(
-    store.settings.getAppState(WORKFLOW_CLI_POLICY_KEY)?.value ?? null
-  )
-  const flags = readFeatureFlags(store.settings)
-  for (const workspace of store.listWorkspaces()) {
-    try {
-      ensureProtocolFile(workspace.path, policy, flags)
-    } catch (error) {
-      console.error('[hive] swallowed:settings.refreshProtocol', error)
-    }
-  }
-}
-
 const readCommandPresetBody = async (
   request: Parameters<RouteDefinition['handler']>[0]['request']
 ) => {
@@ -154,6 +132,11 @@ const assertAppStateKeyAllowed = (
   key: string,
   write: boolean
 ): void => {
+  if (key.startsWith('agent_handover:'))
+    throw new ForbiddenError('Internal app state is not available')
+  if (!write && key === REMOTE_DAEMON_TOKEN_KEY) {
+    throw new ForbiddenError('Remote daemon token is not available through app state')
+  }
   if (write && key === REMOTE_ENABLED_KEY) {
     throw new ForbiddenError('remote_enabled can only be changed via /api/remote/enabled')
   }
@@ -287,7 +270,6 @@ export const settingsRoutes: RouteDefinition[] = [
       }
     })()
     store.settings.setAppState(WORKFLOW_CLI_POLICY_KEY, JSON.stringify(clean))
-    refreshWorkflowProtocolDocs(store)
     sendJson(response, 200, { ...clean, supported: [...CANONICAL_WORKFLOW_CLIS] })
   }),
   route('GET', '/api/settings/workflow-feature', ({ request, response, store }) => {
@@ -304,7 +286,6 @@ export const settingsRoutes: RouteDefinition[] = [
       throw new BadRequestError('workflow-feature requires { enabled: boolean }')
     }
     store.settings.setAppState(WORKFLOW_ENABLED_KEY, serializeWorkflowEnabled(body.enabled))
-    refreshWorkflowProtocolDocs(store)
     sendJson(response, 200, { enabled: body.enabled })
   }),
 ]

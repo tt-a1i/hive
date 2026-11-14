@@ -1,13 +1,12 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { createAgentManager } from '../../src/server/agent-manager.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { WORKFLOW_CLI_POLICY_KEY } from '../../src/server/workflow-cli-policy.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences, inboxReaderCommonJsSource } from '../helpers/inbox.js'
 import {
   prependPassiveWorkflowCliPath,
   writePassiveWorkflowCli,
@@ -115,6 +114,7 @@ const writeFakeCodexThatExitsOnDispatchPaste = (binDir: string): string => {
   writeFileSync(
     scriptPath,
     [
+      inboxReaderCommonJsSource,
       "process.stdin.setEncoding('utf8')",
       'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
       "const PASTE_END = '\\u001b[201~'",
@@ -126,6 +126,7 @@ const writeFakeCodexThatExitsOnDispatchPaste = (binDir: string): string => {
       "process.stdout.write('› ')",
       'const handlePaste = (pastedText) => {',
       '  const pastedChars = pastedText.length',
+      '  pastedText = expandReceivedInbox(pastedText)',
       "  if (pastedText.includes('dispatch that exits during paste submit')) {",
       '    setTimeout(() => process.exit(0), 100)',
       '    return',
@@ -417,13 +418,14 @@ describe('workflow runner — single agent() call', () => {
       )
       const output = await waitForValue(() => {
         const text = store.getActiveRunByAgentId(ws.id, dispatch.toAgentId)?.output
-        return text?.includes('ordered dispatch') ? text.replace(/\r\n/g, '\n') : undefined
+        const received = expandInboxReferences(text ?? '')
+        return received.includes('ordered dispatch') ? received.replace(/\r\n/g, '\n') : undefined
       }, 12_000)
       const startupIndex = output.indexOf('<hive-message kind="startup">')
       const dispatchIndex = output.indexOf('<hive-message kind="dispatch"')
       expect(startupIndex).toBeGreaterThanOrEqual(0)
       expect(dispatchIndex).toBeGreaterThan(startupIndex)
-      expect(output).toContain('one-shot Hive workflow member')
+      expect(expandInboxReferences(output)).toContain('one-shot Hive workflow member')
       expect(store.stopWorkflowRun(run.id)).toBe(true)
       await waitForValue(() =>
         store.getWorkflowRun(run.id)?.status === 'stopped' ? true : undefined

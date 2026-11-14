@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  captureSessionIdForCapture,
   captureStdoutRegexSessionId,
   doesCapturedSessionExist,
   snapshotSessionIdsForCapture,
@@ -37,6 +38,46 @@ afterEach(() => {
 })
 
 describe('multi-CLI session capture', () => {
+  test('aborting one directory capture leaves its sibling able to claim the new session', async () => {
+    const root = makeTempDir('hive-cancel-capture')
+    const cwd = join(root, 'workspace')
+    const capture = {
+      source: 'codex_session_jsonl_dir' as const,
+      pattern: join(root, 'sessions/**/*.jsonl'),
+    }
+    const snapshot = { knownSessionIds: new Set<string>(), root }
+    const cancel = new AbortController()
+    const received: string[] = []
+    const stopped = captureSessionIdForCapture(
+      cwd,
+      capture,
+      snapshot,
+      (id) => received.push(`stopped:${id}`),
+      5000,
+      10,
+      cancel.signal
+    )
+    const waiting = captureSessionIdForCapture(
+      cwd,
+      capture,
+      snapshot,
+      (id) => received.push(id),
+      5000,
+      10
+    )
+    cancel.abort()
+    await stopped
+    const id = '019dc277-0e8e-75c1-9794-94929426288e'
+    const directory = join(root, 'sessions', '2026', '04', '30')
+    mkdirSync(directory, { recursive: true })
+    writeFileSync(
+      join(directory, `rollout-2026-04-30T00-00-00-${id}.jsonl`),
+      `${JSON.stringify({ type: 'session_meta', payload: { cwd, id } })}\n`
+    )
+    await waiting
+    expect(received).toEqual([id])
+  })
+
   test('captures Codex sessions by cwd from CODEX_HOME session jsonl files', () => {
     const codexHome = makeTempDir('hive-codex-home')
     const cwd = join(codexHome, 'workspace')

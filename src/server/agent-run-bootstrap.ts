@@ -152,6 +152,7 @@ export const buildAgentRunBootstrap = (
 }
 
 export const startAgentRunCapture = ({
+  signal,
   agentId,
   getRunOutput,
   sessionCaptureSnapshot,
@@ -160,6 +161,7 @@ export const startAgentRunCapture = ({
   workspace,
 }: {
   agentId: string
+  signal: AbortSignal
   getRunOutput?: () => string | null
   sessionCaptureSnapshot: SessionCaptureSnapshot | undefined
   sessionStore: AgentSessionStorePort
@@ -179,6 +181,8 @@ export const startAgentRunCapture = ({
     (sessionId) => {
       sessionStore.setLastSessionId(workspace.id, agentId, sessionId)
     },
-    SESSION_CAPTURE_TIMEOUT_MS
+    SESSION_CAPTURE_TIMEOUT_MS,
+    undefined,
+    signal
   )
 }

@@ -12,7 +12,7 @@ const tempDirs: string[] = []
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
-  timeoutMs = 1500,
+  timeoutMs = 5000,
   intervalMs = 20
 ) => {
   const deadline = Date.now() + timeoutMs
@@ -135,7 +135,7 @@ describe('hive bin dir', () => {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 10000)
 
   test('dummy agent can execute team list via injected HIVE_BIN_DIR and HIVE env', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-bin-dir-team-list-'))
@@ -217,5 +217,5 @@ describe('hive bin dir', () => {
       delete process.env.HIVE_DATA_DIR
       await hive.close()
     }
-  })
+  }, 10000)
 })

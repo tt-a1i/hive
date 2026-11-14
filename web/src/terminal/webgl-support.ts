@@ -6,15 +6,22 @@
  * absent. The canvas factory is injectable so the check is testable in jsdom.
  */
 
-export const detectWebglSupport = (
-  createCanvas: () => HTMLCanvasElement | null = () =>
-    typeof document !== 'undefined' ? document.createElement('canvas') : null
-): boolean => {
-  const canvas = createCanvas()
-  if (!canvas || typeof canvas.getContext !== 'function') return false
+let cachedSupport: boolean | undefined
+
+export const detectWebglSupport = (createCanvas?: () => HTMLCanvasElement | null): boolean => {
+  if (!createCanvas && cachedSupport !== undefined) return cachedSupport
+  const probe =
+    createCanvas ??
+    (() => (typeof document !== 'undefined' ? document.createElement('canvas') : null))
+  const canvas = probe()
+  let supported = false
   try {
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'))
+    const context = canvas?.getContext?.('webgl2') || canvas?.getContext?.('webgl')
+    supported = Boolean(context)
+    context?.getExtension?.('WEBGL_lose_context')?.loseContext()
   } catch {
-    return false
+    // A failed probe leaves the default renderer in use.
   }
+  if (!createCanvas) cachedSupport = supported
+  return supported
 }

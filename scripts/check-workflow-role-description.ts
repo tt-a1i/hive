@@ -10,6 +10,7 @@ import { createAgentManager } from '../src/server/agent-manager.js'
 import { createApp } from '../src/server/app.js'
 import { getDefaultRoleDescription } from '../src/server/role-templates.js'
 import { createRuntimeStore } from '../src/server/runtime-store.js'
+import { inboxReaderCommonJsSource } from '../tests/helpers/inbox.js'
 
 const root = await mkdtemp(join(tmpdir(), 'hive-workflow-role-check-'))
 const bin = join(root, 'bin')
@@ -19,12 +20,14 @@ const recorder = join(bin, 'recorder.cjs')
 await writeFile(
   recorder,
   String.raw`
+${inboxReaderCommonJsSource}
 process.stdin.setEncoding('utf8')
 if (process.stdin.isTTY) process.stdin.setRawMode(true)
 let buffer = ''
 process.stdout.write('› \n')
 process.stdin.on('data', chunk => {
   buffer += chunk
+  buffer = expandReceivedInbox(buffer)
   if (buffer.includes('\u001b[201~')) {
     if (buffer.includes('<hive-message kind="startup">')) {
       process.stdout.write('\nCHECK_STARTUP:' + Buffer.from(buffer).toString('base64') + '\n')

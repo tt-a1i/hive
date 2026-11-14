@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -30,8 +30,7 @@ afterEach(async () => {
 })
 
 const startServer = async () => {
-  const dataDir = join(tmpdir(), `hive-scenario-api-${Date.now()}-${Math.random()}`)
-  mkdirSync(dataDir, { recursive: true })
+  const dataDir = mkdtempSync(join(tmpdir(), 'hive-scenario-api-'))
   tempDirs.push(dataDir)
 
   const workspacePath = join(dataDir, 'workspace')
@@ -131,7 +130,7 @@ describe('scenario apply route', () => {
     const scenario = getScenarioPreset('build_review_test')
     if (!scenario) throw new Error('missing scenario preset')
 
-    const created = applyScenarioDirect(
+    const created = await applyScenarioDirect(
       store,
       workspace.id,
       scenario,
@@ -173,7 +172,7 @@ describe('scenario apply route', () => {
     const scenario = getScenarioPreset('research_factcheck')
     if (!scenario) throw new Error('missing scenario preset')
 
-    const created = applyScenarioDirect(
+    const created = await applyScenarioDirect(
       store,
       workspace.id,
       scenario,

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import Database from '../../src/server/sqlite.js'
-
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { inboxReaderSource } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -74,6 +74,7 @@ const writeResumableClaudeEcho = (workspacePath: string) => {
   writeFileSync(
     cliPath,
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -89,10 +90,11 @@ mkdirSync(projectDir, { recursive: true })
 const sessionPath = join(projectDir, sessionId + '.jsonl')
 writeFileSync(sessionPath, '{}\\n')
 let pasteOpen = false
+process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: expandReceivedInbox(chunk) } }) + '\\n')
   if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
     pasteOpen = false

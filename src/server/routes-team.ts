@@ -1,4 +1,3 @@
-import type { TeamListItem } from '../shared/types.js'
 import { validateCronNextRunAt } from './cron-util.js'
 import { readFeatureFlags } from './feature-flags.js'
 import { buildProtocolGuide, isProtocolGuideTopic } from './hive-team-guidance.js'
@@ -27,12 +26,6 @@ import { readWorkflowCliPolicy, WORKFLOW_CLI_POLICY_KEY } from './workflow-cli-p
 import { readWorkflowEnabled, WORKFLOW_ENABLED_KEY } from './workflow-feature.js'
 import { getOrchestratorId } from './workspace-store-support.js'
 import { resolveWorkspaceUiLanguage } from './workspace-ui-language.js'
-
-const shouldAutoStartTeamSendTarget = (
-  store: Parameters<RouteDefinition['handler']>[0]['store'],
-  targetWorker: TeamListItem | undefined
-): boolean =>
-  targetWorker?.spawnedBy === 'orchestrator' && store.listAgentRuns(targetWorker.id).length === 0
 
 // Experimental gate: `team workflow run` / `team workflow schedule` only work
 // when the user has enabled workflows in Settings. Off by default. The PTY
@@ -142,22 +135,15 @@ export const teamRoutes: RouteDefinition[] = [
       body.related_to_dispatch_id === undefined
         ? undefined
         : requireNonEmptyString(body.related_to_dispatch_id, 'related_to_dispatch_id')
-    const targetWorker = store.listWorkers(projectId).find((worker) => worker.name === to)
-    const shouldAutoStartWorker = shouldAutoStartTeamSendTarget(store, targetWorker)
+    const target = store.listWorkers(projectId).find((worker) => worker.name === to)
     const dispatch = await store.dispatchTaskByWorkerName(projectId, to, text, {
-      autoStartWorker: shouldAutoStartWorker,
+      autoStartWorker:
+        target !== undefined && store.peekAgentLaunchConfig(projectId, target.id) !== undefined,
       ...(relatedToDispatchId !== undefined ? { relatedToDispatchId } : {}),
       fromAgentId,
       hivePort: String(request.socket.localPort ?? ''),
     })
 
-    /* The user-facing team send route queues work for user-managed stopped
-       workers without auto-starting them. An orchestrator-spawned worker is
-       different only for its first dispatch: `team spawn` is immediately
-       followed by `team send`, so the send path wakes a never-started spawned
-       worker to keep that natural flow from parking forever. A parked dispatch
-       is flagged so the orchestrator can tell the user the worker needs a
-       start (replay delivers it automatically on that start). */
     sendJson(response, 202, {
       dispatch_id: dispatch.id,
       parent_dispatch_id: dispatch.parentDispatchId,

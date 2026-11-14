@@ -87,6 +87,44 @@ afterEach(() => {
 })
 
 describe('terminal-client — tunnel reconnect surfacing (VULN-RELIABILITY-2)', () => {
+  test('flushes accumulated output acknowledgements when control opens and clears them on close', async () => {
+    const transport = makeFakeTransport()
+    setApiTransport(transport)
+    let acknowledge!: (bytes: number) => void
+    const client = createTerminalClient({
+      runId: 'ack-queue',
+      onError: () => {},
+      onExit: () => {},
+      onOutput: (_chunk, ack) => {
+        acknowledge = ack
+      },
+      onRestore: (_snapshot, done) => done(),
+    })
+    await flush()
+    const io = transport.sockets.find((socket) => socket.path.endsWith('/io'))
+    const control = transport.sockets.find((socket) => socket.path.endsWith('/control'))
+    if (!io || !control) throw new Error('Missing terminal sockets')
+    control.deliver(JSON.stringify({ type: 'restore', snapshot: '' }))
+    io.deliver('hello')
+    control.readyState = 0
+    acknowledge(2)
+    acknowledge(3)
+    expect(
+      control.sent.filter((item) => typeof item === 'string' && item.includes('output_ack'))
+    ).toEqual([])
+    control.readyState = 1
+    control.onopen?.()
+    control.onopen?.()
+    expect(
+      control.sent.filter((item) => typeof item === 'string' && item.includes('output_ack'))
+    ).toEqual([JSON.stringify({ type: 'output_ack', bytes: 5 })])
+    client.dispose()
+    acknowledge(5)
+    expect(
+      control.sent.filter((item) => typeof item === 'string' && item.includes('output_ack'))
+    ).toHaveLength(1)
+  })
+
   test('waits for the restore write to finish before releasing live output', async () => {
     const transport = makeFakeTransport()
     setApiTransport(transport)

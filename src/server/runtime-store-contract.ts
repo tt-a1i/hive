@@ -5,14 +5,6 @@ import type { AgentLaunchConfigInput, PersistedAgentRun } from './agent-run-stor
 import type { LiveAgentRun } from './agent-runtime-types.js'
 import type { DispatchRecord, ListDispatchesOptions } from './dispatch-ledger-store.js'
 import type { DispatchMessageOperations } from './dispatch-message-operations.js'
-import type {
-  ExternalGoalBridge,
-  ExternalGoalCancelInput,
-  ExternalGoalContinueInput,
-  ExternalGoalReportInput,
-  ExternalGoalStartInput,
-  ExternalGoalWaitInput,
-} from './external-goal-bridge.js'
 import type { RecoveryMessage } from './message-log-store.js'
 import type { PtyOutputBus } from './pty-output-bus.js'
 import type { RemoteAuditStore } from './remote-audit-store.js'
@@ -20,20 +12,7 @@ import type { DeviceSessionProvider } from './remote-device-session.js'
 import type { RemoteDeviceRecord, RemoteDeviceStore } from './remote-device-store.js'
 import type { RemotePairing } from './remote-pairing.js'
 import type { RemoteTunnel, TunnelStatus } from './remote-tunnel.js'
-import type { ControllerMethods } from './runtime-store-controller.js'
-import type { MemoryDreamInput } from './runtime-store-dream.js'
 import type { SettingsStore } from './settings-store.js'
-import type { BuildMemoryDiagnosticsInput, MemoryDiagnostics } from './team-memory-diagnostics.js'
-import type { DreamRunRecord } from './team-memory-dream-store.js'
-import type {
-  AddMemoryEntryInput,
-  LogMemoryInjectionsInput,
-  MemoryEntryWithSources,
-  MemoryInjectionWithMemory,
-  MemoryListOptions,
-  MemorySearchOptions,
-  MemorySearchResult,
-} from './team-memory-store.js'
 import type {
   CancelTaskInput,
   DispatchTaskInput,
@@ -50,13 +29,9 @@ import type { WorkflowScheduleRecord } from './workflow-schedule-store.js'
 import type { WorkerInput, WorkspaceRecord } from './workspace-store.js'
 import type { SaveWorkspaceUploadInput, WorkspaceUploadRecord } from './workspace-upload-store.js'
 
-export interface RuntimeStore extends DispatchMessageOperations, ControllerMethods {
+export interface RuntimeStore extends DispatchMessageOperations {
   close: () => Promise<void>
-  createWorkspace: (
-    path: string,
-    name: string,
-    controllerMode?: 'internal' | 'codex_app'
-  ) => WorkspaceSummary
+  createWorkspace: (path: string, name: string) => WorkspaceSummary
   deleteWorkspace: (workspaceId: string) => Promise<void>
   listWorkspaces: () => WorkspaceSummary[]
   addWorker: (workspaceId: string, input: WorkerInput) => AgentSummary
@@ -73,7 +48,7 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   ) => AgentSummary
   updateWorkerAvatar: (workspaceId: string, workerId: string, avatar: string | null) => AgentSummary
   renameWorker: (workspaceId: string, workerId: string, name: string) => AgentSummary
-  recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => void
+  recordUserInput: (workspaceId: string, orchestratorId: string, text: string) => Promise<void>
   deliverUserInput: (workspaceId: string, orchestratorId: string, text: string) => Promise<void>
   dispatchTask: (
     workspaceId: string,
@@ -101,19 +76,6 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   getDispatch: (workspaceId: string, dispatchId: string) => DispatchRecord | undefined
   listOpenDispatches: (workspaceId: string) => DispatchRecord[]
   listRecentDispatches: (workspaceId: string, limit?: number) => DispatchRecord[]
-  listExternalGoalWorkspaces: ExternalGoalBridge['listWorkspaces']
-  inspectExternalGoalWorkspace: ExternalGoalBridge['inspectWorkspace']
-  startExternalGoal: (input: ExternalGoalStartInput) => ReturnType<ExternalGoalBridge['startGoal']>
-  continueExternalGoal: (
-    input: ExternalGoalContinueInput
-  ) => ReturnType<ExternalGoalBridge['continueGoal']>
-  reportExternalGoal: (
-    input: ExternalGoalReportInput
-  ) => ReturnType<ExternalGoalBridge['reportGoal']>
-  waitExternalGoal: (input: ExternalGoalWaitInput) => ReturnType<ExternalGoalBridge['waitGoal']>
-  cancelExternalGoal: (
-    input: ExternalGoalCancelInput
-  ) => ReturnType<ExternalGoalBridge['cancelGoal']>
   listWorkers: (workspaceId: string) => TeamListItem[]
   getLastPtyLineForAgent: (workspaceId: string, agentId: string) => string | null
   getWorkspaceSnapshot: (workspaceId: string) => WorkspaceRecord
@@ -123,6 +85,12 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   listTerminalRuns: (workspaceId: string) => TerminalRunSummary[]
   closeWorkspaceShell: (workspaceId: string, runId: string) => boolean
   startWorkspaceShell: (workspaceId: string) => Promise<LiveAgentRun>
+  switchAgentLaunch: (
+    workspaceId: string,
+    agentId: string,
+    config: AgentLaunchConfigInput,
+    input: { hivePort: string; restart: boolean }
+  ) => Promise<LiveAgentRun | null>
   configureAgentLaunch: (
     workspaceId: string,
     agentId: string,
@@ -155,39 +123,6 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   listAgentRuns: (agentId: string) => PersistedAgentRun[]
   listMessagesForRecovery: (workspaceId: string, sinceMs: number) => RecoveryMessage[]
   recallMessages: (workspaceId: string, query: string, options?: RecallOptions) => RecallResult[]
-  addMemoryEntry: (input: AddMemoryEntryInput) => MemoryEntryWithSources
-  approveMemoryCandidate: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  archiveMemoryEntry: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  getMemoryEntry: (workspaceId: string, memoryId: string) => MemoryEntryWithSources | undefined
-  getMemoryDiagnostics: (input: BuildMemoryDiagnosticsInput) => MemoryDiagnostics
-  listMemoryEntries: (workspaceId: string, options?: MemoryListOptions) => MemoryEntryWithSources[]
-  listMemoryInjectionsForDispatch: (
-    workspaceId: string,
-    dispatchId: string
-  ) => MemoryInjectionWithMemory[]
-  logMemoryInjections: (input: LogMemoryInjectionsInput) => string[]
-  rejectMemoryCandidate: (workspaceId: string, memoryId: string) => MemoryEntryWithSources
-  searchMemoryEntries: (
-    workspaceId: string,
-    query: string,
-    options?: MemorySearchOptions
-  ) => MemorySearchResult[]
-  setMemoryDisabled: (
-    workspaceId: string,
-    memoryId: string,
-    disabled: boolean
-  ) => MemoryEntryWithSources
-  setMemoryPinned: (
-    workspaceId: string,
-    memoryId: string,
-    pinned: boolean
-  ) => MemoryEntryWithSources
-  applyMemoryDreamRun: (workspaceId: string, runId: string, rawOps: unknown) => DreamRunRecord
-  getMemoryDreamInput: (workspaceId: string, runId: string) => MemoryDreamInput
-  listMemoryDreamRuns: (workspaceId: string, limit?: number) => DreamRunRecord[]
-  revertMemoryDream: (workspaceId: string, runId: string) => DreamRunRecord
-  runMemoryDream: (workspaceId: string) => Promise<DreamRunRecord>
-  tickMemoryDreamScheduler: (now?: number) => Promise<void>
   peekAgentToken: (agentId: string) => string | undefined
   pauseTerminalRun: (runId: string) => void
   resizeAgentRun: (runId: string, cols: number, rows: number) => void
@@ -195,11 +130,9 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
   settings: SettingsStore
   writeRunInput: (runId: string, input: Buffer | string) => void
   getUiToken: () => string
-  getSupervisorToken: () => string
   stopAgentRun: (runId: string) => void
   validateAgentToken: (agentId: string, token: string | undefined) => boolean
   validateUiToken: (token: string | undefined) => boolean
-  validateSupervisorToken: (token: string | undefined) => boolean
   // Remote tunnel (invariant 2): true iff the request carries the live per-boot
   // tunnel secret. The auth chokepoints pass this as the optional authorize-arg
   // so tunnel-originated loopback requests skip the cookie check.
@@ -295,6 +228,7 @@ export interface RuntimeStore extends DispatchMessageOperations, ControllerMetho
 }
 
 export interface RuntimeStoreOptions {
+  getHivePort?: () => string
   dataDir?: string
   agentManager?: AgentManager
 }

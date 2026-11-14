@@ -55,6 +55,7 @@ export const captureSessionIdWithCoordinator = async ({
   projectKey,
   timeoutMs = 5000,
   matchesSessionId,
+  signal,
 }: {
   intervalMs?: number
   knownSessionIds: Set<string>
@@ -62,8 +63,10 @@ export const captureSessionIdWithCoordinator = async ({
   matchesSessionId?: (sessionId: string) => boolean
   onCapture: (sessionId: string) => void
   projectKey: string
+  signal?: AbortSignal | undefined
   timeoutMs?: number
 }) => {
+  if (signal?.aborted) return
   await new Promise<void>((resolve) => {
     let timeout: ReturnType<typeof setTimeout>
     const waiter: CaptureWaiter = {
@@ -72,17 +75,20 @@ export const captureSessionIdWithCoordinator = async ({
       onCapture,
       resolve: () => {
         clearTimeout(timeout)
+        signal?.removeEventListener('abort', cancel)
         resolve()
       },
     }
-    timeout = setTimeout(() => {
+    const cancel = () => {
       waitersByProjectKey.set(
         projectKey,
         (waitersByProjectKey.get(projectKey) ?? []).filter((candidate) => candidate !== waiter)
       )
       clearPollerIfIdle(projectKey)
-      resolve()
-    }, timeoutMs)
+      waiter.resolve()
+    }
+    signal?.addEventListener('abort', cancel, { once: true })
+    timeout = setTimeout(cancel, timeoutMs)
     timeout.unref?.()
     waitersByProjectKey.set(projectKey, [...(waitersByProjectKey.get(projectKey) ?? []), waiter])
     if (!pollersByProjectKey.has(projectKey)) {

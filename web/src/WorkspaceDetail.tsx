@@ -1,5 +1,14 @@
 import { Maximize2, Minimize2 } from 'lucide-react'
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import type { TeamListItem, WorkspaceSummary } from '../../src/shared/types.js'
 import { ActionCenterStrip } from './action-center/ActionCenterStrip.js'
@@ -23,8 +32,8 @@ import { findRunByAgentId } from './terminal/useTerminalRuns.js'
 import { useWorkspaceShellLauncher } from './terminal/useWorkspaceShellLauncher.js'
 import { useToast } from './ui/useToast.js'
 import { usePaneSplit } from './usePaneSplit.js'
-import { ExternalControllerPane } from './worker/ExternalControllerPane.js'
 import { OrchestratorPane } from './worker/OrchestratorPane.js'
+import { SwitchAgentCliDialog } from './worker/SwitchAgentCliDialog.js'
 import { useOrchestratorPaneState } from './worker/useOrchestratorPaneState.js'
 import type { WorkerActions } from './worker/useWorkerActions.js'
 import { useWorkerComposer } from './worker/useWorkerComposer.js'
@@ -88,6 +97,14 @@ export const WorkspaceDetail = ({
   onActiveWorkerChange,
   showInlineActionCenter = true,
 }: WorkspaceDetailProps) => {
+  const visit = useMemo(() => ({ workspaceId: workspace?.id }), [workspace?.id])
+  const currentVisit = useRef<typeof visit | null>(visit)
+  useLayoutEffect(() => {
+    currentVisit.current = visit
+    return () => {
+      if (currentVisit.current === visit) currentVisit.current = null
+    }
+  }, [visit])
   const { t } = useI18n()
   const isMobile = useIsMobile()
   const [localActiveWorkerId, setLocalActiveWorkerId] = useState<string | null>(null)
@@ -112,12 +129,17 @@ export const WorkspaceDetail = ({
   // away while focused (workspace deleted → Welcome pane), restore the chrome
   // so the user is never stranded without navigation.
   useEffect(() => () => setMobileFocusMode(false), [])
+  const [switchAgentId, setSwitchAgentId] = useState<string | null>(null)
+  // Reset dialog state when the active workspace changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the workspace change is the reset trigger.
+  useEffect(() => setSwitchAgentId(null), [workspace?.id])
   const [deleteWorkerError, setDeleteWorkerError] = useState<string | null>(null)
   const [startWorkerError, setStartWorkerError] = useState<string | null>(null)
   const [startingWorkerId, setStartingWorkerId] = useState<string | null>(null)
   const [terminalPanelHidden, setTerminalPanelHidden] = useState(false)
   const toast = useToast()
   const composer = useWorkerComposer({
+    workspaceId: workspace?.id ?? null,
     createWorker: onCreateWorker,
     open: composerOpen,
     workers,
@@ -209,8 +231,11 @@ export const WorkspaceDetail = ({
   const handleDeleteWorker = (worker: TeamListItem) => {
     setDeleteWorkerError(null)
     void onDeleteWorker(worker.id)
-      .then(() => setActiveWorkerId(null))
+      .then(() => {
+        if (currentVisit.current === visit) setActiveWorkerId(null)
+      })
       .catch((error) => {
+        if (currentVisit.current !== visit) return
         setDeleteWorkerError(error instanceof Error ? error.message : String(error))
       })
   }
@@ -220,16 +245,21 @@ export const WorkspaceDetail = ({
     setStartingWorkerId(worker.id)
     void onStartWorker(worker.id)
       .then(({ error }) => {
+        if (currentVisit.current !== visit) return
         if (error) setStartWorkerError(error)
       })
       .catch((error) => {
+        if (currentVisit.current !== visit) return
         setStartWorkerError(error instanceof Error ? error.message : String(error))
       })
-      .finally(() => setStartingWorkerId(null))
+      .finally(() => {
+        if (currentVisit.current === visit) setStartingWorkerId(null)
+      })
   }
 
   const handleStopWorker = (runId: string) => {
     void onStopWorker(runId).then(({ error }) => {
+      if (currentVisit.current !== visit) return
       if (error) toast.show({ kind: 'error', message: error })
     })
   }
@@ -239,12 +269,16 @@ export const WorkspaceDetail = ({
     setStartingWorkerId(workerId)
     void onRestartWorker(workerId, runId)
       .then(({ error }) => {
+        if (currentVisit.current !== visit) return
         if (error) setStartWorkerError(error)
       })
       .catch((error) => {
+        if (currentVisit.current !== visit) return
         setStartWorkerError(error instanceof Error ? error.message : String(error))
       })
-      .finally(() => setStartingWorkerId(null))
+      .finally(() => {
+        if (currentVisit.current === visit) setStartingWorkerId(null)
+      })
   }
 
   const handleRenameWorker = async (
@@ -253,12 +287,14 @@ export const WorkspaceDetail = ({
   ): Promise<{ error: string | null }> => {
     try {
       await renameWorker(workspace.id, worker.id, newName)
+      if (currentVisit.current !== visit) return { error: null }
       toast.show({
         kind: 'success',
         message: t('worker.renameSuccess', { name: newName }),
       })
       return { error: null }
     } catch (error) {
+      if (currentVisit.current !== visit) return { error: null }
       const message = error instanceof Error ? error.message : String(error)
       toast.show({ kind: 'error', message: t('worker.renameFailed', { message }) })
       return { error: message }
@@ -274,28 +310,20 @@ export const WorkspaceDetail = ({
     setTerminalPanelHidden(false)
     startNewShell()
   }
-  const orchestratorPane =
-    workspace.controller_mode === 'codex_app' ? (
-      <ExternalControllerPane
-        key={workspace.id}
-        workspaceId={workspace.id}
-        workspaceName={workspace.name}
-        memberCount={workers.length}
-        onAddMember={() => setComposerOpen(true)}
-      />
-    ) : (
-      <OrchestratorPane
-        state={orchestrator.state}
-        onRemoveWorkspace={() => {
-          void onDeleteWorkspace(workspace).catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error)
-            toast.show({ kind: 'error', message: `Delete failed: ${message}` })
-          })
-        }}
-        onStart={orchestrator.start}
-        onRestart={orchestrator.restart}
-      />
-    )
+  const orchestratorPane = (
+    <OrchestratorPane
+      state={orchestrator.state}
+      onRemoveWorkspace={() => {
+        void onDeleteWorkspace(workspace).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          toast.show({ kind: 'error', message: `Delete failed: ${message}` })
+        })
+      }}
+      onStart={orchestrator.start}
+      onRestart={orchestrator.restart}
+      onSwitchCli={() => setSwitchAgentId(`${workspace.id}:orchestrator`)}
+    />
+  )
 
   const workersArea = (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -304,6 +332,7 @@ export const WorkspaceDetail = ({
         onDeleteWorker={handleDeleteWorker}
         onOpenShellTerminal={openShellTerminal}
         onOpenWorker={(worker) => setActiveWorkerId(worker.id)}
+        onSwitchCli={(worker) => setSwitchAgentId(worker.id)}
         onRenameWorker={handleRenameWorker}
         onUpdateWorkerAvatar={onUpdateWorkerAvatar}
         onStartWorker={handleStartWorker}
@@ -312,8 +341,29 @@ export const WorkspaceDetail = ({
         startingWorkerId={startingWorkerId}
         terminalRuns={terminalRuns}
         workers={workers}
-        {...(workspace.controller_mode === 'codex_app' ? {} : { workspaceId: workspace.id })}
+        workspaceId={workspace.id}
       />
+      {switchAgentId && (
+        <SwitchAgentCliDialog
+          key={`${workspace.id}:${switchAgentId}`}
+          workspaceId={workspace.id}
+          agentId={switchAgentId}
+          runId={terminalRuns.find((run) => run.agent_id === switchAgentId)?.run_id ?? null}
+          onClose={() => setSwitchAgentId(null)}
+          onSaved={() => {
+            if (switchAgentId === `${workspace.id}:orchestrator`)
+              onOrchestratorResult(workspace.id, { ok: true, error: null, run_id: null })
+          }}
+          onStopped={(runId) => {
+            if (switchAgentId === `${workspace.id}:orchestrator`)
+              onOrchestratorRunClosed?.(workspace.id, runId)
+          }}
+          onStarted={(runId) => {
+            if (switchAgentId === `${workspace.id}:orchestrator`)
+              onOrchestratorResult(workspace.id, { ok: true, error: null, run_id: runId })
+          }}
+        />
+      )}
       {terminalPanelHidden ? null : (
         <TerminalBottomPanel
           tabs={shellPanelTabs}
@@ -389,9 +439,7 @@ export const WorkspaceDetail = ({
                 >
                   <span>
                     {pane === 'orchestrator'
-                      ? workspace.controller_mode === 'codex_app'
-                        ? t('controller.title')
-                        : t('mobile.team.orchestrator')
+                      ? t('mobile.team.orchestrator')
                       : t('mobile.team.workers')}
                   </span>
                   {pane === 'workers' && workers.length > 0 ? (

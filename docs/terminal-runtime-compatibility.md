@@ -63,10 +63,7 @@ custom policies conflict, leave the option disabled until that policy has been
 reviewed rather than silently broadening inheritance.
 
 Verify variable presence only, then run `team list` inside the Hive-launched
-agent and compare its members with the current workspace. Do not manufacture
-tokens or switch to an external controller to bypass missing internal context.
-An external controller must independently bind to the correct Hive instance;
-workspace IDs from a different server are not interchangeable.
+agent and compare its members with the current workspace.
 
 ## Native and browser dependency delivery are separate
 

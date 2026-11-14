@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import type { CommandPreset, FsProbeResponse } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { CliInstallGuidancePanel } from './CliInstallGuidance.js'
-import { ControllerModeSelect } from './ControllerModeSelect.js'
 import { sanitizePastedPath } from './path-input.js'
 import { WorkspaceCommandPresetSelect } from './WorkspaceCommandPresetSelect.js'
 import type { WorkspaceCreateInput } from './workspace-create-input.js'
@@ -53,8 +52,6 @@ export const ConfirmWorkspaceDialog = ({
   const [pasteExpanded, setPasteExpanded] = useState(pasteFallbackDefault)
   const [startupExpanded, setStartupExpanded] = useState(false)
   const [startupCommand, setStartupCommand] = useState('')
-  const [controllerMode, setControllerMode] = useState<'internal' | 'codex_app'>('internal')
-  const externalController = controllerMode === 'codex_app'
 
   // Re-sync when the probe changes (user re-picks a folder without closing).
   useEffect(() => {
@@ -79,17 +76,17 @@ export const ConfirmWorkspaceDialog = ({
   const canCreate =
     name.trim().length > 0 &&
     resolvedPath.length > 0 &&
-    (externalController ||
-      (!presetsLoading && !genericPresetNeedsStartup && !selectedPresetUnavailable))
+    !presetsLoading &&
+    !genericPresetNeedsStartup &&
+    !selectedPresetUnavailable
 
   const handleCreate = () => {
     if (!canCreate) return
     onCreate({
-      ...(externalController ? { controllerMode: 'codex_app' as const } : {}),
-      commandPresetId: externalController ? null : commandPresetId || null,
+      commandPresetId: commandPresetId || null,
       name: name.trim(),
       path: resolvedPath,
-      ...(!externalController && startupClean ? { startupCommand: startupClean } : {}),
+      ...(startupClean ? { startupCommand: startupClean } : {}),
     })
   }
 
@@ -131,11 +128,7 @@ export const ConfirmWorkspaceDialog = ({
                   {t('workspace.confirm.title')}
                 </Dialog.Title>
                 <Dialog.Description className="text-xs text-ter">
-                  {t(
-                    externalController
-                      ? 'controller.workspaceDescription'
-                      : 'workspace.confirm.description'
-                  )}
+                  {t('workspace.confirm.description')}
                 </Dialog.Description>
               </div>
             </div>
@@ -201,17 +194,14 @@ export const ConfirmWorkspaceDialog = ({
                 />
               </label>
 
-              <ControllerModeSelect value={controllerMode} onChange={setControllerMode} />
-              {!externalController && (
-                <WorkspaceCommandPresetSelect
-                  error={commandPresetError ?? presetAvailabilityError}
-                  onChange={onCommandPresetChange}
-                  presets={commandPresets}
-                  value={commandPresetId}
-                />
-              )}
+              <WorkspaceCommandPresetSelect
+                error={commandPresetError ?? presetAvailabilityError}
+                onChange={onCommandPresetChange}
+                presets={commandPresets}
+                value={commandPresetId}
+              />
 
-              {!externalController && selectedPresetUnavailable && selectedPreset ? (
+              {selectedPresetUnavailable && selectedPreset ? (
                 <CliInstallGuidancePanel
                   presetId={selectedPreset.id}
                   presetName={selectedPreset.displayName}
@@ -226,10 +216,10 @@ export const ConfirmWorkspaceDialog = ({
                 }}
                 data-testid="yolo-mode-notice"
               >
-                {t(externalController ? 'controller.memberPermissions' : 'workspace.yolo.notice')}
+                {t('workspace.yolo.notice')}
               </p>
 
-              {!externalController && allPresetsUnavailable && onTryDemo ? (
+              {allPresetsUnavailable && onTryDemo ? (
                 <div
                   className="flex flex-col gap-2 rounded-lg border p-3"
                   style={{
@@ -252,54 +242,52 @@ export const ConfirmWorkspaceDialog = ({
               ) : null}
 
               {/* Advanced Configurations */}
-              {!externalController && (
-                <div
-                  className="mt-2 rounded-lg border overflow-hidden transition-all"
-                  style={{
-                    borderColor: 'var(--border)',
-                    background: 'var(--bg-1)',
-                  }}
+              <div
+                className="mt-2 rounded-lg border overflow-hidden transition-all"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: 'var(--bg-1)',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setStartupExpanded((v) => !v)}
+                  className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
+                  data-testid="confirm-workspace-startup-toggle"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setStartupExpanded((v) => !v)}
-                    className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
-                    data-testid="confirm-workspace-startup-toggle"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Sliders size={12} aria-hidden className="text-ter" />
-                      {t('workspace.advanced.startup')}
-                    </span>
-                    {startupExpanded ? (
-                      <ChevronDown size={14} aria-hidden />
-                    ) : (
-                      <ChevronRight size={14} aria-hidden />
-                    )}
-                  </button>
+                  <span className="flex items-center gap-2">
+                    <Sliders size={12} aria-hidden className="text-ter" />
+                    {t('workspace.advanced.startup')}
+                  </span>
                   {startupExpanded ? (
-                    <div
-                      className="flex flex-col gap-2 border-t p-3.5 transition-all"
-                      style={{
-                        background: 'var(--bg-2)',
-                        borderColor: 'var(--border)',
-                      }}
-                    >
-                      <FieldLabel>{t('workspace.field.startup')}</FieldLabel>
-                      <input
-                        type="text"
-                        value={startupCommand}
-                        onChange={(event) => setStartupCommand(event.target.value)}
-                        placeholder={t('workspace.field.startupPlaceholder')}
-                        className="input mono text-sm"
-                        data-testid="confirm-workspace-startup-command"
-                      />
-                      <span className="text-[11px] text-ter normal-case tracking-normal leading-relaxed">
-                        {t('workspace.startup.hint')}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              )}
+                    <ChevronDown size={14} aria-hidden />
+                  ) : (
+                    <ChevronRight size={14} aria-hidden />
+                  )}
+                </button>
+                {startupExpanded ? (
+                  <div
+                    className="flex flex-col gap-2 border-t p-3.5 transition-all"
+                    style={{
+                      background: 'var(--bg-2)',
+                      borderColor: 'var(--border)',
+                    }}
+                  >
+                    <FieldLabel>{t('workspace.field.startup')}</FieldLabel>
+                    <input
+                      type="text"
+                      value={startupCommand}
+                      onChange={(event) => setStartupCommand(event.target.value)}
+                      placeholder={t('workspace.field.startupPlaceholder')}
+                      className="input mono text-sm"
+                      data-testid="confirm-workspace-startup-command"
+                    />
+                    <span className="text-[11px] text-ter normal-case tracking-normal leading-relaxed">
+                      {t('workspace.startup.hint')}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
 
               <div
                 className="rounded-lg border overflow-hidden transition-all"

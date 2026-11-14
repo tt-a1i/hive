@@ -12,10 +12,6 @@ import {
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
-import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
-import { buildProtocolDoc } from './hive-team-guidance.js'
-import type { WorkflowCliPolicy } from './workflow-cli-policy.js'
-
 interface TasksFileService {
   readTasks: (workspacePath: string) => string
   writeTasks: (workspacePath: string, content: string) => void
@@ -24,14 +20,9 @@ interface TasksFileService {
 export const HIVE_DIR_NAME = '.hive'
 export const TASKS_FILE_NAME = 'tasks.md'
 export const TASKS_RELATIVE_PATH = `${HIVE_DIR_NAME}/${TASKS_FILE_NAME}`
-export const PROTOCOL_FILE_NAME = 'PROTOCOL.md'
-export const PROTOCOL_RELATIVE_PATH = `${HIVE_DIR_NAME}/${PROTOCOL_FILE_NAME}`
 
 export const getTasksFilePath = (workspacePath: string) =>
   join(workspacePath, HIVE_DIR_NAME, TASKS_FILE_NAME)
-
-export const getProtocolFilePath = (workspacePath: string) =>
-  join(workspacePath, HIVE_DIR_NAME, PROTOCOL_FILE_NAME)
 
 const getLegacyTasksFilePath = (workspacePath: string) => join(workspacePath, TASKS_FILE_NAME)
 const RETRYABLE_TASKS_FS_ERROR_CODES = new Set(['EACCES', 'EBUSY', 'EPERM'])
@@ -95,28 +86,6 @@ export const ensureTasksFile = (workspacePath: string) => {
     : ''
   runRetryableTasksFileOperation(() => writeUtf8FileAtomically(tasksFilePath, content))
   return content
-}
-
-/**
- * Always overwrites `.hive/PROTOCOL.md` with the freshly-built protocol doc.
- * The doc is marked auto-generated so user edits are not expected; rewriting
- * on every workspace open means a Hive version bump that changes the rules
- * propagates without manual intervention.
- */
-export const ensureProtocolFile = (
-  workspacePath: string,
-  cliPolicy?: WorkflowCliPolicy,
-  flags: FeatureFlags = FEATURE_FLAGS_ALL_OFF
-) => {
-  ensureTasksDir(workspacePath)
-  const protocolFilePath = getProtocolFilePath(workspacePath)
-  const desired = buildProtocolDoc(cliPolicy, flags)
-  const current = existsSync(protocolFilePath)
-    ? runRetryableTasksFileOperation(() => readFileSync(protocolFilePath, 'utf8'))
-    : null
-  if (current === desired) return desired
-  runRetryableTasksFileOperation(() => writeUtf8FileAtomically(protocolFilePath, desired))
-  return desired
 }
 
 export const createTasksFileService = (): TasksFileService => {

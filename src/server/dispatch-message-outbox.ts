@@ -8,10 +8,13 @@ export const createDispatchMessageOutbox = (ports: {
   runtime: AgentRuntime
   isClosing: () => boolean
 }) => {
+  let closed = false
+  const retryTimers = new Map<string, NodeJS.Timeout>()
+  const isClosing = () => closed || ports.isClosing()
   const draining = new Set<string>()
   const rerunRequested = new Set<string>()
   const canDeliver = (message: DispatchMessageRecord) => {
-    if (ports.isClosing()) return false
+    if (isClosing()) return false
     const current = ports.messages.getMessage(message.workspaceId, message.id)
     if (current?.deliveryState !== 'delivering') return false
     if (!ports.messages.isEligible(message.id)) {
@@ -20,29 +23,32 @@ export const createDispatchMessageOutbox = (ports: {
     }
     return true
   }
-  const drainTarget = async (workspaceId: string, targetAgentId: string) => {
-    if (
-      targetAgentId === `${workspaceId}:orchestrator` &&
-      ports.messages.controllerBinding(workspaceId).external
-    )
-      return
+  const drainTarget = async (
+    workspaceId: string,
+    targetAgentId: string,
+    attempt = 0,
+    retryMessageId?: string
+  ) => {
     const key = `${workspaceId}:${targetAgentId}`
     if (draining.has(key)) {
       rerunRequested.add(key)
       return
     }
     draining.add(key)
+    let deliveryFailed = false
     try {
-      while (!ports.isClosing()) {
+      while (!isClosing()) {
         const run = ports.runtime.getActiveRunByAgentId(workspaceId, targetAgentId)
         if (!run) return
         const message = ports.messages.listQueued(workspaceId, targetAgentId)[0]
         if (!message) return
+        if (retryMessageId && message.id !== retryMessageId) attempt = 0
+        retryMessageId = undefined
         if (!ports.messages.claim(message.id)) continue
         if (!canDeliver(message)) continue
         try {
           if (run.postStartInputReady) await run.postStartInputReady
-          if (ports.isClosing()) return
+          if (isClosing()) return
           if (!canDeliver(message)) continue
           await ports.runtime.deliverSystemMessageToAgent(
             workspaceId,
@@ -51,27 +57,54 @@ export const createDispatchMessageOutbox = (ports: {
               message,
               ports.messages.requiredSeenSeq(message.dispatchId, message.recipientAgentId)
             ),
-            { requireActiveRun: true, beforeWrite: () => canDeliver(message) }
+            {
+              requireActiveRun: true,
+              beforeWrite: () => canDeliver(message),
+              metadata: { kind: message.kind, dispatchIds: [message.dispatchId] },
+            }
           )
-          if (ports.isClosing()) return
+          if (isClosing()) return
           ports.messages.delivered(message.id)
+          attempt = 0
         } catch (error) {
-          if (ports.isClosing()) return
+          if (isClosing()) return
           ports.messages.failed(message.id, error instanceof Error ? error.message : String(error))
-          return // retry on next explicit drain/start; never spin on a failed PTY
+          deliveryFailed = true
+          const current = ports.messages.getMessage(workspaceId, message.id)
+          if (current?.deliveryState === 'queued') {
+            if (!ports.messages.isEligible(message.id)) ports.messages.cancel(message.id)
+            else if (attempt < 2) {
+              const timer = setTimeout(
+                () => {
+                  retryTimers.delete(key)
+                  if (isClosing()) return
+                  void drainTarget(workspaceId, targetAgentId, attempt + 1, message.id).catch(
+                    (error) => {
+                      if (!isClosing()) console.error('[hive] dispatch message retry failed', error)
+                    }
+                  )
+                },
+                250 * 2 ** attempt
+              )
+              timer.unref()
+              retryTimers.set(key, timer)
+            }
+          }
+          return // Exhausted messages stay queued for a later explicit drain/start.
         }
       }
     } finally {
       draining.delete(key)
-      if (rerunRequested.delete(key) && !ports.isClosing()) {
+      const rerun = rerunRequested.delete(key)
+      if (rerun && !deliveryFailed && !isClosing()) {
         void drainTarget(workspaceId, targetAgentId).catch((error) => {
-          if (!ports.isClosing()) console.error('[hive] dispatch message retry failed', error)
+          if (!isClosing()) console.error('[hive] dispatch message retry failed', error)
         })
       }
     }
   }
-  return (workspaceId: string, targetAgentId?: string): void => {
-    if (ports.isClosing()) return
+  const drain = (workspaceId: string, targetAgentId?: string): void => {
+    if (isClosing()) return
     const targets = targetAgentId
       ? [targetAgentId]
       : [
@@ -79,9 +112,21 @@ export const createDispatchMessageOutbox = (ports: {
             ports.messages.listQueued(workspaceId).map((message) => message.recipientAgentId)
           ),
         ]
-    for (const target of targets)
+    for (const target of targets) {
+      const key = `${workspaceId}:${target}`
+      clearTimeout(retryTimers.get(key))
+      retryTimers.delete(key)
       void drainTarget(workspaceId, target).catch((error) => {
-        if (!ports.isClosing()) console.error('[hive] dispatch message delivery failed', error)
+        if (!isClosing()) console.error('[hive] dispatch message delivery failed', error)
       })
+    }
   }
+  return Object.assign(drain, {
+    close: () => {
+      closed = true
+      for (const timer of retryTimers.values()) clearTimeout(timer)
+      retryTimers.clear()
+      rerunRequested.clear()
+    },
+  })
 }

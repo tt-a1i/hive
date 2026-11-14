@@ -122,26 +122,3 @@ test('topbar shows the Workflows button when a toggle is wired (the feature-on p
   )
   expect(screen.getByTestId('topbar-workflows')).toBeInTheDocument()
 })
-
-test('topbar memory entry stays quiet without badges, counts, or learned prompts', () => {
-  stubFetch(true)
-  render(
-    <AppProviders>
-      <Topbar
-        version="1.4.4"
-        versionInfo={VERSION_INFO}
-        onToggleMemory={() => {}}
-        onToggleTaskGraph={() => {}}
-        openTaskCount={7}
-      />
-    </AppProviders>
-  )
-
-  const memory = screen.getByTestId('topbar-memory')
-  expect(memory).toHaveTextContent(/^Memory$/)
-  expect(memory).not.toHaveAttribute('data-has-tasks')
-  expect(memory.querySelector('[data-testid*="badge"], [data-count]')).toBeNull()
-  expect(memory.textContent ?? '').not.toMatch(/\b(?:candidate|learned|7)\b/i)
-
-  expect(screen.getByTestId('topbar-blueprint')).toHaveAttribute('data-has-tasks', 'true')
-})

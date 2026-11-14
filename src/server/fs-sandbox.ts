@@ -1,5 +1,6 @@
+import { lstatSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 
 import { realpathNative } from './path-canonicalization.js'
 
@@ -44,14 +45,24 @@ export const isPathWithinRoot = (rootPath: string, candidatePath: string): boole
   } catch {
     // Missing / inaccessible roots are handled by the caller's readdir/stat path.
   }
-  try {
-    resolvedCandidate = realpathNative(resolvedCandidate)
-  } catch {
-    // Non-existent children still need lexical sandboxing for "create later"
-    // probes; existing symlinks/junctions use the realpath branch above.
-    if (isResolvedPathWithinRoot(lexicalRoot, lexicalCandidate)) {
-      resolvedRoot = lexicalRoot
-      resolvedCandidate = lexicalCandidate
+  let ancestor = lexicalCandidate
+  const suffix: string[] = []
+  while (true) {
+    try {
+      resolvedCandidate = resolve(realpathNative(ancestor), ...suffix)
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return false
+      try {
+        lstatSync(ancestor)
+        return false // A dangling symlink is not a missing path.
+      } catch (statError) {
+        if ((statError as NodeJS.ErrnoException).code !== 'ENOENT') return false
+      }
+      const parent = dirname(ancestor)
+      if (parent === ancestor) return false
+      suffix.unshift(basename(ancestor))
+      ancestor = parent
     }
   }
   return isResolvedPathWithinRoot(resolvedRoot, resolvedCandidate)

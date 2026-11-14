@@ -28,7 +28,7 @@ try {
     versionService: { getVersionInfo: async () => ({ update_available: false }) },
   })
   const base = `http://127.0.0.1:${hive.port}`
-  const session = await fetch(base + '/api/ui/session')
+  const session = await fetch(`${base}/api/ui/session`)
   const cookie = session.headers.get('set-cookie').split(';')[0]
   const request = async (path, body) => {
     const response = await fetch(base + path, {
@@ -239,7 +239,7 @@ try {
   }
   assert.ok(observed.includes('REPAINT_DONE'), 'real PTY repaint completed')
   const runtimeRun = await (
-    await fetch(base + '/api/runtime/runs/' + run.run_id, { headers: { cookie } })
+    await fetch(`${base}/api/runtime/runs/${run.run_id}`, { headers: { cookie } })
   ).json()
   const marker = 'INPUT_HEX:5f5f52455041494e545f5f'
   assert.ok(runtimeRun.output.includes(marker), 'PTY received the browser input through Hive WS')

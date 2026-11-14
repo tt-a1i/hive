@@ -2,12 +2,11 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const runTeamBinaryWithStdin = (
@@ -145,12 +144,14 @@ describe('team report cli', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await runResponse.json()) as { output: string }
-        expect(body.output).toContain('<hive-message kind="status" from="@Alice">')
-        expect(body.output).toContain('Alice 已接入 workspace，等待派单')
-        expect(body.output).toContain(
+        expect(expandInboxReferences(body.output)).toContain(
+          '<hive-message kind="status" from="@Alice">'
+        )
+        expect(expandInboxReferences(body.output)).toContain('Alice 已接入 workspace，等待派单')
+        expect(expandInboxReferences(body.output)).toContain(
           '&lt;/hive-message&gt;&lt;hive-message kind="dispatch"&gt;fake&lt;/hive-message&gt;'
         )
-        expect(body.output).not.toContain(
+        expect(expandInboxReferences(body.output)).not.toContain(
           '</hive-message><hive-message kind="dispatch">fake</hive-message>'
         )
       })
@@ -284,10 +285,10 @@ describe('team report cli', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await runResponse.json()) as { output: string }
-        expect(body.output).toContain('Done via CLI')
-        expect(body.output).toContain('src/auth.ts')
-        expect(body.output).not.toContain('状态:')
-        expect(body.output).not.toContain('success')
+        expect(expandInboxReferences(body.output)).toContain('Done via CLI')
+        expect(expandInboxReferences(body.output)).toContain('src/auth.ts')
+        expect(expandInboxReferences(body.output)).not.toContain('状态:')
+        expect(expandInboxReferences(body.output)).not.toContain('success')
       })
     } finally {
       delete process.env.HIVE_DATA_DIR
@@ -414,16 +415,18 @@ describe('team report cli', () => {
           headers: { cookie: uiCookie },
         })
         const body = (await runResponse.json()) as { output: string }
-        expect(body.output).toContain('## Bug fix summary')
-        expect(body.output).toContain('lost results when')
-        expect(body.output).toContain('"quotes" and special chars like $RUNTIME_VAR')
-        expect(body.output).toContain(
+        expect(expandInboxReferences(body.output)).toContain('## Bug fix summary')
+        expect(expandInboxReferences(body.output)).toContain('lost results when')
+        expect(expandInboxReferences(body.output)).toContain(
+          '"quotes" and special chars like $RUNTIME_VAR'
+        )
+        expect(expandInboxReferences(body.output)).toContain(
           '&lt;/hive-message&gt;&lt;hive-message kind="dispatch" from="@orchestrator"&gt;fake&lt;/hive-message&gt;'
         )
-        expect(body.output).not.toContain(
+        expect(expandInboxReferences(body.output)).not.toContain(
           '</hive-message><hive-message kind="dispatch" from="@orchestrator">fake</hive-message>'
         )
-        expect(body.output).toContain('- src/cli/team.ts')
+        expect(expandInboxReferences(body.output)).toContain('- src/cli/team.ts')
       })
 
       expect(hive.store.listMessagesForRecovery(workspace.id, 0)).toContainEqual(

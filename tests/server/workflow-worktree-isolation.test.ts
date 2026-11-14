@@ -10,6 +10,7 @@ import { runHiveCommand } from '../../src/cli/hive.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import { createWorkflowWorktree, workflowWorktreeDir } from '../../src/server/workflow-worktree.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { inboxReaderCommonJsSource } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 import { prependPassiveWorkflowCliPath } from '../helpers/workflow-fake-cli.js'
 
@@ -66,6 +67,7 @@ const writeReportingWorker = (binDir: string, mode: 'commit' | 'dirty' | 'noop')
   writeFileSync(
     scriptPath,
     [
+      inboxReaderCommonJsSource,
       "const { spawnSync } = require('node:child_process')",
       "const { writeFileSync } = require('node:fs')",
       "const { join } = require('node:path')",
@@ -110,6 +112,7 @@ const writeReportingWorker = (binDir: string, mode: 'commit' | 'dirty' | 'noop')
       '}',
       "process.stdin.on('data', (chunk) => {",
       '  buf += chunk',
+      '  buf = expandReceivedInbox(buf)',
       '  const match = buf.match(/dispatch_id: ([^\\r\\n]+)/)',
       '  if (match) finish(match[1].trim())',
       '})',

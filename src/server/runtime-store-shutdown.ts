@@ -7,9 +7,8 @@ type Closeable = { close: () => Promise<void> }
 export const createRuntimeStoreShutdown = (
   services: Pick<
     ReturnType<typeof createRuntimeStoreServices>,
-    'markRuntimeClosing' | 'teamMemoryDreamScheduler'
+    'markRuntimeClosing' | 'dispatchMessageOps'
   >,
-  controller: Closeable,
   lifecycle: Closeable,
   getWorkflows: () => ReturnType<typeof createRuntimeStoreWorkflowRuntime> | undefined
 ): (() => Promise<void>) => {
@@ -17,13 +16,10 @@ export const createRuntimeStoreShutdown = (
   return () =>
     (closing ??= (async () => {
       services.markRuntimeClosing()
+      services.dispatchMessageOps.notifyDispatchQuestionChange()
       const workflows = getWorkflows()
       workflows?.scheduler.close()
-      await Promise.all([
-        controller.close(),
-        workflows?.runner.close(),
-        services.teamMemoryDreamScheduler.close(),
-      ])
+      await workflows?.runner.close()
       await lifecycle.close()
     })())
 }

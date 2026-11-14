@@ -1,5 +1,7 @@
 import { buildActionCenterSummary } from './action-center-summary.js'
-import { getRequiredParam, route, sendJson } from './route-helpers.js'
+import { serializeDispatchMessage } from './dispatch-message-serializer.js'
+import { BadRequestError, ConflictError } from './http-errors.js'
+import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { RouteDefinition } from './route-types.js'
 import { buildTeamRecapMarkdown } from './team-recap.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
@@ -25,6 +27,25 @@ export const actionCenterRoutes: RouteDefinition[] = [
         return
       }
       sendJson(response, 200, buildActionCenterSummary({ store, workspaceId }))
+    }
+  ),
+  route(
+    'POST',
+    '/api/ui/workspaces/:workspaceId/questions/:questionId/reply',
+    async ({ params, request, response, store }) => {
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+      const { workspaceId, questionId } = params
+      if (!workspaceId || !questionId)
+        throw new BadRequestError('Workspace and question are required')
+      const body = await readJsonBody<{ text?: unknown } | null>(request)
+      if (typeof body?.text !== 'string' || !body.text.trim())
+        throw new BadRequestError('An answer is required')
+      const actor = `${workspaceId}:orchestrator`
+      const input = store.getDispatchReplyInput(workspaceId, actor, questionId, body.text)
+      if (store.getDispatchQuestion(workspaceId, actor, questionId).status !== 'pending')
+        throw new ConflictError('This question no longer needs an answer')
+      const message = store.sendDispatchMessage(workspaceId, actor, input)
+      sendJson(response, 202, { ok: true, message: serializeDispatchMessage(message) })
     }
   ),
   route('GET', '/api/workspaces/:workspaceId/recap', ({ params, request, response, store }) => {

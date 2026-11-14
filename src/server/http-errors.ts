@@ -62,3 +62,10 @@ export class ConflictError extends HttpError {
     this.name = 'ConflictError'
   }
 }
+
+export class UnsupportedMediaTypeError extends HttpError {
+  constructor(message: string) {
+    super(415, message)
+    this.name = 'UnsupportedMediaTypeError'
+  }
+}

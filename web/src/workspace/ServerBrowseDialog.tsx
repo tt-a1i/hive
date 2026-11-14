@@ -6,7 +6,6 @@ import { WINDOWS_DRIVES_ROOT } from '../../../src/shared/fs-browse.js'
 import type { CommandPreset } from '../api.js'
 import { useI18n } from '../i18n.js'
 import { useIsMobile } from '../mobile/layout-mode.js'
-import { ControllerModeSelect } from './ControllerModeSelect.js'
 import { FsEntryList } from './FsEntryList.js'
 import { FsSelectionPreview } from './FsSelectionPreview.js'
 import { buildBreadcrumbs } from './path-breadcrumbs.js'
@@ -65,8 +64,6 @@ export const ServerBrowseDialog = ({
   const [manualPath, setManualPath] = useState('')
   const [startupExpanded, setStartupExpanded] = useState(false)
   const [startupCommand, setStartupCommand] = useState('')
-  const [controllerMode, setControllerMode] = useState<'internal' | 'codex_app'>('internal')
-  const externalController = controllerMode === 'codex_app'
   const sanitizedManualPath = sanitizePastedPath(manualPath)
   const manualSuggestedName = basenameOfPath(sanitizedManualPath)
   const suggestedName =
@@ -108,19 +105,19 @@ export const ServerBrowseDialog = ({
   const canCreate =
     name.trim().length > 0 &&
     (probe?.is_dir === true || (advanced && sanitizedManualPath.length > 0)) &&
-    (externalController ||
-      (!presetsLoading && !genericPresetNeedsStartup && !selectedPresetUnavailable))
+    !presetsLoading &&
+    !genericPresetNeedsStartup &&
+    !selectedPresetUnavailable
 
   const handleCreate = () => {
     const path =
       advanced && sanitizedManualPath.length > 0 ? sanitizedManualPath : (probe?.path ?? '')
     if (!path) return
     onCreate({
-      ...(externalController ? { controllerMode: 'codex_app' as const } : {}),
-      commandPresetId: externalController ? null : commandPresetId || null,
+      commandPresetId: commandPresetId || null,
       name: name.trim(),
       path,
-      ...(!externalController && startupClean ? { startupCommand: startupClean } : {}),
+      ...(startupClean ? { startupCommand: startupClean } : {}),
     })
   }
 
@@ -251,69 +248,63 @@ export const ServerBrowseDialog = ({
                   probe={probe}
                   suggestedName={name}
                 />
-                <ControllerModeSelect value={controllerMode} onChange={setControllerMode} />
-                {!externalController && (
-                  <WorkspaceCommandPresetSelect
-                    error={commandPresetError ?? presetAvailabilityError}
-                    onChange={onCommandPresetChange}
-                    presets={commandPresets}
-                    value={commandPresetId}
-                  />
-                )}
-                {!externalController && (
-                  <div
-                    className="rounded-lg border overflow-hidden transition-all"
-                    style={{
-                      borderColor: 'var(--border)',
-                      background: 'var(--bg-1)',
-                    }}
+                <WorkspaceCommandPresetSelect
+                  error={commandPresetError ?? presetAvailabilityError}
+                  onChange={onCommandPresetChange}
+                  presets={commandPresets}
+                  value={commandPresetId}
+                />
+                <div
+                  className="rounded-lg border overflow-hidden transition-all"
+                  style={{
+                    borderColor: 'var(--border)',
+                    background: 'var(--bg-1)',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setStartupExpanded((v) => !v)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
                   >
-                    <button
-                      type="button"
-                      onClick={() => setStartupExpanded((v) => !v)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-sec hover:bg-3 transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Sliders size={12} aria-hidden className="text-ter" />
-                        {t('workspace.advanced.startup')}
-                      </span>
-                      {startupExpanded ? (
-                        <ChevronDown size={14} aria-hidden />
-                      ) : (
-                        <ChevronRight size={14} aria-hidden />
-                      )}
-                    </button>
+                    <span className="flex items-center gap-1.5">
+                      <Sliders size={12} aria-hidden className="text-ter" />
+                      {t('workspace.advanced.startup')}
+                    </span>
                     {startupExpanded ? (
-                      <div
-                        className="flex flex-col gap-2 border-t p-3 transition-all"
-                        style={{
-                          background: 'var(--bg-2)',
-                          borderColor: 'var(--border)',
-                        }}
-                      >
-                        <span className="text-xs font-medium uppercase tracking-wider text-ter">
-                          {t('workspace.field.startup')}
-                        </span>
-                        <input
-                          type="text"
-                          value={startupCommand}
-                          onChange={(event) => setStartupCommand(event.target.value)}
-                          placeholder={t('workspace.field.startupPlaceholder')}
-                          className="input mono text-sm max-md:text-base"
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          inputMode="text"
-                          data-testid="fs-startup-command"
-                        />
-                        <span className="text-xs normal-case tracking-normal text-ter leading-relaxed">
-                          {t('workspace.startup.hintShort')}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
+                      <ChevronDown size={14} aria-hidden />
+                    ) : (
+                      <ChevronRight size={14} aria-hidden />
+                    )}
+                  </button>
+                  {startupExpanded ? (
+                    <div
+                      className="flex flex-col gap-2 border-t p-3 transition-all"
+                      style={{
+                        background: 'var(--bg-2)',
+                        borderColor: 'var(--border)',
+                      }}
+                    >
+                      <span className="text-xs font-medium uppercase tracking-wider text-ter">
+                        {t('workspace.field.startup')}
+                      </span>
+                      <input
+                        type="text"
+                        value={startupCommand}
+                        onChange={(event) => setStartupCommand(event.target.value)}
+                        placeholder={t('workspace.field.startupPlaceholder')}
+                        className="input mono text-sm max-md:text-base"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        inputMode="text"
+                        data-testid="fs-startup-command"
+                      />
+                      <span className="text-xs normal-case tracking-normal text-ter leading-relaxed">
+                        {t('workspace.startup.hintShort')}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
                 <div
                   className="rounded-lg border overflow-hidden transition-all"
                   style={{

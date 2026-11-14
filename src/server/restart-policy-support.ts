@@ -4,10 +4,12 @@ import type { PersistedAgentRun } from './agent-run-store.js'
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 import type { FeatureFlags } from './feature-flags.js'
 import type { MessageLogHandle, MessageLogRecord, RecoveryMessage } from './message-log-store.js'
-import type { TeamMemoryInjectionService } from './team-memory-injection.js'
 
 export interface RestartPolicyInput {
   deleteMessage: (handle: MessageLogHandle) => void
+  getHandover?: (workspaceId: string, agentId: string) => string | undefined
+  completeHandover?: (workspaceId: string, agentId: string, token: string) => void
+  listAllDispatches?: (workspaceId: string) => DispatchRecord[]
   getWorkspaceSnapshot: (workspaceId: string) => {
     agents: AgentSummary[]
     summary: WorkspaceSummary
@@ -25,7 +27,6 @@ export interface RestartPolicyInput {
   /** Resolves the live experimental flags, threaded into the recovery handover
    *  prompt so it matches a fresh startup. Optional; omitted → all off. */
   getFlags?: () => FeatureFlags
-  memoryInjection?: TeamMemoryInjectionService
 }
 
 export const findPreviousRun = (runs: PersistedAgentRun[], currentRunId: string) =>
@@ -38,11 +39,11 @@ export const writeSystemMessage = ({
   runId,
   text,
   writeToRun,
-  onWriteFailure,
+  onDelivered,
 }: {
+  onDelivered?: () => void
   deleteMessage: RestartPolicyInput['deleteMessage']
   insertMessage: RestartPolicyInput['insertMessage']
-  onWriteFailure?: () => void
   record: MessageLogRecord
   runId: string
   text: string
@@ -50,17 +51,17 @@ export const writeSystemMessage = ({
 }) => {
   const handle = insertMessage(record)
   try {
-    void writeToRun(runId, text).catch(() => {
-      onWriteFailure?.()
-      try {
-        deleteMessage(handle)
-      } catch {
-        // The runtime may already be closing; the failed post-start write is
-        // non-critical once the run is gone.
-      }
-    })
+    void writeToRun(runId, text)
+      .then(() => onDelivered?.())
+      .catch(() => {
+        try {
+          deleteMessage(handle)
+        } catch {
+          // The runtime may already be closing; the failed post-start write is
+          // non-critical once the run is gone.
+        }
+      })
   } catch (error) {
-    onWriteFailure?.()
     deleteMessage(handle)
     throw error
   }

@@ -35,6 +35,7 @@ export const closeAgentRuntime = async (
 ) => {
   const runs = registry.list()
   for (const run of runs) {
+    run.captureController?.abort()
     syncRun(run)
     agentManager?.stopRun(run.runId)
   }

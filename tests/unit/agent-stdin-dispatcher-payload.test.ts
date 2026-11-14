@@ -152,19 +152,6 @@ describe('buildWorkerDispatchPayload', () => {
     expect(reminderIdx).toBeGreaterThan(taskBodyIdx)
   })
 
-  test('places dispatch memory before the task body', () => {
-    const payload = buildWorkerDispatchPayload(
-      'orchestrator-1',
-      'Coder',
-      'disp-99',
-      'do the thing',
-      '<hive-memory context="dispatch">verify first</hive-memory>'
-    )
-    expect(payload.indexOf('<hive-memory context="dispatch">')).toBeLessThan(
-      payload.indexOf('Task:')
-    )
-  })
-
   test('escapes orchestrator-controlled dispatch text without reintroducing the startup role', () => {
     const payload = buildWorkerDispatchPayload(
       'orchestrator-1',

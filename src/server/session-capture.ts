@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import {
   captureClaudeSessionId,
   getClaudeProjectsRoot,
@@ -137,7 +138,8 @@ export const captureSessionIdForCapture = async (
   snapshot: SessionCaptureSnapshot,
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
-  intervalMs = 100
+  intervalMs = 100,
+  signal?: AbortSignal
 ) => {
   if (capture.source === 'claude_project_jsonl_dir') {
     await captureClaudeSessionId(
@@ -147,7 +149,8 @@ export const captureSessionIdForCapture = async (
       timeoutMs,
       intervalMs,
       snapshot.root,
-      snapshot.discriminator
+      snapshot.discriminator,
+      signal
     )
   }
   if (capture.source === 'codex_session_jsonl_dir') {
@@ -158,7 +161,8 @@ export const captureSessionIdForCapture = async (
       timeoutMs,
       intervalMs,
       snapshot.root,
-      snapshot.discriminator
+      snapshot.discriminator,
+      signal
     )
   }
   if (capture.source === 'gemini_session_json_dir') {
@@ -168,7 +172,8 @@ export const captureSessionIdForCapture = async (
       onCapture,
       timeoutMs,
       intervalMs,
-      snapshot.root
+      snapshot.root,
+      signal
     )
   }
   if (capture.source === 'opencode_session_db') {
@@ -178,7 +183,9 @@ export const captureSessionIdForCapture = async (
       onCapture,
       timeoutMs,
       intervalMs,
-      snapshot.root
+      snapshot.root,
+      undefined,
+      signal
     )
   }
   if (capture.source === 'qwen_session_json_dir') {
@@ -188,7 +195,8 @@ export const captureSessionIdForCapture = async (
       onCapture,
       timeoutMs,
       intervalMs,
-      snapshot.root
+      snapshot.root,
+      signal
     )
   }
   if (capture.source === 'stdout_regex') {
@@ -198,7 +206,8 @@ export const captureSessionIdForCapture = async (
       snapshot.knownSessionIds,
       onCapture,
       timeoutMs,
-      intervalMs
+      intervalMs,
+      signal
     )
   }
 }
@@ -255,12 +264,13 @@ export const captureStdoutRegexSessionId = async (
   knownSessionIds: Set<string>,
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
-  intervalMs = 100
+  intervalMs = 100,
+  signal?: AbortSignal
 ) => {
   const regex = compileCaptureRegex(pattern)
   if (!regex || !getOutput) return
   const deadline = Date.now() + timeoutMs
-  while (Date.now() <= deadline) {
+  while (!signal?.aborted && Date.now() <= deadline) {
     const output = getOutput()
     const match = output ? regex.exec(output) : null
     const sessionId = match?.[1]
@@ -268,6 +278,11 @@ export const captureStdoutRegexSessionId = async (
       onCapture(sessionId)
       return
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    try {
+      await delay(intervalMs, undefined, { signal })
+    } catch (error) {
+      if (signal?.aborted) return
+      throw error
+    }
   }
 }

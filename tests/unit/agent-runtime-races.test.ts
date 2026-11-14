@@ -3,6 +3,7 @@ import '../helpers/mock-node-pty.ts'
 import { describe, expect, test, vi } from 'vitest'
 
 import { createAgentRuntime } from '../../src/server/agent-runtime.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 
 const outputBus = {
   clear: () => {},
@@ -125,7 +126,7 @@ describe('agent runtime races (unit)', () => {
     expect(stopSpy).not.toHaveBeenCalled()
   })
 
-  test('failed stdin write surfaces PtyInactiveError so callers can skip message recording', async () => {
+  test('failed stdin write exposes the transport failure and keeps the complete dispatch in the inbox', async () => {
     const writes: (string | Buffer)[] = []
 
     const runtime = createAgentRuntime(
@@ -193,8 +194,11 @@ describe('agent runtime races (unit)', () => {
     ).toThrow(/EPIPE/)
 
     expect(writes).toHaveLength(1)
-    expect(writes[0]).toContain('Implement login')
-    expect(writes[0]).toContain('@Orchestrator')
+    const wakeup = String(writes[0])
+    expect(wakeup).toContain('dispatch_id=dispatch-1')
+    const payload = expandInboxReferences(wakeup)
+    expect(payload).toContain('Implement login')
+    expect(payload).toContain('@Orchestrator')
   })
 
   test('does not retain live run when persisted insert fails', async () => {

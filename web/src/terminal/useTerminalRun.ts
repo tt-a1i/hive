@@ -1,4 +1,5 @@
 import type { FitAddon as XtermFitAddon } from '@xterm/addon-fit'
+import type { WebglAddon as XtermWebglAddon } from '@xterm/addon-webgl'
 import type { Terminal as XtermTerminal } from '@xterm/xterm'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -248,6 +249,19 @@ export const useTerminalRun = (
     let terminal: XtermTerminal | undefined
     let fitAddon: XtermFitAddon | undefined
     let resizeObserver: ResizeObserver | undefined
+    let hostObserver: MutationObserver | undefined
+    let onRendererVisibilityChange: (() => void) | undefined
+    let webglAddon: XtermWebglAddon | undefined
+    let webglContext: WebGL2RenderingContext | null = null
+    let webglGeneration = 0
+    const releaseWebglContext = () => {
+      try {
+        webglContext?.getExtension('WEBGL_lose_context')?.loseContext()
+      } catch {
+        // Contexts can already be lost when the browser evicts them.
+      }
+      webglContext = null
+    }
     let outputRenderQueue: TerminalOutputRenderQueue | undefined
     let resizeTimer: number | undefined
     let connectRetryTimer: number | undefined
@@ -491,7 +505,9 @@ export const useTerminalRun = (
           return !container.closest('[data-terminal-host-parked="true"]')
         }
         outputRenderQueue = createTerminalOutputRenderQueue({
-          canRender: isContainerResizable,
+          onOverflow: () => {
+            if (!disposed) setReconnectEpoch((value) => value + 1)
+          },
           write: (chunk, callback) => nextTerminal.write(chunk, callback),
           resize: (cols, rows, callback) =>
             nextTerminal.write('', () => {
@@ -561,34 +577,83 @@ export const useTerminalRun = (
             // Keep the core terminal usable when optional addons fail to load.
           })
 
-        // Only load the WebGL addon when a context is actually available. Some
-        // mobile browsers report no stable WebGL, where loading the addon
-        // white-screens the terminal; there we keep xterm's default canvas
-        // renderer. The try/catch + onContextLoss stay as a second net (a context
-        // can still be lost after a successful detect).
-        if (detectWebglSupport()) {
+        // Parking keeps a terminal alive briefly for fast tab switches; it must not
+        // keep a scarce WebGL context. Invalidate pending imports on every hide.
+        let loadingWebgl = false
+        let webglFailed = false
+        const disposeWebgl = () => {
+          const addon = webglAddon
+          webglAddon = undefined
+          addon?.dispose()
+          releaseWebglContext()
+        }
+        const rendererVisible = () =>
+          document.visibilityState !== 'hidden' && isContainerResizable()
+        const updateRenderer = () => {
+          if (disposed) return
+          if (!rendererVisible()) {
+            webglGeneration += 1
+            loadingWebgl = false
+            disposeWebgl()
+            setTerminalRenderer('canvas')
+            return
+          }
+          if (webglAddon || loadingWebgl || webglFailed || !detectWebglSupport()) return
+          loadingWebgl = true
+          const generation = ++webglGeneration
           void import('@xterm/addon-webgl')
-            .then((webglModule) => {
-              if (disposed || terminal !== nextTerminal) return
+            .then((module) => {
+              if (disposed || generation !== webglGeneration || !rendererVisible()) return
+              const addon = new module.WebglAddon()
               try {
-                const webglAddon = new webglModule.WebglAddon()
-                webglAddon.onContextLoss(() => {
-                  webglAddon.dispose()
+                const previousCanvases = new Set(
+                  Array.from(nextTerminal.element?.querySelectorAll('canvas') ?? [])
+                )
+                addon.onContextLoss(() => {
+                  if (webglAddon !== addon) return
+                  webglFailed = true
+                  disposeWebgl()
                   setTerminalRenderer('canvas')
                 })
-                nextTerminal.loadAddon(webglAddon)
+                nextTerminal.loadAddon(addon)
+                webglAddon = addon
+                for (const canvas of Array.from(
+                  nextTerminal.element?.querySelectorAll('canvas') ?? []
+                )) {
+                  if (previousCanvases.has(canvas)) continue
+                  const context = canvas.getContext('webgl2')
+                  if (context) {
+                    webglContext = context
+                    break
+                  }
+                }
                 setTerminalRenderer('webgl')
                 scheduleResize()
               } catch {
-                // Fall back to the default renderer when WebGL is unavailable.
+                if (webglAddon === addon) disposeWebgl()
+                else addon.dispose()
+                webglFailed = true
                 setTerminalRenderer('canvas')
               }
             })
             .catch(() => {
-              // Fall back to the default renderer when the WebGL chunk is unavailable.
-              setTerminalRenderer('canvas')
+              if (!disposed && generation === webglGeneration) webglFailed = true
+            })
+            .finally(() => {
+              if (generation === webglGeneration) loadingWebgl = false
             })
         }
+        onRendererVisibilityChange = updateRenderer
+        const host = containerRef.current?.closest('[data-terminal-host-run-id]')
+        if (host && typeof MutationObserver !== 'undefined') {
+          hostObserver = new MutationObserver(updateRenderer)
+          hostObserver.observe(host, {
+            attributes: true,
+            attributeFilter: ['data-terminal-host-parked'],
+          })
+        }
+        document.addEventListener('visibilitychange', updateRenderer)
+        updateRenderer()
 
         client = createTerminalClient({
           initialSize: {
@@ -659,6 +724,7 @@ export const useTerminalRun = (
         }
         onTerminalVisibleResize = (event) => {
           if ((event as TerminalVisibleResizeEvent).detail?.runId !== runId) return
+          updateRenderer()
           outputRenderQueue?.flush()
           scheduleResize()
         }
@@ -674,6 +740,12 @@ export const useTerminalRun = (
 
     return () => {
       disposed = true
+      webglGeneration += 1
+      hostObserver?.disconnect()
+      if (onRendererVisibilityChange)
+        document.removeEventListener('visibilitychange', onRendererVisibilityChange)
+      webglAddon?.dispose()
+      releaseWebglContext()
       if (onTerminalVisibleResize) {
         window.removeEventListener(TERMINAL_VISIBLE_RESIZE_EVENT, onTerminalVisibleResize)
       }

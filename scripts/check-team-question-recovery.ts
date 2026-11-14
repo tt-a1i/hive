@@ -6,8 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout } from 'node:timers/promises'
 import { runHiveCommand } from '../src/cli/hive.js'
-import { createControllerStore } from '../src/server/controller-store.js'
-import { openRuntimeDatabase } from '../src/server/runtime-database.js'
+import { expandInboxReferences } from '../tests/helpers/inbox.js'
 
 interface Message {
   id: string
@@ -71,6 +70,7 @@ const cli = (actor: string, args: string[], input = '') => {
   processes.add(child)
   let stdout = ''
   let stderr = ''
+  let finished = false
   child.stdout.on('data', (chunk) => {
     stdout += chunk
   })
@@ -81,13 +81,14 @@ const cli = (actor: string, args: string[], input = '') => {
     (resolve, reject) => {
       child.once('error', reject)
       child.once('close', (code) => {
+        finished = true
         processes.delete(child)
         resolve({ code, stdout, stderr })
       })
     }
   )
   child.stdin.end(input)
-  return { result, stderr: () => stderr }
+  return { child, result, stderr: () => stderr, finished: () => finished }
 }
 const json = async <T>(pending: ReturnType<typeof cli>): Promise<T> => {
   const result = await pending.result
@@ -95,16 +96,20 @@ const json = async <T>(pending: ReturnType<typeof cli>): Promise<T> => {
   return JSON.parse(result.stdout) as T
 }
 const savedId = async (pending: ReturnType<typeof cli>) => {
-  await until(
-    () => /Question saved: (\S+)\./u.test(pending.stderr()),
-    'durable CLI question receipt'
-  )
+  await until(() => {
+    const saved = /Question saved: (\S+)\./u.test(pending.stderr())
+    if (!saved && pending.finished()) assert.fail(`CLI exited before receipt: ${pending.stderr()}`)
+    return saved
+  }, 'durable CLI question receipt')
   return pending.stderr().match(/Question saved: (\S+)\./u)?.[1] as string
 }
 const start = async (actor: string, passive: string, project = workspaceId) => {
   await request(
     `/api/workspaces/${project}/agents/${actor}/config`,
-    { command: process.execPath, args: [passive, join(root, `${actor}.stdin`)] },
+    {
+      command: process.execPath,
+      args: [passive, join(root, `${encodeURIComponent(actor)}.stdin`)],
+    },
     204
   )
   const { run_id: runId } = await (
@@ -185,7 +190,7 @@ try {
   const unrelated = await send(orchestrator, 'Carol')
   const first = cli(
     bob,
-    ['ask', '--dispatch', author, '--from-dispatch', review, '--stdin'],
+    ['ask', '--dispatch', author, '--from-dispatch', review, '--wait', '0', '--stdin'],
     'Explain the evidence'
   )
   const firstId = await savedId(first)
@@ -196,9 +201,9 @@ try {
   assert.deepEqual(pending.answers, [])
   await until(
     async () =>
-      (await readFile(join(root, `${alice}.stdin`), 'utf8')).includes(
-        `Reply: team reply ${firstId} --stdin`
-      ),
+      expandInboxReferences(
+        await readFile(join(root, `${encodeURIComponent(alice)}.stdin`), 'utf8')
+      ).includes(`Reply: team reply ${firstId} --stdin`),
     'short executable reply command in actual PTY input'
   )
   await team(carol, 'question', { question_id: firstId }, 403)
@@ -235,7 +240,21 @@ try {
     [reply.message.id]
   )
   assert.equal(runtime.store.getWorker(workspaceId, bob).pendingTaskCount, 1)
-
+  const peerWait = cli(bob, [
+    'ask',
+    '--dispatch',
+    author,
+    '--from-dispatch',
+    review,
+    '--wait',
+    '3',
+    'Peer decision',
+  ])
+  const peerId = await savedId(peerWait)
+  await json(cli(alice, ['reply', peerId, 'Peer answer']))
+  const peerResult = await json<QuestionResult>(peerWait)
+  assert.equal(peerResult.status, 'answered')
+  assert.equal(peerResult.answers[0]?.text, 'Peer answer')
   // Discard the write receipt, then recover its ID from sender-only history.
   await team(bob, 'message', {
     dispatch_id: review,
@@ -250,20 +269,30 @@ try {
   const lost = own.questions.find((item) => item.text === 'Discarded receipt probe')
   assert.ok(lost)
   const count = runtime.store.listWorkspaceDispatchMessages(workspaceId).length
-  const waiting = cli(
-    bob,
-    ['ask', '--dispatch', review, '--to', 'orchestrator', '--wait', '10', '--stdin'],
-    'Wait for a decision'
-  )
+  const waiting = cli(bob, ['ask', '--stdin'], 'Wait for a decision')
   const waitingId = await savedId(waiting)
+  const waitStarted = performance.now()
   const beforeAnswer = await (await team(bob, 'question', { question_id: waitingId }, 200)).json()
   assert.equal(beforeAnswer.status, 'pending')
   assert.deepEqual(beforeAnswer.answers, [])
   await json(cli(orchestrator, ['reply', waitingId, '--stdin'], 'Proceed'))
-  const afterAnswer = await json<QuestionResult>(waiting)
-  assert.equal(afterAnswer.status, 'answered')
-  assert.equal(afterAnswer.timed_out, false)
-  assert.equal(afterAnswer.answers[0]?.text, 'Proceed')
+  const afterAnswer = await waiting.result
+  assert.equal(afterAnswer.code, 0, afterAnswer.stderr)
+  assert.equal(afterAnswer.stdout, 'Proceed\n')
+  assert.ok(performance.now() - waitStarted < 5000)
+  const explicit = cli(bob, [
+    'ask',
+    '--dispatch',
+    review,
+    '--to',
+    'orchestrator',
+    'Explicit decision',
+  ])
+  const explicitId = await savedId(explicit)
+  await json(cli(orchestrator, ['reply', explicitId, '--stdin'], 'First line\nSecond line'))
+  const explicitAnswer = await explicit.result
+  assert.equal(explicitAnswer.code, 0, explicitAnswer.stderr)
+  assert.equal(explicitAnswer.stdout, 'First line\nSecond line\n')
   const timeoutRequest = cli(bob, [
     'ask',
     '--dispatch',
@@ -281,13 +310,39 @@ try {
   assert.equal(timeout.timed_out, true)
   assert.ok(performance.now() - timeoutStart >= 850)
   assert.ok(performance.now() - timeoutStart < 3000)
+  await json(cli(orchestrator, ['reply', timeout.question_id, 'Recovered after timeout']))
+  const timeoutAnswer = await json<QuestionResult>(
+    cli(bob, ['ask', '--resume', timeout.question_id])
+  )
+  assert.equal(timeoutAnswer.answers[0]?.text, 'Recovered after timeout')
+  // Node cannot deliver SIGINT to a child on Windows; child.kill terminates it.
+  const canSignalChild = process.platform !== 'win32'
+  if (canSignalChild) {
+    const interrupted = cli(bob, ['ask', 'Question survives interrupt'])
+    const interruptedId = await savedId(interrupted)
+    interrupted.child.kill('SIGINT')
+    const interruptedResult = await interrupted.result
+    assert.equal(interruptedResult.code, 130, interruptedResult.stderr)
+    assert.equal(JSON.parse(interruptedResult.stdout).question_id, interruptedId)
+    assert.equal(JSON.parse(interruptedResult.stdout).interrupted, true)
+    const interruptSnapshot = await json<QuestionResult>(
+      cli(bob, ['ask', '--resume', interruptedId, '--wait', '0'])
+    )
+    assert.equal(interruptSnapshot.status, 'pending')
+    assert.equal(interruptSnapshot.question.text, 'Question survives interrupt')
+    await json(cli(orchestrator, ['reply', interruptedId, 'Recovered after interrupt']))
+    const interruptAnswer = await json<QuestionResult>(cli(bob, ['ask', '--resume', interruptedId]))
+    assert.equal(interruptAnswer.answers[0]?.text, 'Recovered after interrupt')
+  }
   const beforeRestart = runtime.store.listWorkspaceDispatchMessages(workspaceId).length
-  assert.equal(beforeRestart, count + 3)
+  assert.equal(beforeRestart, count + (canSignalChild ? 8 : 6))
   await runtime.close()
   runtime = await runHiveCommand(['--port', '0', '--no-open'])
   cookie = (await request('/api/ui/session')).headers.get('set-cookie') ?? ''
   for (const actor of [orchestrator, ...workers]) await start(actor, passive)
-  const recovered = await json<QuestionResult>(cli(bob, ['ask', '--resume', lost.id]))
+  const recovered = await json<QuestionResult>(
+    cli(bob, ['ask', '--resume', lost.id, '--wait', '0'])
+  )
   assert.equal(recovered.status, 'pending')
   assert.equal(recovered.question.text, lost.text)
   assert.equal(
@@ -351,8 +406,31 @@ try {
     ['Paged question 0']
   )
   assert.equal(older.next_before, null)
+  const ownerQuestion = await json<QuestionResult>(
+    cli(orchestrator, ['ask', '--dispatch', author, '--wait', '0', 'Explain your result'])
+  )
+  assert.equal(ownerQuestion.question.recipient_agent_id, alice)
+  const selfQuestion = await cli(orchestrator, [
+    'ask',
+    '--dispatch',
+    author,
+    '--to',
+    'orchestrator',
+    'Cannot ask myself',
+  ]).result
+  assert.notEqual(selfQuestion.code, 0)
+
   const cancelled = await json<QuestionResult>(
-    cli(carol, ['ask', '--dispatch', unrelated, '--to', 'orchestrator', 'Will be cancelled'])
+    cli(carol, [
+      'ask',
+      '--dispatch',
+      unrelated,
+      '--to',
+      'orchestrator',
+      '--wait',
+      '0',
+      'Will be cancelled',
+    ])
   )
   await team(orchestrator, 'cancel', { dispatch_id: unrelated, reason: 'Retire this question' })
   assert.equal(
@@ -393,92 +471,8 @@ try {
     'closed'
   )
 
-  // Configure real persisted binding state directly: exercise new HTTP entry
-  // points under a changed thread without invoking Codex host notifications.
-  await mkdir(join(root, 'external'))
-  const external = (
-    await (
-      await request(
-        '/api/workspaces',
-        {
-          name: 'Retired controller fixture',
-          path: join(root, 'external'),
-          controller_mode: 'codex_app',
-        },
-        201
-      )
-    ).json()
-  ).id as string
-  const externalActor = `${external}:orchestrator`
-  const externalWorker = (
-    await (
-      await request(
-        `/api/workspaces/${external}/workers`,
-        {
-          name: 'External worker',
-          role: 'coder',
-        },
-        201
-      )
-    ).json()
-  ).id as string
-  await start(externalWorker, passive, external)
-  const db = openRuntimeDatabase(root)
-  try {
-    const controllers = createControllerStore(db)
-    const bind = (thread: string) => {
-      controllers.request(external, thread)
-      const requestId = controllers.get(external).request_id
-      assert.ok(requestId)
-      controllers.confirm(external, requestId)
-    }
-    bind('old-thread')
-    const task = await runtime.store.dispatchTaskByWorkerName(
-      external,
-      'External worker',
-      'Bound task',
-      {
-        fromAgentId: externalActor,
-        hivePort: String(runtime.port),
-      }
-    )
-    const question = runtime.store.sendDispatchMessage(external, externalActor, {
-      dispatchId: task.id,
-      kind: 'question',
-      text: 'Old controller question',
-    })
-    const externalIdentity = {
-      project_id: external,
-      from_agent_id: externalWorker,
-      token: runtime.store.peekAgentToken(externalWorker),
-      question_id: question.id,
-    }
-    assert.equal(
-      (await (await request('/api/team/question', externalIdentity, 200)).json()).status,
-      'pending'
-    )
-    controllers.disconnect(external)
-    bind('new-thread')
-    assert.equal(
-      (await (await request('/api/team/question', externalIdentity, 200)).json()).status,
-      'closed'
-    )
-    const answerCount = () =>
-      runtime?.store
-        .listWorkspaceDispatchMessages(external)
-        .filter((item) => item.replyTo === question.id).length
-    assert.equal(answerCount(), 0)
-    await request(
-      '/api/team/reply',
-      { ...externalIdentity, text: 'Cannot cross controller binding' },
-      409
-    )
-    assert.equal(answerCount(), 0)
-  } finally {
-    db.close()
-  }
   console.log(
-    'PASS: short CLI reply routing; nonblocking ask; durable resume/list; bounded wait; sender/workspace/root authorization; cancellation/removal/controller closure; unchanged explicit seen barrier'
+    `PASS: short CLI reply routing; explicit snapshot ask; blocking default; durable resume/list; bounded long poll; ${canSignalChild ? 'Ctrl+C preserves question' : 'child SIGINT probe skipped on Windows'}; sender/workspace/root authorization; cancellation/removal closure; unchanged explicit seen barrier`
   )
 } finally {
   await Promise.all(

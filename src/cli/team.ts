@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BUILTIN_COMMAND_PRESET_CLI_LIST } from '../server/command-preset-defaults.js'
 import {
@@ -8,30 +6,13 @@ import {
   PROTOCOL_GUIDE_TOPICS,
 } from '../server/hive-team-guidance.js'
 import { sameFilesystemPath } from '../server/path-canonicalization.js'
-import {
-  isMemoryKind,
-  isMemoryProcedureRefType,
-  isMemoryScope,
-  MEMORY_BODY_MAX_CHARS,
-  MEMORY_KINDS,
-  MEMORY_PROCEDURE_REF_ID_MAX_CHARS,
-  MEMORY_PROCEDURE_REF_TITLE_MAX_CHARS,
-  MEMORY_PROCEDURE_REF_TYPES,
-  MEMORY_QUERY_MAX_CHARS,
-  MEMORY_SCOPES,
-  MEMORY_SEARCH_MAX_LIMIT,
-  MEMORY_TAG_MAX_CHARS,
-  MEMORY_TAG_MAX_COUNT,
-  type MemoryKind,
-  type MemoryProcedureRef,
-  type MemoryScope,
-} from '../shared/team-memory.js'
 import { RECALL_QUERY_MAX_CHARS } from '../shared/team-recall.js'
 import { isTeamReviewRole, type TeamReviewRole } from '../shared/types.js'
 import {
   MESSAGE_USAGE,
   parseMessageArgs,
   parseMessagesArgs,
+  parseOptions,
   parseSendArgs,
   parseSequence,
 } from './team-message-args.js'
@@ -66,12 +47,6 @@ const TEAM_USAGE = [
   `  team guide <${PROTOCOL_GUIDE_TOPICS.join('|')}>`,
   '  team next   (tasks in .hive/tasks.md that are unblocked now — those whose [needs: #n] deps are all done)',
   '  team recall "<query>" [--limit <n>] [--window <n>]',
-  '  team memory add "<body>" [--kind fact|preference|decision|pitfall|procedure_ref] [--scope workspace|user] [--tag <tag>] [--ref-type workflow|skill|procedure|template|doc --ref-id <id> [--ref-title <title>]]',
-  '  team memory show <memory-id>',
-  '  team memory search "<query>" [--limit <n>] [--scope workspace|user|all]',
-  '  team memory dream show <dream-run-id>',
-  '  team memory apply --run <dream-run-id> --stdin',
-  '  team memory forget <memory-id>',
   '  team send <member-name> "<task>" [--related-to <dispatch-id>]',
   `  ${MESSAGE_USAGE}`,
   `  ${ASK_USAGE}`,
@@ -83,8 +58,6 @@ const TEAM_USAGE = [
   `  team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`,
   '  team dismiss <member-name>',
   '  team cancel --dispatch <dispatch-id> "<reason>"',
-  '  team goal report --goal <goal-id> --status progress|done|blocked|failed "<body>"',
-  '  team goal report --goal <goal-id> --status progress|done|blocked|failed --stdin',
   '  team report "<result>" [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
   '  team report --stdin [--dispatch <dispatch-id>] [--seen <sequence>] [--artifact <path>]',
   '  team status "<current status>" [--artifact <path>]  (optional readiness note; never closes a dispatch)',
@@ -99,7 +72,7 @@ const TEAM_USAGE = [
   '  PowerShell:   Get-Content -Raw -Encoding utf8 body.txt | team report --stdin --dispatch <id>',
   '  Portable:     team report --stdin --dispatch <id> < body.txt',
   '',
-  'For focused runtime guidance, use team guide <topic>. For the full generated protocol, see .hive/PROTOCOL.md',
+  'For focused runtime guidance, use team guide <topic>.',
 ].join('\n')
 
 const getHiveEnv = (): HiveEnv => {
@@ -115,15 +88,6 @@ const getHiveEnv = (): HiveEnv => {
 }
 
 const getBaseUrl = (env: HiveEnv) => `http://127.0.0.1:${env.HIVE_PORT}`
-
-// Read `--flag value` from an argv slice; returns undefined when absent or
-// when the flag is the last token with no following value.
-const readFlag = (args: string[], flag: string): string | undefined => {
-  const index = args.indexOf(flag)
-  if (index === -1) return undefined
-  const value = args[index + 1]
-  return value && !value.startsWith('--') ? value : undefined
-}
 
 const describeFetchError = (baseUrl: string, error: unknown) => {
   const cause =
@@ -190,13 +154,6 @@ interface TeamReportResponse {
   pending_warning?: string | null
 }
 
-interface TeamGoalReportResponse {
-  cursor: number
-  goal_id: string
-  ok: true
-  status: string
-}
-
 interface ParsedCancelArgs {
   dispatchId: string
   reason: string
@@ -209,19 +166,6 @@ const CANCEL_USAGE = 'Usage: team cancel --dispatch <dispatch-id> <reason>'
 const REVIEW_USAGE = `Usage: team review [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--role reviewer|tester] [--model <model>] [--name <name>] ("<focus>" | --stdin)`
 const GUIDE_USAGE = `Usage: team guide <${PROTOCOL_GUIDE_TOPICS.join('|')}>`
 const RECALL_USAGE = 'Usage: team recall "<query>" [--limit <n>] [--window <n>]'
-const MEMORY_ADD_USAGE =
-  'Usage: team memory add "<body>" [--kind fact|preference|decision|pitfall|procedure_ref] [--scope workspace|user] [--tag <tag>] [--ref-type workflow|skill|procedure|template|doc --ref-id <id> [--ref-title <title>]]'
-const MEMORY_SHOW_USAGE = 'Usage: team memory show <memory-id>'
-const MEMORY_SEARCH_USAGE =
-  'Usage: team memory search "<query>" [--limit <n>] [--scope workspace|user|all]'
-const MEMORY_DREAM_SHOW_USAGE = 'Usage: team memory dream show <dream-run-id>'
-const MEMORY_APPLY_USAGE = 'Usage: team memory apply --run <dream-run-id> --stdin'
-const MEMORY_FORGET_USAGE = 'Usage: team memory forget <memory-id>'
-const GOAL_REPORT_USAGE =
-  'Usage: team goal report --goal <goal-id> --status progress|done|blocked|failed (<body> | --stdin) [--artifact <path>]'
-
-const GOAL_REPORT_STATUSES = new Set(['progress', 'done', 'blocked', 'failed'])
-
 const usageFor = (command: string) => (command === 'status' ? STATUS_USAGE : REPORT_USAGE)
 
 const withUsage = (message: string, command: string) => `${message}\n\n${usageFor(command)}`
@@ -252,20 +196,6 @@ const printOrchestratorDeliveryWarning = (
   }
 }
 
-const readGeneratedProtocolGuide = (topic: string): string | null => {
-  const protocolPath = join(process.cwd(), '.hive', 'PROTOCOL.md')
-  if (!existsSync(protocolPath)) return null
-  const doc = readFileSync(protocolPath, 'utf8')
-  const marker = `## Guide: ${topic}`
-  const start = doc.indexOf(marker)
-  if (start === -1) return null
-  const nextGuide = doc.indexOf('\n## Guide:', start + marker.length)
-  const reminders = doc.indexOf('\n## In-message reminders', start + marker.length)
-  const candidates = [nextGuide, reminders].filter((index) => index !== -1)
-  const end = candidates.length === 0 ? doc.length : Math.min(...candidates)
-  return doc.slice(start, end).trimEnd()
-}
-
 export interface ParsedReportArgs {
   artifacts: string[]
   dispatchId: string | undefined
@@ -275,69 +205,31 @@ export interface ParsedReportArgs {
 }
 
 export const parseReportArgs = (args: string[], command = 'report'): ParsedReportArgs => {
-  const positionals: string[] = []
-  const artifacts: string[] = []
-  let dispatchId: string | undefined
-  let seenSeq: number | undefined
-  let useStdin = false
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    // Backward-compatible no-op: reports are interpreted from their text.
-    if (arg === '--success' || arg === '--failed') continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-
-    if (arg === '--artifact') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(withUsage('--artifact requires a value', command))
-      }
-      artifacts.push(next)
-      index += 1
-      continue
-    }
-
-    if (arg === '--seen') {
-      if (command !== 'report' || seenSeq !== undefined)
-        throw new Error(withUsage('Invalid or duplicate --seen', command))
-      const value = args[index + 1]
-      if (value === undefined) throw new Error(withUsage('--seen requires a value', command))
-      seenSeq = parseSequence(value, '--seen')
-      index += 1
-      continue
-    }
-
-    if (arg === '--dispatch') {
-      if (dispatchId !== undefined) throw new Error(withUsage('Duplicate --dispatch', command))
-      if (command === 'status') {
-        throw new Error(
-          withUsage(
-            'team status does not accept --dispatch; record task progress with team message --dispatch <id> --to orchestrator --kind progress "<update>". Use team report only when ending the responsibility.',
-            command
-          )
-        )
-      }
-      const next = args[index + 1]
-      if (next === undefined || !next.trim() || next.startsWith('--')) {
-        throw new Error(withUsage('--dispatch requires a value', command))
-      }
-      dispatchId = next
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(withUsage(`Unknown argument: ${arg}`, command))
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(
+      args,
+      new Set(['--stdin', '--success', '--failed', '--artifact', '--dispatch', '--seen']),
+      new Set(['--artifact'])
+    )
+  } catch (error) {
+    throw new Error(withUsage(error instanceof Error ? error.message : String(error), command))
   }
+  const { options, positionals, repeated } = parsed
+  const artifacts = repeated.get('--artifact') ?? []
+  const dispatchId = options.get('--dispatch')
+  const seen = options.get('--seen')
+  const useStdin = options.has('--stdin')
+  if (command === 'status' && dispatchId)
+    throw new Error(
+      withUsage(
+        'team status does not accept --dispatch; use team report to end the responsibility.',
+        command
+      )
+    )
+  if (command !== 'report' && seen !== undefined)
+    throw new Error(withUsage('Invalid --seen', command))
+  const seenSeq = seen === undefined ? undefined : parseSequence(seen, '--seen')
 
   if (useStdin && positionals.length > 0) {
     throw new Error(
@@ -376,29 +268,14 @@ export const parseReportArgs = (args: string[], command = 'report'): ParsedRepor
 }
 
 export const parseCancelArgs = (args: string[]): ParsedCancelArgs => {
-  const positionals: string[] = []
-  let dispatchId: string | undefined
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--dispatch') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--dispatch requires a value\n\n${CANCEL_USAGE}`)
-      }
-      dispatchId = next
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${CANCEL_USAGE}`)
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--dispatch']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${CANCEL_USAGE}`)
   }
+  const { options, positionals } = parsed
+  const dispatchId = options.get('--dispatch')
 
   if (!dispatchId) {
     throw new Error(`Missing --dispatch <dispatch-id>\n\n${CANCEL_USAGE}`)
@@ -435,61 +312,23 @@ export interface ParsedReviewArgs {
 }
 
 export const parseReviewArgs = (args: string[]): ParsedReviewArgs => {
-  const positionals: string[] = []
-  let cli: string | undefined
-  let model: string | undefined
-  let name: string | undefined
-  let role: TeamReviewRole | undefined
-  let useStdin = false
-
-  const readValue = (flag: string, index: number) => {
-    const next = args[index + 1]
-    if (next === undefined || next.startsWith('--')) {
-      throw new Error(`${flag} requires a value\n\n${REVIEW_USAGE}`)
-    }
-    return next
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--stdin', '--cli', '--model', '--name', '--role']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${REVIEW_USAGE}`)
   }
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-    if (arg === '--cli') {
-      cli = readValue('--cli', index)
-      index += 1
-      continue
-    }
-    if (arg === '--model') {
-      model = readValue('--model', index)
-      index += 1
-      continue
-    }
-    if (arg === '--name') {
-      name = readValue('--name', index)
-      index += 1
-      continue
-    }
-    if (arg === '--role') {
-      const value = readValue('--role', index)
-      if (!isTeamReviewRole(value)) {
-        throw new TeamUsageError(
-          'REVIEW_INVALID_ROLE',
-          `--role must be reviewer or tester\n\n${REVIEW_USAGE}`
-        )
-      }
-      role = value
-      index += 1
-      continue
-    }
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${REVIEW_USAGE}`)
-    }
-    positionals.push(arg)
-  }
+  const { options, positionals } = parsed
+  const cli = options.get('--cli')
+  const model = options.get('--model')
+  const name = options.get('--name')
+  const role = options.get('--role')
+  const useStdin = options.has('--stdin')
+  if (role && !isTeamReviewRole(role))
+    throw new TeamUsageError(
+      'REVIEW_INVALID_ROLE',
+      `--role must be reviewer or tester\n\n${REVIEW_USAGE}`
+    )
 
   if (useStdin && positionals.length > 0) {
     throw new TeamUsageError(
@@ -523,102 +362,7 @@ export const parseReviewArgs = (args: string[]): ParsedReviewArgs => {
     ...(cli ? { cli } : {}),
     ...(model ? { model } : {}),
     ...(name ? { name } : {}),
-    ...(role ? { role } : {}),
-  }
-}
-
-export interface ParsedGoalReportArgs {
-  artifacts: string[]
-  goalId: string
-  result: string | null
-  status: 'progress' | 'done' | 'blocked' | 'failed'
-  useStdin: boolean
-}
-
-export const parseGoalReportArgs = (args: string[]): ParsedGoalReportArgs => {
-  const positionals: string[] = []
-  const artifacts: string[] = []
-  let goalId: string | undefined
-  let status: ParsedGoalReportArgs['status'] | undefined
-  let useStdin = false
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-
-    if (arg === '--goal') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--goal requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      goalId = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--status') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--status requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      if (!GOAL_REPORT_STATUSES.has(next)) {
-        throw new Error(
-          `--status must be one of: progress, done, blocked, failed\n\n${GOAL_REPORT_USAGE}`
-        )
-      }
-      status = next as ParsedGoalReportArgs['status']
-      index += 1
-      continue
-    }
-
-    if (arg === '--artifact') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--artifact requires a value\n\n${GOAL_REPORT_USAGE}`)
-      }
-      artifacts.push(next)
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${GOAL_REPORT_USAGE}`)
-    }
-
-    positionals.push(arg)
-  }
-
-  if (!goalId) throw new Error(`Missing --goal <goal-id>\n\n${GOAL_REPORT_USAGE}`)
-  if (!status) throw new Error(`Missing --status <status>\n\n${GOAL_REPORT_USAGE}`)
-  if (useStdin && positionals.length > 0) {
-    throw new Error(
-      `--stdin is mutually exclusive with a positional body; pass the body on stdin or as an argument, not both\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-  if (!useStdin && positionals.length === 0) {
-    throw new Error(
-      `Missing <body> (or pass --stdin to read it from stdin)\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-  if (positionals.length > 1) {
-    throw new Error(
-      `Expected exactly one body positional, got ${positionals.length}: ${positionals
-        .map((value) => JSON.stringify(value))
-        .join(', ')}\n\n${GOAL_REPORT_USAGE}`
-    )
-  }
-
-  return {
-    artifacts,
-    goalId,
-    result: useStdin ? null : (positionals[0] ?? null),
-    status,
-    useStdin,
+    ...(role && isTeamReviewRole(role) ? { role } : {}),
   }
 }
 
@@ -632,31 +376,15 @@ const parseNonNegativeIntFlag = (value: string | undefined, flag: string) => {
 }
 
 export const parseRecallArgs = (args: string[]) => {
-  const positionals: string[] = []
-  let limit: number | undefined
-  let window: number | undefined
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--limit' || arg === '--window') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`${arg} requires a value\n\n${RECALL_USAGE}`)
-      }
-      if (arg === '--limit') limit = parseNonNegativeIntFlag(next, '--limit')
-      else window = parseNonNegativeIntFlag(next, '--window')
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${RECALL_USAGE}`)
-    }
-
-    positionals.push(arg)
+  let parsed: ReturnType<typeof parseOptions>
+  try {
+    parsed = parseOptions(args, new Set(['--limit', '--window']))
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${RECALL_USAGE}`)
   }
+  const { options, positionals } = parsed
+  const limit = parseNonNegativeIntFlag(options.get('--limit'), '--limit')
+  const window = parseNonNegativeIntFlag(options.get('--window'), '--window')
 
   if (positionals.length === 0) {
     throw new Error(`Missing <query>\n\n${RECALL_USAGE}`)
@@ -673,322 +401,6 @@ export const parseRecallArgs = (args: string[]) => {
     ...(limit !== undefined ? { limit } : {}),
     ...(window !== undefined ? { window } : {}),
   }
-}
-
-export interface ParsedMemoryAddArgs {
-  body: string
-  kind: MemoryKind
-  procedureRef: MemoryProcedureRef | null
-  scope: MemoryScope
-  tags: string[]
-}
-
-export const parseMemoryAddArgs = (args: string[]): ParsedMemoryAddArgs => {
-  const positionals: string[] = []
-  const tags: string[] = []
-  let kind: MemoryKind = 'fact'
-  let procedureRefId: string | undefined
-  let procedureRefTitle: string | null = null
-  let procedureRefType: MemoryProcedureRef['type'] | undefined
-  let scope: MemoryScope = 'workspace'
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--kind') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--kind requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      if (!isMemoryKind(next)) {
-        throw new Error(`--kind must be one of: ${MEMORY_KINDS.join(', ')}\n\n${MEMORY_ADD_USAGE}`)
-      }
-      kind = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--scope') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--scope requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      if (!isMemoryScope(next)) {
-        throw new Error(
-          `--scope must be one of: ${MEMORY_SCOPES.join(', ')}\n\n${MEMORY_ADD_USAGE}`
-        )
-      }
-      scope = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--ref-type') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--ref-type requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      if (!isMemoryProcedureRefType(next)) {
-        throw new Error(
-          `--ref-type must be one of: ${MEMORY_PROCEDURE_REF_TYPES.join(', ')}\n\n${MEMORY_ADD_USAGE}`
-        )
-      }
-      procedureRefType = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--ref-id') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--ref-id requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      const refId = next.trim()
-      if (!refId) throw new Error(`--ref-id requires a non-empty value\n\n${MEMORY_ADD_USAGE}`)
-      if ([...refId].length > MEMORY_PROCEDURE_REF_ID_MAX_CHARS) {
-        throw new Error(
-          `--ref-id must be ${MEMORY_PROCEDURE_REF_ID_MAX_CHARS} characters or fewer\n\n${MEMORY_ADD_USAGE}`
-        )
-      }
-      procedureRefId = refId
-      index += 1
-      continue
-    }
-
-    if (arg === '--ref-title') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--ref-title requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      const refTitle = next.trim()
-      if ([...refTitle].length > MEMORY_PROCEDURE_REF_TITLE_MAX_CHARS) {
-        throw new Error(
-          `--ref-title must be ${MEMORY_PROCEDURE_REF_TITLE_MAX_CHARS} characters or fewer\n\n${MEMORY_ADD_USAGE}`
-        )
-      }
-      procedureRefTitle = refTitle || null
-      index += 1
-      continue
-    }
-
-    if (arg === '--tag') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--tag requires a value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      const tag = next.trim()
-      if (!tag) {
-        throw new Error(`--tag requires a non-empty value\n\n${MEMORY_ADD_USAGE}`)
-      }
-      if ([...tag].length > MEMORY_TAG_MAX_CHARS) {
-        throw new Error(
-          `--tag must be ${MEMORY_TAG_MAX_CHARS} characters or fewer\n\n${MEMORY_ADD_USAGE}`
-        )
-      }
-      if (!tags.includes(tag)) tags.push(tag)
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${MEMORY_ADD_USAGE}`)
-    }
-
-    positionals.push(arg)
-  }
-
-  if (tags.length > MEMORY_TAG_MAX_COUNT) {
-    throw new Error(
-      `--tag may be repeated ${MEMORY_TAG_MAX_COUNT} times or fewer\n\n${MEMORY_ADD_USAGE}`
-    )
-  }
-
-  if (positionals.length === 0) {
-    throw new Error(`Missing <body>\n\n${MEMORY_ADD_USAGE}`)
-  }
-
-  const body = positionals.join(' ').trim()
-  if (!body) {
-    throw new Error(`Missing <body>\n\n${MEMORY_ADD_USAGE}`)
-  }
-  if ([...body].length > MEMORY_BODY_MAX_CHARS) {
-    throw new Error(
-      `body must be ${MEMORY_BODY_MAX_CHARS} characters or fewer\n\n${MEMORY_ADD_USAGE}`
-    )
-  }
-
-  if (
-    (procedureRefType || procedureRefId || procedureRefTitle) &&
-    (!procedureRefType || !procedureRefId)
-  ) {
-    throw new Error(`--ref-type and --ref-id must be provided together\n\n${MEMORY_ADD_USAGE}`)
-  }
-
-  const procedureRef =
-    procedureRefType && procedureRefId
-      ? { id: procedureRefId, title: procedureRefTitle, type: procedureRefType }
-      : null
-  if (kind === 'procedure_ref' && !procedureRef) {
-    throw new Error(`--kind procedure_ref requires --ref-type and --ref-id\n\n${MEMORY_ADD_USAGE}`)
-  }
-
-  return {
-    body,
-    kind,
-    procedureRef,
-    scope,
-    tags,
-  }
-}
-
-export const parseMemoryShowArgs = (args: string[]) => {
-  if (args.length !== 1 || !args[0] || args[0].startsWith('--')) {
-    throw new Error(`Missing <memory-id>\n\n${MEMORY_SHOW_USAGE}`)
-  }
-  return { memoryId: args[0] }
-}
-
-export const parseMemorySearchArgs = (args: string[]) => {
-  const positionals: string[] = []
-  let limit: number | undefined
-  let scope: MemoryScope | 'all' = 'workspace'
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--limit') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--limit requires a value\n\n${MEMORY_SEARCH_USAGE}`)
-      }
-      const parsed = Number(next)
-      if (!Number.isInteger(parsed) || parsed < 0) {
-        throw new Error(`--limit must be a non-negative integer\n\n${MEMORY_SEARCH_USAGE}`)
-      }
-      limit = Math.min(parsed, MEMORY_SEARCH_MAX_LIMIT)
-      index += 1
-      continue
-    }
-
-    if (arg === '--scope') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--scope requires a value\n\n${MEMORY_SEARCH_USAGE}`)
-      }
-      if (next !== 'all' && !isMemoryScope(next)) {
-        throw new Error(`--scope must be workspace, user, or all\n\n${MEMORY_SEARCH_USAGE}`)
-      }
-      scope = next
-      index += 1
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${MEMORY_SEARCH_USAGE}`)
-    }
-
-    positionals.push(arg)
-  }
-
-  if (positionals.length === 0) {
-    throw new Error(`Missing <query>\n\n${MEMORY_SEARCH_USAGE}`)
-  }
-  const query = positionals.join(' ').trim()
-  if (!query) {
-    throw new Error(`Missing <query>\n\n${MEMORY_SEARCH_USAGE}`)
-  }
-  if ([...query].length > MEMORY_QUERY_MAX_CHARS) {
-    throw new Error(
-      `query must be ${MEMORY_QUERY_MAX_CHARS} characters or fewer\n\n${MEMORY_SEARCH_USAGE}`
-    )
-  }
-
-  return {
-    query,
-    ...(limit !== undefined ? { limit } : {}),
-    scope,
-  }
-}
-
-export const parseMemoryDreamShowArgs = (args: string[]) => {
-  if (args.length !== 1 || !args[0] || args[0].startsWith('--')) {
-    throw new Error(`Missing <dream-run-id>\n\n${MEMORY_DREAM_SHOW_USAGE}`)
-  }
-  return { runId: args[0] }
-}
-
-export const parseMemoryApplyArgs = (args: string[]) => {
-  const positionals: string[] = []
-  let runId: string | undefined
-  let useStdin = false
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index]
-    if (arg === undefined) continue
-
-    if (arg === '--run') {
-      const next = args[index + 1]
-      if (next === undefined || next.startsWith('--')) {
-        throw new Error(`--run requires a value\n\n${MEMORY_APPLY_USAGE}`)
-      }
-      runId = next
-      index += 1
-      continue
-    }
-
-    if (arg === '--stdin') {
-      useStdin = true
-      continue
-    }
-
-    if (arg.startsWith('--')) {
-      throw new Error(`Unknown argument: ${arg}\n\n${MEMORY_APPLY_USAGE}`)
-    }
-
-    positionals.push(arg)
-  }
-
-  if (positionals.length > 0) {
-    throw new Error(`Unexpected positional argument\n\n${MEMORY_APPLY_USAGE}`)
-  }
-  if (!runId) {
-    throw new Error(`Missing --run <dream-run-id>\n\n${MEMORY_APPLY_USAGE}`)
-  }
-  if (!useStdin) {
-    throw new Error(`Missing --stdin\n\n${MEMORY_APPLY_USAGE}`)
-  }
-  return { runId }
-}
-
-export const parseMemoryApplyPayload = (value: string): unknown => {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value) as unknown
-  } catch (error) {
-    throw new Error(
-      `stdin must be valid JSON; got: ${error instanceof Error ? error.message : String(error)}\n\n${MEMORY_APPLY_USAGE}`
-    )
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`stdin JSON must be an object with an ops array\n\n${MEMORY_APPLY_USAGE}`)
-  }
-  const ops = (parsed as { ops?: unknown }).ops
-  if (!Array.isArray(ops)) {
-    throw new Error(`stdin JSON must include an ops array\n\n${MEMORY_APPLY_USAGE}`)
-  }
-  return ops
-}
-
-export const parseMemoryForgetArgs = (args: string[]) => {
-  if (args.length === 0 || !args[0] || args[0].startsWith('--')) {
-    throw new Error(`Missing <memory-id>\n\n${MEMORY_FORGET_USAGE}`)
-  }
-  if (args.length !== 1) {
-    throw new Error(`Expected exactly one <memory-id>\n\n${MEMORY_FORGET_USAGE}`)
-  }
-  return { memoryId: args[0] }
 }
 
 export const decodeStdinBuffer = (buffer: Buffer): string => {
@@ -1016,8 +428,13 @@ export const readStdinToString = async (
     )
   }
   const chunks: Buffer[] = []
+  let bytes = 0
+  const maxBytes = 1024 * 1024
   for await (const chunk of process.stdin) {
-    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+    bytes += buffer.length
+    if (bytes > maxBytes) throw new Error(`--stdin exceeds ${maxBytes} bytes\n\n${usage}`)
+    chunks.push(buffer)
   }
   const content = decodeStdinBuffer(Buffer.concat(chunks))
   if (!content.trim()) {
@@ -1031,6 +448,32 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     console.log(TEAM_USAGE)
+    return
+  }
+
+  const beforeDelimiter = args.slice(0, args.indexOf('--') < 0 ? args.length : args.indexOf('--'))
+  if (beforeDelimiter.includes('--help') || beforeDelimiter.includes('-h')) {
+    const prefix =
+      command === 'workflow' && args[0] && !args[0].startsWith('-')
+        ? `team workflow ${args[0]}`
+        : `team ${command}`
+    const lines = TEAM_USAGE.split('\n').filter(
+      (line) => line.trimStart() === prefix || line.trimStart().startsWith(`${prefix} `)
+    )
+    const workflowUsage: Record<string, string> = {
+      run: 'Usage: team workflow run (--stdin | --inline <source>) [--name <name>] [--args <JSON>]',
+      schedule:
+        'Usage: team workflow schedule --cron <cron> --name <name> (--stdin | --inline <source>) [--args <JSON>]',
+      show: 'Usage: team workflow show <run-id>',
+      stop: 'Usage: team workflow stop <run-id>',
+    }
+    console.log(
+      command === 'workflow'
+        ? (workflowUsage[args[0] ?? ''] ?? 'Usage: team workflow <run|schedule|show|stop>')
+        : lines.length
+          ? `Usage:\n${lines.join('\n')}`
+          : `Usage: ${prefix}`
+    )
     return
   }
 
@@ -1057,6 +500,7 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'list') {
+    if (args.length) throw new Error('Usage: team list')
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     const response = await fetchRuntime(baseUrl, `/api/workspaces/${env.HIVE_PROJECT_ID}/team`, {
@@ -1077,7 +521,7 @@ export const runTeamCommand = async (argv: string[]) => {
 
   if (command === 'guide') {
     const topic = args[0]
-    if (!topic || !isProtocolGuideTopic(topic)) {
+    if (args.length !== 1 || !topic || !isProtocolGuideTopic(topic)) {
       throw new Error(GUIDE_USAGE)
     }
     if (REQUIRED_ENV_KEYS.some((key) => process.env[key] !== undefined)) {
@@ -1097,20 +541,19 @@ export const runTeamCommand = async (argv: string[]) => {
         `Live Hive guide — project_id: ${result.project_id}\nProject path: ${JSON.stringify(result.project_path)}\n\n${result.guide}`
       )
     } else {
-      const saved = readGeneratedProtocolGuide(topic)
       const reference =
-        saved ??
-        (topic === 'workflow'
+        topic === 'workflow'
           ? '## Guide: workflow\nWorkflow availability and CLI policy are unknown. Run `team guide workflow` inside a Hive member terminal to read the current configuration before authoring or running a workflow.'
-          : buildProtocolGuide(topic))
+          : buildProtocolGuide(topic)
       console.log(
-        `${saved ? 'Saved' : 'Offline'} reference only: no authenticated Hive workspace. Any saved feature state may be stale; current capabilities are unknown. Run this command inside a Hive member terminal for live guidance.\n\n${reference}`
+        `Offline reference only: no authenticated Hive workspace. Current capabilities are unknown. Run this command inside a Hive member terminal for live guidance.\n\n${reference}`
       )
     }
     return
   }
 
   if (command === 'next') {
+    if (args.length) throw new Error('Usage: team next')
     const env = getHiveEnv()
     const baseUrl = getBaseUrl(env)
     const response = await fetchRuntime(
@@ -1146,113 +589,6 @@ export const runTeamCommand = async (argv: string[]) => {
     })
     console.log(JSON.stringify(await response.json()))
     return
-  }
-
-  if (command === 'memory') {
-    const [subcommand, ...memoryArgs] = args
-    if (subcommand === 'add') {
-      const memory = parseMemoryAddArgs(memoryArgs)
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/add', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        body: memory.body,
-        kind: memory.kind,
-        procedure_ref: memory.procedureRef,
-        scope: memory.scope,
-        tags: memory.tags,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    if (subcommand === 'show') {
-      const memory = parseMemoryShowArgs(memoryArgs)
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/show', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        memory_id: memory.memoryId,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    if (subcommand === 'search') {
-      const memory = parseMemorySearchArgs(memoryArgs)
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/search', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        query: memory.query,
-        ...(memory.limit !== undefined ? { limit: memory.limit } : {}),
-        scope: memory.scope,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    if (subcommand === 'dream') {
-      const [dreamSubcommand, ...dreamArgs] = memoryArgs
-      if (dreamSubcommand !== 'show') {
-        throw new Error(MEMORY_DREAM_SHOW_USAGE)
-      }
-      const dream = parseMemoryDreamShowArgs(dreamArgs)
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/dream/show', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        run_id: dream.runId,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    if (subcommand === 'apply') {
-      const apply = parseMemoryApplyArgs(memoryArgs)
-      const ops = parseMemoryApplyPayload(
-        await readStdinToString('memory apply', MEMORY_APPLY_USAGE)
-      )
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/apply', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        run_id: apply.runId,
-        ops,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    if (subcommand === 'forget') {
-      const memory = parseMemoryForgetArgs(memoryArgs)
-      const env = getHiveEnv()
-      const response = await postJson(getBaseUrl(env), '/api/team/memory/forget', {
-        project_id: env.HIVE_PROJECT_ID,
-        from_agent_id: env.HIVE_AGENT_ID,
-        token: env.HIVE_AGENT_TOKEN,
-        memory_id: memory.memoryId,
-      })
-      console.log(JSON.stringify(await response.json()))
-      return
-    }
-
-    throw new Error(
-      [
-        'Usage:',
-        `  ${MEMORY_ADD_USAGE}`,
-        `  ${MEMORY_SHOW_USAGE}`,
-        `  ${MEMORY_SEARCH_USAGE}`,
-        `  ${MEMORY_DREAM_SHOW_USAGE}`,
-        `  ${MEMORY_APPLY_USAGE}`,
-        `  ${MEMORY_FORGET_USAGE}`,
-      ].join('\n')
-    )
   }
 
   if (command === 'message' || command === 'messages') {
@@ -1327,17 +663,13 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'spawn') {
-    const role = args[0]
-    if (!role || role.startsWith('--')) {
-      throw new Error(
-        `Usage: team spawn <role> [--name <name>] [--cli <${BUILTIN_COMMAND_PRESET_CLI_LIST}>] [--ephemeral]\n` +
-          '  Default: persistent member (lives until you `team dismiss` it).\n' +
-          '  --ephemeral: auto-dismiss after the next dispatch report (one-shot member).'
-      )
-    }
-    const name = readFlag(args, '--name')
-    const cli = readFlag(args, '--cli')
-    const ephemeral = args.includes('--ephemeral')
+    const { options, positionals } = parseOptions(args, new Set(['--name', '--cli', '--ephemeral']))
+    const role = positionals[0]
+    if (!role || positionals.length !== 1)
+      throw new Error('Usage: team spawn <role> [--name <name>] [--cli <cli>] [--ephemeral]')
+    const name = options.get('--name')
+    const cli = options.get('--cli')
+    const ephemeral = options.has('--ephemeral')
     const env = getHiveEnv()
     const response = await postJson(getBaseUrl(env), '/api/team/spawn', {
       project_id: env.HIVE_PROJECT_ID,
@@ -1379,10 +711,10 @@ export const runTeamCommand = async (argv: string[]) => {
   }
 
   if (command === 'dismiss') {
-    const memberName = args[0]
-    if (!memberName || memberName.startsWith('--')) {
+    const { positionals } = parseOptions(args, new Set())
+    const memberName = positionals[0]
+    if (!memberName || positionals.length !== 1)
       throw new Error('Usage: team dismiss <member-name>')
-    }
     const env = getHiveEnv()
     const response = await postJson(getBaseUrl(env), '/api/team/dismiss', {
       project_id: env.HIVE_PROJECT_ID,
@@ -1398,13 +730,20 @@ export const runTeamCommand = async (argv: string[]) => {
     const sub = args[0]
     const rest = args.slice(1)
     if (sub === 'run') {
-      const inlineFlag = rest.indexOf('--inline')
-      const stdinFlag = rest.includes('--stdin')
-      const name = readFlag(rest, '--name')
+      const { options, positionals } = parseOptions(
+        rest,
+        new Set(['--inline', '--stdin', '--name', '--args'])
+      )
+      if (positionals.length || options.has('--inline') === options.has('--stdin'))
+        throw new Error(
+          'Usage: team workflow run (--inline <source> | --stdin) [--name <name>] [--args <JSON>]'
+        )
+      const inline = options.get('--inline')
+      const name = options.get('--name')
       // TIER 2 #8 — `--args '<JSON>'` makes the script's `args` global a
       // real value instead of always undefined. Parses lazily so a bad
       // JSON gives a clear local error before the HTTP round-trip.
-      const rawArgs = readFlag(rest, '--args')
+      const rawArgs = options.get('--args')
       let parsedArgs: unknown | undefined
       if (rawArgs !== undefined) {
         try {
@@ -1415,20 +754,7 @@ export const runTeamCommand = async (argv: string[]) => {
           )
         }
       }
-      let source: string
-      if (inlineFlag !== -1) {
-        const literal = rest[inlineFlag + 1]
-        if (!literal) throw new Error('Usage: team workflow run --inline "<script-source>"')
-        source = literal
-      } else if (stdinFlag) {
-        source = await readStdinToString('workflow run')
-      } else {
-        throw new Error(
-          'Usage: team workflow run --stdin   |   team workflow run --inline "<script-source>"\n' +
-            '  Pass workflow source via stdin (POSIX heredoc / `type x.ts |`) or as one inline arg.\n' +
-            "  Optional: --args '<JSON>' makes the script's `args` global a real value."
-        )
-      }
+      const source = inline ?? (await readStdinToString('workflow run'))
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/run', {
         project_id: env.HIVE_PROJECT_ID,
@@ -1442,8 +768,9 @@ export const runTeamCommand = async (argv: string[]) => {
       return
     }
     if (sub === 'stop') {
-      const runId = rest[0]
-      if (!runId) throw new Error('Usage: team workflow stop <run-id>')
+      const { positionals } = parseOptions(rest, new Set())
+      const runId = positionals[0]
+      if (!runId || positionals.length !== 1) throw new Error('Usage: team workflow stop <run-id>')
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/stop', {
         project_id: env.HIVE_PROJECT_ID,
@@ -1455,8 +782,9 @@ export const runTeamCommand = async (argv: string[]) => {
       return
     }
     if (sub === 'show') {
-      const runId = rest[0]
-      if (!runId) throw new Error('Usage: team workflow show <run-id>')
+      const { positionals } = parseOptions(rest, new Set())
+      const runId = positionals[0]
+      if (!runId || positionals.length !== 1) throw new Error('Usage: team workflow show <run-id>')
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/show', {
         project_id: env.HIVE_PROJECT_ID,
@@ -1472,12 +800,17 @@ export const runTeamCommand = async (argv: string[]) => {
         'Usage: team workflow schedule --cron "<5-field cron>" --name <name> --stdin\n' +
         '       team workflow schedule --cron "<cron>" --name <name> --inline "<source>" [--args \'<JSON>\']\n' +
         '  Registers a recurring run. Source is persisted so cron can fire it with no orchestrator present.'
-      const inlineFlag = rest.indexOf('--inline')
-      const stdinFlag = rest.includes('--stdin')
-      const cron = readFlag(rest, '--cron')
-      const name = readFlag(rest, '--name')
+      const { options, positionals } = parseOptions(
+        rest,
+        new Set(['--inline', '--stdin', '--cron', '--name', '--args'])
+      )
+      if (positionals.length || options.has('--inline') === options.has('--stdin'))
+        throw new Error(usage)
+      const inline = options.get('--inline')
+      const cron = options.get('--cron')
+      const name = options.get('--name')
       if (!cron || !name) throw new Error(usage)
-      const rawArgs = readFlag(rest, '--args')
+      const rawArgs = options.get('--args')
       let parsedArgs: unknown | undefined
       if (rawArgs !== undefined) {
         try {
@@ -1488,16 +821,7 @@ export const runTeamCommand = async (argv: string[]) => {
           )
         }
       }
-      let source: string
-      if (inlineFlag !== -1) {
-        const literal = rest[inlineFlag + 1]
-        if (!literal) throw new Error(usage)
-        source = literal
-      } else if (stdinFlag) {
-        source = await readStdinToString('workflow schedule')
-      } else {
-        throw new Error(usage)
-      }
+      const source = inline ?? (await readStdinToString('workflow schedule'))
       const env = getHiveEnv()
       const response = await postJson(getBaseUrl(env), '/api/team/workflow/schedule', {
         project_id: env.HIVE_PROJECT_ID,
@@ -1518,7 +842,7 @@ export const runTeamCommand = async (argv: string[]) => {
         '  team workflow stop <run-id>                     (cancel a running workflow)\n' +
         '  team workflow show <run-id>                     (full per-agent transcript)\n' +
         '  team workflow schedule --cron "<cron>" --name <n> --stdin   (register a recurring run)\n' +
-        '  Note: workflow commands are experimental and may be disabled in this workspace; re-read .hive/PROTOCOL.md for the enabled command set.'
+        '  Note: workflow commands are experimental and may be disabled in this workspace; run team guide workflow for the enabled command set.'
     )
   }
 
@@ -1539,34 +863,6 @@ export const runTeamCommand = async (argv: string[]) => {
         `Hive cancelled the dispatch in the ledger, but could not deliver the cancel notice to the member: ${payload.forward_error}. The member may still be acting on the task.`
       )
     }
-    return
-  }
-
-  if (command === 'goal') {
-    const [subcommand, ...goalArgs] = args
-    if (subcommand !== 'report') {
-      throw new Error(GOAL_REPORT_USAGE)
-    }
-    const report = parseGoalReportArgs(goalArgs)
-    const body = report.useStdin
-      ? await readStdinToString('goal report', GOAL_REPORT_USAGE)
-      : (report.result ?? '')
-
-    const env = getHiveEnv()
-    const baseUrl = getBaseUrl(env)
-    const response = await postJson(baseUrl, '/api/team/goal/report', {
-      artifacts: report.artifacts,
-      from_agent_id: env.HIVE_AGENT_ID,
-      goal_id: report.goalId,
-      project_id: env.HIVE_PROJECT_ID,
-      result: body,
-      status: report.status,
-      token: env.HIVE_AGENT_TOKEN,
-    })
-    const payload = (await response.json()) as TeamGoalReportResponse
-    console.log(
-      JSON.stringify({ goal_id: payload.goal_id, cursor: payload.cursor, status: payload.status })
-    )
     return
   }
 

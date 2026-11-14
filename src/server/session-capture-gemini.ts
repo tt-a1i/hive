@@ -3,17 +3,19 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { captureSessionIdWithCoordinator } from './claude-session-coordinator.js'
-import { arePathsEqual, expandHomePath, indexOfPathMarker } from './platform-path.js'
+import { arePathsEqual, expandHomePath } from './platform-path.js'
 
 const GEMINI_SESSION_FILE = /^session-.*\.json$/i
-const GEMINI_TMP_MARKER = '/tmp/'
 
 const getDefaultGeminiHome = () => process.env.HIVE_GEMINI_HOME ?? join(homedir(), '.gemini')
 
 export const getGeminiHome = (pattern?: string, platform: NodeJS.Platform = process.platform) => {
   if (!pattern) return getDefaultGeminiHome()
-  const markerIndex = indexOfPathMarker(pattern, GEMINI_TMP_MARKER, platform)
-  if (markerIndex === -1) return getDefaultGeminiHome()
+  const normalized = platform === 'win32' ? pattern.replaceAll('\\', '/') : pattern
+  const sessionDirectory =
+    platform === 'win32' ? /\/tmp\/[^/]+\/chats(?=\/|$)/giu : /\/tmp\/[^/]+\/chats(?=\/|$)/gu
+  const markerIndex = [...normalized.matchAll(sessionDirectory)].at(-1)?.index
+  if (markerIndex === undefined) return getDefaultGeminiHome()
   const rawRoot = pattern.slice(0, markerIndex).replace(/[\\/]+$/u, '')
   const root = expandHomePath(rawRoot)
   if (arePathsEqual(root, join(homedir(), '.gemini'), platform)) return getDefaultGeminiHome()
@@ -76,9 +78,11 @@ export const captureGeminiSessionId = async (
   onCapture: (sessionId: string) => void,
   timeoutMs = 5000,
   intervalMs = 100,
-  geminiHome = getDefaultGeminiHome()
+  geminiHome = getDefaultGeminiHome(),
+  signal?: AbortSignal
 ) => {
   await captureSessionIdWithCoordinator({
+    signal,
     intervalMs,
     knownSessionIds,
     listSessionIds: () => listSessionIds(cwd, geminiHome),

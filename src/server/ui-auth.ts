@@ -5,9 +5,7 @@ import { HIVE_REMOTE_SECRET_HEADER } from './remote-loopback-auth.js'
 
 export interface UiAuth {
   getToken: () => string
-  getSupervisorToken: () => string
   validate: (token: string | undefined) => boolean
-  validateSupervisorToken: (token: string | undefined) => boolean
   // True iff the request carries the live per-boot tunnel secret (constant-time
   // compare). The secret is the ONLY escalation to tunnel authority; an absent
   // or wrong secret returns false so the caller falls through to normal UI-token
@@ -21,7 +19,6 @@ export interface UiAuth {
 
 export const createUiAuth = (): UiAuth => {
   const token = randomUUID()
-  const supervisorToken = randomUUID()
   // 32 bytes of CSPRNG entropy, fresh every boot. base64url so it travels as a
   // clean header value. Held only in this closure.
   const tunnelSecret = randomBytes(32).toString('base64url')
@@ -31,14 +28,11 @@ export const createUiAuth = (): UiAuth => {
     getToken() {
       return token
     },
-    getSupervisorToken() {
-      return supervisorToken
-    },
     validate(input) {
-      return input === token
-    },
-    validateSupervisorToken(input) {
-      return input === supervisorToken
+      if (typeof input !== 'string') return false
+      const actual = Buffer.from(input)
+      const reference = Buffer.from(token)
+      return actual.length === reference.length && timingSafeEqual(actual, reference)
     },
     isTunnelRequest(request) {
       const raw = request.headers[HIVE_REMOTE_SECRET_HEADER]

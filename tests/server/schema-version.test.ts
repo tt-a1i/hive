@@ -12,6 +12,7 @@ import { applySchemaVersion25 } from '../../src/server/sqlite-schema-v25.js'
 import { applySchemaVersion26 } from '../../src/server/sqlite-schema-v26.js'
 import { applySchemaVersion27 } from '../../src/server/sqlite-schema-v27.js'
 import { applySchemaVersion36 } from '../../src/server/sqlite-schema-v36.js'
+import { applySchemaVersion37 } from '../../src/server/sqlite-schema-v37.js'
 import { applySchemaVersion44 } from '../../src/server/sqlite-schema-v44.js'
 import { applySchemaVersion45 } from '../../src/server/sqlite-schema-v45.js'
 
@@ -136,8 +137,6 @@ describe('schema version', () => {
     )
     const externalGoalSessionColumns = tableColumns(db, 'external_goal_sessions')
     const externalGoalEventColumns = tableColumns(db, 'external_goal_events')
-    const externalGoalSessionIndexes = tableIndexes(db, 'external_goal_sessions')
-    const externalGoalEventIndexes = tableIndexes(db, 'external_goal_events')
 
     expect(workerColumns.has('last_session_id')).toBe(true)
     expect(workerColumns.has('avatar')).toBe(true)
@@ -208,61 +207,9 @@ describe('schema version', () => {
         'report_payload_bytes',
       ])
     )
-    expect(dreamRunColumns).toEqual(
-      new Set([
-        'id',
-        'workspace_id',
-        'trigger',
-        'status',
-        'started_at',
-        'finished_at',
-        'input_seq_from',
-        'input_seq_to',
-        'report',
-        'revert_blob',
-        'error',
-      ])
-    )
-    expect(externalGoalSessionColumns).toEqual(
-      new Set([
-        'id',
-        'workspace_id',
-        'source',
-        'goal',
-        'context_json',
-        'status',
-        'title',
-        'summary',
-        'created_at',
-        'updated_at',
-        'closed_at',
-      ])
-    )
-    expect(externalGoalEventColumns).toEqual(
-      new Set([
-        'sequence',
-        'id',
-        'goal_id',
-        'workspace_id',
-        'kind',
-        'status',
-        'body',
-        'artifacts_json',
-        'created_at',
-      ])
-    )
-    expect(externalGoalSessionIndexes.has('idx_external_goal_sessions_workspace')).toBe(true)
-    expect(indexColumns(db, 'idx_external_goal_sessions_workspace')).toEqual([
-      'workspace_id',
-      'created_at',
-    ])
-    expect(externalGoalEventIndexes.has('idx_external_goal_events_goal')).toBe(true)
-    expect(indexColumns(db, 'idx_external_goal_events_goal')).toEqual(['goal_id', 'sequence'])
-    expect(externalGoalEventIndexes.has('idx_external_goal_events_workspace')).toBe(true)
-    expect(indexColumns(db, 'idx_external_goal_events_workspace')).toEqual([
-      'workspace_id',
-      'created_at',
-    ])
+    expect(dreamRunColumns.size).toBe(0)
+    expect(externalGoalSessionColumns.size).toBe(0)
+    expect(externalGoalEventColumns.size).toBe(0)
     expectDispatchSchema(db)
 
     const presetCount = db
@@ -936,7 +883,7 @@ describe('schema version', () => {
     db.close()
   })
 
-  test('runtime init rebuilds v27 memory FTS when schema_version already contains 27', () => {
+  test('v27 repairs existing memory FTS independently', () => {
     const db = new Database(':memory:')
     db.exec(`
       CREATE TABLE schema_version (
@@ -987,7 +934,7 @@ describe('schema version', () => {
       JSON.stringify([])
     )
 
-    initializeRuntimeDatabase(db)
+    applySchemaVersion27(db, { rebuild: false })
 
     expect(ftsHitCount(db, 'memory_fts', '"stamped" AND "marker"')).toBe(1)
     expect(ftsHitCount(db, 'memory_fts_trigram', '"sta"')).toBe(1)
@@ -2206,7 +2153,7 @@ describe('schema version', () => {
       db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(version, 1)
     }
 
-    initializeRuntimeDatabase(db)
+    applySchemaVersion37(db)
 
     expect(tableColumns(db, 'external_goal_sessions')).toEqual(
       new Set([
@@ -2238,26 +2185,12 @@ describe('schema version', () => {
     )
     expect(tableIndexes(db, 'external_goal_events').has('idx_external_goal_events_goal')).toBe(true)
     expect(indexColumns(db, 'idx_external_goal_events_goal')).toEqual(['goal_id', 'sequence'])
-    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(37)).toEqual({
-      version: 37,
+    initializeRuntimeDatabase(db)
+    expect(tableColumns(db, 'external_goal_sessions').size).toBe(0)
+    expect(tableColumns(db, 'external_goal_events').size).toBe(0)
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = 46').get()).toEqual({
+      version: 46,
     })
-    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(38)).toEqual({
-      version: 38,
-    })
-    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(39)).toEqual({
-      version: 39,
-    })
-    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(40)).toEqual({
-      version: 40,
-    })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
-    expect(db.prepare('SELECT version FROM schema_version WHERE version = 41').get()).toEqual({
-      version: 41,
-    })
-    expect(
-      db.prepare('SELECT version FROM schema_version WHERE version >= 42 ORDER BY version').all()
-    ).toEqual([{ version: 42 }, { version: 43 }, { version: 44 }, { version: 45 }])
-
     db.close()
   })
 
@@ -2545,7 +2478,10 @@ describe('schema version', () => {
     expect(
       db.prepare("SELECT COUNT(*) AS count FROM role_templates WHERE role_type = 'sentinel'").get()
     ).toEqual({ count: 0 })
-    expect(db.prepare('SELECT role FROM workers ORDER BY id').all()).toEqual([{ role: 'coder' }])
+    expect(db.prepare('SELECT role FROM workers ORDER BY id').all()).toEqual([
+      { role: 'coder' },
+      { role: 'orchestrator' },
+    ])
     expect(db.prepare('SELECT worker_id FROM messages ORDER BY worker_id').all()).toEqual([
       { worker_id: 'coder-worker' },
     ])
@@ -2802,7 +2738,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
+    expect(CURRENT_SCHEMA_VERSION).toBe(46)
 
     db.close()
   })
@@ -2938,7 +2874,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(45)
+    expect(CURRENT_SCHEMA_VERSION).toBe(46)
 
     db.close()
   })

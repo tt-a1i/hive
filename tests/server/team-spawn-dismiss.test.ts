@@ -190,9 +190,12 @@ describe('team spawn / dismiss', () => {
         restarted_worker?: boolean
         worker_status?: string
       }
-      expect(secondDispatch.queued).toBe(true)
-      expect(secondDispatch.restarted_worker).toBe(false)
-      expect(secondDispatch.worker_status).toBe('stopped')
+      expect(secondDispatch.queued).toBeUndefined()
+      expect(secondDispatch.restarted_worker).toBe(true)
+      await waitFor(() => {
+        const run = ctx.hive.store.getActiveRunByAgentId(ctx.workspaceId, spawned.worker_id)
+        expect(run?.output).toContain(`DISPATCH:${secondDispatch.dispatch_id}`)
+      }, 8000)
       await ctx.hive.store.cancelTask(ctx.workspaceId, secondDispatch.dispatch_id, {
         fromAgentId: ctx.orchestratorId,
         reason: 'test cleanup',

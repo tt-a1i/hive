@@ -56,7 +56,7 @@ export function isTunnelDroppedRequestHeader(name: string): boolean {
   const lk = name.toLowerCase()
   if (REQUEST_DROPPED_HEADERS.has(lk)) return true
   if (REQUEST_HOP_BY_HOP_HEADERS.has(lk)) return true
-  if (lk.startsWith('x-forwarded-')) return true
+  if (lk.startsWith('x-forwarded-') || lk.startsWith('x-hive-')) return true
   return false
 }
 

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { generateWorkerName } from '../../../src/shared/random-worker-name.js'
 import type { TeamListItem, WorkerRole } from '../../../src/shared/types.js'
 import {
@@ -14,6 +14,7 @@ import type { UiLanguage } from '../uiLanguage.js'
 import type { WorkerActions } from './useWorkerActions.js'
 
 interface UseWorkerComposerInput {
+  workspaceId?: string | null
   createWorker: WorkerActions['createWorker']
   open: boolean
   workers: TeamListItem[]
@@ -132,10 +133,13 @@ const getDefaultDescription = (
     : fallbackRoleDescriptions[language][role]
 
 export const useWorkerComposer = ({
+  workspaceId,
   createWorker,
   open,
   workers,
 }: UseWorkerComposerInput): WorkerComposerState => {
+  const scope = useMemo(() => ({ workspaceId, open }), [workspaceId, open])
+  const currentScope = useRef<typeof scope | null>(scope)
   const { language } = useI18n()
   const [workerName, setWorkerName] = useState('')
   const [workerRole, setWorkerRole] = useState<WorkerRole>('coder')
@@ -152,6 +156,14 @@ export const useWorkerComposer = ({
   const [startupCommand, setStartupCommand] = useState('')
   const [createWorkerError, setCreateWorkerError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  useLayoutEffect(() => {
+    currentScope.current = scope
+    setCreating(false)
+    setCreateWorkerError(null)
+    return () => {
+      if (currentScope.current === scope) currentScope.current = null
+    }
+  }, [scope])
   const workerNameGeneratedRef = useRef(false)
   const roleDescriptionEditedRef = useRef(false)
   // Tracks the previous `open` value so the name effect can tell "the dialog
@@ -368,6 +380,7 @@ export const useWorkerComposer = ({
       startupCommand,
     })
       .then(({ error }) => {
+        if (currentScope.current !== scope) return
         setWorkerName('')
         workerNameGeneratedRef.current = false
         selectWorkerRole('coder')
@@ -379,9 +392,12 @@ export const useWorkerComposer = ({
         if (error) setCreateWorkerError(error)
       })
       .catch((error) => {
+        if (currentScope.current !== scope) return
         setCreateWorkerError(error instanceof Error ? error.message : String(error))
       })
-      .finally(() => setCreating(false))
+      .finally(() => {
+        if (currentScope.current === scope) setCreating(false)
+      })
   }
 
   return {

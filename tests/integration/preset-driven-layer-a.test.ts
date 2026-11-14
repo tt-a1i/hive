@@ -4,6 +4,7 @@ import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences, inboxReaderSource } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -73,6 +74,7 @@ const writeFakeClaude = (workspacePath: string) => {
     workspacePath,
     'claude',
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -91,10 +93,11 @@ mkdirSync(projectDir, { recursive: true })
 const sessionPath = join(projectDir, sessionId + '.jsonl')
 writeFileSync(sessionPath, '{}\\n')
 let pasteOpen = false
+process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
-  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: chunk } }) + '\\n')
+  appendFileSync(sessionPath, JSON.stringify({ message: { role: 'user', content: expandReceivedInbox(chunk) } }) + '\\n')
   if (chunk.includes('\\u001b[200~') || chunk.includes('<hive-message') || chunk.includes('<hive-system-message')) pasteOpen = true
   if (chunk.includes('\\u001b[201~') || (process.platform === 'win32' && pasteOpen && (chunk.includes('</hive-message>') || chunk.includes('</hive-system-message>')))) {
     pasteOpen = false
@@ -117,6 +120,7 @@ const writeFakeCodex = (workspacePath: string) => {
     workspacePath,
     'codex',
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -134,10 +138,12 @@ const resumeIndex = args.indexOf('resume')
 let inputBuffer = ''
 let pendingRecords = ''
 let sessionReady = false
+process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
   inputBuffer += chunk
+  inputBuffer = expandReceivedInbox(inputBuffer)
   const frames = /<(hive-message|hive-system-message)(?: [^>]*)?>[\\s\\S]*?<\\/\\1>/g
   let frame
   let consumed = 0
@@ -178,6 +184,7 @@ const writeFakeGemini = (workspacePath: string) => {
     workspacePath,
     'gemini',
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -204,6 +211,7 @@ const writeFakeOpenCode = (workspacePath: string) => {
     workspacePath,
     'opencode',
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { existsSync } from 'node:fs'
 import { DatabaseSync as Database } from 'node:sqlite'
 const args = process.argv.slice(2)
@@ -227,6 +235,7 @@ const writeFakeHermes = (workspacePath: string) => {
     workspacePath,
     'hermes',
     `#!/usr/bin/env node
+${inboxReaderSource}
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -234,6 +243,7 @@ const args = process.argv.slice(2)
 const sessionIndex = args.indexOf('--session-id-test')
 const sessionId = sessionIndex >= 0 ? args[sessionIndex + 1] : '20260602_140311_be67e0'
 const resumeIndex = args.indexOf('--resume')
+process.stdin.setRawMode?.(true)
 process.stdin.setEncoding('utf8')
 process.stdin.on('data', (chunk) => {
   process.stdout.write('STDIN:' + chunk)
@@ -369,6 +379,57 @@ afterEach(() => {
 })
 
 describe('preset-driven Layer A', () => {
+  test.runIf(process.platform !== 'win32')(
+    'builtin Claude selected through worker creation appends identity and preserves the wakeup binding',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'hive-preset-native-'))
+      tempDirs.push(root)
+      const workspacePath = join(root, 'workspace')
+      mkdirSync(workspacePath)
+      const fake = writeFakeCli(
+        workspacePath,
+        'claude',
+        `
+if (process.argv.includes('--help')) { console.log('--append-system-prompt'); process.exit(0) }
+console.log('ARGV:' + JSON.stringify(process.argv.slice(2)))
+process.stdin.on('data', (chunk) => process.stdout.write('INPUT:' + chunk))
+setInterval(() => {}, 1000)
+`
+      )
+      process.env.PATH = `${dirname(fake)}${delimiter}${originalPath ?? ''}`
+      process.env.HIVE_CLAUDE_PROJECTS_DIR = join(root, 'projects')
+      const server = await startTestServer()
+      try {
+        const cookie = await getUiCookie(server.baseUrl)
+        const workspace = await createWorkspaceViaHttp(server.baseUrl, cookie, workspacePath)
+        const response = await fetch(`${server.baseUrl}/api/workspaces/${workspace.id}/workers`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie },
+          body: JSON.stringify({
+            name: 'Alice',
+            role: 'coder',
+            command_preset_id: 'claude',
+            autostart: false,
+          }),
+        })
+        expect(response.status).toBe(201)
+        const worker = (await response.json()) as { id: string }
+        const run = await startWorkerViaHttp(server.baseUrl, cookie, workspace.id, worker.id)
+        await waitFor(async () => {
+          const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
+          expect(state.output).toContain('--append-system-prompt')
+          expect(state.output).toContain('You are a Hive member')
+          expect(state.output).toContain(
+            `Hive session binding: workspace_id=${workspace.id}; agent_id=${worker.id} [hive-inbox `
+          )
+        })
+      } finally {
+        await server.close()
+      }
+    },
+    30_000
+  )
+
   test('bound claude preset injects yolo args on fresh start', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'hive-preset-layer-a-home-'))
     const workspacePathRaw = join(homeDir, 'workspace')
@@ -561,7 +622,9 @@ describe('preset-driven Layer A', () => {
         expect(state.output).toContain(
           `ARGS:--dangerously-skip-permissions --permission-mode=bypassPermissions --disallowedTools=Task --session-id-test ${aliceSessionId}`
         )
-        expect(state.output).not.toContain('--resume')
+        const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
       })
       await waitFor(() => {
         expect(readLastSessionId(dataDir, workspaceId, aliceId)).toBe(aliceSessionId)
@@ -601,7 +664,9 @@ describe('preset-driven Layer A', () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, run.runId)
         expect(state.status).toBe('running')
         expect(state.output).toContain(`ARGS:--session-id-test ${sessionId}`)
-        expect(state.output).not.toContain('--resume')
+        const argvLine = state.output.match(/(?:^|[\r\n])ARGS:([^\r\n]*)/)
+        expect(argvLine?.[1]).toBeDefined()
+        expect(argvLine?.[1]?.split(/\s+/)).not.toContain('--resume')
         expect(state.output).not.toContain('--dangerously-skip-permissions')
       })
 
@@ -690,7 +755,7 @@ describe('preset-driven Layer A', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain(input.expectedArgs(input.sessionId))
+        expect(expandInboxReferences(state.output)).toContain(input.expectedArgs(input.sessionId))
       })
     } finally {
       await server.close()
@@ -735,7 +800,7 @@ describe('preset-driven Layer A', () => {
       await waitFor(async () => {
         const state = await getRunViaHttp(server.baseUrl, cookie, secondRun.runId)
         expect(state.status).toBe('running')
-        expect(state.output).toContain('<hive-message kind="startup">')
+        expect(expandInboxReferences(state.output)).toContain('<hive-message kind="startup">')
         expect(state.output).toContain(
           `ARGS:--dangerously-bypass-approvals-and-sandbox --session-id-test ${sessionId}`
         )
@@ -779,8 +844,10 @@ describe('preset-driven Layer A', () => {
         expect(state.output).toContain(
           `ARGS:--dangerously-bypass-approvals-and-sandbox --session-id-test ${sessionId}`
         )
-        expect(state.output).not.toContain('bad option')
-        expect(state.output).not.toContain('stale codex npm entrypoint should not run')
+        expect(expandInboxReferences(state.output)).not.toContain('bad option')
+        expect(expandInboxReferences(state.output)).not.toContain(
+          'stale codex npm entrypoint should not run'
+        )
       })
     } finally {
       await server.close()

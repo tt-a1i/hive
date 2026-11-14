@@ -3,14 +3,14 @@
  */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { runHiveCommand } from '../src/cli/hive.js'
-import { callHiveMcpTool } from '../src/cli/hive-mcp.js'
 import { PtyInactiveError } from '../src/server/http-errors.js'
 import BetterSqlite3 from '../src/server/sqlite.js'
+import { CURRENT_SCHEMA_VERSION } from '../src/server/sqlite-schema.js'
+import { expandInboxReferences } from '../tests/helpers/inbox.js'
 
 type Runtime = Awaited<ReturnType<typeof runHiveCommand>>
 type Row = { id: string; state: string; text: string; report_text: string | null }
@@ -114,7 +114,10 @@ const outputHas = async (actor: string, text: string) =>
     const output = await json<{ output: string }>(
       await expectStatus(await request(`/api/runtime/runs/${runs.get(actor)}`), 200)
     )
-    assert.ok(output.output.includes(text), `PTY ${actor} did not receive ${text}`)
+    assert.ok(
+      expandInboxReferences(output.output).includes(text),
+      `PTY ${actor} did not receive ${text}`
+    )
   })
 // Read persisted identity without calling messages(), which would itself request a drain.
 // Match the delivery-only envelope: recovery summaries can repeat message body text.
@@ -260,7 +263,11 @@ try {
       41
     )
     assert.deepEqual(
-      legacyDb.prepare('SELECT id,status,text,report_text FROM dispatches WHERE id=?').get(simple),
+      {
+        ...(legacyDb
+          .prepare('SELECT id,status,text,report_text FROM dispatches WHERE id=?')
+          .get(simple) as object),
+      },
       {
         id: simple,
         status: 'reported',
@@ -277,11 +284,13 @@ try {
   const upgradedDb = new BetterSqlite3(join(root, 'runtime.sqlite'), { readOnly: true })
   try {
     assert.deepEqual(
-      upgradedDb
-        .prepare(
-          'SELECT id,status,text,report_text,parent_dispatch_id,root_dispatch_id,seen_seq FROM dispatches WHERE id=?'
-        )
-        .get(simple),
+      {
+        ...(upgradedDb
+          .prepare(
+            'SELECT id,status,text,report_text,parent_dispatch_id,root_dispatch_id,seen_seq FROM dispatches WHERE id=?'
+          )
+          .get(simple) as object),
+      },
       {
         id: simple,
         status: 'reported',
@@ -298,14 +307,14 @@ try {
           version: number
         }
       ).version,
-      43
+      CURRENT_SCHEMA_VERSION
     )
   } finally {
     upgradedDb.close()
   }
   await outputHas(alice, 'Preserve custom Alice')
   pass(
-    'schema41-shaped populated database upgrades to 43 preserving legacy responsibility and custom role'
+    `schema41-shaped populated database upgrades to ${CURRENT_SCHEMA_VERSION} preserving legacy responsibility and custom role`
   )
 
   const task = await send('Alice', 'continuous task')
@@ -437,7 +446,7 @@ try {
   await expectStatus(await request(`/api/runtime/runs/${runs.get(alice)}/stop`, {}), 202)
   await start(alice)
   await outputHas(alice, orchQuestion.id)
-  await outputHas(alice, `--to orchestrator --kind answer --reply-to ${orchQuestion.id}`)
+  await outputHas(alice, `team reply ${orchQuestion.id} --stdin`)
   await message(alice, task, 'answer', 'Historical explanation only', {
     recipient: 'orchestrator',
     reply_to: orchQuestion.id,
@@ -544,7 +553,7 @@ try {
   const freshOutput = await json<{ output: string }>(
     await expectStatus(await request(`/api/runtime/runs/${runs.get(alice)}`), 200)
   )
-  assert.ok(!freshOutput.output.includes(obsoleteQuestion.id))
+  assert.ok(!expandInboxReferences(freshOutput.output).includes(obsoleteQuestion.id))
   const actions = await json<{ attention: Array<{ message_id?: string }> }>(
     await expectStatus(await request(`/api/ui/workspaces/${workspaceId}/action-center`), 200)
   )
@@ -867,427 +876,6 @@ try {
   await outputHas(orchestrator, `completed ${survivingTarget}`)
   assert.ok(!runtime.store.listWorkers(workspaceId).some((worker) => worker.id === eve))
   pass('accepted note survives deletion of source member')
-  const bridgeBin = join(root, 'notification-bridge')
-  await mkdir(bridgeBin)
-  await writeFile(
-    join(bridgeBin, 'codex'),
-    '#!/bin/sh\nif [ "$2" = "--help" ]; then exit 0; fi\nexit 1\n',
-    { mode: 0o755 }
-  )
-  process.env.PATH = `${bridgeBin}${delimiter}${oldPath ?? ''}`
-  const externalPath = join(root, 'external-workspace')
-  await mkdir(externalPath)
-  workspaceId = (
-    await json<{ id: string }>(
-      await expectStatus(
-        await request('/api/workspaces', {
-          name: 'External collaboration check',
-          path: externalPath,
-          controller_mode: 'codex_app',
-        }),
-        201
-      )
-    )
-  ).id
-  orchestrator = `${workspaceId}:orchestrator`
-  let threadId = randomUUID()
-  const controller = (action: string, extra: Record<string, unknown> = {}, caller = threadId) =>
-    callHiveMcpTool(
-      'hive.controller_action',
-      { workspace_id: workspaceId, action, ...extra },
-      { baseUrl: base(), metadata: { threadId: caller } }
-    )
-  await callHiveMcpTool(
-    'hive.controller_connect',
-    { workspace_id: workspaceId },
-    { baseUrl: base(), metadata: { threadId } }
-  )
-  const statusPath = `/api/workspaces/${workspaceId}/controller`
-  const requested = await json<{ pending_request: { id: string } }>(
-    await expectStatus(await request(statusPath), 200)
-  )
-  await expectStatus(
-    await request(`${statusPath}/confirm`, { request_id: requested.pending_request.id }),
-    200
-  )
-  assert.equal(runtime.store.getActiveRunByAgentId(workspaceId, orchestrator), undefined)
-  const externalMember = await json<{ id: string }>(
-    await expectStatus(
-      await request(`/api/workspaces/${workspaceId}/workers`, {
-        name: 'ExternalProbe',
-        role: 'coder',
-        description: 'External user supplied member',
-      }),
-      201
-    )
-  )
-  await expectStatus(
-    await request(`/api/workspaces/${workspaceId}/agents/${externalMember.id}/config`, {
-      command: process.execPath,
-      args: [fixture, '--model', 'user-selected-selfcheck'],
-    }),
-    204
-  )
-  const externalStart = (await controller('start', {
-    worker_name: 'ExternalProbe',
-    operation_id: 'external-start',
-  })) as { run_id: string }
-  runs.set(externalMember.id, externalStart.run_id)
-  const externalSend = {
-    worker_name: 'ExternalProbe',
-    text: 'external task',
-    operation_id: 'external-send',
-  }
-  const externalTask = (await controller('send', externalSend)) as { dispatch_id: string }
-  assert.deepEqual(await controller('send', externalSend), externalTask)
-  await outputHas(externalMember.id, externalTask.dispatch_id)
-  await cli(externalMember.id, [
-    'message',
-    '--dispatch',
-    externalTask.dispatch_id,
-    '--to',
-    'orchestrator',
-    '--kind',
-    'question',
-    'External clarification required',
-  ])
-  type Receipts = {
-    reports: Array<{
-      id: number
-      kind: string
-      result: string
-      dispatch_id: string
-      message?: { id: string; text: string }
-    }>
-    pending_reports: number
-  }
-  const receipts = (await controller('read_reports')) as Receipts
-  const externalQuestion = receipts.reports.find(
-    (item) =>
-      item.kind === 'dispatch_message' && item.message?.text === 'External clarification required'
-  )
-  assert.ok(externalQuestion?.message)
-  assert.equal(externalQuestion.dispatch_id, externalTask.dispatch_id)
-  await controller('ack_reports', { report_ids: [externalQuestion.id] })
-  await state(externalTask.dispatch_id, 'submitted')
-  await assert.rejects(
-    controller(
-      'message',
-      {
-        dispatch_id: externalTask.dispatch_id,
-        kind: 'note',
-        text: 'wrong caller',
-        operation_id: 'wrong-caller',
-      },
-      randomUUID()
-    )
-  )
-  const answerOperation = {
-    dispatch_id: externalTask.dispatch_id,
-    kind: 'answer',
-    text: 'External authoritative answer',
-    reply_to: externalQuestion.message.id,
-    operation_id: 'external-answer',
-  }
-  const externalAnswer = (await controller('message', answerOperation)) as {
-    message: { id: string }
-  }
-  assert.deepEqual(await controller('message', answerOperation), externalAnswer)
-  await outputHas(
-    externalMember.id,
-    `<hive-message kind="answer" message="${externalAnswer.message.id}" dispatch="${externalTask.dispatch_id}">`
-  )
-  const externalInbox = (await controller('messages', {
-    dispatch_id: externalTask.dispatch_id,
-  })) as Inbox
-  assert.equal(
-    externalInbox.messages.filter((item) => item.text === 'External authoritative answer').length,
-    1
-  )
-  await cli(
-    externalMember.id,
-    ['report', 'must reject missing seen', '--dispatch', externalTask.dispatch_id],
-    1
-  )
-  const pendingBeforeProgress = ((await controller('read_reports')) as Receipts).pending_reports
-  await cli(externalMember.id, [
-    'message',
-    '--dispatch',
-    externalTask.dispatch_id,
-    '--to',
-    'orchestrator',
-    '--kind',
-    'progress',
-    'External quiet progress',
-  ])
-  assert.equal(
-    ((await controller('read_reports')) as Receipts).pending_reports,
-    pendingBeforeProgress
-  )
-  await cli(externalMember.id, [
-    'report',
-    'External complete',
-    '--dispatch',
-    externalTask.dispatch_id,
-    '--seen',
-    String(externalInbox.required_seen_seq),
-  ])
-  await state(externalTask.dispatch_id, 'reported')
-  const externalRelated = (await controller('send', {
-    worker_name: 'ExternalProbe',
-    text: 'external related review',
-    related_to_dispatch_id: externalTask.dispatch_id,
-    operation_id: 'external-related',
-  })) as { dispatch_id: string }
-  const externalRelatedInbox = (await controller('messages', {
-    dispatch_id: externalRelated.dispatch_id,
-  })) as Inbox
-  assert.ok(
-    externalRelatedInbox.related_dispatches.some((item) => item.id === externalTask.dispatch_id)
-  )
-  await controller('cancel', {
-    dispatch_id: externalRelated.dispatch_id,
-    reason: 'external scenario complete',
-    operation_id: 'external-cancel',
-  })
-  await outputHas(externalMember.id, 'external scenario complete')
-  await runtime.close()
-  runtime = undefined
-  runtime = await runHiveCommand(['--port', '0'])
-  cookie = (await request('/api/ui/session')).headers.get('set-cookie') ?? ''
-  const persistedReports = (await controller('read_reports')) as Receipts
-  assert.ok(
-    persistedReports.reports.some(
-      (item) =>
-        item.dispatch_id === externalTask.dispatch_id &&
-        item.kind === 'dispatch_result' &&
-        item.result === 'External complete'
-    )
-  )
-  assert.deepEqual(await controller('message', answerOperation), externalAnswer)
-  await controller('ack_reports', { report_ids: persistedReports.reports.map((item) => item.id) })
-  assert.equal(((await controller('read_reports')) as Receipts).pending_reports, 0)
-  assert.equal(runtime.store.getActiveRunByAgentId(workspaceId, orchestrator), undefined)
-  pass(
-    'external controller MCP/HTTP/SQLite/PTY collaboration, operation replay, receipts, quiet progress and restart; only notification executable is a fixture'
-  )
-  const reboundStart = (await controller('start', {
-    worker_name: 'ExternalProbe',
-    operation_id: 'external-restart-historical',
-  })) as { run_id: string }
-  runs.set(externalMember.id, reboundStart.run_id)
-  const oldQuestionOperation = {
-    dispatch_id: externalTask.dispatch_id,
-    kind: 'question',
-    text: 'Old controller historical question',
-    operation_id: 'old-controller-question',
-  }
-  const oldControllerQuestion = (await controller('message', oldQuestionOperation)) as {
-    message: { id: string }
-  }
-  await outputHas(
-    externalMember.id,
-    `<hive-message kind="question" message="${oldControllerQuestion.message.id}" dispatch="${externalTask.dispatch_id}">`
-  )
-  await eventually(async () =>
-    assert.equal(
-      (
-        (await controller('messages', { dispatch_id: externalTask.dispatch_id })) as Inbox
-      ).messages.find((item) => item.id === oldControllerQuestion.message.id)?.delivery_state,
-      'delivered'
-    )
-  )
-  await expectStatus(await request(`${statusPath}/disconnect`, {}), 200)
-  const lateAnswer = {
-    dispatch_id: externalTask.dispatch_id,
-    kind: 'answer',
-    recipient: 'orchestrator',
-    reply_to: oldControllerQuestion.message.id,
-    text: 'must not cross controller binding',
-  }
-  await team(externalMember.id, 'message', lateAnswer, 409)
-  threadId = randomUUID()
-  await callHiveMcpTool(
-    'hive.controller_connect',
-    { workspace_id: workspaceId },
-    { baseUrl: base(), metadata: { threadId } }
-  )
-  const reboundRequest = await json<{ pending_request: { id: string } }>(
-    await expectStatus(await request(statusPath), 200)
-  )
-  await expectStatus(
-    await request(`${statusPath}/confirm`, { request_id: reboundRequest.pending_request.id }),
-    200
-  )
-  await team(externalMember.id, 'message', lateAnswer, 409)
-  assert.equal(((await controller('read_reports')) as Receipts).pending_reports, 0)
-  const newControllerQuestion = (await controller('message', {
-    dispatch_id: externalTask.dispatch_id,
-    kind: 'question',
-    text: 'New controller historical question',
-    operation_id: 'new-controller-question',
-  })) as { message: { id: string } }
-  await outputHas(
-    externalMember.id,
-    `<hive-message kind="question" message="${newControllerQuestion.message.id}" dispatch="${externalTask.dispatch_id}">`
-  )
-  await cli(externalMember.id, [
-    'message',
-    '--dispatch',
-    externalTask.dispatch_id,
-    '--to',
-    'orchestrator',
-    '--kind',
-    'answer',
-    '--reply-to',
-    newControllerQuestion.message.id,
-    'new binding answer',
-  ])
-  const reboundReceipts = (await controller('read_reports')) as Receipts
-  assert.ok(reboundReceipts.reports.some((item) => item.message?.text === 'new binding answer'))
-  assert.ok(!reboundReceipts.reports.some((item) => item.message?.text === lateAnswer.text))
-  await controller('ack_reports', { report_ids: reboundReceipts.reports.map((item) => item.id) })
-  await state(externalTask.dispatch_id, 'reported')
-  pass(
-    'external historical answers cannot cross disconnect/rebind; new controller receives only its own answer'
-  )
-  await expectStatus(
-    await request(`/api/runtime/runs/${runs.get(externalMember.id)}/stop`, {}),
-    202
-  )
-  const queuedHistoricalQuestion = (await controller('message', {
-    dispatch_id: externalTask.dispatch_id,
-    kind: 'question',
-    text: 'Queued inquiry retired by disconnect',
-    operation_id: 'queued-disconnect-question',
-  })) as { message: { id: string } }
-  const disconnectStatus = await json<{ can_disconnect: boolean }>(
-    await expectStatus(await request(statusPath), 200)
-  )
-  assert.equal(disconnectStatus.can_disconnect, true)
-  await expectStatus(await request(`${statusPath}/disconnect`, {}), 200)
-  const retiredQueued = runtime.store
-    .listWorkspaceDispatchMessages(workspaceId)
-    .find((item) => item.id === queuedHistoricalQuestion.message.id)
-  assert.equal(retiredQueued?.deliveryState, 'cancelled')
-  assert.equal(runtime.store.listWorkers(workspaceId)[0]?.status, 'stopped')
-  // Rebind the same thread: retired question state, not only thread identity, must reject it.
-  await callHiveMcpTool(
-    'hive.controller_connect',
-    { workspace_id: workspaceId },
-    { baseUrl: base(), metadata: { threadId } }
-  )
-  const thirdRequest = await json<{ pending_request: { id: string } }>(
-    await expectStatus(await request(statusPath), 200)
-  )
-  await expectStatus(
-    await request(`${statusPath}/confirm`, { request_id: thirdRequest.pending_request.id }),
-    200
-  )
-  const lastStart = (await controller('start', {
-    worker_name: 'ExternalProbe',
-    operation_id: 'after-queued-disconnect-start',
-  })) as { run_id: string }
-  runs.set(externalMember.id, lastStart.run_id)
-  await team(
-    externalMember.id,
-    'message',
-    {
-      dispatch_id: externalTask.dispatch_id,
-      kind: 'answer',
-      recipient: 'orchestrator',
-      reply_to: queuedHistoricalQuestion.message.id,
-      text: 'must not revive retired same-thread inquiry',
-    },
-    409
-  )
-  pass(
-    'disconnect retires queued historical question without forcing startup; same-thread rebind cannot revive it'
-  )
-  const retiredReportTask = (await controller('send', {
-    worker_name: 'ExternalProbe',
-    text: 'finish before question read',
-    operation_id: 'retired-report-send',
-  })) as { dispatch_id: string }
-  await outputHas(externalMember.id, retiredReportTask.dispatch_id)
-  const unreadBeforeReport = await json<{ message: { id: string } }>(
-    await message(
-      externalMember.id,
-      retiredReportTask.dispatch_id,
-      'question',
-      'Question retired by own final report',
-      { recipient: 'orchestrator' }
-    )
-  )
-  await cli(externalMember.id, [
-    'report',
-    'Final result replaces pending question',
-    '--dispatch',
-    retiredReportTask.dispatch_id,
-  ])
-  const retirementReports = (await controller('read_reports')) as Receipts
-  assert.ok(
-    retirementReports.reports.some(
-      (item) =>
-        item.dispatch_id === retiredReportTask.dispatch_id && item.kind === 'dispatch_result'
-    )
-  )
-  assert.ok(
-    !retirementReports.reports.some((item) => item.message?.id === unreadBeforeReport.message.id)
-  )
-  await expectStatus(
-    await fetch(`${base()}/api/workspaces/${workspaceId}/workers/${externalMember.id}`, {
-      method: 'DELETE',
-      headers: { cookie },
-      signal: AbortSignal.timeout(15000),
-    }),
-    409
-  )
-  assert.ok(
-    runtime.store.listWorkers(workspaceId).some((worker) => worker.id === externalMember.id)
-  )
-  await controller('ack_reports', { report_ids: retirementReports.reports.map((item) => item.id) })
-  const retiredCancelTask = (await controller('send', {
-    worker_name: 'ExternalProbe',
-    text: 'cancel before question read',
-    operation_id: 'retired-cancel-send',
-  })) as { dispatch_id: string }
-  await outputHas(externalMember.id, retiredCancelTask.dispatch_id)
-  const unreadBeforeCancel = await json<{ message: { id: string } }>(
-    await message(
-      externalMember.id,
-      retiredCancelTask.dispatch_id,
-      'question',
-      'Question retired by cancellation',
-      { recipient: 'orchestrator' }
-    )
-  )
-  await controller('cancel', {
-    dispatch_id: retiredCancelTask.dispatch_id,
-    reason: 'retire unread inquiry',
-    operation_id: 'retired-cancel',
-  })
-  await outputHas(externalMember.id, 'retire unread inquiry')
-  const cancellationReports = (await controller('read_reports')) as Receipts
-  assert.ok(
-    !cancellationReports.reports.some((item) => item.message?.id === unreadBeforeCancel.message.id)
-  )
-  await controller('ack_reports', {
-    report_ids: cancellationReports.reports.map((item) => item.id),
-  })
-  assert.equal(((await controller('read_reports')) as Receipts).pending_reports, 0)
-  await expectStatus(
-    await fetch(`${base()}/api/workspaces/${workspaceId}/workers/${externalMember.id}`, {
-      method: 'DELETE',
-      headers: { cookie },
-      signal: AbortSignal.timeout(15000),
-    }),
-    204
-  )
-  assert.deepEqual(runtime.store.listWorkers(workspaceId), [])
-  pass(
-    'unread questions retired by report/cancel do not block member deletion after terminal receipt acknowledgement'
-  )
   const receipt = {
     outcome: 'passed',
     checks: passed,

@@ -30,17 +30,6 @@ export const authorizeDispatchMessage = (
     throw new BadRequestError('Invalid recipient')
   const recipientAgentId =
     input.recipient === 'orchestrator' ? `${workspaceId}:orchestrator` : target.toAgentId
-  const binding = ports.messages.controllerBinding(workspaceId)
-  if (
-    binding.external &&
-    !binding.threadId &&
-    (fromAgentId === `${workspaceId}:orchestrator` ||
-      (recipientAgentId === `${workspaceId}:orchestrator` && input.kind !== 'progress'))
-  ) {
-    throw new ConflictError(
-      'No Codex App controller is connected. Connect and confirm a controller before sending task messages. Do not create or close another responsibility to bypass this.'
-    )
-  }
   if (input.kind === 'progress' && input.recipient !== 'orchestrator')
     throw new BadRequestError('Progress is recorded for the orchestrator; use --to orchestrator')
   const sourceId =
@@ -65,14 +54,8 @@ export const authorizeDispatchMessage = (
       throw new ForbiddenError('Answer must reference a question addressed to you')
     if (reply.deliveryState === 'cancelled')
       throw new ConflictError(
-        'This question was retired. Ask the current controller for a new question; do not answer or reopen the retired one.'
+        'This question was retired. Ask the sender for a new question; do not answer or reopen the retired one.'
       )
-    const questionThread = ports.messages.messageControllerThread(workspaceId, reply.id)
-    if (questionThread && questionThread !== binding.threadId) {
-      throw new ConflictError(
-        'The controller that asked this question is no longer connected. Do not reroute the answer; the current controller must ask a new question.'
-      )
-    }
     const replyTarget = ports.getDispatch(workspaceId, reply.dispatchId)
     if (!replyTarget || dispatchRoot(replyTarget) !== dispatchRoot(target))
       throw new ForbiddenError('Question belongs to another collaboration')

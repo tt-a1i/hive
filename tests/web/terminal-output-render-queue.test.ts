@@ -11,7 +11,7 @@ afterEach(() => {
 })
 
 describe('terminal output render queue', () => {
-  test('a geometry barrier waits for the native parser beyond the byte ACK timeout', async () => {
+  test('a geometry barrier and byte ACK wait for the native parser', async () => {
     vi.useFakeTimers()
     const terminal = new headlessModule.Terminal({ cols: 6, rows: 3, allowProposedApi: true })
     let releaseParser!: (handled: boolean) => void
@@ -27,7 +27,7 @@ describe('terminal output render queue', () => {
     })
     const acks: number[] = []
     const queue = createTerminalOutputRenderQueue({
-      canRender: () => true,
+      onOverflow: () => {},
       write: (chunk, callback) => terminal.write(chunk, callback),
       resize: (cols, rows, callback) =>
         terminal.write('', () => {
@@ -41,7 +41,7 @@ describe('terminal output render queue', () => {
       queue.enqueue('\r\nNEW', 5, (bytes) => acks.push(bytes))
       await vi.advanceTimersByTimeAsync(3100)
       expect(parserBlocked).toBe(true)
-      expect(acks).toEqual([9])
+      expect(acks).toEqual([])
       expect(terminal.cols).toBe(6)
       expect(terminal.buffer.active.getLine(0)?.translateToString(true)).toBe('')
       releaseParser(true)
@@ -61,7 +61,7 @@ describe('terminal output render queue', () => {
     const applied: string[] = []
     let finishWrite: (() => void) | undefined
     const queue = createTerminalOutputRenderQueue({
-      canRender: () => true,
+      onOverflow: () => {},
       write: (chunk, callback) => {
         applied.push(chunk)
         finishWrite = callback
@@ -81,57 +81,55 @@ describe('terminal output render queue', () => {
     queue.dispose()
   })
 
-  test('acks hidden output immediately and renders it after visibility returns', () => {
-    let renderable = false
+  test('parses parked output and acknowledges only after the write completes', () => {
+    let complete!: () => void
     const writes: string[] = []
     const acks: number[] = []
     const queue = createTerminalOutputRenderQueue({
-      canRender: () => renderable,
+      onOverflow: () => {},
       write: (chunk, callback) => {
         writes.push(chunk)
-        callback()
+        complete = callback
       },
     })
-
     queue.enqueue('hidden', 6, (bytes) => acks.push(bytes))
-
-    expect(writes).toEqual([])
-    expect(acks).toEqual([6])
-
-    renderable = true
-    queue.flush()
-
     expect(writes).toEqual(['hidden'])
+    expect(acks).toEqual([])
+    complete()
     expect(acks).toEqual([6])
-
     queue.dispose()
   })
 
-  test('acks and releases the queue when xterm write never calls back', () => {
+  test('bounds blocked output and asks for a new snapshot without acknowledging it', () => {
+    const acks: number[] = []
+    let overflows = 0
+    const queue = createTerminalOutputRenderQueue({
+      onOverflow: () => {
+        overflows++
+      },
+      write: () => {},
+    })
+    const acknowledge = (bytes: number) => acks.push(bytes)
+    queue.enqueue('in flight', 9, acknowledge)
+    for (let index = 0; index < 300; index++) queue.enqueue('x'.repeat(1024), 1024, acknowledge)
+    expect(overflows).toBe(1)
+    expect(acks).toEqual([])
+    queue.dispose()
+  })
+  test('recovers a stalled parser through a fresh snapshot without false acknowledgement', () => {
     vi.useFakeTimers()
-    vi.setSystemTime(0)
-    const writes: string[] = []
+    let overflows = 0
     const acks: number[] = []
     const queue = createTerminalOutputRenderQueue({
-      canRender: () => true,
-      write: (chunk) => {
-        writes.push(chunk)
+      onOverflow: () => {
+        overflows++
       },
+      write: () => {},
     })
-
-    queue.enqueue('first', 5, (bytes) => acks.push(bytes))
-    queue.enqueue('second', 6, (bytes) => acks.push(bytes))
-
-    expect(writes).toEqual(['first'])
+    queue.enqueue('blocked', 7, (bytes) => acks.push(bytes))
+    vi.advanceTimersByTime(10_000)
+    expect(overflows).toBe(1)
     expect(acks).toEqual([])
-
-    vi.advanceTimersByTime(1000)
-    expect(writes).toEqual(['first', 'second'])
-    expect(acks).toEqual([5])
-
-    vi.advanceTimersByTime(1000)
-    expect(acks).toEqual([5, 6])
-
     queue.dispose()
   })
 })

@@ -83,6 +83,19 @@ const denyDirectoryReadOnWindows = (path: string) => {
   }
 }
 
+test.skipIf(process.platform === 'win32')(
+  'does not read a git directory outside the browse root',
+  async () => {
+    const repo = join(sandboxRoot, 'projects', 'external-gitdir')
+    mkdirSync(repo)
+    writeFileSync(join(repo, '.git'), `gitdir: ${outsideRoot}\n`)
+    writeFileSync(join(outsideRoot, 'HEAD'), 'ref: refs/heads/private\n')
+    const result = await probe(repo)
+    expect(result.current_branch).toBeNull()
+    expect(result.is_git_repository).toBe(false)
+  }
+)
+
 describe('GET /api/fs/browse', () => {
   test('defaults to the sandbox root and lists directories, hides dotdirs + files', async () => {
     const { body, status } = await browse(null)

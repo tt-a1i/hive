@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http'
 
 import type { TeamListOpenDispatchPayload } from '../shared/types.js'
 
-import { BadRequestError, PtyInactiveError } from './http-errors.js'
+import { PtyInactiveError } from './http-errors.js'
 import { autostartOrchestrator } from './orchestrator-autostart.js'
 import { seedOrchestratorLaunchConfig } from './orchestrator-launch.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
@@ -63,26 +63,18 @@ export const workspaceRoutes: RouteDefinition[] = [
     const body = await readJsonBody<CreateWorkspaceBody>(request)
     const startupCommand = typeof body.startup_command === 'string' ? body.startup_command : null
     const workspacePath = validateWorkspacePath(body.path)
-    if (
-      body.controller_mode !== undefined &&
-      body.controller_mode !== 'internal' &&
-      body.controller_mode !== 'codex_app'
-    )
-      throw new BadRequestError('Invalid controller_mode')
-    const workspace = store.createWorkspace(workspacePath, body.name, body.controller_mode)
+    const workspace = store.createWorkspace(workspacePath, body.name)
     const language = resolveWorkspaceUiLanguage(store.settings, workspace.id, body.ui_language)
     writeWorkspaceUiLanguage(store.settings, workspace.id, language)
-    if (workspace.controller_mode !== 'codex_app')
-      seedOrchestratorLaunchConfig(
-        store,
-        store.settings,
-        workspace.id,
-        body.command_preset_id ?? null,
-        startupCommand
-      )
+    seedOrchestratorLaunchConfig(
+      store,
+      store.settings,
+      workspace.id,
+      body.command_preset_id ?? null,
+      startupCommand
+    )
 
-    const autostart =
-      workspace.controller_mode !== 'codex_app' && body.autostart_orchestrator !== false
+    const autostart = body.autostart_orchestrator !== false
     if (!autostart) {
       sendJson(response, 201, {
         ...workspace,

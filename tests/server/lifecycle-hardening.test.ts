@@ -628,4 +628,31 @@ describe('lifecycle hardening (R2.1 / R2.2 / R2.3) — real PTY', () => {
       if (childPid && isProcessAlive(childPid)) process.kill(childPid, 'SIGKILL')
     }
   })
+  test('retains an exited terminal until replacement and releases deleted worker runs', async () => {
+    const { dataDir, workspacePath } = prepareWorkspace()
+    const manager = createAgentManager()
+    const store = createRuntimeStore({ agentManager: manager, dataDir })
+    const workspace = store.createWorkspace(workspacePath, 'Alpha')
+    const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    store.configureAgentLaunch(workspace.id, worker.id, {
+      command: process.execPath,
+      args: ['-e', "console.log('RUN_READY'); setInterval(() => {}, 1000)"],
+    })
+    try {
+      const first = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+      await waitFor(() => expect(store.getLiveRun(first.runId).output).toContain('RUN_READY'))
+      store.stopAgentRun(first.runId)
+      expect(await store.waitForRunExit(first.runId, 5000)).toBe(true)
+      expect(store.getLiveRun(first.runId).output).toContain('RUN_READY')
+      const second = await store.startAgent(workspace.id, worker.id, { hivePort: '4010' })
+      await waitFor(() => expect(store.findLiveRun(first.runId)).toBeUndefined())
+      expect(() => manager.getRun(first.runId)).toThrow()
+      await waitFor(() => expect(store.getLiveRun(second.runId).output).toContain('RUN_READY'))
+      store.deleteWorker(workspace.id, worker.id)
+      await waitFor(() => expect(store.findLiveRun(second.runId)).toBeUndefined())
+      expect(() => manager.getRun(second.runId)).toThrow()
+    } finally {
+      await store.close()
+    }
+  })
 })

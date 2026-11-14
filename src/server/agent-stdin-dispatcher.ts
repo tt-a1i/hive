@@ -1,3 +1,5 @@
+import type { InboxMessageMetadata } from './agent-inbox.js'
+import { type AgentInbox, createAgentInbox } from './agent-inbox.js'
 import type { AgentManager } from './agent-manager.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import type { LiveAgentRun } from './agent-runtime-types.js'
@@ -8,12 +10,6 @@ import { buildOrchestratorReminderTail, buildWorkerReminderTail } from './hive-t
 import { PtyInactiveError } from './http-errors.js'
 import type { LiveRunRegistry } from './live-run-registry.js'
 import { createImmediateInteractiveInputWriter } from './post-start-input-writer.js'
-import {
-  buildDispatchMemoryDigestSafely,
-  logMemoryDigestInjection,
-  rollbackMemoryDigestInjection,
-  type TeamMemoryInjectionService,
-} from './team-memory-injection.js'
 
 interface AgentStdinDispatcherInput {
   agentManager: AgentManager | undefined
@@ -21,7 +17,7 @@ interface AgentStdinDispatcherInput {
   getWorkspaceId: (agentId: string) => string | undefined
   registry: LiveRunRegistry
   syncRun: (run: LiveAgentRun) => LiveAgentRun
-  memoryInjection?: TeamMemoryInjectionService
+  inbox?: AgentInbox
   /** Live flags retained for payload API compatibility. Optional; omitted → all off. */
   getFlags?: () => FeatureFlags
 }
@@ -78,7 +74,6 @@ export const buildWorkerDispatchPayload = (
   _workerDescription: string,
   dispatchId: string,
   text: string,
-  memoryDigest?: string | null,
   requiredSeenSeq = 0
 ): string =>
   [
@@ -96,7 +91,6 @@ export const buildWorkerDispatchPayload = (
       : []),
     formatRequiredSeenSeqAdvice(escapeHiveEnvelopeText(dispatchId), requiredSeenSeq),
     '',
-    ...(memoryDigest ? [memoryDigest, ''] : []),
     'Task:',
     escapeHiveEnvelopeText(text),
     '</hive-message>',
@@ -133,7 +127,7 @@ export const createAgentStdinDispatcher = ({
   getWorkspaceId,
   registry,
   syncRun,
-  memoryInjection,
+  inbox = createAgentInbox(),
   getFlags,
 }: AgentStdinDispatcherInput) => {
   const flags = () => getFlags?.() ?? FEATURE_FLAGS_ALL_OFF
@@ -159,7 +153,12 @@ export const createAgentStdinDispatcher = ({
   const resolveActiveRun = (workspaceId: string, agentId: string) =>
     registry
       .list()
-      .filter((item) => item.agentId === agentId && getWorkspaceId(item.agentId) === workspaceId)
+      .filter(
+        (item) =>
+          !item.userStopped &&
+          item.agentId === agentId &&
+          getWorkspaceId(item.agentId) === workspaceId
+      )
       .sort((left, right) => right.startedAt - left.startedAt)
       .find((item) => {
         const status = syncRun(item).status
@@ -173,8 +172,14 @@ export const createAgentStdinDispatcher = ({
   const prepareWrite = (
     workspaceId: string,
     agentId: string,
-    text: string,
-    input: { requireActiveRun?: boolean; beforeWrite?: () => boolean }
+    text: string | (() => string | undefined),
+    input: {
+      requireActiveRun?: boolean
+      beforeWrite?: () => boolean
+      raw?: boolean
+      onWrittenBytes?: (bytes: number) => void
+      metadata?: InboxMessageMetadata | (() => InboxMessageMetadata)
+    }
   ): (() => Promise<void>) => {
     if (!resolveActiveRun(workspaceId, agentId)) {
       if (input.requireActiveRun) {
@@ -194,6 +199,16 @@ export const createAgentStdinDispatcher = ({
         return run.postStartInputReady.then(() => writeWhenReady(run.runId))
       }
       if (input.beforeWrite?.() === false) return Promise.resolve()
+      const body = typeof text === 'function' ? text() : text
+      if (body === undefined) return Promise.resolve()
+      const payload = input.raw
+        ? body
+        : inbox.prepare(
+            workspaceId,
+            body,
+            typeof input.metadata === 'function' ? input.metadata() : input.metadata
+          )
+      const written = () => input.onWrittenBytes?.(utf8ByteLength(payload))
       try {
         const config = getLaunchConfig(workspaceId, agentId)
         if (agentManager && config) {
@@ -201,12 +216,15 @@ export const createAgentStdinDispatcher = ({
             createImmediateInteractiveInputWriter(
               agentManager,
               config.interactiveCommand ?? config.command
-            )(run.runId, text).catch((error) => {
-              throw new PtyInactiveError(error instanceof Error ? error.message : String(error))
-            }) ?? Promise.resolve()
+            )(run.runId, payload)
+              .then(written)
+              .catch((error) => {
+                throw new PtyInactiveError(error instanceof Error ? error.message : String(error))
+              }) ?? Promise.resolve()
           )
         }
-        agentManager?.writeInput(run.runId, text)
+        agentManager?.writeInput(run.runId, payload)
+        written()
         return Promise.resolve()
       } catch (error) {
         throw new PtyInactiveError(error instanceof Error ? error.message : String(error))
@@ -250,8 +268,14 @@ export const createAgentStdinDispatcher = ({
   const writeToActiveAgentRun = (
     workspaceId: string,
     agentId: string,
-    text: string,
-    input: { requireActiveRun?: boolean; beforeWrite?: () => boolean } = {}
+    text: string | (() => string | undefined),
+    input: {
+      requireActiveRun?: boolean
+      beforeWrite?: () => boolean
+      raw?: boolean
+      onWrittenBytes?: (bytes: number) => void
+      metadata?: InboxMessageMetadata | (() => InboxMessageMetadata)
+    } = {}
   ): Promise<void> => {
     const thunk = prepareWrite(workspaceId, agentId, text, input)
     const chain = getChain(agentId)
@@ -286,7 +310,10 @@ export const createAgentStdinDispatcher = ({
       input: { requireActiveRun?: boolean } = {}
     ): Promise<void> {
       const payload = buildOrchestratorStatusPayload(workerName, text, artifacts, flags())
-      return writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, payload, input)
+      return writeToActiveAgentRun(workspaceId, `${workspaceId}:orchestrator`, payload, {
+        ...input,
+        metadata: { kind: 'status' },
+      })
     },
     writeSendPrompt(
       workspaceId: string,
@@ -301,55 +328,37 @@ export const createAgentStdinDispatcher = ({
       if (!resolveActiveRun(workspaceId, workerId)) {
         throw new PtyInactiveError(`No active run for agent: ${workerId}`)
       }
-      const memoryDigest = buildDispatchMemoryDigestSafely({
-        memoryInjection,
-        taskText: text,
-        workerDescription,
-        workspaceId,
-      })
-      const injectionIds = logMemoryDigestInjection({
-        agentId: workerId,
-        contextType: 'dispatch',
-        dispatchId,
-        memoryDigest,
-        memoryInjection,
-        workspaceId,
-      })
-      const rollback = () =>
-        rollbackMemoryDigestInjection({
-          injectionIds,
-          memoryInjection,
-        })
-      const payload = buildWorkerDispatchPayload(
+      const body = buildWorkerDispatchPayload(
         fromAgentName,
         workerDescription,
         dispatchId,
         text,
-        injectionIds ? memoryDigest?.text : null,
         requiredSeenSeq
       )
-      try {
-        let written = false
-        const write = writeToActiveAgentRun(workspaceId, workerId, payload, {
-          requireActiveRun: true,
-          beforeWrite: () => {
-            if (input.beforeWrite?.() === false) return false
-            written = true
-            return true
-          },
+      let payloadBytes = 0
+      const payload = () => {
+        const prepared = inbox.prepare(workspaceId, body, {
+          kind: 'dispatch',
+          dispatchIds: [dispatchId],
         })
-          .then(() => {
-            if (!written) rollback()
-            return written
-          })
-          .catch((error) => {
-            rollback()
-            throw error
-          })
-        return { payloadBytes: utf8ByteLength(payload), write }
-      } catch (error) {
-        rollback()
-        throw error
+        payloadBytes = utf8ByteLength(prepared)
+        return prepared
+      }
+      let written = false
+      const write = writeToActiveAgentRun(workspaceId, workerId, payload, {
+        requireActiveRun: true,
+        raw: true,
+        beforeWrite: () => {
+          if (input.beforeWrite?.() === false) return false
+          written = true
+          return true
+        },
+      }).then(() => written)
+      return {
+        get payloadBytes() {
+          return payloadBytes
+        },
+        write,
       }
     },
     writeCancelPrompt(
@@ -363,7 +372,7 @@ export const createAgentStdinDispatcher = ({
         workspaceId,
         workerId,
         buildWorkerCancelPayload(dispatchId, reason),
-        input
+        { ...input, metadata: { kind: 'cancel', dispatchIds: [dispatchId] } }
       )
     },
     writeUserInputPrompt(workspaceId: string, text: string) {
@@ -371,7 +380,8 @@ export const createAgentStdinDispatcher = ({
         writeToActiveAgentRun(
           workspaceId,
           `${workspaceId}:orchestrator`,
-          buildOrchestratorUserInputPayload(text, flags())
+          buildOrchestratorUserInputPayload(text, flags()),
+          { raw: true }
         )
       )
     },
@@ -384,7 +394,7 @@ export const createAgentStdinDispatcher = ({
         workspaceId,
         `${workspaceId}:orchestrator`,
         buildOrchestratorUserInputPayload(text, flags()),
-        input
+        { ...input, raw: true }
       )
     },
     /** Generic: deliver an opaque text block to a specific agent's PTY.
@@ -398,8 +408,13 @@ export const createAgentStdinDispatcher = ({
     deliverSystemMessageToAgent(
       workspaceId: string,
       agentId: string,
-      text: string,
-      input: { requireActiveRun?: boolean; beforeWrite?: () => boolean } = {}
+      text: string | (() => string | undefined),
+      input: {
+        requireActiveRun?: boolean
+        beforeWrite?: () => boolean
+        onWrittenBytes?: (bytes: number) => void
+        metadata?: InboxMessageMetadata | (() => InboxMessageMetadata)
+      } = {}
     ): Promise<void> {
       return writeToActiveAgentRun(workspaceId, agentId, text, input)
     },

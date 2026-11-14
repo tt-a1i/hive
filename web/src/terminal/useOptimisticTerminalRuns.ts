@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { TeamListItem } from '../../../src/shared/types.js'
 import { isWorkspaceShellRun, type TerminalInputProfile, type TerminalRunSummary } from '../api.js'
 
-interface OptimisticRunInput {
+export interface OptimisticRunInput {
   agentId: string
   agentName: string
   runId: string

@@ -1,3 +1,5 @@
+import { resolveStartupCommandLaunchConfig } from './agent-launch-resolver.js'
+import { BadRequestError } from './http-errors.js'
 import { getRequiredParam, readJsonBody, route, sendJson } from './route-helpers.js'
 import type { ConfigureAgentLaunchBody, RouteDefinition } from './route-types.js'
 import { requireUiTokenFromRequest } from './ui-auth-helpers.js'
@@ -79,6 +81,42 @@ export const runtimeRoutes: RouteDefinition[] = [
     }
   ),
   route(
+    'GET',
+    '/api/workspaces/:workspaceId/agents/:agentId/config',
+    ({ params, request, response, store }) => {
+      const workspaceId = getRequiredParam(
+        response,
+        params,
+        'workspaceId',
+        'Workspace id and agent id are required'
+      )
+      const agentId = getRequiredParam(
+        response,
+        params,
+        'agentId',
+        'Workspace id and agent id are required'
+      )
+      if (!workspaceId || !agentId) return
+      requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
+      store.getAgent(workspaceId, agentId)
+      const config = store.peekAgentLaunchConfig(workspaceId, agentId)
+      if (!config) {
+        sendJson(response, 404, { error: 'Agent launch config not found' })
+        return
+      }
+      sendJson(response, 200, {
+        command: config.command,
+        args: config.args ?? [],
+        command_preset_id: config.commandPresetId ?? null,
+        cwd: config.cwd ?? null,
+        interactive_command: config.interactiveCommand ?? null,
+        preset_augmentation_disabled: config.presetAugmentationDisabled ?? false,
+        resume_args_template: config.resumeArgsTemplate ?? null,
+        session_id_capture: config.sessionIdCapture ?? null,
+      })
+    }
+  ),
+  route(
     'POST',
     '/api/workspaces/:workspaceId/agents/:agentId/config',
     async ({ params, request, response, store }) => {
@@ -101,11 +139,35 @@ export const runtimeRoutes: RouteDefinition[] = [
       requireUiTokenFromRequest(request, store.validateUiToken, store.authorizeRemoteTunnelRequest)
 
       const body = await readJsonBody<ConfigureAgentLaunchBody>(request)
-      store.configureAgentLaunch(workspaceId, agentId, {
-        command: body.command,
-        commandPresetId: body.command_preset_id ?? null,
-        ...(body.args ? { args: body.args } : {}),
-      })
+      if (body.startup_command !== undefined) {
+        if (
+          typeof body.startup_command !== 'string' ||
+          body.command !== undefined ||
+          body.command_preset_id != null
+        )
+          throw new BadRequestError('Invalid startup command')
+        const resolved = resolveStartupCommandLaunchConfig(store.settings, body.startup_command)
+        if (!resolved) throw new BadRequestError('Startup command must not be empty')
+        store.configureAgentLaunch(workspaceId, agentId, resolved)
+      } else {
+        if (
+          typeof body.command !== 'string' ||
+          !body.command.trim() ||
+          (body.args !== undefined &&
+            (!Array.isArray(body.args) || body.args.some((arg) => typeof arg !== 'string')))
+        )
+          throw new BadRequestError('Invalid agent command')
+        const previous = store.peekAgentLaunchConfig(workspaceId, agentId)
+        const presetId = body.command_preset_id ?? null
+        const same =
+          previous?.command === body.command && (previous.commandPresetId ?? null) === presetId
+        store.configureAgentLaunch(workspaceId, agentId, {
+          ...(same ? previous : {}),
+          command: body.command,
+          commandPresetId: presetId,
+          ...(body.args ? { args: body.args } : {}),
+        })
+      }
       response.statusCode = 204
       response.end()
     }

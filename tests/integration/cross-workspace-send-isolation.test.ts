@@ -6,8 +6,10 @@ import { afterEach, describe, expect, test } from 'vitest'
 
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 
 const tempDirs: string[] = []
+const originalDataDir = process.env.HIVE_DATA_DIR
 
 const waitFor = async (
   assertion: () => void | Promise<void>,
@@ -57,11 +59,17 @@ describe('cross workspace send isolation', () => {
 
       const workerScriptA = join(workspaceAPath, 'echo-a.js')
       const workerScriptB = join(workspaceBPath, 'echo-b.js')
+      const receivedA = join(workspaceAPath, 'received.txt')
       const receivedB = join(workspaceBPath, 'received.txt')
+      writeFileSync(receivedA, '')
       writeFileSync(receivedB, '')
       writeFileSync(
         workerScriptA,
-        "process.stdin.setEncoding('utf8')\nprocess.stdin.on('data', c => process.stdout.write('A:' + c))\n"
+        [
+          "const { appendFileSync } = require('node:fs')",
+          'process.stdin.setRawMode(true)',
+          `process.stdin.on('data', c => { appendFileSync(${JSON.stringify(receivedA)}, c); process.stdout.write('A:' + c) })`,
+        ].join('\n')
       )
       writeFileSync(
         workerScriptB,
@@ -114,6 +122,7 @@ describe('cross workspace send isolation', () => {
       await config(a.id, workerA.id, workerScriptA)
       await config(b.id, workerB.id, workerScriptB)
       await config(a.id, `${a.id}:orchestrator`, workerScriptA)
+      await config(b.id, `${b.id}:orchestrator`, workerScriptB)
 
       const start = async (workspaceId: string, agentId: string) => {
         const response = await fetch(
@@ -131,6 +140,7 @@ describe('cross workspace send isolation', () => {
       const runA = await start(a.id, workerA.id)
       const runB = await start(b.id, workerB.id)
       await start(a.id, `${a.id}:orchestrator`)
+      await start(b.id, `${b.id}:orchestrator`)
       await hive.store.getActiveRunByAgentId(b.id, workerB.id)?.postStartInputReady
       await waitFor(() => {
         expect(hive.store.getActiveRunByAgentId(b.id, workerB.id)?.output).toContain(
@@ -150,6 +160,19 @@ describe('cross workspace send isolation', () => {
         }),
       })
       expect(sent.ok).toBe(true)
+      const ownTaskB = 'B_WORKSPACE_OWN_TASK'
+      const sentB = await fetch(`${baseUrl}/api/team/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          project_id: b.id,
+          from_agent_id: `${b.id}:orchestrator`,
+          token: hive.store.peekAgentToken(`${b.id}:orchestrator`),
+          to: 'Alice',
+          text: ownTaskB,
+        }),
+      })
+      expect(sentB.status).toBe(202)
 
       await waitFor(
         async () => {
@@ -163,24 +186,35 @@ describe('cross workspace send isolation', () => {
           const bodyB = (await responseB.json()) as { output: string }
 
           expect(bodyA.output).toContain('A:')
-          expect(bodyA.output).toContain('@Orchestrator')
-          expect(bodyA.output).toContain('实现登录')
-          expect(bodyB.output).not.toContain('实现登录')
+          expect(expandInboxReferences(bodyA.output)).toContain('@Orchestrator')
+          expect(expandInboxReferences(bodyA.output)).toContain('实现登录')
+          expect(bodyB.output).toContain('B_RECEIVER_READY')
+          expect(expandInboxReferences(readFileSync(receivedA, 'utf8'))).toContain('实现登录')
+          expect(expandInboxReferences(readFileSync(receivedB, 'utf8'))).toContain(ownTaskB)
         },
         2000,
         25
       )
       // Only assert absence after B has consumed a subsequent input barrier.
       // Raw child receipts are unaffected by terminal wrapping/repaints.
-      hive.store.writeRunInput(runB.runId, 'ISOLATION_BARRIER\r')
+      hive.store.writeRunInput(runA.runId, 'ISOLATION_A_BARRIER\r')
+      hive.store.writeRunInput(runB.runId, 'ISOLATION_B_BARRIER\r')
       await waitFor(() => {
-        const received = readFileSync(receivedB, 'utf8')
-        expect(received).toContain('ISOLATION_BARRIER')
-        expect(received).not.toContain('实现登录')
+        const rawA = readFileSync(receivedA, 'utf8')
+        const rawB = readFileSync(receivedB, 'utf8')
+        expect(rawA).toContain('ISOLATION_A_BARRIER')
+        expect(rawB).toContain('ISOLATION_B_BARRIER')
+        const deliveredA = expandInboxReferences(rawA)
+        const deliveredB = expandInboxReferences(rawB)
+        expect(deliveredA).toContain('实现登录')
+        expect(deliveredB).toContain(ownTaskB)
+        expect(deliveredA).not.toContain(ownTaskB)
+        expect(deliveredB).not.toContain('实现登录')
       })
     } finally {
-      delete process.env.HIVE_DATA_DIR
       await hive.close()
+      if (originalDataDir === undefined) delete process.env.HIVE_DATA_DIR
+      else process.env.HIVE_DATA_DIR = originalDataDir
     }
   }, 15_000)
 })

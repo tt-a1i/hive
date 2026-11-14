@@ -118,10 +118,10 @@ const getTaskSectionTitle = (agent: AgentSummary) =>
 export const buildRecoverySummary = ({
   agent,
   openDispatches,
+  allDispatches,
   dispatchMessages = [],
   actionableDispatchMessages = [],
   resumedSession = false,
-  memoryDigest,
   messages,
   tasksContent,
   workers,
@@ -130,11 +130,11 @@ export const buildRecoverySummary = ({
 }: {
   agent: AgentSummary
   allTaskMessages?: RecoveryMessage[]
+  allDispatches?: DispatchRecord[]
   openDispatches?: DispatchRecord[]
   dispatchMessages?: DispatchMessageRecord[]
   actionableDispatchMessages?: DispatchMessageRecord[]
   resumedSession?: boolean
-  memoryDigest?: string | null | undefined
   messages: RecoveryMessage[]
   tasksContent: string
   workers: AgentSummary[]
@@ -157,6 +157,23 @@ export const buildRecoverySummary = ({
       getTaskSectionTitle(agent),
       ...formatTaskEvents(messages, agent),
       '',
+      ...(allDispatches
+        ? [
+            '## Recent dispatch history (use team recall for older history)',
+            ...allDispatches
+              .filter(
+                (item) =>
+                  agent.role === 'orchestrator' ||
+                  item.toAgentId === agent.id ||
+                  item.fromAgentId === agent.id
+              )
+              .map(
+                (item) =>
+                  `- dispatch ${item.id} (${item.status}, owner ${escapeHiveEnvelopeText(item.toAgentId)}): ${escapeHiveEnvelopeText(item.text.slice(0, 500))}${item.reportText ? `; report: ${escapeHiveEnvelopeText(item.reportText.slice(0, 500))}` : ''}`
+              ),
+            '',
+          ]
+        : []),
       '## Open tasks (dispatch ledger)',
       ...formatOpenTasks(openDispatches, agent),
       ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
@@ -168,7 +185,6 @@ export const buildRecoverySummary = ({
       '## Active members',
       ...formatWorkers(workers),
       '',
-      ...(memoryDigest ? ['## Hive memory digest', memoryDigest, ''] : []),
       agent.role === 'orchestrator' ? '## Hive member dispatch rules' : '## Hive member boundaries',
       ...getHiveTeamRules(agent, flags),
       '',

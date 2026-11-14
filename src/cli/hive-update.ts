@@ -373,6 +373,7 @@ export const runHiveUpdateCommand = async (
   const displayCommand = formatUpdateCommand('npm', args, platform)
   console.log(`Running: ${displayCommand}`)
 
+  const previousVersion = readPackageVersion()
   const result = await run(command, args)
 
   if (result.spawnError) {
@@ -390,7 +391,7 @@ export const runHiveUpdateCommand = async (
   }
 
   const packageRoot = resolveUpdatedInstallTarget(findPackageRoot(moduleUrl), prefix)
-  const recovery = buildVersionLockedInstallCommand(readPackageVersion(), updatePlan, platform)
+  const recovery = buildVersionLockedInstallCommand(previousVersion, updatePlan, platform)
   const printRecovery = () => {
     if (recovery) console.error(`Reinstall the same version with: ${recovery}`)
     else {

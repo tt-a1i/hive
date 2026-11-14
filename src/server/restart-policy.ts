@@ -1,6 +1,7 @@
 import type { WorkspaceSummary } from '../shared/types.js'
 import type { AgentLaunchConfigInput } from './agent-run-store.js'
 import { FEATURE_FLAGS_ALL_OFF } from './feature-flags.js'
+import { isResumeLaunchConfig } from './preset-launch-support.js'
 import { buildRecoverySummary } from './recovery-summary.js'
 import {
   findPreviousRun,
@@ -8,11 +9,6 @@ import {
   writeSystemMessage,
 } from './restart-policy-support.js'
 import { createSystemRecoverySummaryMessage } from './runtime-message-builders.js'
-import {
-  buildMemoryDigestSafely,
-  logMemoryDigestInjection,
-  rollbackMemoryDigestInjection,
-} from './team-memory-injection.js'
 
 const RECOVERY_WINDOW_MS = 60 * 60 * 1000
 
@@ -40,13 +36,15 @@ export const createNoopRestartPolicy = (): RestartPolicy => ({
 export const createRestartPolicy = ({
   deleteMessage,
   getWorkspaceSnapshot,
+  getHandover,
+  completeHandover,
+  listAllDispatches,
   insertMessage,
   listAgentRuns,
   listMessagesForRecovery,
   listOpenDispatches,
   listDispatchMessagesForRecovery,
   listActionableDispatchMessagesForRecovery,
-  memoryInjection,
   readTasks,
   getFlags,
 }: RestartPolicyInput): RestartPolicy => {
@@ -62,10 +60,11 @@ export const createRestartPolicy = ({
     },
     injectPostStartMessage({ agentId, runId, startConfig, workspace, writeToRun }) {
       const previousRun = findPreviousRun(listAgentRuns(agentId), runId)
-      if (!previousRun) return false
+      const handoverToken = getHandover?.(workspace.id, agentId)
+      if (!previousRun && !handoverToken) return false
       // Consume the marker whether or not we end up skipping, so it never
       // lingers to suppress a later genuine crash on the same run id.
-      const wasUserStopped = userStoppedRuns.delete(previousRun.runId)
+      const wasUserStopped = previousRun ? userStoppedRuns.delete(previousRun.runId) : false
 
       const snapshot = getWorkspaceSnapshot(workspace.id)
       const agent = snapshot.agents.find((item) => item.id === agentId)
@@ -83,29 +82,22 @@ export const createRestartPolicy = ({
       )
       // Stopping a process does not cancel a responsibility or retire a question.
       // A deliberate restart without outstanding protocol work can start fresh.
-      if (wasUserStopped && !ownsOpenWork && actionableDispatchMessages.length === 0) return false
+      if (
+        !handoverToken &&
+        wasUserStopped &&
+        !ownsOpenWork &&
+        actionableDispatchMessages.length === 0
+      )
+        return false
 
-      const memoryDigest = buildMemoryDigestSafely({
-        contextType: 'recovery',
-        memoryInjection,
-        workspaceId: workspace.id,
-      })
-      const injectionIds = logMemoryDigestInjection({
-        agentId,
-        contextType: 'recovery',
-        memoryDigest,
-        memoryInjection,
-        workspaceId: workspace.id,
-      })
-      const auditedMemoryDigest = injectionIds ? memoryDigest : null
       const text = buildRecoverySummary({
         agent,
-        resumedSession: Boolean(startConfig.resumedSessionId),
+        resumedSession: isResumeLaunchConfig(startConfig),
         dispatchMessages: listDispatchMessagesForRecovery?.(workspace.id) ?? [],
         actionableDispatchMessages,
         ...(openDispatches ? { openDispatches } : {}),
-        memoryDigest: auditedMemoryDigest?.text,
         messages: listMessagesForRecovery(workspace.id, Date.now() - RECOVERY_WINDOW_MS),
+        ...(handoverToken ? { allDispatches: listAllDispatches?.(workspace.id) ?? [] } : {}),
         tasksContent,
         workers,
         workspace,
@@ -118,7 +110,9 @@ export const createRestartPolicy = ({
         runId,
         text,
         writeToRun,
-        onWriteFailure: () => rollbackMemoryDigestInjection({ injectionIds, memoryInjection }),
+        ...(handoverToken
+          ? { onDelivered: () => completeHandover?.(workspace.id, agentId, handoverToken) }
+          : {}),
       })
       return true
     },

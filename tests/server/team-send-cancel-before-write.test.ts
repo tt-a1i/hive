@@ -1,11 +1,10 @@
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
-
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { inboxReaderCommonJsSource } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
 const tempDirs: string[] = []
@@ -17,6 +16,7 @@ const writeSlowAckClaude = (binDir: string) => {
   writeFileSync(
     scriptPath,
     [
+      inboxReaderCommonJsSource,
       "process.stdin.setEncoding('utf8')",
       'if (process.stdin.isTTY && process.stdin.setRawMode) process.stdin.setRawMode(true)',
       "const PASTE_END = '\\u001b[201~'",
@@ -25,6 +25,7 @@ const writeSlowAckClaude = (binDir: string) => {
       "process.stdout.write('❯ ')",
       "process.stdin.on('data', (chunk) => {",
       '  buffer += chunk',
+      '  buffer = expandReceivedInbox(buffer)',
       '  if (buffer.includes(PASTE_END) || (process.platform === "win32" && buffer.includes("</hive-message>"))) {',
       '    pasteCount += 1',
       '    const current = pasteCount',

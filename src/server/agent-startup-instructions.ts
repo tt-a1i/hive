@@ -27,12 +27,10 @@ export const buildAgentLegacyIdentityMarker = ({
 
 export const buildAgentStartupInstructions = ({
   agent,
-  memoryDigest,
   workspace,
   flags = FEATURE_FLAGS_ALL_OFF,
 }: {
   agent: AgentSummary
-  memoryDigest?: string | null | undefined
   workspace: WorkspaceSummary
   /** Live flags gate optional workflow reference. They do not grant staffing authorization. */
   flags?: FeatureFlags
@@ -51,10 +49,6 @@ export const buildAgentStartupInstructions = ({
     '',
   ]
 
-  if (memoryDigest) {
-    lines.push(memoryDigest, '')
-  }
-
   lines.push('Hive boundaries:', ...getHiveTeamRules(agent, flags).map((rule) => `- ${rule}`))
   if (agent.role !== 'orchestrator') {
     lines.push(
@@ -65,7 +59,7 @@ export const buildAgentStartupInstructions = ({
   }
   lines.push(
     '',
-    'For an assigned task with missing context, read `team guide core` or `.hive/PROTOCOL.md`; query messages using its dispatch ID. Native CLI compaction is not assumed detectable by Hive.'
+    'For an assigned task with missing context, read `team guide core`; query messages using its dispatch ID. Native CLI compaction is not assumed detectable by Hive.'
   )
 
   lines.push('', '</hive-message>', '')

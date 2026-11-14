@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import {
   listWorkflowRuns,
@@ -23,88 +23,97 @@ interface UseWorkflowsPollingResult {
   refreshSchedules: () => Promise<void>
 }
 
-// Workflows are authored + fired by the orchestrator agent, so this drawer is
-// observation-only: it polls runs (every 2s while open) and lists schedules
-// (once on open + on schedule mutations). There is no script library to fetch.
+// A visit has its own cancellation scope, including returning from A to B to A.
 export const useWorkflowsPolling = ({
   workspaceId,
   enabled,
 }: UseWorkflowsPollingArgs): UseWorkflowsPollingResult => {
-  const [runs, setRuns] = useState<WorkflowRun[]>([])
-  const [schedules, setSchedules] = useState<WorkflowSchedule[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const cancelledRef = useRef(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const fetchRuns = useCallback(async () => {
-    if (!workspaceId) return
-    try {
-      const next = await listWorkflowRuns(workspaceId)
-      if (!cancelledRef.current) setRuns(next)
-    } catch (e) {
-      if (!cancelledRef.current) setError(e instanceof Error ? e.message : String(e))
+  const scope = useMemo(() => ({ workspaceId, enabled }), [workspaceId, enabled])
+  const currentScope = useRef<typeof scope | null>(scope)
+  useLayoutEffect(() => {
+    currentScope.current = scope
+    return () => {
+      if (currentScope.current === scope) currentScope.current = null
     }
-  }, [workspaceId])
-
-  const fetchSchedules = useCallback(async () => {
-    if (!workspaceId) return
-    try {
-      const next = await listWorkflowSchedules(workspaceId)
-      if (!cancelledRef.current) setSchedules(next)
-    } catch (e) {
-      if (!cancelledRef.current) setError(e instanceof Error ? e.message : String(e))
-    }
-  }, [workspaceId])
-
-  const refresh = useCallback(async () => {
-    if (!workspaceId || !enabled) return
-    setLoading(true)
-    try {
-      await Promise.all([fetchRuns(), fetchSchedules()])
-    } finally {
-      if (!cancelledRef.current) setLoading(false)
-    }
-  }, [workspaceId, enabled, fetchRuns, fetchSchedules])
-
-  const refreshSchedules = useCallback(async () => {
-    await fetchSchedules()
-  }, [fetchSchedules])
+  }, [scope])
+  const [state, setState] = useState({
+    scope,
+    runs: [] as WorkflowRun[],
+    schedules: [] as WorkflowSchedule[],
+    error: null as string | null,
+    loading: false,
+  })
+  const actions = useRef({ refresh: async () => {}, refreshSchedules: async () => {} })
 
   useEffect(() => {
-    cancelledRef.current = false
-    if (!enabled || !workspaceId) {
-      return () => {
-        cancelledRef.current = true
-        if (timerRef.current) {
-          clearTimeout(timerRef.current)
-          timerRef.current = null
-        }
-      }
-    }
-
-    setError(null)
-    setLoading(true)
-    Promise.all([fetchRuns(), fetchSchedules()]).finally(() => {
-      if (!cancelledRef.current) setLoading(false)
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const isCurrent = () => !cancelled && currentScope.current === scope
+    setState({
+      scope,
+      runs: [],
+      schedules: [],
+      error: null,
+      loading: Boolean(enabled && workspaceId),
     })
-
-    const tick = async () => {
-      if (cancelledRef.current) return
-      await fetchRuns()
-      if (cancelledRef.current) return
-      timerRef.current = setTimeout(tick, RUN_POLL_INTERVAL_MS)
-    }
-    timerRef.current = setTimeout(tick, RUN_POLL_INTERVAL_MS)
-
-    return () => {
-      cancelledRef.current = true
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
-        timerRef.current = null
+    if (!enabled || !workspaceId) return
+    const fetchRuns = async () => {
+      try {
+        const runs = await listWorkflowRuns(workspaceId)
+        if (isCurrent()) setState((current) => ({ ...current, runs }))
+      } catch (error) {
+        if (isCurrent())
+          setState((current) => ({
+            ...current,
+            error: error instanceof Error ? error.message : String(error),
+          }))
       }
     }
-  }, [enabled, workspaceId, fetchRuns, fetchSchedules])
+    const fetchSchedules = async () => {
+      try {
+        const schedules = await listWorkflowSchedules(workspaceId)
+        if (isCurrent()) setState((current) => ({ ...current, schedules }))
+      } catch (error) {
+        if (isCurrent())
+          setState((current) => ({
+            ...current,
+            error: error instanceof Error ? error.message : String(error),
+          }))
+      }
+    }
+    const refresh = async () => {
+      if (!isCurrent()) return
+      setState((current) => ({ ...current, error: null, loading: true }))
+      await Promise.all([fetchRuns(), fetchSchedules()])
+      if (isCurrent()) setState((current) => ({ ...current, loading: false }))
+    }
+    actions.current = {
+      refresh,
+      refreshSchedules: async () => {
+        if (isCurrent()) await fetchSchedules()
+      },
+    }
+    const tick = async () => {
+      await fetchRuns()
+      if (isCurrent()) timer = setTimeout(tick, RUN_POLL_INTERVAL_MS)
+    }
+    void refresh().then(() => {
+      if (isCurrent()) timer = setTimeout(tick, RUN_POLL_INTERVAL_MS)
+    })
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [scope, enabled, workspaceId])
 
-  return { runs, schedules, error, loading, refresh, refreshSchedules }
+  const refresh = useCallback(() => actions.current.refresh(), [])
+  const refreshSchedules = useCallback(() => actions.current.refreshSchedules(), [])
+  return {
+    runs: state.scope === scope ? state.runs : [],
+    schedules: state.scope === scope ? state.schedules : [],
+    error: state.scope === scope ? state.error : null,
+    loading: state.scope === scope ? state.loading : Boolean(enabled && workspaceId),
+    refresh,
+    refreshSchedules,
+  }
 }

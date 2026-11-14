@@ -34,14 +34,14 @@ test('preserves both shutdown failures without closing SQLite ahead of its users
   const services = createRuntimeStoreServices({ dataDir })
   const lifecycle = createRuntimeStoreLifecycle({ services })
   const closeShell = services.shellRuntime.close
-  const closeExport = services.teamMemoryExport.close
+  const closeAgent = services.agentRuntime.close
   const shellFailure = new Error('injected shell failure')
-  const exportFailure = new Error('injected export failure')
+  const agentFailure = new Error('injected agent failure')
   services.shellRuntime.close = async () => {
     throw shellFailure
   }
-  services.teamMemoryExport.close = async () => {
-    throw exportFailure
+  services.agentRuntime.close = async () => {
+    throw agentFailure
   }
   try {
     const failure = await lifecycle.close().then(
@@ -49,11 +49,11 @@ test('preserves both shutdown failures without closing SQLite ahead of its users
       (error: unknown) => error
     )
     expect(failure).toBeInstanceOf(AggregateError)
-    expect((failure as AggregateError).errors).toEqual([shellFailure, exportFailure])
+    expect((failure as AggregateError).errors).toEqual([shellFailure, agentFailure])
     expect(services.db.isOpen).toBe(true)
   } finally {
     services.shellRuntime.close = closeShell
-    services.teamMemoryExport.close = closeExport
+    services.agentRuntime.close = closeAgent
     await lifecycle.close()
     removeTestPath(dataDir)
   }

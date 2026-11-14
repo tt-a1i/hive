@@ -397,7 +397,7 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
   // streamId -> deviceId binding, learned on the first successfully-opened frame for a stream.
   const streamOwner = new Map<number, string>()
 
-  const streamKey = (deviceId: string, streamId: number): string => `${deviceId} ${streamId}`
+  const streamKey = (deviceId: string, streamId: number): string => `${deviceId}\0${streamId}`
 
   // Derive a candidate DeviceState for (session, phoneConnSalt) WITHOUT caching it. Used to trial-open
   // an unbound frame against each (root × pending salt) pair; only the pair that opens gets committed
@@ -525,7 +525,7 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
     streamOwner.delete(extractStreamId(key))
   }
 
-  const extractStreamId = (key: string): number => Number(key.split(' ')[1])
+  const extractStreamId = (key: string): number => Number(key.split('\0')[1])
 
   const retirePhoneSalt = (deviceId: string, salt: Uint8Array): void => {
     const retired = retiredPhoneSalts.get(deviceId) ?? []
@@ -670,39 +670,44 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
     const headers = stampLoopbackHeaders(meta.http?.headers ?? [], ctx.loopbackSecret, deviceId)
 
     if (decision.transport === 'http') {
-      sb.http = transports.openHttp(
-        { port: ctx.loopbackPort, method: decision.method, path: decision.path, headers },
-        {
-          onHead: (head) => {
-            if (sb.closed) return
-            const safe: HttpResponseHead = {
-              status: head.status,
-              headers: sanitizeTunnelResponseHeaders(head.headers),
-            }
-            sendFrame(st, FrameKind.Data, streamId, encodeHttpHead(safe))
-          },
-          onBody: (chunk) => {
-            if (sb.closed) return
-            sendFrame(st, FrameKind.Data, streamId, encodeHttpBodyChunk(chunk))
-          },
-          onEnd: () => {
-            if (sb.closed) return
-            sb.closed = true
-            sendFrame(st, FrameKind.End, streamId, new Uint8Array(0))
-            audit.enqueue({ action: 'http', result: 'ok', endpoint: sb.path, deviceId })
-            streams.delete(key)
-            streamOwner.delete(streamId)
-          },
-          onError: () => {
-            if (sb.closed) return
-            sb.closed = true
-            sendReset(st, streamId, ResetCode.InternalError)
-            audit.enqueue({ action: 'http', result: 'error', endpoint: sb.path, deviceId })
-            streams.delete(key)
-            streamOwner.delete(streamId)
-          },
-        }
-      )
+      try {
+        sb.http = transports.openHttp(
+          { port: ctx.loopbackPort, method: decision.method, path: decision.path, headers },
+          {
+            onHead: (head) => {
+              if (sb.closed) return
+              const safe: HttpResponseHead = {
+                status: head.status,
+                headers: sanitizeTunnelResponseHeaders(head.headers),
+              }
+              sendFrame(st, FrameKind.Data, streamId, encodeHttpHead(safe))
+            },
+            onBody: (chunk) => {
+              if (sb.closed) return
+              sendFrame(st, FrameKind.Data, streamId, encodeHttpBodyChunk(chunk))
+            },
+            onEnd: () => {
+              if (sb.closed) return
+              sb.closed = true
+              sendFrame(st, FrameKind.End, streamId, new Uint8Array(0))
+              audit.enqueue({ action: 'http', result: 'ok', endpoint: sb.path, deviceId })
+              streams.delete(key)
+              streamOwner.delete(streamId)
+            },
+            onError: () => {
+              if (sb.closed) return
+              sb.closed = true
+              sendReset(st, streamId, ResetCode.InternalError)
+              audit.enqueue({ action: 'http', result: 'error', endpoint: sb.path, deviceId })
+              streams.delete(key)
+              streamOwner.delete(streamId)
+            },
+          }
+        )
+      } catch {
+        sendReset(st, streamId, ResetCode.InternalError)
+        tearDownStream(key, 'reset')
+      }
     } else {
       // The WS query (clientId/cols/rows) rode the separate decision.query field (classifyOpen keeps
       // the path bare). Reattach it onto the loopback URL so terminal-ws-server reads clientId/cols/
@@ -789,11 +794,25 @@ export const createFrameBridge = (ctx: FrameBridgeContext): FrameBridge => {
     }
 
     if (sb.transport === 'http') {
-      const chunk = decodeHttpData(plaintext)
+      let chunk: ReturnType<typeof decodeHttpData>
+      try {
+        chunk = decodeHttpData(plaintext)
+      } catch {
+        sendReset(st, streamId, ResetCode.ProtocolError)
+        tearDownStream(key, 'reset')
+        return
+      }
       if (chunk.kind === 'body') sb.http?.onData(chunk.data)
       // a 'head' on the request side is illegal; ignore.
     } else {
-      const msg = decodeWsMessage(plaintext)
+      let msg: ReturnType<typeof decodeWsMessage>
+      try {
+        msg = decodeWsMessage(plaintext)
+      } catch {
+        sendReset(st, streamId, ResetCode.ProtocolError)
+        tearDownStream(key, 'reset')
+        return
+      }
       audit.enqueue({
         action: 'ws_input',
         result: 'ok',

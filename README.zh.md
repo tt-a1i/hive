@@ -120,7 +120,7 @@ PWA 只是 UI 壳，Hive 后端仍需要在终端里跑着。如果启动 PWA �
 2. 挑一个 Orchestrator 预设。
 3. Hive 会创建 `<workspace>/.hive/tasks.md`，启动 Orchestrator 的 PTY，把内部的 `team` 命令注入这个 agent 会话。
 4. 在 Team Members 面板里添加 Worker。
-5. 跟 Orchestrator 说一声让它派活，它会用 `team send <worker-name> "<task>"` 发任务，Worker 完事后用 `team report` 回报。
+5. 跟 Orchestrator 说一声让它派活，它会用 `team send <worker-name> "<task>"` 发任务，并按需启动已配置的 Worker。Worker 遇到需要决定的问题时，用 `team ask "<问题>"` 等待答复。主控用 `team reply <问题 ID> "<答复>"` 回复，Worker 做完后用 `team report` 汇报。
 
 想试更强的自动化，可以在右上角设置里开启实验性的 **Workflow** 开关。开启后，Orchestrator 可以编写并运行多 agent workflow，把一个目标拆成 fan-out / review / test 等阶段；顶部的 **Workflows** 面板会显示运行记录、阶段结果、定时任务和停止按钮。Workflow 创建的新 agent 默认使用哪种 CLI、允许使用哪些 CLI，也可以在 Workflows 面板里配置。
 
@@ -331,26 +331,9 @@ Hive 目前处于 alpha 阶段，核心流程已可用。当前重点是继续�
   <img src="./assets/qq-group.jpg" width="240" alt="Ai Native 交流群 QQ 群二维码，群号 1098836554" />
 </p>
 
-## 在路上：跨 Agent 的长时记忆
+## 查询协作历史
 
-<p align="center">
-  <a href="https://github.com/EverMind-AI/EverOS">
-    <img src="https://avatars.githubusercontent.com/EverMind-AI" width="72" alt="EverMind / EverOS" />
-  </a>
-</p>
-
-单 agent 现在已经各有各的"记忆"了——但风格其实差很多：
-
-- **Claude Code 的 [Auto Dream](https://claudefa.st/blog/guide/mechanics/auto-dream)（俗称"做梦"）** 走 **离线批处理** 路线：`/dream` 触发（或 24h 自动），Claude 在云端把 JSONL 会话归并去重抽模式，产出新版本 memory 库给你审查再采纳——像人类的 REM 睡眠，**清醒 / 睡眠二相**。
-- **Hermes Agent** 反过来走 **嵌入式 / 在场** 路线：不睡，每 N 轮对话后台 fork 一个 sub-agent review，结果直接落进本地的 **多层记忆**——`MEMORY.md`（事实/规则）·`USER.md`（用户画像）·SQLite + FTS5（情景检索）·Honcho（第三人称表征）·`skills/`（程序性记忆）——而且 agent 允许边走边改自己的 skill 文件，记忆和能力是一回事。
-
-但 **这些都是单 agent 内部的记忆**。Hive 是多 agent 协作工作台，正在把它们打通：让整支团队 **共享一座长时记忆库**——Worker A 今天踩的坑，明天 Orchestrator 派给 Worker B 时能自动调来当上下文。
-
-第一阶段先走本地优先：Hive 用 SQLite 保存协作历史和显式团队记忆，支持 `team recall` / `team memory`、派单和恢复时的自动注入、`<workspace>/.hive/memory.md` 单向导出，以及 Dream 整理。Dream 会按 workspace 空闲和增量阈值创建维护 run，把有界协议窗口注入 Orchestrator；Orchestrator 可自己整理，或派 worker 只读评审并回报建议，最后由 Orchestrator 用 `team memory apply --run <id> --stdin` 提交去重/改写/归档/新增。每次 run 保留 diff 报告和回滚入口。
-
-下一阶段再接 **[EverOS](https://github.com/EverMind-AI/EverOS)**（[EverMind](https://evermind.ai/) 出品的开源长时记忆 OS，目前在 LoCoMo / LongMemEval / HaluMem 三个记忆 benchmark 上 SOTA）这类外部 provider。EverOS 的四层架构（Agentic / Memory / Index / API+MCP）跟 Hive 的多 PTY 协作模型很搭：每个 agent 各跑各的 CLI session，团队级的事实和模式凝在 provider，Orchestrator 派单时一并喂给 worker。
-
-进度跟踪：[#6](https://github.com/tt-a1i/hive/issues/6)——想看进度或提建议，在 issue 留 +1。
+Hive 保存工作区内的协作消息和报告。使用 `team recall` 可以搜索历史记录；引用结果前请核实可能已经变化的事实。
 
 ## 另一种形态：squad
 

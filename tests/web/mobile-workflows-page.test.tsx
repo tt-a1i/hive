@@ -7,7 +7,7 @@
 // orchestrator re-firing + the observation surface, NOT a missing button — so
 // the test asserts the controls that DO exist.
 
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import * as api from '../../web/src/api.js'
@@ -104,5 +104,33 @@ describe('mobile WorkflowsDrawer — full-screen page', () => {
     fireEvent.click(await screen.findByTestId('workflow-run-toggle-run-1'))
     await waitFor(() => expect(dispatches).toHaveBeenCalledWith('run-1'))
     expect(await screen.findByTestId('workflow-run-detail-run-1')).toBeTruthy()
+  })
+
+  test('dispatch details still show the prompt and report', async () => {
+    vi.spyOn(api, 'listWorkflowRunDispatches').mockResolvedValue([
+      {
+        id: 'dispatch-1',
+        workspaceId: 'ws-1',
+        fromAgentId: null,
+        toAgentId: 'worker-1',
+        text: 'Inspect the migration',
+        status: 'reported',
+        reportText: 'Migration verified',
+        reportedAt: 1,
+        createdAt: 1,
+        workflowRunId: 'run-1',
+        stepIndex: 1,
+        phase: null,
+        label: 'Review migration',
+      },
+    ])
+    renderWide(withI18n(<WorkflowsDrawer open onClose={vi.fn()} workspaceId="ws-1" />))
+    fireEvent.click(await screen.findByTestId('workflow-run-toggle-run-1'))
+    fireEvent.click(
+      within(await screen.findByTestId('workflow-dispatch-row-dispatch-1')).getByRole('button')
+    )
+    const detail = await screen.findByTestId('workflow-dispatch-detail-dispatch-1')
+    expect(detail).toHaveTextContent('Inspect the migration')
+    expect(detail).toHaveTextContent('Migration verified')
   })
 })

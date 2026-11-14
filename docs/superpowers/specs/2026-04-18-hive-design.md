@@ -1,6 +1,6 @@
 # Hive 设计文档
 
-> **2026-09-05 外部主控模式修订（issue #57，用户已确认）**：本文件中主控必须运行于 Hive PTY、选择主控引擎、成员通过 stdin 向主控回灌等规定，继续适用于内部模式。新建工作区可选择 Codex App 外部主控模式：App 会话为唯一运行的主控，Hive 只管理成员进程；成员仍通过原 team 协议汇报，由 Runtime 持久化后通知绑定的 App 会话。外部主控按每次 MCP 调用的宿主元数据识别，经 Hive 面板确认绑定；不得通过手填 thread ID 或复制内部 Agent token 冒充身份。外部模式不自动启动内部主控，任务/汇报未清空不得换绑。接收结果不等于验收；通知不构成新的用户授权。具体接口和验证边界见 [Codex 外部主控实施计划](../../plans/2026-09-05-codex-external-controller.md)。
+> **薄蜂巢修订**：每个工作区的 Orchestrator 和 Worker 均运行在 Hive 管理的 PTY 中。Codex CLI 可担当任一角色，成员通过 `team` 协议协作。
 
 **日期**：2026-04-18
 **状态**：Draft / Pending review
@@ -1076,7 +1076,7 @@ YOLO 模式（默认）：支持 CLI yolo flag 的 agent 启动时自动加跳�
 按时间从近到远：
 
 1. **MVP**（2-3 周）：上述 In Scope 全做完
-2. **v0.2**：MCP 工具支持（给 CC/Cursor 用更顺）；orch 主动给 user 推送（PTY 之外的通知 banner）
+2. **v0.2**：orch 主动给 user 推送（PTY 之外的通知 banner）
 3. **v0.3**：Worker 间直接消息（仍经 orch 路由，但 UI 上像点对点聊天）
 4. **v0.4**：可选 worktree 隔离（高级开关；workflow `agent({ isolation: 'worktree' })` 窄例外已落地，见 [设计决策](../../design-decisions.md)）
 5. **v1.0**：远程协作模式、模板市场、同屏多 workspace 视图

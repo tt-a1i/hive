@@ -963,14 +963,12 @@ html, body {
 }
 
 /* ── Shared drawer card / tab / section styles ─────────────────────
-   Unified visual language for Memory / Tasks / Workflows drawers.
+   Unified visual language for Tasks / Workflows drawers.
    Cards use --bg-2 surface with visible --border-bright edges so rows
    read as discrete objects. Tabs use an underline-active pattern.
    Section labels are uppercase micro-headers. */
 
-/* Card — list items inside drawers (memory rows, dream runs, workflow runs).
-   No default padding; memory rows add p-3 inline, workflow rows manage
-   their own internal layout via toggle buttons. */
+/* Card — workflow runs manage their own internal layout via toggle buttons. */
 .drawer-card {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -998,33 +996,19 @@ html, body {
 }
 
 /* Status-indicator borders on drawer cards */
-.drawer-card[data-run-status="running"],
-.drawer-card[data-dream-status="running"] {
+.drawer-card[data-run-status="running"] {
   border-left: 3px solid var(--accent);
 }
-.drawer-card[data-run-status="completed"],
-.drawer-card[data-dream-status="completed"] {
+.drawer-card[data-run-status="completed"] {
   border-left: 3px solid var(--status-green);
 }
-.drawer-card[data-run-status="failed"],
-.drawer-card[data-dream-status="failed"] {
+.drawer-card[data-run-status="failed"] {
   border-left: 3px solid var(--status-red);
 }
 .drawer-card[data-run-status="stopped"],
 .drawer-card[data-run-status="interrupted"] {
   border-left: 3px solid var(--text-tertiary);
 }
-.drawer-card[data-dream-status="reverted"] {
-  border-left: 3px solid var(--status-orange);
-}
-.drawer-card[data-pinned="true"] {
-  border-left: 3px solid var(--status-orange);
-}
-.drawer-card[data-disabled="true"] {
-  opacity: 0.6;
-  border-left: 3px solid var(--text-extra-light);
-}
-
 /* Hover dynamic slide-in actions for desktop */
 @media (hover: hover) {
   .drawer-card__actions {
@@ -1057,20 +1041,7 @@ html, body {
   color: var(--status-red);
 }
 
-/* Kind badge in memory rows. */
-.drawer-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--radius-md);
-  padding: 1px 7px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-3);
-  border: 1px solid var(--border-bright);
-}
-
-/* Status badge in dream run rows. */
+/* Status badge in workflow run rows. */
 .drawer-status-badge {
   display: inline-flex;
   align-items: center;
@@ -1107,18 +1078,6 @@ html, body {
   color: var(--text-tertiary);
   background: color-mix(in oklab, var(--text-tertiary) 10%, transparent);
   border-color: color-mix(in oklab, var(--text-tertiary) 30%, transparent);
-}
-
-/* Tag chip in memory rows. */
-.drawer-tag {
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--radius-md);
-  padding: 1px 6px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  background: var(--bg-3);
-  border: 1px solid var(--border);
 }
 
 /* Tab bar — underline active pattern. */
@@ -1178,26 +1137,6 @@ html, body {
 }
 
 /* Settings row — checkbox toggle row inside drawers. */
-.drawer-settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-bright);
-  padding: 8px 12px;
-  font-size: 13px;
-  background: var(--bg-2);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) ease;
-}
-.drawer-settings-row:hover {
-  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright));
-}
-.drawer-settings-row span {
-  color: var(--text-secondary);
-}
-
 /* Search input inside drawers. */
 .drawer-search {
   position: relative;
@@ -1831,7 +1770,7 @@ html, body {
   background: var(--bg-0);
 }
 
-/* Dispatch detail panel (prompt/report/memory) */
+/* Dispatch detail panel (prompt/report) */
 .wf-dispatch-detail {
   margin: 4px 8px 6px 52px;
   border-radius: var(--radius-md);
@@ -4723,11 +4662,10 @@ html, body {
 }
 
 /* ==========================================================================
-   Hive UI/UX Design System Upgrades (Memory & Workflow Interfaces)
+   Hive UI/UX Design System Upgrades (Workflow Interfaces)
    ========================================================================== */
 
 /* ── 1. 全局 Dialog / Drawer 美化 ── */
-[data-testid='memory-drawer'],
 [data-testid='action-center-drawer'],
 [data-testid='workflows-drawer'] {
   border-radius: var(--radius-xl, 16px) !important;
@@ -4739,7 +4677,6 @@ html, body {
 }
 
 /* 磨砂玻璃 Overlay 遮罩层 */
-[data-testid='memory-overlay'],
 [data-testid='action-center-overlay'],
 [data-testid='workflows-overlay'] {
   background: rgba(0, 0, 0, 0.5) !important;
@@ -4747,7 +4684,6 @@ html, body {
 }
 
 /* 顶部 Header */
-[data-testid='memory-drawer'] header,
 [data-testid='action-center-drawer'] header,
 .wf-panel-header {
   background: color-mix(in oklab, var(--bg-1) 40%, transparent) !important;
@@ -5011,7 +4947,7 @@ html, body {
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 15%, transparent) !important;
 }
 
-/* ── 2. 记忆卡片（Memory Rows）美化 ── */
+/* ── 2. Drawer cards ── */
 .drawer-card {
   border-radius: 12px !important;
   border: 1px solid var(--border) !important;
@@ -5024,60 +4960,6 @@ html, body {
   transform: translateY(-1.5px);
   border-color: var(--border-bright) !important;
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35) !important;
-}
-
-/* 记忆分类徽章 */
-.drawer-kind-badge {
-  font-size: 9.5px !important;
-  font-weight: 700 !important;
-  padding: 1px 7px !important;
-  border-radius: 6px !important;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  border: 1px solid transparent !important;
-  display: inline-block;
-}
-
-/* Kind-specific colors */
-.drawer-kind-badge--decision {
-  background: rgba(245, 158, 11, 0.08) !important;
-  color: #f59e0b !important;
-  border-color: rgba(245, 158, 11, 0.2) !important;
-}
-.drawer-kind-badge--fact {
-  background: rgba(59, 130, 246, 0.08) !important;
-  color: #60a5fa !important;
-  border-color: rgba(59, 130, 246, 0.2) !important;
-}
-.drawer-kind-badge--pitfall {
-  background: rgba(239, 68, 68, 0.08) !important;
-  color: #f87171 !important;
-  border-color: rgba(239, 68, 68, 0.2) !important;
-}
-.drawer-kind-badge--preference {
-  background: rgba(16, 185, 129, 0.08) !important;
-  color: #34d399 !important;
-  border-color: rgba(16, 185, 129, 0.2) !important;
-}
-.drawer-kind-badge--procedure_ref {
-  background: rgba(139, 92, 246, 0.08) !important;
-  color: #a78bfa !important;
-  border-color: rgba(139, 92, 246, 0.2) !important;
-}
-
-/* Pinned (置顶) 状态记忆的呼吸金光 */
-.drawer-card[data-pinned="true"] {
-  border-color: rgba(234, 179, 8, 0.35) !important;
-  background: linear-gradient(to right, color-mix(in oklab, rgb(234, 179, 8) 4%, var(--bg-2)), var(--bg-2)) !important;
-}
-.drawer-card[data-pinned="true"]:hover {
-  border-color: rgba(234, 179, 8, 0.55) !important;
-}
-
-/* Disabled (停用) 状态记忆的置灰与淡化 */
-.drawer-card[data-disabled="true"] {
-  opacity: 0.5;
-  filter: grayscale(40%);
 }
 
 /* Card 内部折叠区展开动画效果 */
@@ -5099,63 +4981,7 @@ html, body {
   }
 }
 
-/* ── 3. 开关滑块 Toggle Switch（ checkbox 升级） ── */
-.drawer-settings-row {
-  position: relative !important;
-  padding-right: 54px !important;
-  border-radius: 12px !important;
-  border: 1px solid var(--border) !important;
-  background: var(--bg-2) !important;
-  padding: 10px 14px !important;
-  cursor: pointer;
-  transition: all 0.2s ease !important;
-  font-weight: 500;
-}
-.drawer-settings-row:hover {
-  border-color: color-mix(in oklab, var(--accent) 30%, var(--border-bright)) !important;
-  background: color-mix(in oklab, var(--accent) 2%, var(--bg-2)) !important;
-}
-.drawer-settings-row input[type="checkbox"] {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  width: 36px !important;
-  height: 20px !important;
-  border-radius: 99px !important;
-  background: var(--bg-3) !important;
-  position: absolute !important;
-  right: 14px !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  cursor: pointer !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  border: 1px solid var(--border) !important;
-  outline: none !important;
-}
-.drawer-settings-row input[type="checkbox"]::after {
-  content: '' !important;
-  position: absolute !important;
-  width: 14px !important;
-  height: 14px !important;
-  border-radius: 50% !important;
-  background: var(--text-tertiary) !important;
-  left: 2px !important;
-  top: 2px !important;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-.drawer-settings-row input[type="checkbox"]:checked {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
-}
-.drawer-settings-row input[type="checkbox"]:checked::after {
-  transform: translateX(16px) !important;
-  background: #ffffff !important;
-}
-.drawer-settings-row input[type="checkbox"]:disabled {
-  opacity: 0.5 !important;
-  cursor: not-allowed !important;
-}
-
-/* ── 4. 梦境运行 (Dream Runs) 科幻体验 ── */
+/* ── 4. Drawer action buttons ── */
 .drawer-action-btn {
   border-radius: 99px !important;
   padding: 0 16px !important;
@@ -5164,7 +4990,7 @@ html, body {
   height: 30px !important;
 }
 
-/* Dreaming “Run Now” 渐变流光呼吸特效 */
+/* Drawer action hover treatment */
 button.drawer-action-btn:has(svg.animate-spin),
 button.drawer-action-btn:hover:has(svg) {
   background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%) !important;
@@ -5179,26 +5005,7 @@ button.drawer-action-btn:hover svg {
   transform: scale(1.1) rotate(10deg);
 }
 
-/* 梦境运行卡片处于不同状态的样式 */
-.drawer-card[data-dream-status="running"] {
-  border-color: rgba(168, 85, 247, 0.4) !important;
-  background: linear-gradient(135deg, color-mix(in oklab, #a855f7 8%, var(--bg-2)), var(--bg-2)) !important;
-  box-shadow: inset 0 0 12px rgba(168, 85, 247, 0.08) !important;
-  animation: dream-running-pulse 2s infinite ease-in-out;
-}
-.drawer-card[data-dream-status="completed"] {
-  border-color: rgba(34, 197, 94, 0.15) !important;
-}
-.drawer-card[data-dream-status="failed"] {
-  border-color: rgba(239, 68, 68, 0.2) !important;
-}
-
-@keyframes dream-running-pulse {
-  0%, 100% { border-color: rgba(168, 85, 247, 0.35); }
-  50% { border-color: rgba(168, 85, 247, 0.65); box-shadow: 0 0 8px rgba(168, 85, 247, 0.15), inset 0 0 12px rgba(168, 85, 247, 0.12) !important; }
-}
-
-/* 梦境状态 Badge 润色 */
+/* Workflow status badges */
 .drawer-status-badge {
   font-size: 9px !important;
   text-transform: uppercase;
@@ -5227,26 +5034,6 @@ button.drawer-action-btn:hover svg {
   color: rgb(239, 68, 68) !important;
   border: 1px solid rgba(239, 68, 68, 0.18) !important;
 }
-
-/* 梦境运行展开的 Diff 区块美化 */
-.dream-diff-block {
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: var(--bg-0);
-  border: 1px solid var(--border);
-  margin-top: 8px;
-}
-.dream-diff-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 6px;
-}
-.dream-diff-added { color: rgb(34, 197, 94); }
-.dream-diff-rewritten { color: rgb(245, 158, 11); }
-.dream-diff-archived { color: rgb(239, 68, 68); }
-.dream-diff-merged { color: #a855f7; }
 
 /* ── 5. 工作流近期运行（Workflow Runs）美化 ── */
 /* 运行中卡片的呼吸蓝光与滚动极光条 */
@@ -5370,406 +5157,6 @@ button.drawer-action-btn:hover svg {
 @keyframes cursor-pulse {
   0%, 100% { opacity: 0.2; }
   50% { opacity: 1; }
-}
-
-/* ── Memory drawer — calm, editorial hierarchy ─────────────────────
-   Scoped overrides keep the shared workflow/action-center language intact.
-   Memory is dense reference material, so it favors quiet surfaces, strong
-   typography and compact metadata over decorative glow. */
-.memory-drawer {
-  border-radius: 18px !important;
-  border-color: color-mix(in oklab, var(--border-bright) 82%, transparent) !important;
-  background: var(--bg-1) !important;
-  box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.52),
-    0 1px 0 rgba(255, 255, 255, 0.05) inset !important;
-  overflow: hidden;
-}
-
-.memory-drawer__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px !important;
-  border-bottom: 1px solid var(--border) !important;
-  background:
-    radial-gradient(circle at 8% 0%, color-mix(in oklab, var(--accent) 8%, transparent), transparent 36%),
-    var(--bg-1) !important;
-  backdrop-filter: none !important;
-}
-
-.memory-drawer__heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.memory-drawer__mark {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: none;
-  place-items: center;
-  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--border));
-  border-radius: 11px;
-  background: color-mix(in oklab, var(--accent) 9%, var(--bg-2));
-  color: var(--accent);
-  box-shadow: 0 8px 24px color-mix(in oklab, var(--accent) 8%, transparent);
-}
-
-.memory-drawer__title {
-  color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 680;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
-}
-
-.memory-drawer__subtitle {
-  margin-top: 3px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  line-height: 1.35;
-}
-
-.memory-drawer__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 20px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--bg-2) 72%, var(--bg-1));
-}
-
-.memory-drawer .drawer-tabs {
-  flex: 0 0 auto;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-0);
-}
-
-.memory-drawer .drawer-tab {
-  min-height: 28px;
-  padding: 5px 11px;
-  border-radius: 7px;
-  color: var(--text-tertiary);
-  font-size: 11.5px;
-  font-weight: 560;
-}
-
-.memory-drawer .drawer-tab:hover {
-  color: var(--text-secondary);
-  background: var(--bg-2);
-}
-
-.memory-drawer .drawer-tab--active,
-.memory-drawer .drawer-tab--active:hover {
-  color: var(--text-primary);
-  background: var(--bg-3);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 2px 8px rgba(0, 0, 0, 0.18);
-}
-
-.memory-search {
-  width: 238px;
-  max-width: 42vw;
-  margin-left: auto;
-}
-
-.memory-search__input {
-  width: 100%;
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-0);
-  padding: 0 12px 0 32px;
-  color: var(--text-primary);
-  font-size: 11.5px;
-  outline: none;
-  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
-}
-
-.memory-search__input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.memory-search__input:focus-visible {
-  border-color: color-mix(in oklab, var(--accent) 55%, var(--border-bright));
-  background: var(--bg-1);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent);
-}
-
-.memory-drawer__content {
-  padding: 15px 20px 20px;
-  background: color-mix(in oklab, var(--bg-0) 48%, var(--bg-1));
-}
-
-.memory-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 11px;
-}
-
-.memory-summary__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  font-weight: 560;
-}
-
-.memory-summary__icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-2);
-  color: var(--text-tertiary);
-}
-
-.memory-drawer .drawer-action-btn {
-  height: 30px !important;
-  border-radius: 8px !important;
-  padding: 0 10px !important;
-  border-color: color-mix(in oklab, var(--accent) 28%, var(--border)) !important;
-  background: color-mix(in oklab, var(--accent) 7%, var(--bg-2)) !important;
-  color: var(--accent) !important;
-  box-shadow: none !important;
-  font-size: 11.5px;
-}
-
-.memory-drawer .drawer-action-btn:hover:not(:disabled) {
-  border-color: color-mix(in oklab, var(--accent) 45%, var(--border)) !important;
-  background: color-mix(in oklab, var(--accent) 11%, var(--bg-2)) !important;
-}
-
-.memory-list {
-  display: grid;
-  gap: 9px;
-}
-
-.memory-drawer .memory-card {
-  position: relative;
-  padding: 14px 14px 13px;
-  border: 1px solid var(--border) !important;
-  border-radius: 13px !important;
-  background: color-mix(in oklab, var(--bg-2) 82%, var(--bg-1)) !important;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
-  overflow: visible;
-  transition: border-color var(--dur-base) ease, background var(--dur-base) ease, box-shadow var(--dur-base) ease !important;
-}
-
-.memory-drawer .memory-card:hover {
-  border-color: color-mix(in oklab, var(--accent) 16%, var(--border-bright)) !important;
-  background: var(--bg-2) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.035) inset,
-    0 8px 24px rgba(0, 0, 0, 0.16) !important;
-  transform: none;
-}
-
-.memory-drawer .memory-card[data-pinned='true'] {
-  border-color: color-mix(in oklab, var(--status-orange) 28%, var(--border)) !important;
-  background: color-mix(in oklab, var(--status-orange) 3%, var(--bg-2)) !important;
-}
-
-.memory-drawer .memory-card[data-disabled='true'] {
-  opacity: 0.58;
-  filter: none;
-}
-
-.memory-card__layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.memory-card__main {
-  min-width: 0;
-  flex: 1;
-  text-align: left;
-}
-
-.memory-card__eyebrow {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  font-size: 10.5px;
-}
-
-.memory-drawer .drawer-kind-badge {
-  padding: 2px 7px !important;
-  border-radius: 6px !important;
-  font-size: 9px !important;
-  letter-spacing: 0.045em;
-}
-
-.memory-state {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  border-radius: 999px;
-  padding: 1px 6px;
-  color: var(--text-tertiary);
-  background: var(--bg-3);
-}
-
-.memory-state--pinned {
-  color: var(--status-orange);
-  background: color-mix(in oklab, var(--status-orange) 9%, transparent);
-}
-
-.memory-card__source {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-tertiary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memory-card__body {
-  color: var(--text-primary);
-  font-size: 13px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.memory-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px 8px;
-  margin-top: 10px;
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-}
-
-.memory-drawer .drawer-tag {
-  border-color: color-mix(in oklab, var(--border-bright) 72%, transparent);
-  border-radius: 6px;
-  padding: 1px 6px;
-  background: var(--bg-1);
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
-.memory-card__time + .memory-card__time::before {
-  content: '·';
-  margin-right: 8px;
-  color: var(--text-extra-light);
-}
-
-.memory-card__reference {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--accent);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memory-card__actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 3px;
-  opacity: 1 !important;
-  transform: none !important;
-}
-
-.memory-card__actions .icon-btn {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  min-width: 28px;
-  border-radius: 7px;
-  opacity: 0;
-  transition: opacity var(--dur-fast) ease, background var(--dur-fast) ease;
-}
-
-.memory-card:hover .memory-card__actions .icon-btn,
-.memory-card:focus-within .memory-card__actions .icon-btn {
-  opacity: 1;
-}
-
-.memory-card__disclosure {
-  display: grid;
-  width: 24px;
-  height: 28px;
-  place-items: center;
-  color: var(--text-tertiary);
-  transition: color var(--dur-fast) ease, transform var(--dur-fast) ease;
-}
-
-.memory-card__disclosure[data-expanded='true'] {
-  color: var(--text-secondary);
-  transform: rotate(180deg);
-}
-
-.memory-drawer .drawer-card__expanded {
-  margin-top: 13px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-@media (hover: none) {
-  .memory-card__actions .icon-btn {
-    opacity: 1;
-  }
-}
-
-@media (max-width: 767px) {
-  .memory-drawer {
-    width: calc(100vw - 20px);
-    max-height: calc(100dvh - 20px);
-  }
-  .memory-drawer__header {
-    padding: 15px 14px !important;
-  }
-  .memory-drawer__mark {
-    width: 32px;
-    height: 32px;
-  }
-  .memory-drawer__toolbar--mobile {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 10px 14px;
-  }
-  .memory-drawer__toolbar--mobile .drawer-tabs {
-    width: 100%;
-  }
-  .memory-drawer__toolbar--mobile .drawer-tab {
-    flex: 1;
-  }
-  .memory-search {
-    width: 100%;
-    max-width: none;
-  }
-  .memory-drawer__content {
-    padding: 12px 12px 16px;
-  }
-  .memory-drawer .memory-card {
-    padding: 12px;
-  }
-  .memory-card__layout {
-    gap: 7px;
-  }
-  .memory-card__actions .icon-btn {
-    width: 36px;
-    height: 36px;
-  }
 }
 
 /* ── 7. Result Panel 结果面板与代码高亮 ── */

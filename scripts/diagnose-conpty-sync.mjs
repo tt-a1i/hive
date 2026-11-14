@@ -16,7 +16,7 @@ const hiveOptions = process.argv.includes('--hive')
       TEMP: process.env.TEMP,
     })
   : undefined
-const source = `let i=0;const timer=setInterval(()=>{const row=8+i%2;process.stdout.write(${JSON.stringify(esc + '[?2026h' + esc + '[?25l' + esc + '[2;1HWorking')}+i+${JSON.stringify(esc + '[')}+row+';13H'+${JSON.stringify(esc + '[?25h' + esc + '[?2026l')});if(++i===${frames}){clearInterval(timer);setTimeout(()=>process.exit(0),300)}},100)`
+const source = `let i=0;const timer=setInterval(()=>{const row=8+i%2;process.stdout.write(${JSON.stringify(`${esc}[?2026h${esc}[?25l${esc}[2;1HWorking`)}+i+${JSON.stringify(`${esc}[`)}+row+';13H'+${JSON.stringify(`${esc}[?25h${esc}[?2026l`)});if(++i===${frames}){clearInterval(timer);setTimeout(()=>process.exit(0),300)}},100)`
 
 const backends = hiveOptions
   ? [hiveOptions.useConptyDll ?? false]

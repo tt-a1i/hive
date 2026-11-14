@@ -1,15 +1,13 @@
 import type { TeamListItem } from '../shared/types.js'
+import { InboxWriteError } from './agent-inbox.js'
 import type { AgentRuntime } from './agent-runtime.js'
-import {
-  buildOrchestratorReportPayload,
-  type SendPromptWrite,
-  utf8ByteLength,
-} from './agent-stdin-dispatcher.js'
+import { buildOrchestratorReportPayload, type SendPromptWrite } from './agent-stdin-dispatcher.js'
 import type { DispatchRecord } from './dispatch-ledger-store.js'
 import { FEATURE_FLAGS_ALL_OFF, type FeatureFlags } from './feature-flags.js'
 import { escapeHiveEnvelopeText } from './hive-envelope-escape.js'
 import { ConflictError, PromptReadinessTimeoutError } from './http-errors.js'
 import type { MessageLogHandle, MessageLogRecord } from './message-log-store.js'
+import { createReportOutboxDelivery } from './report-outbox-delivery.js'
 import type { ReportOutboxStore } from './report-outbox-store.js'
 import {
   createReportMessage,
@@ -243,19 +241,19 @@ export const createTeamOperations = ({
   const flags = () => getFlags?.() ?? FEATURE_FLAGS_ALL_OFF
   const runMutation = runDataMutation ?? ((mutation: () => void) => mutation())
   const runtimeClosing = () => isRuntimeClosing?.() === true
-  const recordDispatchDelivery = (dispatchId: string, { payloadBytes, write }: SendPromptWrite) => {
+  const recordDispatchDelivery = (dispatchId: string, delivery: SendPromptWrite) => {
     if (!markDispatchDelivered) return
     // Stamp delivery when the PTY write actually completes, not when it is
     // queued: the prompt-readiness wait in between is the injection latency
     // this metric exists to expose. Write failures are handled by the caller.
-    void write.then(
+    void delivery.write.then(
       (written) => {
         if (!written || runtimeClosing()) return
         try {
           markDispatchDelivered({
             deliveredAt: Date.now(),
             dispatchId,
-            dispatchPayloadBytes: payloadBytes,
+            dispatchPayloadBytes: delivery.payloadBytes,
           })
         } catch (error) {
           console.error('[hive] swallowed:collaborationMetrics.dispatchWrite', error)
@@ -281,75 +279,12 @@ export const createTeamOperations = ({
       }
     })
   }
-  const recordReportBytes = (dispatchId: string, payload: string) => {
-    if (!recordReportPayloadBytes) return
-    try {
-      recordReportPayloadBytes(dispatchId, utf8ByteLength(payload))
-    } catch (error) {
-      console.error('[hive] swallowed:collaborationMetrics.reportPayload', error)
-    }
-  }
-  const drainingReportOutboxIds = new Set<number>()
-  // Best-effort redelivery of reports a prior orchestrator outage stranded.
-  // Called when a fresh report confirms the orchestrator is reachable and
-  // when the orchestrator polls `team list` (its natural post-restart wakeup).
-  // An entry is marked delivered only after its PTY write actually resolves,
-  // so a still-down orchestrator just leaves the backlog pending.
-  const drainReportOutbox = (
-    workspaceId: string,
-    targetAgentId = `${workspaceId}:orchestrator`
-  ) => {
-    if (runtimeClosing()) return { attempted: 0, firstSyncError: null as string | null }
-    if (!agentRuntime.getActiveRunByAgentId(workspaceId, targetAgentId)) {
-      return { attempted: 0, firstSyncError: null as string | null }
-    }
-    const pending = reportOutbox.listPending(workspaceId, targetAgentId)
-    const pendingCount = pending.length
-    const oldestEntry = pending[0]
-    const oldestPendingWaitMs = oldestEntry ? Date.now() - oldestEntry.createdAt : 0
-    let attempted = 0
-    let firstSyncError: string | null = null
-    for (const entry of pending) {
-      if (drainingReportOutboxIds.has(entry.id)) continue
-      drainingReportOutboxIds.add(entry.id)
-      attempted += 1
-      try {
-        void agentRuntime
-          .deliverSystemMessageToAgent(workspaceId, targetAgentId, entry.payload, {
-            requireActiveRun: true,
-          })
-          .then(() => {
-            if (!runtimeClosing()) reportOutbox.markDelivered(entry.id)
-          })
-          .catch((error) => {
-            if (runtimeClosing()) return
-            console.error('[hive] swallowed:teamReport.outboxDrain', {
-              workspaceId,
-              targetAgentId,
-              pendingCount,
-              oldestPendingWaitMs,
-              error: reportForwardErrorMessage(error),
-            })
-          })
-          .finally(() => {
-            drainingReportOutboxIds.delete(entry.id)
-          })
-      } catch (error) {
-        drainingReportOutboxIds.delete(entry.id)
-        firstSyncError ??= reportForwardErrorMessage(error)
-        if (!runtimeClosing()) {
-          console.error('[hive] swallowed:teamReport.outboxDrain', {
-            workspaceId,
-            targetAgentId,
-            pendingCount,
-            oldestPendingWaitMs,
-            error: reportForwardErrorMessage(error),
-          })
-        }
-      }
-    }
-    return { attempted, firstSyncError }
-  }
+  const drainReportOutbox = createReportOutboxDelivery({
+    outbox: reportOutbox,
+    runtime: agentRuntime,
+    isClosing: runtimeClosing,
+    ...(recordReportPayloadBytes ? { recordBytes: recordReportPayloadBytes } : {}),
+  })
   const ensureWorkerRun = async (workspaceId: string, workerId: string, hivePort: string) => {
     const activeRun = agentRuntime.getActiveRunByAgentId(workspaceId, workerId)
     if (activeRun) {
@@ -361,17 +296,17 @@ export const createTeamOperations = ({
       throw new ConflictError('No worker launch config available')
     }
 
-    workspaceStore.markAgentStarted(workspaceId, workerId)
     try {
       const run = await agentRuntime.startAgent(
         workspaceStore.getWorkspaceSnapshot(workspaceId).summary,
         workerId,
         { hivePort }
       )
-      if (run.status === 'error') {
+      if (run.status === 'error' || run.status === 'exited') {
         workspaceStore.markAgentStopped(workspaceId, workerId)
         throw new ConflictError(`${config.command} failed to start`)
       }
+      workspaceStore.markAgentStarted(workspaceId, workerId)
       return run
     } catch (error) {
       workspaceStore.markAgentStopped(workspaceId, workerId)
@@ -667,6 +602,33 @@ export const createTeamOperations = ({
         }
         const isWorkflowDispatch =
           input.workflowRunId !== undefined || input.fromAgentId === getWorkflowAgentId(workspaceId)
+        const failClaimedWrite = (error: unknown) => {
+          if (runtimeClosing()) return
+          if (error instanceof InboxWriteError) {
+            // No PTY bytes were written. Keep the accepted responsibility and
+            // its send evidence queued so the next explicit start can replay it.
+            reparkClaimedDispatch(dispatchId)
+            console.error(
+              '[hive] dispatch inbox write failed; responsibility remains queued',
+              error
+            )
+            return
+          }
+          try {
+            cancelUndeliveredDispatch(
+              workspaceId,
+              workerId,
+              dispatchId,
+              reportForwardErrorMessage(error),
+              input.workflowRunId,
+              isWorkflowDispatch ? undefined : fromAgentId
+            )
+          } catch (cancelError) {
+            if (!isWorkflowDispatch)
+              console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
+          }
+          if (!isWorkflowDispatch) console.error('[hive] swallowed:teamDispatch.writePrompt', error)
+        }
         const writeClaimedDispatch = (currentWorker: typeof worker) => {
           try {
             const writePrompt = agentRuntime.writeSendPrompt(
@@ -683,43 +645,9 @@ export const createTeamOperations = ({
               }
             )
             recordDispatchDelivery(dispatchId, writePrompt)
-            void writePrompt.write.catch((error) => {
-              if (runtimeClosing()) return
-              // `team send` is intentionally asynchronous (§3.3). A worker that
-              // exits during paste-submit did not receive actionable work, so
-              // close the open dispatch instead of leaving a fake pending task.
-              try {
-                cancelUndeliveredDispatch(
-                  workspaceId,
-                  workerId,
-                  dispatchId,
-                  reportForwardErrorMessage(error),
-                  input.workflowRunId,
-                  isWorkflowDispatch ? undefined : fromAgentId
-                )
-              } catch (cancelError) {
-                if (!isWorkflowDispatch)
-                  console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
-              }
-              if (!isWorkflowDispatch)
-                console.error('[hive] swallowed:teamDispatch.writePrompt', error)
-            })
+            void writePrompt.write.catch(failClaimedWrite)
           } catch (error) {
-            try {
-              cancelUndeliveredDispatch(
-                workspaceId,
-                workerId,
-                dispatchId,
-                reportForwardErrorMessage(error),
-                input.workflowRunId,
-                isWorkflowDispatch ? undefined : fromAgentId
-              )
-            } catch (cancelError) {
-              if (!isWorkflowDispatch)
-                console.error('[hive] swallowed:teamDispatch.cancelUndelivered', cancelError)
-            }
-            if (!isWorkflowDispatch)
-              console.error('[hive] swallowed:teamDispatch.writePrompt', error)
+            failClaimedWrite(error)
           }
         }
         const claimAndWriteDispatch = () => {
@@ -881,10 +809,7 @@ export const createTeamOperations = ({
       if (!worker) {
         throw new ConflictError(formatUnknownWorkerError(workerName, roster))
       }
-      /* Capture the active-run state *before* dispatchTask runs. Internal
-         workflow calls and orchestrator-owned `team spawn` follow-up sends may
-         auto-start a stopped worker; user-managed stopped workers remain
-         stopped with a queued dispatch until the user restarts them. */
+      // Capture whether this send needs to start the worker before dispatching.
       const restartedWorker =
         input.fromAgentId !== undefined &&
         input.autoStartWorker !== false &&
@@ -892,10 +817,19 @@ export const createTeamOperations = ({
       const dispatch = await dispatchTask(workspaceId, worker.id, text, input)
       return Object.assign(dispatch, { restartedWorker })
     },
-    recordUserInput(workspaceId: string, orchestratorId: string, text: string) {
+    async recordUserInput(workspaceId: string, orchestratorId: string, text: string) {
       workspaceStore.getAgent(workspaceId, orchestratorId)
-      agentRuntime.writeUserInputPrompt(workspaceId, text)
-      insertMessage(createUserInputMessage(workspaceId, orchestratorId, text))
+      const messageHandle = insertMessage(createUserInputMessage(workspaceId, orchestratorId, text))
+      try {
+        await agentRuntime.deliverUserInputToOrchestrator(workspaceId, text, {
+          requireActiveRun: Boolean(
+            agentRuntime.getActiveRunByAgentId(workspaceId, orchestratorId)
+          ),
+        })
+      } catch (error) {
+        deleteMessage(messageHandle)
+        throw error
+      }
     },
     async deliverUserInput(workspaceId: string, orchestratorId: string, text: string) {
       workspaceStore.getAgent(workspaceId, orchestratorId)
@@ -1046,7 +980,6 @@ export const createTeamOperations = ({
           }
           dispatch = nextDispatch
           recordProtocolEvent?.('report')
-          recordReportBytes(nextDispatch.id, payload)
         })
       } catch (error) {
         if (!runDataMutation) {

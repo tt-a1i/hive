@@ -9,6 +9,7 @@ import { HttpError } from './http-errors.js'
 import { assertLocalRequest } from './local-request-guard.js'
 import { openWorkspace } from './open-target-commands.js'
 import { readPackageVersion } from './package-version.js'
+import { requireJsonContentType } from './route-helpers.js'
 import type { OpenWorkspaceService } from './route-types.js'
 import { matchRoute } from './routes.js'
 import type { RuntimeStore } from './runtime-store.js'
@@ -205,6 +206,12 @@ export const createApp = ({
 
     try {
       assertLocalRequest(request)
+      if (
+        isReservedPath(url.pathname) &&
+        (request.headers['transfer-encoding'] || Number(request.headers['content-length'] ?? 0) > 0)
+      ) {
+        requireJsonContentType(request)
+      }
 
       const match = matchRoute(method, url.pathname)
       if (match) {

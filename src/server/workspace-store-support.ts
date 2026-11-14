@@ -8,7 +8,6 @@ export interface MessageKindRecord {
 }
 
 export interface WorkspaceRow {
-  controller_mode: 'internal' | 'codex_app'
   id: string
   name: string
   path: string
@@ -24,8 +23,6 @@ export interface WorkerRow {
   ephemeral: number
   spawned_by: string | null
 }
-
-export interface WorkspaceSummaryRow extends WorkspaceRow {}
 
 export const getOrchestratorId = (workspaceId: string) => `${workspaceId}:orchestrator`
 

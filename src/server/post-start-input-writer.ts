@@ -7,6 +7,7 @@ const READY_CHECK_INTERVAL_MS = 50
 const READY_TIMEOUT_MS = 3000
 const PROMPT_READY_HARD_TIMEOUT_MS = 30000
 const PROMPT_READY_TAIL_CHARS = 8000
+const OUTPUT_SCAN_LIMIT = 16384
 const OPENCODE_COMPLETION_READY_SETTLE_MS = 1000
 const MIN_SUBMIT_AFTER_PASTE_DELAY_MS = 600
 const MAX_SUBMIT_AFTER_PASTE_DELAY_MS = 1500
@@ -109,7 +110,7 @@ export const isInteractiveAgentCommand = (command: string) => {
 }
 
 const getPlainTerminalOutput = (output: string) =>
-  output.replace(/\r/g, '\n').replace(TERMINAL_CONTROL_PATTERN, '')
+  output.slice(-OUTPUT_SCAN_LIMIT).replace(/\r/g, '\n').replace(TERMINAL_CONTROL_PATTERN, '')
 const getPlainTerminalTail = (output: string) =>
   getPlainTerminalOutput(output).slice(-PROMPT_READY_TAIL_CHARS)
 const getRecentNonEmptyTerminalLines = (output: string): string[] =>
@@ -214,8 +215,20 @@ const getInteractivePromptReadyState = (output: string, command = ''): PromptRea
 export const hasInteractivePromptReady = (output: string, command = '') =>
   getInteractivePromptReadyState(output, command) !== 'not-ready'
 
-export const hasBracketedPasteAcknowledgement = (output: string, baselineLength: number) => {
-  const outputAfterPaste = output.slice(baselineLength)
+const outputLength = (run: { output: string; totalOutputLength?: number }) =>
+  run.totalOutputLength ?? run.output.length
+
+const outputSince = (output: string, baselineLength: number, totalLength: number) => {
+  const length = Math.min(Math.max(0, totalLength - baselineLength), OUTPUT_SCAN_LIMIT)
+  return length === 0 ? '' : output.slice(-length)
+}
+
+export const hasBracketedPasteAcknowledgement = (
+  output: string,
+  baselineLength: number,
+  totalLength = output.length
+) => {
+  const outputAfterPaste = outputSince(output, baselineLength, totalLength)
   const pasteEndIndex = outputAfterPaste.lastIndexOf(BRACKETED_PASTE_END)
   const acknowledgementOutput =
     pasteEndIndex === -1
@@ -224,8 +237,19 @@ export const hasBracketedPasteAcknowledgement = (output: string, baselineLength:
   return PASTE_ACK_PATTERN.test(acknowledgementOutput)
 }
 
-const onlyPasteAcknowledgementWasAppended = (before: string, after: string) =>
-  after.startsWith(before) && PASTE_ACK_ONLY_DELTA_PATTERN.test(after.slice(before.length))
+const onlyPasteAcknowledgementWasAppended = (
+  baselineLength: number,
+  after: { output: string; totalOutputLength?: number }
+) => {
+  const length = outputLength(after) - baselineLength
+  return (
+    length > 0 &&
+    length <= OUTPUT_SCAN_LIMIT &&
+    PASTE_ACK_ONLY_DELTA_PATTERN.test(
+      outputSince(after.output, baselineLength, outputLength(after))
+    )
+  )
+}
 
 const shouldWaitForPasteAck = (command: string, text: string) => {
   const commandName = getCommandName(command)
@@ -264,10 +288,7 @@ const canTimeoutBeforePromptReady = (command: string) => {
     commandName !== 'qwen'
   )
 }
-const hasPromptReadyHardTimeout = (command: string) => {
-  const commandName = getCommandName(command)
-  return commandName === 'hermes' || commandName === 'opencode' || commandName === 'pi'
-}
+const hasPromptReadyHardTimeout = (command: string) => getCommandName(command) !== 'kimi'
 const isWritableRunStatus = (status: string | undefined) =>
   status === undefined || status === 'starting' || status === 'running'
 
@@ -303,7 +324,7 @@ const submitPastedInteractiveInput = (
   const getWritableOutput = () => {
     try {
       const run = agentManager.getRun(runId)
-      return isWritableRunStatus(run.status) ? run.output : null
+      return isWritableRunStatus(run.status) ? run : null
     } catch {
       return null
     }
@@ -311,7 +332,11 @@ const submitPastedInteractiveInput = (
   const getRunOutputState = () => {
     try {
       const run = agentManager.getRun(runId)
-      return { output: run.output, writable: isWritableRunStatus(run.status) }
+      return {
+        output: run.output,
+        totalOutputLength: outputLength(run),
+        writable: isWritableRunStatus(run.status),
+      }
     } catch {
       return null
     }
@@ -337,8 +362,12 @@ const submitPastedInteractiveInput = (
           }
           if (
             outputBeforeSubmit !== null &&
-            hasBracketedPasteAcknowledgement(runAfterSubmit.output, baselineLength) &&
-            onlyPasteAcknowledgementWasAppended(outputBeforeSubmit, runAfterSubmit.output)
+            hasBracketedPasteAcknowledgement(
+              runAfterSubmit.output,
+              baselineLength,
+              runAfterSubmit.totalOutputLength
+            ) &&
+            onlyPasteAcknowledgementWasAppended(outputLength(outputBeforeSubmit), runAfterSubmit)
           ) {
             if (!runAfterSubmit.writable || !writeIfRunWritable(agentManager, runId, '\r')) {
               onError(createRunInactiveError(runId))
@@ -368,7 +397,10 @@ const submitPastedInteractiveInput = (
       onError(createRunInactiveError(runId))
       return
     }
-    if (acknowledgedAt === null && hasBracketedPasteAcknowledgement(output, baselineLength)) {
+    if (
+      acknowledgedAt === null &&
+      hasBracketedPasteAcknowledgement(output.output, baselineLength, outputLength(output))
+    ) {
       acknowledgedAt = Date.now()
     }
 
@@ -410,12 +442,11 @@ const deliverPastedInteractiveInput = (
   runId: string,
   command: string,
   text: string,
-  output: string,
+  baselineLength: number,
   isInitialAttempt: boolean,
   resolveDone: () => void,
   rejectDone: (error: Error) => void
 ) => {
-  const baselineLength = output.length
   const input = usesBracketedPaste(command)
     ? toBracketedPasteSubmission(text)
     : text.replaceAll('\r', '')
@@ -460,14 +491,14 @@ export const createImmediateInteractiveInputWriter = (
 
   return (runId, text) =>
     new Promise<void>((resolve, reject) => {
-      let output: string
+      let baselineLength: number
       try {
         const run = agentManager.getRun(runId)
         if (!isWritableRunStatus(run.status)) {
           reject(createRunInactiveError(runId))
           return
         }
-        output = run.output
+        baselineLength = outputLength(run)
       } catch {
         reject(createRunInactiveError(runId))
         return
@@ -479,7 +510,7 @@ export const createImmediateInteractiveInputWriter = (
         runId,
         command,
         text,
-        output,
+        baselineLength,
         false,
         resolve,
         reject
@@ -492,12 +523,10 @@ const whenInteractiveInputReady = (
   agentManager: AgentManager,
   runId: string,
   command: string,
-  onReady: (output: string) => void,
+  onReady: (baselineLength: number) => void,
   rejectDone: (error: Error) => void
 ) => {
   const startedAt = Date.now()
-  const isKimi = getCommandName(command) === 'kimi'
-  let kimiReadyDeadline = startedAt + PROMPT_READY_HARD_TIMEOUT_MS
   let settleCandidate: { since: number; tail: string } | null = null
   const isReadyToWrite = (output: string) => {
     const promptReadyState = getInteractivePromptReadyState(output, command)
@@ -519,9 +548,11 @@ const whenInteractiveInputReady = (
   }
   const tryReady = () => {
     let output: string | null
+    let baselineLength = 0
     try {
       const run = agentManager.getRun(runId)
       output = isWritableRunStatus(run.status) ? run.output : null
+      baselineLength = outputLength(run)
     } catch {
       rejectDone(createRunInactiveError(runId))
       return
@@ -533,24 +564,22 @@ const whenInteractiveInputReady = (
     const firstRunSetupPromptVisible = hasFirstRunSetupPrompt(output)
     const now = Date.now()
     const elapsed = now - startedAt
-    if (isKimi && firstRunSetupPromptVisible) {
-      kimiReadyDeadline = now + PROMPT_READY_HARD_TIMEOUT_MS
-    }
     // Fallback delivery so a readiness anchor that scrolls out of the tail
     // window (e.g. pi's one-shot startup banner) never strands a dispatch.
     // Commands with a soft fallback (codex/claude) deliver after the short
-    // READY_TIMEOUT_MS; pi/opencode/hermes deliver after the longer hard
+    // READY_TIMEOUT_MS; the other interactive presets use the longer hard
     // timeout, matching the original universal "detect-then-timeout" safety
     // net. The firstRunSetupPrompt guard below still blocks delivery while a
-    // genuine trust/login/setup prompt is on screen.
+    // genuine trust/login/setup prompt is on screen; such a blocked startup
+    // fails at the hard deadline instead of leaving its polling timer alive.
     const fallbackDeliveryDue =
       (canTimeoutBeforePromptReady(command) && elapsed >= READY_TIMEOUT_MS) ||
       (hasPromptReadyHardTimeout(command) && elapsed >= PROMPT_READY_HARD_TIMEOUT_MS)
     if (!firstRunSetupPromptVisible && (isReadyToWrite(output) || fallbackDeliveryDue)) {
-      onReady(output)
+      onReady(baselineLength)
       return
     }
-    if (isKimi && now >= kimiReadyDeadline) {
+    if (elapsed >= PROMPT_READY_HARD_TIMEOUT_MS) {
       rejectDone(new PromptReadinessTimeoutError(command, runId))
       return
     }
@@ -604,13 +633,13 @@ export const createPostStartInputWriter = (
         agentManager,
         runId,
         command,
-        (output) => {
+        (baselineLength) => {
           deliverPastedInteractiveInput(
             agentManager,
             runId,
             command,
             text,
-            output,
+            baselineLength,
             isInitialAttempt,
             resolveDone,
             rejectDone

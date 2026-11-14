@@ -3,6 +3,12 @@ import { describe, expect, test } from 'vitest'
 import { formatPortInUseMessage } from '../../src/cli/hive.js'
 
 describe('formatPortInUseMessage', () => {
+  test('suggests a valid port when 65535 is in use', () => {
+    const message = formatPortInUseMessage(65535)
+    expect(message).not.toContain('65536')
+    expect(message).toContain('hive --port 65534')
+  })
+
   test('POSIX (mac/linux) suggests lsof + kill', () => {
     const message = formatPortInUseMessage(4010, 'darwin')
     expect(message).toContain('port 4010 is already in use')

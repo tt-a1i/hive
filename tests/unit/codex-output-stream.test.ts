@@ -13,7 +13,9 @@ async function render(chunks: string[]) {
   let forwarded = ''
   let written: () => void = () => {}
   const queue = createTerminalOutputRenderQueue({
-    canRender: () => true,
+    onOverflow: () => {
+      throw new Error('Unexpected terminal overflow')
+    },
     write: (chunk, done) => {
       forwarded += chunk
       terminal.write(chunk, () => {

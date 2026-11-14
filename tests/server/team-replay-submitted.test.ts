@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest'
 import { createDispatchLedgerStore } from '../../src/server/dispatch-ledger-store.js'
 import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
 import { getUiCookie } from '../helpers/ui-session.js'
 
@@ -80,8 +81,16 @@ describe('submitted dispatch recovery across a real runtime restart (#80)', () =
       expect(response.status).toBe(201)
       // A later queued task proves replay and the receiver ran: an empty
       // capture plus an arbitrary delay cannot pass the no-redelivery case.
-      await expect.poll(() => readFileSync(receipt, 'utf8'), { timeout: 10000 }).toContain(barrier)
-      const received = readFileSync(receipt, 'utf8')
+      const receivedDispatches = () =>
+        (
+          expandInboxReferences(readFileSync(receipt, 'utf8')).match(
+            /<hive-message kind="dispatch"[^>]*>[\s\S]*?<\/hive-message>/g
+          ) ?? []
+        ).join('\n')
+      // A recovery summary may quote either task as context. Only actual dispatch
+      // envelopes establish whether the runtime replayed a responsibility.
+      await expect.poll(receivedDispatches, { timeout: 10000 }).toContain(barrier)
+      const received = receivedDispatches()
       expect(received.split(marker).length - 1).toBe(delivered ? 0 : 1)
       expect(received.split(barrier).length - 1).toBe(1)
       for (const id of [dispatchId, barrierId]) {

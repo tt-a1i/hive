@@ -1,13 +1,16 @@
+import { execFile } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, test } from 'vitest'
-
 import { runHiveCommand } from '../../src/cli/hive.js'
 import { runTeamCommand } from '../../src/cli/team.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
+import { expandInboxReferences } from '../helpers/inbox.js'
 import { getUiCookie } from '../helpers/ui-session.js'
+
+const runTeamBinary = promisify(execFile)
 
 const tempDirs: string[] = []
 const originalEnv = { ...process.env }
@@ -133,12 +136,14 @@ describe('team send CLI side effects (R1.3)', () => {
       )
       await waitFor(async () => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
-        expect(run?.output).toContain('WRK:')
-        expect(run?.output).toContain('@Orchestrator')
-        expect(run?.output).toContain('Hive member; keep your assigned role and scope')
-        expect(run?.output).toContain('实现登录')
-        expect(run?.output).toContain(`dispatch_id: ${dispatch?.id}`)
-        expect(run?.output).toContain(
+        expect(expandInboxReferences(run?.output ?? '')).toContain('WRK:')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('@Orchestrator')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(
+          'Hive member; keep your assigned role and scope'
+        )
+        expect(expandInboxReferences(run?.output ?? '')).toContain('实现登录')
+        expect(expandInboxReferences(run?.output ?? '')).toContain(`dispatch_id: ${dispatch?.id}`)
+        expect(expandInboxReferences(run?.output ?? '')).toContain(
           `team report --dispatch ${dispatch?.id} --seen <required_seen_seq> --stdin`
         )
       })
@@ -156,7 +161,7 @@ describe('team send CLI side effects (R1.3)', () => {
     }
   }, 20_000)
 
-  test('team send queues work for a stopped worker without auto-starting it', async () => {
+  test('team send starts a configured stopped worker and delivers repeated sends', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'hive-team-cli-stopped-queue-'))
     const workspacePath = join(dataDir, 'workspace')
     mkdirSync(workspacePath, { recursive: true })
@@ -182,7 +187,11 @@ describe('team send CLI side effects (R1.3)', () => {
       const workspaceResponse = await fetch(`${baseUrl}/api/workspaces`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', cookie: uiCookie },
-        body: JSON.stringify({ name: 'AutoStart', path: workspacePath }),
+        body: JSON.stringify({
+          autostart_orchestrator: false,
+          name: 'AutoStart',
+          path: workspacePath,
+        }),
       })
       const workspace = (await workspaceResponse.json()) as { id: string }
       const orchestratorId = `${workspace.id}:orchestrator`
@@ -229,30 +238,112 @@ describe('team send CLI side effects (R1.3)', () => {
         HIVE_PROJECT_ID: workspace.id,
       }
 
-      await runTeamCommand(['send', 'Alice', '评估项目结构'])
-
-      expect(hive.store.getActiveRunByAgentId(workspace.id, worker.id)).toBeUndefined()
-      const dispatch = hive.store.listDispatches(workspace.id)[0]
-      expect(dispatch).toEqual(
-        expect.objectContaining({
-          status: 'queued',
-          text: '评估项目结构',
-          toAgentId: worker.id,
-        })
+      const send = (text: string) =>
+        runTeamBinary(process.execPath, ['--import', 'tsx', 'bin/team', 'send', 'Alice', text])
+      const [first, second] = await Promise.all([send('评估项目结构'), send('第二次任务')])
+      expect(JSON.parse(first.stdout)).toEqual(expect.objectContaining({ ok: true }))
+      expect(JSON.parse(second.stdout)).toEqual(expect.objectContaining({ ok: true }))
+      await waitFor(() => {
+        const run = hive.store.getActiveRunByAgentId(workspace.id, worker.id)
+        expect(expandInboxReferences(run?.output ?? '')).toContain('评估项目结构')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('第二次任务')
+        expect(
+          hive.store.listDispatches(workspace.id).filter((item) => item.deliveredAt !== null)
+        ).toHaveLength(2)
+      }, 10_000)
+      expect(hive.store.listAgentRuns(worker.id)).toHaveLength(1)
+      const dispatches = hive.store.listDispatches(workspace.id)
+      expect(dispatches.map((item) => item.text).sort()).toEqual(
+        ['第二次任务', '评估项目结构'].sort()
       )
+      const missing = await runTeamBinary(process.execPath, [
+        '--import',
+        'tsx',
+        'bin/team',
+        'send',
+        'Missing',
+        'task',
+      ]).then(
+        () => null,
+        (error: unknown) => error
+      )
+      expect(missing).toEqual(expect.objectContaining({ code: 1 }))
+      expect(hive.store.listDispatches(workspace.id)).toHaveLength(2)
 
-      const teamResponse = await fetch(`${baseUrl}/api/ui/workspaces/${workspace.id}/team`, {
-        headers: { cookie: uiCookie },
-      })
-      expect(teamResponse.status).toBe(200)
-      const team = (await teamResponse.json()) as Array<{
-        id: string
-        pending_task_count: number
-        status: string
-      }>
-      const aliceRow = team.find((item) => item.id === worker.id)
-      expect(aliceRow?.pending_task_count).toBe(1)
-      expect(aliceRow?.status).toBe('stopped')
+      const unconfiguredResponse = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/workers`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ name: 'Unconfigured', role: 'coder' }),
+        }
+      )
+      const unconfigured = (await unconfiguredResponse.json()) as { id: string }
+      const queued = await runTeamBinary(process.execPath, [
+        '--import',
+        'tsx',
+        'bin/team',
+        'send',
+        'Unconfigured',
+        'task',
+      ])
+      expect(JSON.parse(queued.stdout)).toEqual(
+        expect.objectContaining({ ok: true, queued: true, worker_status: 'stopped' })
+      )
+      expect(hive.store.getActiveRunByAgentId(workspace.id, unconfigured.id)).toBeUndefined()
+      expect(hive.store.listDispatches(workspace.id)).toHaveLength(3)
+
+      const badConfig = await fetch(
+        `${baseUrl}/api/workspaces/${workspace.id}/agents/${unconfigured.id}/config`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', cookie: uiCookie },
+          body: JSON.stringify({ command: join(workspacePath, 'missing-executable'), args: [] }),
+        }
+      )
+      expect(badConfig.status).toBe(204)
+      const badStart = await runTeamBinary(process.execPath, [
+        '--import',
+        'tsx',
+        'bin/team',
+        'send',
+        'Unconfigured',
+        'bad start',
+      ]).then(
+        () => null,
+        (error: unknown) => error
+      )
+      expect(badStart).toEqual(expect.objectContaining({ code: 1 }))
+      expect(hive.store.getActiveRunByAgentId(workspace.id, unconfigured.id)).toBeUndefined()
+      expect(hive.store.getWorker(workspace.id, unconfigured.id)).toEqual(
+        expect.objectContaining({ status: 'stopped', pendingTaskCount: 1 })
+      )
+      expect(hive.store.listDispatches(workspace.id)).toHaveLength(3)
+
+      expect((await configure(unconfigured.id, workerScript)).status).toBe(204)
+      const recovery = await runTeamBinary(process.execPath, [
+        '--import',
+        'tsx',
+        'bin/team',
+        'send',
+        'Unconfigured',
+        'new after configuration',
+      ])
+      expect(JSON.parse(recovery.stdout)).toEqual(
+        expect.objectContaining({ ok: true, restarted_worker: true })
+      )
+      await waitFor(() => {
+        const run = hive.store.getActiveRunByAgentId(workspace.id, unconfigured.id)
+        expect(expandInboxReferences(run?.output ?? '')).toContain('task')
+        expect(expandInboxReferences(run?.output ?? '')).toContain('new after configuration')
+        const delivered = hive.store
+          .listDispatches(workspace.id)
+          .filter((item) => item.toAgentId === unconfigured.id && item.deliveredAt !== null)
+        expect(delivered.map((item) => item.text).sort()).toEqual(
+          ['task', 'new after configuration'].sort()
+        )
+      }, 10_000)
+      expect(hive.store.listAgentRuns(unconfigured.id)).toHaveLength(1)
     } finally {
       delete process.env.HIVE_DATA_DIR
       await hive.close()

@@ -189,7 +189,7 @@ const buildScenarioKickoffText = (
     workers: created.map((worker) => ({ name: worker.name, role: worker.role })),
   })
 
-const recordScenarioKickoff = (
+const recordScenarioKickoff = async (
   store: RuntimeStore,
   workspaceId: string,
   scenario: ScenarioPreset,
@@ -197,23 +197,23 @@ const recordScenarioKickoff = (
   language: UiLanguage,
   created: CreatedScenarioWorker[]
 ) => {
-  store.recordUserInput(
+  await store.recordUserInput(
     workspaceId,
     getOrchestratorId(workspaceId),
     buildScenarioKickoffText(scenario, goal, language, created)
   )
 }
 
-export const applyScenario = (
+export const applyScenario = async (
   store: RuntimeStore,
   workspaceId: string,
   scenario: ScenarioPreset,
   goal: string,
   isCommandAvailable?: CliAvailabilityProbe,
   language: UiLanguage = 'en'
-): CreatedScenarioWorker[] => {
+): Promise<CreatedScenarioWorker[]> => {
   const created = createScenarioWorkers(store, workspaceId, scenario, isCommandAvailable, language)
-  recordScenarioKickoff(store, workspaceId, scenario, goal, language, created)
+  await recordScenarioKickoff(store, workspaceId, scenario, goal, language, created)
 
   return created
 }
