@@ -143,51 +143,70 @@ export const buildRecoverySummary = ({
    *  with what a fresh startup would inject (workflow + team-sizing rules). */
   flags?: FeatureFlags
 }) =>
-  wrapRawSystemMessage(
-    [
-      `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`,
-      `Current member profile: ${escapeHiveEnvelopeText(agent.description)}`,
-      resumedSession
-        ? 'Your native session resumed. These are current protocol facts; PTY delivery is not proof that inputs were considered.'
-        : 'Hive restarted you. These are current responsibility facts; verify artifacts before continuing work.',
-      '',
-      '## Conversation with the user in the last hour',
-      ...formatUserInputs(messages),
-      '',
-      getTaskSectionTitle(agent),
-      ...formatTaskEvents(messages, agent),
-      '',
-      ...(allDispatches
-        ? [
-            '## Recent dispatch history (use team recall for older history)',
-            ...allDispatches
-              .filter(
-                (item) =>
-                  agent.role === 'orchestrator' ||
-                  item.toAgentId === agent.id ||
-                  item.fromAgentId === agent.id
-              )
-              .map(
-                (item) =>
-                  `- dispatch ${item.id} (${item.status}, owner ${escapeHiveEnvelopeText(item.toAgentId)}): ${escapeHiveEnvelopeText(item.text.slice(0, 500))}${item.reportText ? `; report: ${escapeHiveEnvelopeText(item.reportText.slice(0, 500))}` : ''}`
-              ),
-            '',
-          ]
-        : []),
-      '## Open tasks (dispatch ledger)',
-      ...formatOpenTasks(openDispatches, agent),
-      ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
-      ...formatPendingQuestions(actionableDispatchMessages, agent),
-      '',
-      `## Current ${TASKS_RELATIVE_PATH}`,
-      escapeHiveEnvelopeText(tasksContent.slice(0, TASKS_HEAD_LIMIT)) || '(empty)',
-      '',
-      '## Active members',
-      ...formatWorkers(workers),
-      '',
-      agent.role === 'orchestrator' ? '## Hive member dispatch rules' : '## Hive member boundaries',
-      ...getHiveTeamRules(agent, flags),
-      '',
-      'Continue from these facts within your current responsibility; reconcile missing context before acting.',
-    ].join('\n')
-  )
+  resumedSession && !allDispatches
+    ? wrapRawSystemMessage(
+        [
+          `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`,
+          `Current member profile: ${escapeHiveEnvelopeText(agent.description)}`,
+          'Your native session resumed. Reconcile current Hive state below (PTY delivery is not proof inputs were read):',
+          '',
+          '## Open tasks (dispatch ledger)',
+          ...formatOpenTasks(openDispatches, agent),
+          ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
+          ...formatPendingQuestions(actionableDispatchMessages, agent),
+          '',
+          `## Current ${TASKS_RELATIVE_PATH}`,
+          escapeHiveEnvelopeText(tasksContent.slice(0, TASKS_HEAD_LIMIT)) || '(empty)',
+          '',
+          '## Active members',
+          ...formatWorkers(workers),
+        ].join('\n')
+      )
+    : wrapRawSystemMessage(
+        [
+          `You are ${escapeHiveEnvelopeText(agent.name)} (${agent.role}) in workspace ${escapeHiveEnvelopeText(workspace.name)}.`,
+          `Current member profile: ${escapeHiveEnvelopeText(agent.description)}`,
+          'Hive restarted you. These are current responsibility facts; verify artifacts before continuing work.',
+          '',
+          '## Conversation with the user in the last hour',
+          ...formatUserInputs(messages),
+          '',
+          getTaskSectionTitle(agent),
+          ...formatTaskEvents(messages, agent),
+          '',
+          ...(allDispatches
+            ? [
+                '## Recent dispatch history (use team recall for older history)',
+                ...allDispatches
+                  .filter(
+                    (item) =>
+                      agent.role === 'orchestrator' ||
+                      item.toAgentId === agent.id ||
+                      item.fromAgentId === agent.id
+                  )
+                  .map(
+                    (item) =>
+                      `- dispatch ${item.id} (${item.status}, owner ${escapeHiveEnvelopeText(item.toAgentId)}): ${escapeHiveEnvelopeText(item.text.slice(0, 500))}${item.reportText ? `; report: ${escapeHiveEnvelopeText(item.reportText.slice(0, 500))}` : ''}`
+                  ),
+                '',
+              ]
+            : []),
+          '## Open tasks (dispatch ledger)',
+          ...formatOpenTasks(openDispatches, agent),
+          ...formatDispatchMessages(openDispatches, dispatchMessages, agent),
+          ...formatPendingQuestions(actionableDispatchMessages, agent),
+          '',
+          `## Current ${TASKS_RELATIVE_PATH}`,
+          escapeHiveEnvelopeText(tasksContent.slice(0, TASKS_HEAD_LIMIT)) || '(empty)',
+          '',
+          '## Active members',
+          ...formatWorkers(workers),
+          '',
+          agent.role === 'orchestrator'
+            ? '## Hive member dispatch rules'
+            : '## Hive member boundaries',
+          ...getHiveTeamRules(agent, flags),
+          '',
+          'Continue from these facts within your current responsibility; reconcile missing context before acting.',
+        ].join('\n')
+      )

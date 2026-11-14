@@ -277,11 +277,15 @@ export const createRuntimeStoreServices = (
           db.transaction(() => {
             for (const dispatch of open) {
               const text = `Worker @${worker.name} exited before reporting on dispatch ${dispatch.id} (run ${exit.runId}, exit code ${exit.exitCode ?? 'unknown'}). The dispatch remains open; explicitly restart the worker or cancel the dispatch.`
+              const inline = `<hive-system-reminder>${escapeHiveEnvelopeText(text)}</hive-system-reminder>`
               reportOutbox.enqueue({
                 workspaceId,
                 targetAgentId: getOrchestratorId(workspaceId),
                 dispatchId: `exit:${exit.runId}:${dispatch.id}`,
-                payload: `<hive-system-reminder>\n${escapeHiveEnvelopeText(text)}\n</hive-system-reminder>\n`,
+                payload:
+                  inline.length <= 400
+                    ? inline
+                    : `<hive-system-reminder>\n${escapeHiveEnvelopeText(text)}\n</hive-system-reminder>\n`,
               })
             }
           })()

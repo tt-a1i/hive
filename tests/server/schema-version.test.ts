@@ -1,7 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import {
+  ORCHESTRATOR_ROLE_DESCRIPTION,
+  ORCHESTRATOR_ROLE_DESCRIPTION_ZH,
+} from '../../src/server/role-templates.js'
 import { createRuntimeStore } from '../../src/server/runtime-store.js'
 import Database, { type Database as SqliteDatabase } from '../../src/server/sqlite.js'
 import {
@@ -1524,7 +1528,8 @@ describe('schema version', () => {
     expect(byId.reviewer).toContain('blocking issues first')
     expect(byId.tester).toContain('You are a Tester')
     expect(byId.orchestrator).toContain('You are the Hive Orchestrator')
-    expect(byId.orchestrator).toContain('.hive/tasks.md')
+    expect(byId.orchestrator).toContain('team guide core')
+    expect(byId.orchestrator).not.toContain('.hive/tasks.md')
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(12)).toEqual({
       version: 12,
     })
@@ -1600,7 +1605,8 @@ describe('schema version', () => {
     const row = db
       .prepare('SELECT description FROM role_templates WHERE id = ?')
       .get('orchestrator') as { description: string }
-    expect(row.description).toContain('.hive/tasks.md')
+    expect(row.description).toContain('team guide core')
+    expect(row.description).not.toContain('.hive/tasks.md')
     expect(row.description).not.toContain('维护 tasks.md')
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(13)).toEqual({
       version: 13,
@@ -2738,7 +2744,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(46)
+    expect(CURRENT_SCHEMA_VERSION).toBe(47)
 
     db.close()
   })
@@ -2874,8 +2880,94 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(46)
+    expect(CURRENT_SCHEMA_VERSION).toBe(47)
 
     db.close()
+  })
+
+  // Historical v43 text is frozen here so changing current prompt constants cannot
+  // silently change the inputs of this data-migration regression.
+  const legacyDescriptions = {
+    en: [
+      'You are the Hive Orchestrator, the user’s point of contact for this workspace.',
+      'Own the goal, resolve scope, permission, and ownership decisions, and deliver verified outcomes with unmet requirements and remaining risks.',
+      'Keep .hive/tasks.md useful for plans spanning multiple responsibilities. Recover missing coordination rules with `team guide core`.',
+    ].join('\n'),
+    zh: [
+      '你是 Hive Orchestrator，负责在当前 workspace 中对接用户。',
+      '对目标负责，裁决范围、权限和工作归属，向用户交付经核验的结果、未满足要求及剩余风险。',
+      '涉及多份责任的计划记录在 .hive/tasks.md；缺少协作规则时读取 `team guide core`。',
+    ].join('\n'),
+  }
+
+  test.each([
+    { language: 'en', customized: false },
+    { language: 'zh', customized: false },
+    { language: 'en', customized: true },
+    { language: 'zh', customized: true },
+  ] as const)('v47 on-disk prompt migration: $language customized=$customized survives reopening', ({
+    language,
+    customized,
+  }) => {
+    const dir = mkdtempSync(join(tmpdir(), 'hive-schema-v47-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'runtime.sqlite')
+    let db = new Database(path)
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(2000)
+    try {
+      // Reconstruct the complete current schema and stage its v46 prompt data.
+      // v47 changes data only; actual prior-commit DB upgrade is checked separately.
+      initializeRuntimeDatabase(db)
+      db.prepare('DELETE FROM schema_version WHERE version = 47').run()
+      const oldDescription = legacyDescriptions[language]
+      const description = customized
+        ? `${oldDescription}\nKeep my custom ownership rule.`
+        : oldDescription
+      db.prepare(
+        'UPDATE role_templates SET description = ?, updated_at = 1 WHERE id = ? AND is_builtin = 1'
+      ).run(description, 'orchestrator')
+      db.prepare(`INSERT INTO role_templates
+        (id, name, role_type, description, default_command, default_args, default_env, is_builtin, created_at, updated_at)
+        SELECT 'copied-orchestrator', 'Copied', role_type, description, default_command, default_args, default_env, 0, 1, 1
+        FROM role_templates WHERE id = 'orchestrator'`).run()
+      db.close()
+      db = new Database(path)
+      initializeRuntimeDatabase(db)
+      const expected = customized
+        ? description
+        : language === 'en'
+          ? ORCHESTRATOR_ROLE_DESCRIPTION
+          : ORCHESTRATOR_ROLE_DESCRIPTION_ZH
+      const readRows = () =>
+        db
+          .prepare(
+            'SELECT id, description, is_builtin, updated_at FROM role_templates WHERE id IN (?, ?) ORDER BY id'
+          )
+          .all('orchestrator', 'copied-orchestrator')
+      const expectedRows = [
+        { id: 'copied-orchestrator', description, is_builtin: 0, updated_at: 1 },
+        {
+          id: 'orchestrator',
+          description: expected,
+          is_builtin: 1,
+          updated_at: customized ? 1 : 2000,
+        },
+      ]
+      expect(readRows()).toEqual(expectedRows)
+      expect(
+        db.prepare('SELECT version, applied_at FROM schema_version WHERE version = 47').all()
+      ).toEqual([{ version: 47, applied_at: 2000 }])
+      db.close()
+      clock.mockReturnValue(4000)
+      db = new Database(path)
+      initializeRuntimeDatabase(db)
+      expect(readRows()).toEqual(expectedRows)
+      expect(
+        db.prepare('SELECT version, applied_at FROM schema_version WHERE version = 47').all()
+      ).toEqual([{ version: 47, applied_at: 2000 }])
+    } finally {
+      db.close()
+      clock.mockRestore()
+    }
   })
 })

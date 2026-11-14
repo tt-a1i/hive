@@ -80,11 +80,13 @@ export const createRestartPolicy = ({
       const ownsOpenWork = openDispatches?.some(
         (dispatch) => agent.role === 'orchestrator' || dispatch.toAgentId === agentId
       )
+      const resumedSession = !handoverToken && isResumeLaunchConfig(startConfig)
       // Stopping a process does not cancel a responsibility or retire a question.
-      // A deliberate restart without outstanding protocol work can start fresh.
+      // A deliberate restart or native session resume without outstanding protocol
+      // work can start/resume cleanly without injecting a redundant handover (#41).
       if (
         !handoverToken &&
-        wasUserStopped &&
+        (wasUserStopped || resumedSession) &&
         !ownsOpenWork &&
         actionableDispatchMessages.length === 0
       )
@@ -92,7 +94,7 @@ export const createRestartPolicy = ({
 
       const text = buildRecoverySummary({
         agent,
-        resumedSession: isResumeLaunchConfig(startConfig),
+        resumedSession,
         dispatchMessages: listDispatchMessagesForRecovery?.(workspace.id) ?? [],
         actionableDispatchMessages,
         ...(openDispatches ? { openDispatches } : {}),

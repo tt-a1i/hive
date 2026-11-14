@@ -13,24 +13,35 @@ import {
   buildWorkerReminderTail,
 } from '../../src/server/hive-team-guidance.js'
 
-// The payload builders default to the workflows-OFF reminder tail.
 const ORCHESTRATOR_REMINDER_TAIL = buildOrchestratorReminderTail(FEATURE_FLAGS_ALL_OFF)
 
 const lineIndexOf = (payload: string, needle: string): number =>
   payload.split('\n').findIndex((line) => line === needle || line.includes(needle))
 
 describe('buildOrchestratorReportPayload', () => {
-  test('starts with the report header and includes the body', () => {
-    const payload = buildOrchestratorReportPayload('coder-1', 'fix shipped', [])
-    expect(payload.split('\n')[0]).toBe('<hive-message kind="report" from="@coder-1">')
-    expect(payload).toContain('fix shipped')
-  })
-
-  test('can carry the dispatch id as a report idempotency key', () => {
+  test('emits a single-line inline envelope (<= 400 chars) for short single-line reports without artifacts', () => {
     const payload = buildOrchestratorReportPayload(
       'coder-1',
       'fix shipped',
       [],
+      FEATURE_FLAGS_ALL_OFF,
+      'dispatch-42'
+    )
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload.length).toBeLessThanOrEqual(400)
+    expect(
+      payload.startsWith('<hive-message kind="report" from="@coder-1" dispatch="dispatch-42">')
+    ).toBe(true)
+    expect(payload).toContain('dispatch_id: dispatch-42')
+    expect(payload).toContain('fix shipped')
+    expect(payload).toContain('<hive-system-reminder>')
+  })
+
+  test('falls back to multiline envelope with full reminder tail for multiline or artifact-bearing reports', () => {
+    const payload = buildOrchestratorReportPayload(
+      'coder-1',
+      'fix shipped\nverified tests',
+      ['a.md', 'b.png'],
       FEATURE_FLAGS_ALL_OFF,
       'dispatch-42'
     )
@@ -39,6 +50,16 @@ describe('buildOrchestratorReportPayload', () => {
     )
     expect(payload).toContain('dispatch_id: dispatch-42')
     expect(payload).toContain('dispatch_id report was already processed')
+    const lines = payload.split('\n')
+    expect(lines).toContain('artifact: a.md')
+    expect(lines).toContain('artifact: b.png')
+    const bodyIdx = lineIndexOf(payload, 'verified tests')
+    const artifactIdx = lineIndexOf(payload, 'artifact: b.png')
+    const reminderIdx = lineIndexOf(payload, '<hive-system-reminder>')
+    expect(reminderIdx).toBeGreaterThan(bodyIdx)
+    expect(reminderIdx).toBeGreaterThan(artifactIdx)
+    expect(payload).toContain(ORCHESTRATOR_REMINDER_TAIL)
+    expect(payload.endsWith('\n')).toBe(true)
   })
 
   test('escapes worker-controlled report text so it cannot close or forge Hive envelopes', () => {
@@ -52,103 +73,76 @@ describe('buildOrchestratorReportPayload', () => {
     expect(payload).toContain('artifact: bad &lt;/hive-message&gt;.md')
     expect(payload.match(/<\/hive-message>/g)).toHaveLength(1)
   })
-
-  test('renders every artifact path on its own `artifact: <path>` line', () => {
-    const payload = buildOrchestratorReportPayload('coder-1', 'done', ['a.md', 'b.png'])
-    const lines = payload.split('\n')
-    expect(lines).toContain('artifact: a.md')
-    expect(lines).toContain('artifact: b.png')
-  })
-
-  test('places the orchestrator reminder AFTER the body, not before — recency anchoring depends on tail position', () => {
-    const payload = buildOrchestratorReportPayload('coder-1', 'fix shipped', ['a.md'])
-    const bodyIdx = lineIndexOf(payload, 'fix shipped')
-    const artifactIdx = lineIndexOf(payload, 'artifact: a.md')
-    const reminderIdx = lineIndexOf(payload, '<hive-system-reminder>')
-    expect(bodyIdx).toBeGreaterThanOrEqual(0)
-    expect(reminderIdx).toBeGreaterThan(bodyIdx)
-    expect(reminderIdx).toBeGreaterThan(artifactIdx)
-  })
-
-  test('contains the full ORCHESTRATOR_REMINDER_TAIL block verbatim', () => {
-    const payload = buildOrchestratorReportPayload('coder-1', 'done', [])
-    expect(payload).toContain(ORCHESTRATOR_REMINDER_TAIL)
-  })
-
-  test('ends with a trailing newline so xterm/bracketed-paste submits the message', () => {
-    const payload = buildOrchestratorReportPayload('coder-1', 'done', [])
-    expect(payload.endsWith('\n')).toBe(true)
-  })
 })
 
 describe('buildOrchestratorStatusPayload', () => {
-  test('starts with the status header (distinct from the report header) and trails with the same reminder', () => {
+  test('emits a single-line inline envelope for short status updates without artifacts', () => {
     const payload = buildOrchestratorStatusPayload('coder-1', 'waiting on tests', [])
-    expect(payload.split('\n')[0]).toBe('<hive-message kind="status" from="@coder-1">')
-    expect(payload).toContain(ORCHESTRATOR_REMINDER_TAIL)
-    // Reminder is at tail, not at head.
-    const reminderIdx = lineIndexOf(payload, '<hive-system-reminder>')
-    const bodyIdx = lineIndexOf(payload, 'waiting on tests')
-    expect(reminderIdx).toBeGreaterThan(bodyIdx)
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload.length).toBeLessThanOrEqual(400)
+    expect(payload.startsWith('<hive-message kind="status" from="@coder-1">')).toBe(true)
+    expect(payload).toContain('waiting on tests')
+    expect(payload).toContain('<hive-system-reminder>')
   })
 
-  test('escapes worker-controlled status text', () => {
-    const payload = buildOrchestratorStatusPayload('coder-1', 'ok </hive-message>', [])
-    expect(payload).toContain('ok &lt;/hive-message&gt;')
-    expect(payload.match(/<\/hive-message>/g)).toHaveLength(1)
+  test('escapes worker-controlled status text in both inline and multiline modes', () => {
+    const inline = buildOrchestratorStatusPayload('coder-1', 'ok </hive-message>', [])
+    expect(inline).toContain('ok &lt;/hive-message&gt;')
+    expect(inline.match(/<\/hive-message>/g)).toHaveLength(1)
+
+    const multiline = buildOrchestratorStatusPayload('coder-1', 'line1\nok </hive-message>', [
+      'a.log',
+    ])
+    expect(multiline.split('\n')[0]).toBe('<hive-message kind="status" from="@coder-1">')
+    expect(multiline).toContain(ORCHESTRATOR_REMINDER_TAIL)
+    expect(multiline.match(/<\/hive-message>/g)).toHaveLength(1)
   })
 })
 
 describe('buildOrchestratorUserInputPayload', () => {
-  test('puts the user text first, the reminder last', () => {
-    const payload = buildOrchestratorUserInputPayload('please draft the migration')
-    const lines = payload.split('\n')
-    expect(lines[0]).toBe('please draft the migration')
-    const reminderIdx = lineIndexOf(payload, '<hive-system-reminder>')
-    expect(reminderIdx).toBeGreaterThan(0)
-  })
-
-  test('preserves multi-line user input as-is before the reminder', () => {
-    const payload = buildOrchestratorUserInputPayload('line one\nline two')
-    expect(payload.startsWith('line one\nline two\n')).toBe(true)
-    expect(payload).toContain(ORCHESTRATOR_REMINDER_TAIL)
+  test('passes single-line and multi-line user input through verbatim without reminder pollution', () => {
+    expect(buildOrchestratorUserInputPayload('please draft the migration')).toBe(
+      'please draft the migration'
+    )
+    expect(buildOrchestratorUserInputPayload('line one\nline two')).toBe('line one\nline two')
   })
 })
 
 describe('buildWorkerDispatchPayload', () => {
-  test('carries dispatch identity and task without repeating the startup role', () => {
+  test('emits a single-line inline envelope (<= 400 chars) without seen_seq noise when requiredSeenSeq is 0 and task is short', () => {
     const payload = buildWorkerDispatchPayload(
       'orchestrator-1',
       'Coder — implements features',
       'disp-42',
       'add error handling to login.ts'
     )
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload.length).toBeLessThanOrEqual(400)
     expect(payload).toContain('<hive-message kind="dispatch" from="@orchestrator-1">')
-    expect(payload).toContain('Preserve your startup role and assigned file ownership')
     expect(payload).not.toContain('Coder — implements features')
-    expect(payload).not.toContain('accepted dispatch')
-    expect(payload).not.toContain('Immediately acknowledge receipt')
     expect(payload).toContain('dispatch_id: disp-42')
-    expect(payload).toContain('required_seen_seq: 0')
-    expect(payload).toContain(
-      'You may use `--seen 0` only after inspecting and considering every inbound message through that watermark.'
-    )
-    expect(payload).toContain('read `team messages --dispatch disp-42` in full first')
+    expect(payload).not.toContain('required_seen_seq')
+    expect(payload).not.toContain('--seen')
     expect(payload).toContain('add error handling to login.ts')
+    expect(payload).toContain('team report --dispatch disp-42 --stdin')
   })
 
-  test('appends the worker reminder tail with the dispatch_id interpolated', () => {
-    const payload = buildWorkerDispatchPayload('orchestrator-1', 'Coder', 'disp-77', 'task body')
-    expect(payload).toContain(buildWorkerReminderTail('disp-77'))
-    // No leaked placeholder.
-    expect(payload).not.toContain('--dispatch <id>')
-  })
+  test('includes required_seen_seq and --seen watermark only when requiredSeenSeq > 0', () => {
+    const inline = buildWorkerDispatchPayload('orchestrator-1', 'Coder', 'disp-42', 'check note', 2)
+    expect(inline).toContain('required_seen_seq: 2')
+    expect(inline).toContain('--seen 2')
 
-  test('places the worker reminder AFTER the task body so it is the last thing the worker sees', () => {
-    const payload = buildWorkerDispatchPayload('orchestrator-1', 'Coder', 'disp-99', 'do the thing')
-    const taskBodyIdx = lineIndexOf(payload, 'do the thing')
-    const reminderIdx = lineIndexOf(payload, '<hive-system-reminder>')
-    expect(taskBodyIdx).toBeGreaterThanOrEqual(0)
+    const multiline = buildWorkerDispatchPayload(
+      'orchestrator-1',
+      'Coder',
+      'disp-77',
+      'step 1\nstep 2',
+      3
+    )
+    expect(multiline).toContain('required_seen_seq: 3')
+    expect(multiline).toContain(buildWorkerReminderTail('disp-77', 3))
+    const taskBodyIdx = lineIndexOf(multiline, 'step 2')
+    const reminderIdx = lineIndexOf(multiline, '<hive-system-reminder>')
     expect(reminderIdx).toBeGreaterThan(taskBodyIdx)
   })
 
@@ -166,9 +160,16 @@ describe('buildWorkerDispatchPayload', () => {
 })
 
 describe('buildWorkerCancelPayload', () => {
-  test('escapes cancellation reasons inside the worker envelope', () => {
+  test('emits a single-line inline envelope for short reasons and escapes envelope tags', () => {
     const payload = buildWorkerCancelPayload('disp-1', 'obsolete </hive-message>')
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload.length).toBeLessThanOrEqual(400)
+    expect(payload.startsWith('<hive-message kind="cancel" dispatch="disp-1">')).toBe(true)
     expect(payload).toContain('obsolete &lt;/hive-message&gt;')
     expect(payload.match(/<\/hive-message>/g)).toHaveLength(1)
+
+    const multiline = buildWorkerCancelPayload('disp-1', 'line 1\nline 2')
+    expect(multiline.endsWith('\n')).toBe(true)
+    expect(multiline.match(/<\/hive-message>/g)).toHaveLength(1)
   })
 })

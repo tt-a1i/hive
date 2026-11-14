@@ -24,7 +24,7 @@ export const writePassiveWorkflowCli = (binDir: string, name: string) => {
       '  if (sawPasteEnd) {',
       '    pasteCount += 1',
       '    const currentPaste = pasteCount',
-      '    const dispatch = pasteBuffer.match(/dispatch_id: ([^\\r\\n]+)/)',
+      '    const dispatch = pasteBuffer.match(/dispatch_id: ([^\\s|<]+)/)',
       "    if (dispatch) process.stdout.write('\\nDISPATCH:' + dispatch[1])",
       "    const ack = () => process.stdout.write('\\n[Pasted text #' + currentPaste + ']\\n› ')",
       '    if (currentPaste === 1 && FIRST_PASTE_ACK_DELAY_MS > 0) setTimeout(ack, FIRST_PASTE_ACK_DELAY_MS)',

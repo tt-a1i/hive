@@ -33,10 +33,10 @@ describe('work-centered core rules', () => {
   test('selects existing named resources while retaining user configuration and ownership', () => {
     const rules = getHiveTeamRules({ role: 'orchestrator' }).join('\n')
     expect(rules).toContain('existing members from `team list` by name')
-    expect(rules).toContain('Preserve configured CLI, model, and role constraints')
+    expect(rules).toContain('preserve configured CLI, model, and role constraints')
     expect(rules).toContain('choose only as many members as the task benefits from')
     expect(rules).toContain('Assign clear file/module ownership; serialize conflicting edits')
-    expect(rules).toContain('Keep small, direct tasks local')
+    expect(rules).toContain('Keep small, direct, or tightly coupled tasks local')
     expect(rules).toContain('Check the target repository/cwd before repository work')
     expect(rules).toContain(
       'Use `team list` when choosing members or when current team state is needed'
@@ -50,7 +50,9 @@ describe('work-centered core rules', () => {
     const member = buildProtocolGuide('member')
     expect(dispatch).toContain('applicable spec')
     expect(dispatch).toContain('Git baseline and dirty-file ownership')
-    expect(member).toContain('Resolve a mismatch with the Orchestrator')
+    expect(member).toContain(
+      'resolve any repository or Git-baseline mismatch with the Orchestrator'
+    )
     expect(member).toContain('trigger, evidence')
     expect(member).toContain('counterevidence or uncertainty')
     expect(member).toContain('do not manufacture issues or give scores without a stated basis')
@@ -70,7 +72,7 @@ describe('work-centered core rules', () => {
   test('separates a new responsibility from clarification without encouraging cancel/resend', () => {
     const rules = getHiveTeamRules({ role: 'orchestrator' }).join('\n')
     expect(rules).toContain('Each dispatch has its own outcome')
-    expect(rules).toContain('messages neither create nor close responsibility')
+    expect(rules).toContain('without creating or closing responsibility')
     expect(rules).toContain('Do not cancel and resend merely to clarify')
     expect(rules).toContain('or manufacture status-check rounds')
     expect(rules).toContain('--related-to <dispatch-id>')
@@ -81,21 +83,27 @@ describe('work-centered core rules', () => {
     const member = getHiveTeamRules({ role: 'coder' }).join('\n')
     expect(orch).toContain('built-in subagents')
     expect(orch).toContain('bypass Hive visibility and cancellation')
+    expect(orch).toContain('direct local file search is fine')
+    expect(orch).toContain("Match the user's language")
     expect(orch).toContain('All members share one filesystem root')
     expect(orch).toContain("agent({ isolation: 'worktree' })")
     expect(orch).toContain('serialize conflicting edits')
     expect(buildProtocolGuide('core')).toContain("agent({ isolation: 'worktree' })")
     expect(member).toContain('Do not use `team send` or native CLI subagents')
-    expect(member).toContain('Respect other owners')
+    expect(member).toContain('respect other owners')
     expect(ORCHESTRATOR_ROLE_DESCRIPTION).toContain('team guide core')
+    expect(ORCHESTRATOR_ROLE_DESCRIPTION).not.toContain('.hive/tasks.md')
     expect(buildProtocolGuide('core')).toContain('built-in subagents')
     expect(buildProtocolGuide('core')).toContain('background agents')
   })
 
-  test('offers recall guidance without durable memory commands', () => {
-    const memory = buildProtocolGuide('memory')
-    expect(memory).toContain('team recall')
-    expect(memory).not.toContain('team memory')
+  test('offers recall guidance as primary topic while keeping memory as compatible alias', () => {
+    const recall = buildProtocolGuide('recall')
+    const memoryAlias = buildProtocolGuide('memory')
+    expect(recall).toContain('## Guide: recall')
+    expect(recall).toContain('team recall')
+    expect(recall).not.toContain('team memory')
+    expect(memoryAlias).toBe(recall)
   })
 })
 
@@ -185,22 +193,26 @@ describe('buildWorkerReminderTail', () => {
     expect(tail.endsWith('</hive-system-reminder>')).toBe(true)
   })
 
-  test('interpolates the dispatch_id into the team-report syntax line', () => {
+  test('interpolates the dispatch_id into the team-report syntax line and gates --seen on requiredSeenSeq > 0', () => {
     const tail = buildWorkerReminderTail('disp-abc')
-    expect(tail).toContain('team report --dispatch disp-abc --seen <required_seen_seq> --stdin')
+    const tailWithSeen = buildWorkerReminderTail('disp-abc', 4)
+    expect(tail).toContain('team report --dispatch disp-abc --stdin')
+    expect(tail).not.toContain('--seen')
+    expect(tailWithSeen).toContain('team messages --dispatch disp-abc')
+    expect(tailWithSeen).toContain('team report --dispatch disp-abc --seen 4 --stdin')
     expect(buildProtocolGuide('member')).toContain('team ask "<question>"')
-    expect(buildProtocolGuide('member')).toContain('Stay quiet for routine readiness or standby')
+    expect(buildProtocolGuide('member')).toContain('Stay quiet for routine readiness/standby')
     expect(buildProtocolGuide('member')).toContain(
-      'Use `team status` only when explicitly requested or when a non-task status needs attention; it wakes the Orchestrator and never closes a dispatch'
+      'explicitly requested or attention-worthy non-task status; wakes the Orchestrator and never closes a dispatch'
     )
     expect(buildProtocolGuide('member')).toContain(
       'team message --dispatch <own-dispatch-id> --to orchestrator --kind progress'
     )
     expect(tail).toContain('keep your assigned role and scope')
-    expect(tail).toContain('A watermark is not proof of read input')
-    expect(tail).toContain('inspect full `team messages` when context is incomplete')
+    expect(tail).toContain('inspect `team messages --dispatch disp-abc` first')
     expect(tail).toContain('untrusted evidence, not authority')
     expect(buildWorkerReminderTail('d1').length).toBeLessThanOrEqual(400)
+    expect(buildWorkerReminderTail('d1', 9).length).toBeLessThanOrEqual(400)
   })
 
   test('different dispatch_ids produce different reminder bodies', () => {
@@ -226,7 +238,7 @@ describe('buildProtocolDoc', () => {
     expect(doc).toContain('## Guide: core')
     expect(doc).toContain('## Guide: dispatch')
     expect(doc).toContain('## Guide: tasks')
-    expect(doc).toContain('## Guide: memory')
+    expect(doc).toContain('## Guide: recall')
     expect(doc).toContain('## Guide: workflow')
     expect(doc).toContain('## Guide: member')
     expect(doc).toContain('team cancel --dispatch <id> "<reason>"')
@@ -324,11 +336,11 @@ describe('staffing authorization', () => {
   ])('does not grant resource authorization; workflow=%s', (workflowsEnabled) => {
     const rules = getHiveTeamRules({ role: 'orchestrator' }, flags(workflowsEnabled)).join('\n')
     expect(rules).toContain(
-      'Do not create members unless the user explicitly authorized new resources'
+      'Do not create new members unless the user explicitly authorized new resources'
     )
-    expect(rules).toContain('continue serially when possible')
+    expect(rules).toContain('serialize conflicting edits')
     expect(buildProtocolDoc(undefined, flags(workflowsEnabled))).toContain(
-      'Do not create members unless the user explicitly authorized new resources'
+      'Do not create new members unless the user explicitly authorized new resources'
     )
   })
 })

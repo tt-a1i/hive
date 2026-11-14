@@ -179,11 +179,9 @@ describe('agent startup instructions', () => {
         expect(output).toContain('team list')
         expect(output).toContain('Hive boundaries:')
         expect(output).toContain(
-          'Do not create members unless the user explicitly authorized new resources'
+          'Do not create new members unless the user explicitly authorized new resources'
         )
-        expect(output).toContain('team guide dispatch')
-        expect(output).toContain('team guide tasks')
-        expect(output).toContain('team guide member')
+        expect(output).toContain('team guide <core|dispatch|member|recall|tasks>')
         expect(output).not.toContain('Command usage:')
         expect(output).toContain('member')
         expect(output).not.toContain('If exactly one worker is available')
@@ -210,7 +208,8 @@ describe('agent startup instructions', () => {
         )
         expect(output).toContain('<hive-message kind="startup">')
         expect(output).toContain('You are Alice (coder) in workspace Alpha.')
-        expectReceivedText(output, 'team report --dispatch <id> --seen <required_seen_seq> --stdin')
+        expectReceivedText(output, 'team report --dispatch <id> --stdin')
+        expectReceivedText(output, 'required_seen_seq > 0')
         expectReceivedText(output, 'team ask "<question>"')
         expectReceivedText(
           output,

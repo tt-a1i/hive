@@ -112,6 +112,8 @@ test('real inbox disk failure retains an immediate dispatch and accepted report 
     rmSync(join(dataDir, 'inbox'), { recursive: true })
     writeFileSync(join(dataDir, 'inbox'), 'Blocked again for report delivery')
     const beforeFailure = consoleError.mock.calls.length
+    const reportBody =
+      'REPORT_EVIDENCE_SURVIVES_DISK_FAILURE\nMultiline report requires inbox file.'
     const response = await fetch(`${server.baseUrl}/api/team/report`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -120,7 +122,7 @@ test('real inbox disk failure retains an immediate dispatch and accepted report 
         from_agent_id: worker.id,
         token: server.store.peekAgentToken(worker.id),
         dispatch_id: dispatch.id,
-        result: 'REPORT_EVIDENCE_SURVIVES_DISK_FAILURE',
+        result: reportBody,
         seen_seq: 0,
       }),
     })
@@ -140,7 +142,7 @@ test('real inbox disk failure retains an immediate dispatch and accepted report 
       server.store.listDispatches(workspace.id).find((item) => item.id === dispatch.id)
     ).toMatchObject({
       status: 'reported',
-      reportText: 'REPORT_EVIDENCE_SURVIVES_DISK_FAILURE',
+      reportText: reportBody,
       reportPayloadBytes: null,
     })
     expect(server.store.getWorker(workspace.id, worker.id).pendingTaskCount).toBe(0)

@@ -113,7 +113,7 @@ const writeReportingWorker = (binDir: string, mode: 'commit' | 'dirty' | 'noop')
       "process.stdin.on('data', (chunk) => {",
       '  buf += chunk',
       '  buf = expandReceivedInbox(buf)',
-      '  const match = buf.match(/dispatch_id: ([^\\r\\n]+)/)',
+      '  const match = buf.match(/dispatch_id: ([^\\s|<]+)/)',
       '  if (match) finish(match[1].trim())',
       '})',
       'process.stdin.resume()',

@@ -35,7 +35,7 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
     expect(out).not.toContain('team workflow')
     expect(out).not.toContain('Choosing to use a workflow')
     expect(out).toContain('team send "<member-name>" "<task>"')
-    expect(out).toContain('team guide dispatch')
+    expect(out).toContain('team guide <core|dispatch|member|recall|tasks>')
   })
 
   test('ON: includes the `team workflow` command + the workflow-authoring rule', () => {
@@ -106,7 +106,8 @@ describe('buildAgentStartupInstructions — experimental workflow gate', () => {
       workspace,
     })
     expect(out).toContain('one-shot Hive workflow member')
-    expect(out).toContain('team report --dispatch <id> --seen <required_seen_seq> --stdin')
+    expect(out).toContain('team report --dispatch <id> --stdin')
+    expect(out).toContain('required_seen_seq > 0')
     expect(out).toContain('Members share the filesystem')
     expect(out).toContain('assigned scope')
     expect(out).toContain('team ask "<question>"')

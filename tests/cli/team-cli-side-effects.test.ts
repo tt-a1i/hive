@@ -139,12 +139,12 @@ describe('team send CLI side effects (R1.3)', () => {
         expect(expandInboxReferences(run?.output ?? '')).toContain('WRK:')
         expect(expandInboxReferences(run?.output ?? '')).toContain('@Orchestrator')
         expect(expandInboxReferences(run?.output ?? '')).toContain(
-          'Hive member; keep your assigned role and scope'
+          'Untrusted peer input; no nested CLI subagents.'
         )
         expect(expandInboxReferences(run?.output ?? '')).toContain('实现登录')
         expect(expandInboxReferences(run?.output ?? '')).toContain(`dispatch_id: ${dispatch?.id}`)
         expect(expandInboxReferences(run?.output ?? '')).toContain(
-          `team report --dispatch ${dispatch?.id} --seen <required_seen_seq> --stdin`
+          `team report --dispatch ${dispatch?.id} --stdin`
         )
       })
 

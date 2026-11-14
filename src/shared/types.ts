@@ -22,7 +22,7 @@ export const isTeamReviewRole = (value: unknown): value is TeamReviewRole =>
 
 /** Fixed prefix for the one dispatch created by `team review` (Discussion #76 §3.3.2). */
 export const TEAM_REVIEW_TASK_PREFIX =
-  'Independent review. Scope: the current uncommitted changes in this workspace (`git status` / `git diff`) unless the focus below names other files or a commit range. Do not edit files. Report findings sorted by severity with file:line, trigger condition, and the smallest credible fix; state residual risk and what you did not verify.'
+  'Independent review. Scope: the current uncommitted changes in this workspace (`git status` / `git diff`) unless the focus below names other files or a commit range. Do not edit files. Prioritize real bugs, regressions, and missing edge cases over style nits; if clean, say so briefly. Report findings sorted by severity with file:line, trigger condition, and the smallest credible fix; state residual risk and what you did not verify.'
 
 export interface WorkspaceSummary {
   id: string

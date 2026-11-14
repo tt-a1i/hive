@@ -28,7 +28,7 @@ describe('team cli help', () => {
     const output = logSpy.mock.calls.map((call) => call.join(' ')).join('\n')
     expect(output).toContain('Usage:')
     expect(output).toContain('team list')
-    expect(output).toContain('team guide <core|dispatch|tasks|memory|workflow|member>')
+    expect(output).toContain('team guide <core|dispatch|tasks|recall|workflow|member>')
     expect(output).not.toContain('team memory')
     expect(output).toContain('team recall "<query>"')
     expect(output).toContain('team send <member-name> "<task>"')
@@ -50,7 +50,7 @@ describe('team cli help', () => {
     expect(output).toContain('## Guide: dispatch')
     expect(output).toContain('team send "<member-name>" "<task>"')
     expect(output).toContain('existing members from `team list` by name')
-    expect(output).toContain('Preserve configured CLI, model, and role constraints')
+    expect(output).toContain('preserve configured CLI, model, and role constraints')
   })
 
   test('team guide ignores an existing protocol file', async () => {
