@@ -48,6 +48,24 @@ blocked, resolve repository/authentication configuration here; do not return to
 the retired private development workflow. A maintainer-authorized local publish
 must use the same verified release artifact and receive the same npm readback.
 
+## Upgrading to 3.0.0
+
+Before starting 3.0.0, stop Hive and its agents gracefully, then copy the entire
+Hive data directory to a separate backup. Copying the whole directory preserves
+SQLite sidecar files and supporting state. Keep the backup private.
+
+Use `HIVE_DATA_DIR` when set. Otherwise the default is `$XDG_CONFIG_HOME/hive`
+or `~/.config/hive` on macOS/Linux, and `%APPDATA%\hive` on Windows. Older
+Windows installations may still use `~/.config/hive`; back up the directory
+used by the current installation.
+
+The first launch applies v46/v47, including deletion of retired controller and
+Memory/Dream tables. To roll back, stop the new runtime, restore the complete
+pre-upgrade backup to its original data directory, and run the matching older
+Hive version. Save the post-upgrade directory separately if it contains new work.
+The in-app What's New dialog appears after startup and does not replace this
+pre-upgrade backup notice. Include these steps in the public release announcement.
+
 ## CI and platform checks
 
 Pull-request CI selects checks by risk. Documentation-only changes need the plan

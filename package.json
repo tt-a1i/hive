@@ -1,6 +1,6 @@
 {
   "name": "@tt-a1i/hive",
-  "version": "2.2.1",
+  "version": "3.0.0",
   "description": "Run Claude Code, Codex, Gemini, OpenCode, Qwen, Pi, and other CLI agents as a visible local team in your browser.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
