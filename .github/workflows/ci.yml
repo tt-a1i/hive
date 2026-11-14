@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.plan.outputs.code }}
+      gateway_policy: ${{ steps.plan.outputs.gateway_policy }}
       full: ${{ steps.plan.outputs.full }}
       native: ${{ steps.plan.outputs.native }}
       extended: ${{ steps.plan.outputs.extended }}
@@ -56,6 +57,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 10.30.3
@@ -64,6 +67,14 @@ jobs:
           node-version: 22.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check engineering policy
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$CI_BASE_SHA" ]; then
+            CI_BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          node scripts/check-engineering.mjs --base "$CI_BASE_SHA"
       - run: pnpm check
       - run: pnpm exec tsc --noEmit
       - run: pnpm build
@@ -79,6 +90,32 @@ jobs:
           path: ci-package/*.tgz
           if-no-files-found: error
           retention-days: 3
+
+  gateway-policy:
+    needs: plan
+    if: needs.plan.outputs.gateway_policy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check engineering policy
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$CI_BASE_SHA" ]; then
+            CI_BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          node scripts/check-engineering.mjs --base "$CI_BASE_SHA"
 
   tests:
     needs: [plan, verify]
@@ -247,7 +284,7 @@ jobs:
 
   result:
     if: always()
-    needs: [plan, verify, tests, legacy-sqlite, platforms, extended]
+    needs: [plan, verify, tests, legacy-sqlite, platforms, extended, gateway-policy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -18,7 +18,8 @@ a new npm version, or deploy the hosted gateway.
    ```
 
    This runs `pnpm check`, `pnpm build`, `pnpm pack:check`, and `pnpm pack:smoke`.
-   Also run the real integration tests for affected core behavior. Use
+   Also run `pnpm exec tsc --noEmit`, `node scripts/check-engineering.mjs`, and
+   the real integration tests for affected core behavior. Use
    `pnpm release:full` for broad runtime, protocol, schema, or security changes,
    stable major releases, or when explicitly requested, as specified in `AGENTS.md`.
 4. Record the commands, results, omitted checks, and remaining platform/device
@@ -69,11 +70,14 @@ pre-upgrade backup notice. Include these steps in the public release announcemen
 ## CI and platform checks
 
 Pull-request CI selects checks by risk. Documentation-only changes need the plan
-and result jobs; UI changes need static checks and a Linux build. Core changes
+and result jobs; UI changes need static checks, a Linux build, and affected
+existing frontend tests selected by dependency. Core changes
 use dependency-aware tests, with full Linux validation for shared runtime,
 SQLite/schema, dispatch, PTY, workflow, protocol, remote security, dependencies,
 and test/build configuration changes. Packaging changes also use the platform
 installation matrix. The nightly/manual workflow runs the extended matrix.
+Gateway-only source changes run the engineering policy check without starting
+desktop build or test jobs.
 `CI / result` is the aggregate check to require when configuring branch protection.
 
 For a Windows release, verify installation, CLI help/version, runtime startup,
