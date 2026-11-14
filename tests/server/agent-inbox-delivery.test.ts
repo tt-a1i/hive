@@ -75,6 +75,7 @@ test('short system envelopes with control characters are file-backed without alt
     for (const control of controls) expect(raw).not.toContain(control)
     const file = JSON.parse(refs[0]?.[1] ?? 'null') as string
     expect(readFileSync(file, 'utf8')).toBe(payload)
+    expect(readFileSync(file, 'utf8')).toContain(text)
     expect(expandInboxReferences(raw)).toBe(`${payload}\r`)
   } finally {
     await server.close()
