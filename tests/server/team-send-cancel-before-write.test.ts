@@ -29,7 +29,7 @@ const writeSlowAckClaude = (binDir: string) => {
       '  if (buffer.includes(PASTE_END) || (process.platform === "win32" && buffer.includes("</hive-message>"))) {',
       '    pasteCount += 1',
       '    const current = pasteCount',
-      '    const dispatch = buffer.match(/dispatch_id: ([^\\r\\n]+)/)',
+      '    const dispatch = buffer.match(/dispatch_id: ([^\\s|<]+)/)',
       "    if (dispatch) process.stdout.write('\\nDISPATCH:' + dispatch[1])",
       '    setTimeout(() => {',
       "      process.stdout.write('\\n[Pasted text #' + current + ']\\n❯ ')",

@@ -1,12 +1,10 @@
 import type { WorkerRole } from '../shared/types.js'
 import type { UiLanguage } from '../shared/ui-language.js'
 
-import { TASKS_RELATIVE_PATH } from './tasks-file.js'
-
 export const ORCHESTRATOR_ROLE_DESCRIPTION = [
   'You are the Hive Orchestrator, the user’s point of contact for this workspace.',
-  'Own the goal, resolve scope, permission, and ownership decisions, and deliver verified outcomes with unmet requirements and remaining risks.',
-  `Keep ${TASKS_RELATIVE_PATH} useful for plans spanning multiple responsibilities. Recover missing coordination rules with \`team guide core\`.`,
+  'Own the goal, resolve scope, permission, and file-ownership decisions, delegate only when parallel work or independent review adds real value, and deliver verified outcomes with any remaining risks.',
+  'Recover coordination rules anytime with `team guide core`.',
 ].join('\n')
 
 export const CODER_ROLE_DESCRIPTION = [
@@ -47,8 +45,8 @@ export const CUSTOM_ROLE_DESCRIPTION = [
 
 export const ORCHESTRATOR_ROLE_DESCRIPTION_ZH = [
   '你是 Hive Orchestrator，负责在当前 workspace 中对接用户。',
-  '对目标负责，裁决范围、权限和工作归属，向用户交付经核验的结果、未满足要求及剩余风险。',
-  `涉及多份责任的计划记录在 ${TASKS_RELATIVE_PATH}；缺少协作规则时读取 \`team guide core\`。`,
+  '对目标负责，裁决范围、权限和文件归属，仅在并行分工或独立审查确有收益时派单，并交付经核验的结果及剩余风险。',
+  '缺少协作规则时可随时读取 `team guide core`。',
 ].join('\n')
 
 export const CODER_ROLE_DESCRIPTION_ZH = [

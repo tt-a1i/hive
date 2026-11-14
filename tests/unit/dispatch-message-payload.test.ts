@@ -22,24 +22,40 @@ const message = (overrides: Partial<DispatchMessageRecord> = {}): DispatchMessag
 })
 
 describe('buildDispatchMessagePayload', () => {
-  test('adds required_seen_seq for worker recipients and interpolates N into --seen advice', () => {
+  test('emits a single-line inline envelope (<= 400 chars) for short messages and interpolates N into --seen advice for workers', () => {
     const payload = buildDispatchMessagePayload(message(), 2)
-    expect(payload.split('\n').filter((line) => line === 'required_seen_seq: 2')).toEqual([
-      'required_seen_seq: 2',
-    ])
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload.length).toBeLessThanOrEqual(400)
+    expect(payload.startsWith('<hive-message kind="note" message="m1" dispatch="d1">')).toBe(true)
+    expect(payload).toContain('required_seen_seq: 2')
     expect(payload).toContain('use `--seen 2`')
     expect(payload).toContain('team messages --dispatch d1')
   })
 
-  test('omits required_seen_seq for orchestrator recipients', () => {
-    const payload = buildDispatchMessagePayload(message({ recipientAgentId: 'ws:orchestrator' }), 2)
-    expect(payload).not.toContain('required_seen_seq:')
-    expect(payload).not.toContain('--seen 2')
-    expect(payload).toContain('please also cover logout')
+  test('omits required_seen_seq when 0 or when the recipient is the orchestrator', () => {
+    const toOrch = buildDispatchMessagePayload(
+      message({ kind: 'question', fromAgentId: 'worker-1', recipientAgentId: 'ws:orchestrator' }),
+      2
+    )
+    expect(toOrch).not.toMatch(/[\r\n]/)
+    expect(toOrch.length).toBeLessThanOrEqual(400)
+    expect(toOrch).not.toContain('required_seen_seq:')
+    expect(toOrch).not.toContain('--seen')
+    expect(toOrch).toContain('please also cover logout')
+    expect(toOrch).toContain('team reply m1 --stdin')
+
+    const zeroWatermark = buildDispatchMessagePayload(message(), 0)
+    expect(zeroWatermark).not.toContain('required_seen_seq:')
+    expect(zeroWatermark).not.toContain('--seen')
   })
 
-  test('carries required_seen_seq on questions to workers', () => {
-    const payload = buildDispatchMessagePayload(message({ kind: 'question', sequence: 3 }), 3)
+  test('falls back to multiline envelope for multiline or long messages while retaining required_seen_seq', () => {
+    const payload = buildDispatchMessagePayload(
+      message({ kind: 'question', sequence: 3, text: 'question line 1\nquestion line 2' }),
+      3
+    )
+    expect(payload).toContain('\n')
+    expect(payload.split('\n')[0]).toBe('<hive-message kind="question" message="m1" dispatch="d1">')
     expect(payload).toContain('required_seen_seq: 3')
     expect(payload).toContain('use `--seen 3`')
   })

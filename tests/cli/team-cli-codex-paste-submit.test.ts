@@ -348,9 +348,8 @@ describe('team send Codex pasted-content submit regression', () => {
       await waitFor(() => {
         const run = hive.store.getActiveRunByAgentId(workspace.id, orchestratorId)
         const output = run?.output ?? ''
-        expect(output).toContain('type=report')
-        expect(output).not.toContain(marker)
-        expect(expandInboxReferences(output)).toContain(marker)
+        expect(output).toContain('<hive-message kind="report"')
+        expect(output).toContain(marker)
         expect(countSubmitted(run?.output)).toBeGreaterThanOrEqual(submittedBeforeReport + 1)
         expect(run?.output).not.toContain('EARLY_ENTER_IGNORED')
       }, 2500)

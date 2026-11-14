@@ -354,8 +354,14 @@ export const createTeamOperations = ({
     }
   }
 
-  const buildIssuerSystemReminderPayload = (text: string) =>
-    `<hive-system-reminder>\n${escapeHiveEnvelopeText(text)}\n</hive-system-reminder>\n`
+  const buildIssuerSystemReminderPayload = (text: string) => {
+    const escaped = escapeHiveEnvelopeText(text)
+    if (!/[\r\n]/.test(text)) {
+      const inline = `<hive-system-reminder>${escaped}</hive-system-reminder>`
+      if (inline.length <= 400) return inline
+    }
+    return `<hive-system-reminder>\n${escaped}\n</hive-system-reminder>\n`
+  }
 
   /** Issuer notification that survives the issuer being down: try the live
    *  PTY first; if the issuer has no active run (or the write rejects), park

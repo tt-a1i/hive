@@ -36,8 +36,9 @@ import { applySchemaVersion43 } from './sqlite-schema-v43.js'
 import { applySchemaVersion44 } from './sqlite-schema-v44.js'
 import { applySchemaVersion45 } from './sqlite-schema-v45.js'
 import { applySchemaVersion46 } from './sqlite-schema-v46.js'
+import { applySchemaVersion47 } from './sqlite-schema-v47.js'
 
-export const CURRENT_SCHEMA_VERSION = 46
+export const CURRENT_SCHEMA_VERSION = 47
 
 // Idempotent column-add helper. SQLite doesn't have `ALTER TABLE … ADD COLUMN
 // IF NOT EXISTS`, so PRAGMA-check first. Safe to call on every init; required
@@ -517,13 +518,18 @@ export const initializeRuntimeDatabase = (db: Database) => {
       })()
     }
   }
-  if (!appliedVersions.has(46)) {
-    db.transaction(() => {
-      applySchemaVersion46(db)
-      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
-        46,
-        Date.now()
-      )
-    })()
+  for (const [version, apply] of [
+    [46, applySchemaVersion46],
+    [47, applySchemaVersion47],
+  ] as const) {
+    if (!appliedVersions.has(version)) {
+      db.transaction(() => {
+        apply(db)
+        db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
+          version,
+          Date.now()
+        )
+      })()
+    }
   }
 }

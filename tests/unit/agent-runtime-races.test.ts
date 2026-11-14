@@ -189,7 +189,7 @@ describe('agent runtime races (unit)', () => {
         'dispatch-1',
         'Orchestrator',
         'Coder role',
-        'Implement login'
+        'Implement login\nPreserve full context in inbox when EPIPE occurs.'
       )
     ).toThrow(/EPIPE/)
 

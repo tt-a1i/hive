@@ -34,7 +34,7 @@ const writeSlowHermesCli = (binDir: string, promptDelayMs = 350) => {
       "  if (!pasted && (pasteEnd >= 0 || (process.platform === 'win32' && buffer.includes('</hive-message>')))) {",
       '    pasted = true',
       '    const kind = buffer.match(/<hive-message kind="([^"]+)"/)?.[1] || \'unknown\'',
-      '    const dispatch = buffer.match(/dispatch_id: ([^\\r\\n]+)/)?.[1]',
+      '    const dispatch = buffer.match(/dispatch_id: ([^\\s|<]+)/)?.[1]',
       "    process.stdout.write('\\nKIND:' + kind + (dispatch ? ':' + dispatch : '') + '\\n❯ ')",
       '  }',
       '  const submitInput = pasteEnd >= 0 ? buffer.slice(pasteEnd + PASTE_END.length) : chunk',

@@ -228,18 +228,18 @@ describe('collaboration cost metrics (issue #75)', () => {
       expect(body.send_to_delivered_ms.p95).toBeGreaterThan(0)
       expect(body.delivered_to_reported_ms.p50).toBeGreaterThan(0)
       expect(body.delivered_to_reported_ms.p95).toBeGreaterThan(0)
-      // Dispatches and reports carry short inbox wakeups; measure the exact report
-      // wakeups observed by the real orchestrator PTY, independently of the ledger.
+      // Short single-line dispatches and reports travel inline; measure the exact
+      // inline report envelopes observed by the real orchestrator PTY.
       const rawDispatchBytes = Buffer.byteLength('implement login review login', 'utf8')
       expect(dispatchBytesTotal).toBeGreaterThan(rawDispatchBytes)
       expect(dispatchBytesTotal).toBeLessThan(rawDispatchBytes + 2 * 8_000)
-      const wakeups =
+      const reportEnvelopes =
         readFileSync(receivedPath, 'utf8').match(
-          /\[hive-inbox [a-f0-9-]+[^\]\r\n]*\] Read "(?:[^"\\]|\\.)*" for the complete Hive system message\./g
+          /<hive-message kind="report"[^\r\n]*<\/hive-system-reminder>/g
         ) ?? []
-      expect(wakeups).toHaveLength(2)
+      expect(reportEnvelopes).toHaveLength(2)
       expect(reportBytesTotal).toBe(
-        wakeups.reduce((total, wakeup) => total + Buffer.byteLength(wakeup), 0)
+        reportEnvelopes.reduce((total, envelope) => total + Buffer.byteLength(envelope, 'utf8'), 0)
       )
       expect(body.dispatch_payload_bytes.total).toBe(dispatchBytesTotal)
       expect(body.dispatch_payload_bytes.avg).toBe(dispatchBytesTotal / 2)

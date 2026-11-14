@@ -1524,7 +1524,8 @@ describe('schema version', () => {
     expect(byId.reviewer).toContain('blocking issues first')
     expect(byId.tester).toContain('You are a Tester')
     expect(byId.orchestrator).toContain('You are the Hive Orchestrator')
-    expect(byId.orchestrator).toContain('.hive/tasks.md')
+    expect(byId.orchestrator).toContain('team guide core')
+    expect(byId.orchestrator).not.toContain('.hive/tasks.md')
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(12)).toEqual({
       version: 12,
     })
@@ -1600,7 +1601,8 @@ describe('schema version', () => {
     const row = db
       .prepare('SELECT description FROM role_templates WHERE id = ?')
       .get('orchestrator') as { description: string }
-    expect(row.description).toContain('.hive/tasks.md')
+    expect(row.description).toContain('team guide core')
+    expect(row.description).not.toContain('.hive/tasks.md')
     expect(row.description).not.toContain('维护 tasks.md')
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(13)).toEqual({
       version: 13,
@@ -2738,7 +2740,7 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(46)
+    expect(CURRENT_SCHEMA_VERSION).toBe(47)
 
     db.close()
   })
@@ -2874,8 +2876,66 @@ describe('schema version', () => {
     expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(45)).toEqual({
       version: 45,
     })
-    expect(CURRENT_SCHEMA_VERSION).toBe(46)
+    expect(CURRENT_SCHEMA_VERSION).toBe(47)
 
+    db.close()
+  })
+
+  test('migration from v46 refreshes unchanged v43 builtin orchestrator template while preserving customized descriptions', () => {
+    const db = new Database(':memory:')
+    db.exec(`
+      CREATE TABLE schema_version (
+        version INTEGER PRIMARY KEY,
+        applied_at INTEGER NOT NULL
+      );
+      CREATE TABLE role_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        role_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        default_command TEXT NOT NULL,
+        default_args TEXT NOT NULL,
+        default_env TEXT NOT NULL,
+        is_builtin INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `)
+    for (let version = 1; version <= 46; version += 1) {
+      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(version, 1)
+    }
+    const v43Default = [
+      'You are the Hive Orchestrator, the user’s point of contact for this workspace.',
+      'Own the goal, resolve scope, permission, and ownership decisions, and deliver verified outcomes with unmet requirements and remaining risks.',
+      'Keep .hive/tasks.md useful for plans spanning multiple responsibilities. Recover missing coordination rules with `team guide core`.',
+    ].join('\n')
+    db.prepare(
+      `INSERT INTO role_templates (
+        id, name, role_type, description, default_command, default_args, default_env, is_builtin, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'claude', '[]', '{}', ?, 1, 1)`
+    ).run('orchestrator', 'Orchestrator', 'orchestrator', v43Default, 1)
+    db.prepare(
+      `INSERT INTO role_templates (
+        id, name, role_type, description, default_command, default_args, default_env, is_builtin, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'claude', '[]', '{}', ?, 1, 1)`
+    ).run('custom-orch', 'Custom', 'orchestrator', 'My custom orchestrator prompt', 0)
+
+    initializeRuntimeDatabase(db)
+
+    const builtin = db
+      .prepare('SELECT description FROM role_templates WHERE id = ?')
+      .get('orchestrator') as { description: string }
+    const custom = db
+      .prepare('SELECT description FROM role_templates WHERE id = ?')
+      .get('custom-orch') as { description: string }
+    expect(builtin.description).toContain(
+      'delegate only when parallel work or independent review adds real value'
+    )
+    expect(builtin.description).not.toContain('.hive/tasks.md')
+    expect(custom.description).toBe('My custom orchestrator prompt')
+    expect(db.prepare('SELECT version FROM schema_version WHERE version = ?').get(47)).toEqual({
+      version: 47,
+    })
     db.close()
   })
 })

@@ -254,7 +254,10 @@ const onlyPasteAcknowledgementWasAppended = (
 const shouldWaitForPasteAck = (command: string, text: string) => {
   const commandName = getCommandName(command)
   if (commandName === 'codex') {
-    return text.length >= CODEX_PASTE_ACK_MIN_CHARS || HIVE_ACK_GATED_MESSAGE_PATTERN.test(text)
+    return (
+      text.length >= CODEX_PASTE_ACK_MIN_CHARS ||
+      (/[\r\n]/.test(text) && HIVE_ACK_GATED_MESSAGE_PATTERN.test(text))
+    )
   }
   return COMMANDS_WAITING_FOR_PASTE_ACK.has(commandName)
 }

@@ -20,17 +20,23 @@ const fixture = async () => {
 process.stdin.setRawMode(true)
 process.stdin.setEncoding('utf8')
 let input = ''
+const record = (text) => {
+  appendFileSync(${JSON.stringify(receivedLog)}, JSON.stringify({agentId:process.env.HIVE_AGENT_ID,text}) + '\\n')
+  process.stdout.write('RECEIVED_BEGIN\\r\\n' + text + '\\r\\nRECEIVED_END\\r\\n')
+}
 process.stdin.on('data', chunk => {
   input += chunk
-  const pattern = /Read ("[^"\\r\\n]+") for the complete Hive system message/g
-  let consumed = 0
-  for (const match of input.matchAll(pattern)) {
-    const text = readFileSync(JSON.parse(match[1]), 'utf8')
-    appendFileSync(${JSON.stringify(receivedLog)}, JSON.stringify({agentId:process.env.HIVE_AGENT_ID,text}) + '\\n')
-    process.stdout.write('RECEIVED_BEGIN\\r\\n' + text + '\\r\\nRECEIVED_END\\r\\n')
-    consumed = match.index + match[0].length
+  const parts = input.split(/[\\r\\n]+/)
+  input = parts.pop() || ''
+  for (const line of parts) {
+    const inboxMatch = line.match(/Read ("[^"\\r\\n]+") for the complete Hive system message/)
+    if (inboxMatch) {
+      record(readFileSync(JSON.parse(inboxMatch[1]), 'utf8'))
+      continue
+    }
+    const inlineMatch = line.match(/<hive-message\\b[\\s\\S]*<\\/hive-(?:system-reminder|message)>/)
+    if (inlineMatch) record(inlineMatch[0])
   }
-  input = input.slice(consumed)
 })
 process.stdout.write('SWITCH_RECEIVER_READY\\r\\n')`
   )
