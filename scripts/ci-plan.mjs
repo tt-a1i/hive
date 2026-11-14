@@ -1,9 +1,9 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const flags = [
-  '--no-file-parallelism',
-  '--maxWorkers=1',
   '--testTimeout=60000',
   '--hookTimeout=60000',
   '--exclude=tests/integration/package-tarball.test.ts',
@@ -11,7 +11,10 @@ const flags = [
 // These scripts are invoked as subprocesses, so import-graph selection cannot find their tests.
 const scriptTests = {
   'scripts/ci-plan.mjs': ['tests/unit/ci-plan.test.ts'],
-  'scripts/run-tests.mjs': ['tests/unit/ci-plan.test.ts'],
+  'scripts/run-tests.mjs': [
+    'tests/unit/ci-plan.test.ts',
+    'tests/unit/test-execution-policy.test.ts',
+  ],
   'scripts/ci-result.mjs': ['tests/unit/ci-plan.test.ts'],
   'scripts/check-engineering.mjs': ['tests/unit/check-engineering.test.ts'],
   'scripts/prepare-build-artifacts.mjs': ['tests/unit/prepare-build-artifacts.test.js'],
@@ -20,47 +23,7 @@ const scriptTests = {
   'scripts/pack-smoke.mjs': [],
 }
 
-if (process.argv[2] === '--run') {
-  const inputs = JSON.parse(process.env.CI_TEST_INPUTS ?? '[]')
-  if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
-    throw new TypeError('CI_TEST_INPUTS must be an array of file paths')
-  }
-  const full = process.env.CI_FULL === 'true'
-  const shard = process.env.CI_TEST_SHARD
-  if (shard) {
-    const match = /^(\d+)\/(\d+)$/u.exec(shard)
-    const index = Number(match?.[1])
-    const total = Number(match?.[2])
-    if (!full || !Number.isSafeInteger(total) || index < 1 || index > total) {
-      throw new Error('CI_TEST_SHARD must select a valid partition of the full suite')
-    }
-  }
-  if (full || inputs.length) {
-    const direct = inputs.every((file) => /\.test\.[jt]sx?$/u.test(file))
-    const args = full
-      ? [...flags, ...(shard ? [`--shard=${shard}`] : [])]
-      : [...(direct ? [] : ['--related']), ...inputs, ...flags]
-    const result = spawnSync(process.execPath, ['scripts/run-tests.mjs', ...args], {
-      stdio: 'inherit',
-    })
-    if (result.error) throw result.error
-    process.exitCode = result.status ?? 1
-  } else {
-    console.log('No backend/test changes: static checks and build cover this change.')
-  }
-} else {
-  const forced = process.env.CI_FULL === 'true'
-  const base = process.env.CI_BASE_SHA
-  if (!forced && !/^[a-f0-9]{40}$/u.test(base ?? '')) {
-    throw new Error('CI_BASE_SHA must identify the checked-out PR base commit')
-  }
-  const files = forced
-    ? []
-    : execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', base, 'HEAD', '--'], {
-        encoding: 'utf8',
-      })
-        .split('\0')
-        .filter(Boolean)
+export function createPlan({ files, forced = false, exists, oldPackageInput, newPackageInput }) {
   const docs = (file) =>
     /^(docs\/|README[^/]*$|CHANGELOG\.md$|AGENTS\.md$|CLAUDE\.md$|CONTEXT\.md$|\.codex\/agents\/[^/]+\.toml$|LICENSE[^/]*$|NOTICE$|TRADEMARK\.md$|SECURITY\.md$)/u.test(
       file
@@ -70,14 +33,12 @@ if (process.argv[2] === '--run') {
   let full = forced
   let native = forced
   for (const file of relevant) {
-    if ((file.startsWith('src/') || file.startsWith('web/src/')) && !existsSync(file)) full = true
+    if ((file.startsWith('src/') || file.startsWith('web/src/')) && !exists(file)) full = true
     if (file.startsWith('scripts/') && !Object.hasOwn(scriptTests, file)) full = true
     if (file === '.github/workflows/ci.yml') full = true
     if (file === 'package.json') {
-      const oldPackage = JSON.parse(
-        execFileSync('git', ['show', `${base}:package.json`], { encoding: 'utf8' })
-      )
-      const newPackage = JSON.parse(readFileSync(file, 'utf8'))
+      const oldPackage = structuredClone(oldPackageInput)
+      const newPackage = structuredClone(newPackageInput)
       delete oldPackage.version
       delete newPackage.version
       if (JSON.stringify(oldPackage) !== JSON.stringify(newPackage)) full = native = true
@@ -86,7 +47,7 @@ if (process.argv[2] === '--run') {
     ) {
       full = native = true
     } else if (
-      /^src\/(shared\/|cli\/team|server\/(sqlite|runtime-|agent-|dispatch-|workflow-|remote-|team-|controller-|report-outbox|message-|routes-(team|workflow|remote)))/u.test(
+      /^src\/(shared\/|cli\/team|server\/(sqlite|runtime-|agent-|dispatch-|workflow-|remote-|team-(authz|operations)|report-outbox|message-|routes-(workflow|remote)))/u.test(
         file
       )
     ) {
@@ -108,17 +69,22 @@ if (process.argv[2] === '--run') {
     }
   }
   const inputs = relevant.filter(
-    (file) => /^(src\/|web\/src\/|tests\/)/u.test(file) && existsSync(file)
+    (file) => /^(src\/|web\/src\/|tests\/)/u.test(file) && exists(file)
   )
   for (const file of relevant) inputs.push(...(scriptTests[file] ?? []))
   if (relevant.includes('package.json') || relevant.includes('web/src/whats-new/changelog.ts')) {
     inputs.push('tests/unit/whats-new-select.test.ts')
   }
+  // Team routes and helpers use related tests plus real HTTP contract and authorization coverage.
+  // Shared dispatch operations and authorization remain full-suite boundaries above.
+  if (relevant.some((file) => /^src\/server\/(team-|routes-team)/u.test(file))) {
+    inputs.push('tests/server/team-send-contract.test.ts', 'tests/server/team-api-authz.test.ts')
+  }
   if (inputs.some((file) => file.startsWith('src/'))) {
     // CLI subprocess imports are invisible to Vitest's dependency graph.
     inputs.push('tests/cli/team-cli.test.ts', 'tests/server/runtime-rehydration.test.ts')
   }
-  const plan = {
+  return {
     code: forced || relevant.length > 0,
     gateway_policy:
       !forced &&
@@ -135,10 +101,67 @@ if (process.argv[2] === '--run') {
     shards: full ? [1, 2, 3, 4] : [1],
     inputs: [...new Set(inputs)],
   }
-  console.log(JSON.stringify({ ...plan, changed: files }, null, 2))
-  if (process.env.GITHUB_OUTPUT) {
-    for (const [key, value] of Object.entries(plan)) {
-      appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${JSON.stringify(value)}\n`)
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  if (process.argv[2] === '--run') {
+    const inputs = JSON.parse(process.env.CI_TEST_INPUTS ?? '[]')
+    if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
+      throw new TypeError('CI_TEST_INPUTS must be an array of file paths')
+    }
+    const full = process.env.CI_FULL === 'true'
+    const shard = process.env.CI_TEST_SHARD
+    if (shard) {
+      const match = /^(\d+)\/(\d+)$/u.exec(shard)
+      const index = Number(match?.[1])
+      const total = Number(match?.[2])
+      if (!full || !Number.isSafeInteger(total) || index < 1 || index > total) {
+        throw new Error('CI_TEST_SHARD must select a valid partition of the full suite')
+      }
+    }
+    if (full || inputs.length) {
+      const direct = inputs.every((file) => /\.test\.[jt]sx?$/u.test(file))
+      const args = full
+        ? [...flags, ...(shard ? [`--shard=${shard}`] : [])]
+        : [...(direct ? [] : ['--related']), ...inputs, ...flags]
+      const result = spawnSync(process.execPath, ['scripts/run-tests.mjs', ...args], {
+        stdio: 'inherit',
+      })
+      if (result.error) throw result.error
+      process.exitCode = result.status ?? 1
+    } else {
+      console.log('No backend/test changes: static checks and build cover this change.')
+    }
+  } else {
+    const forced = process.env.CI_FULL === 'true'
+    const base = process.env.CI_BASE_SHA
+    if (!forced && !/^[a-f0-9]{40}$/u.test(base ?? '')) {
+      throw new Error('CI_BASE_SHA must identify the checked-out PR base commit')
+    }
+    const files = forced
+      ? []
+      : execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', base, 'HEAD', '--'], {
+          encoding: 'utf8',
+        })
+          .split('\0')
+          .filter(Boolean)
+    const packageChanged = files.includes('package.json')
+    const plan = createPlan({
+      files,
+      forced,
+      exists: existsSync,
+      oldPackageInput:
+        packageChanged && !forced
+          ? JSON.parse(execFileSync('git', ['show', `${base}:package.json`], { encoding: 'utf8' }))
+          : undefined,
+      newPackageInput:
+        packageChanged && !forced ? JSON.parse(readFileSync('package.json', 'utf8')) : undefined,
+    })
+    console.log(JSON.stringify({ ...plan, changed: files }, null, 2))
+    if (process.env.GITHUB_OUTPUT) {
+      for (const [key, value] of Object.entries(plan)) {
+        appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${JSON.stringify(value)}\n`)
+      }
     }
   }
 }

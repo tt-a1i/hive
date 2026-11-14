@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -23,5 +23,12 @@ describe('tasks file missing directory', () => {
     const service = createTasksFileService()
 
     expect(service.readTasks(workspacePath)).toBe('')
+    const tasksPath = join(workspacePath, '.hive', 'tasks.md')
+    expect(readFileSync(tasksPath, 'utf8')).toBe('')
+
+    const content = '- [ ] implement login\n'
+    service.writeTasks(workspacePath, content)
+    expect(readFileSync(tasksPath, 'utf8')).toBe(content)
+    expect(service.readTasks(workspacePath)).toBe(content)
   })
 })

@@ -63,7 +63,7 @@ let cookie = ''
 beforeEach(async () => {
   window.localStorage?.clear?.()
   window.localStorage.setItem('hive.last-seen-version', APP_VERSION)
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = server.close
   baseUrl = server.baseUrl
   await nativeFetch(`${baseUrl}/api/ui/session`).then((response) => {

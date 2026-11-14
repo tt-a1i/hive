@@ -105,7 +105,7 @@ beforeEach(async () => {
   window.localStorage?.clear?.()
   window.localStorage.setItem('hive.first-run-seen', '1')
   stubMobileMatchMedia()
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = server.close
   baseUrl = server.baseUrl
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {

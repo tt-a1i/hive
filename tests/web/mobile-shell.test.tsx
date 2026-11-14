@@ -60,7 +60,7 @@ beforeEach(async () => {
   window.localStorage?.clear?.()
   window.localStorage.setItem('hive.first-run-seen', '1')
   window.localStorage.setItem('hive.last-seen-version', APP_VERSION)
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = server.close
   serverBaseUrl = server.baseUrl
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {

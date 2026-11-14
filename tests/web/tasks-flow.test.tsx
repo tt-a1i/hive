@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import WebSocket from 'ws'
 
@@ -20,16 +20,30 @@ let workspaceId = ''
 let baseUrl = ''
 let uiCookie = ''
 const tempDirs: string[] = []
+let holdSnapshot = false
+let releaseSnapshot: ((content?: string) => void) | undefined
+let deliverUpdate: ((content: string) => void) | undefined
+let suppressUpdates = false
+let togglePromise: Promise<void> | undefined
 
 const TaskDrawerHarness = () => {
   const tasksFile = useTasksFile(workspaceId)
   return (
-    <WorkspaceTaskDrawer
-      open
-      tasksFile={tasksFile}
-      onClose={() => {}}
-      workspacePath={workspacePath}
-    />
+    <>
+      <span data-testid="tasks-loaded">{tasksFile.loaded ? 'loaded' : 'loading'}</span>
+      <WorkspaceTaskDrawer
+        open
+        tasksFile={{
+          ...tasksFile,
+          toggleTaskAtLine: (line) => {
+            togglePromise = tasksFile.toggleTaskAtLine(line)
+            return togglePromise
+          },
+        }}
+        onClose={() => {}}
+        workspacePath={workspacePath}
+      />
+    </>
   )
 }
 
@@ -52,8 +66,19 @@ class ForwardedWebSocket {
     const resolvedPath = new URL(url, 'http://localhost').pathname
     const resolvedUrl = `${baseUrl.replace('http://', 'ws://')}${resolvedPath}`
     this.socket = new WebSocket(resolvedUrl, { headers: { cookie: uiCookie } })
+    deliverUpdate = (content) =>
+      this.onmessage?.({ data: JSON.stringify({ type: 'tasks-updated', content }) })
     this.socket.on('open', () => this.onopen?.())
-    this.socket.on('message', (data) => this.onmessage?.({ data: data.toString() }))
+    this.socket.on('message', (data) => {
+      const message = data.toString()
+      const type = JSON.parse(message).type
+      if (holdSnapshot && type === 'tasks-snapshot') {
+        releaseSnapshot = (content) =>
+          this.onmessage?.({
+            data: content === undefined ? message : JSON.stringify({ type, content }),
+          })
+      } else if (!(suppressUpdates && type === 'tasks-updated')) this.onmessage?.({ data: message })
+    })
     this.socket.on('close', () => this.onclose?.())
     this.socket.on('error', () => this.onerror?.())
   }
@@ -72,7 +97,7 @@ class ForwardedWebSocket {
 }
 
 beforeEach(async () => {
-  const server = await startTestServer()
+  const server = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = server.close
   baseUrl = server.baseUrl
   await nativeFetch(`${server.baseUrl}/api/ui/session`).then((response) => {
@@ -109,6 +134,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   cleanup()
+  holdSnapshot = false
+  suppressUpdates = false
+  togglePromise = undefined
+  deliverUpdate = undefined
+  releaseSnapshot = undefined
   vi.restoreAllMocks()
   await cleanupServer?.()
   cleanupServer = undefined
@@ -214,6 +244,178 @@ describe('tasks flow driven from the Task Graph drawer', () => {
     await waitFor(() => {
       expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
     })
+  })
+
+  test.each([
+    'in-flight',
+    'completed',
+  ] as const)('a delayed snapshot does not undo a %s checkbox save', async (saveState) => {
+    holdSnapshot = true
+    let releaseSave: (() => void) | undefined
+    let markParsed: (() => void) | undefined
+    let watchRefresh = false
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    const refreshParsed = new Promise<void>((resolve) => {
+      markParsed = resolve
+    })
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const value =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      const headers = new Headers(init?.headers)
+      headers.set('cookie', uiCookie)
+      const response = await nativeFetch(new URL(value, baseUrl), { ...init, headers })
+      if (value.endsWith('/tasks') && init?.method === 'PUT' && saveState === 'in-flight')
+        await saveGate
+      if (value.endsWith('/tasks') && !init?.method && watchRefresh) {
+        const parse = response.json.bind(response)
+        response.json = async () => {
+          const body = await parse()
+          markParsed?.()
+          return body
+        }
+      }
+      return response
+    })
+    renderTaskDrawer()
+    const checkbox = await screen.findByTestId('task-checkbox-0')
+    await waitFor(() => expect(releaseSnapshot).toBeDefined())
+    fireEvent.click(checkbox)
+    if (saveState === 'completed')
+      await act(async () => {
+        await togglePromise
+      })
+    watchRefresh = true
+    act(() => releaseSnapshot?.())
+    await act(async () => {
+      releaseSave?.()
+      await togglePromise
+      await refreshParsed
+    })
+    await act(async () => {})
+    expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
+    const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      headers: { cookie: uiCookie },
+    })
+    await expect(saved.json()).resolves.toEqual({ content: '- [x] implement login\n' })
+  })
+
+  test('a delayed initial load does not undo a checkbox save', async () => {
+    let releaseLoad: (() => void) | undefined
+    let initialLoadHeld = false
+    const loadGate = new Promise<void>((resolve) => {
+      releaseLoad = resolve
+    })
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const value =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      const headers = new Headers(init?.headers)
+      headers.set('cookie', uiCookie)
+      const response = await nativeFetch(new URL(value, baseUrl), { ...init, headers })
+      if (value.endsWith('/tasks') && !init?.method) {
+        initialLoadHeld = true
+        await loadGate
+      }
+      return response
+    })
+
+    renderTaskDrawer()
+    const checkbox = await screen.findByTestId('task-checkbox-0')
+    await waitFor(() => expect(initialLoadHeld).toBe(true))
+    fireEvent.click(checkbox)
+    await waitFor(async () => {
+      const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+        headers: { cookie: uiCookie },
+      })
+      await expect(saved.json()).resolves.toEqual({ content: '- [x] implement login\n' })
+    })
+    await act(async () => {
+      await togglePromise
+      releaseLoad?.()
+    })
+    await waitFor(() => expect(screen.getByTestId('tasks-loaded')).toHaveTextContent('loaded'))
+    expect(screen.getByTestId('task-checkbox-0')).toBeChecked()
+  })
+
+  test.each([
+    ['new content', '- [ ] external change\n', 'external change'],
+    ['original content', '- [ ] implement login\n', 'implement login'],
+  ])('external update to %s survives an older held save response', async (_label, external, taskText) => {
+    suppressUpdates = true
+    let releaseSave: (() => void) | undefined
+    let saveWritten = false
+    const saveGate = new Promise<void>((resolve) => {
+      releaseSave = resolve
+    })
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const value =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      const headers = new Headers(init?.headers)
+      headers.set('cookie', uiCookie)
+      const response = await nativeFetch(new URL(value, baseUrl), { ...init, headers })
+      if (value.endsWith('/tasks') && init?.method === 'PUT') {
+        saveWritten = true
+        await saveGate
+      }
+      return response
+    })
+    renderTaskDrawer()
+    fireEvent.click(await screen.findByTestId('task-checkbox-0'))
+    await waitFor(() => expect(saveWritten).toBe(true))
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), external)
+    act(() => deliverUpdate?.(external))
+    await act(async () => {
+      releaseSave?.()
+      await togglePromise
+    })
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: taskText })).not.toBeChecked())
+  })
+
+  test('a delayed snapshot with a newer external update is revalidated', async () => {
+    holdSnapshot = true
+    suppressUpdates = true
+    renderTaskDrawer()
+    const checkbox = await screen.findByTestId('task-checkbox-0')
+    await waitFor(() => expect(releaseSnapshot).toBeDefined())
+    fireEvent.click(checkbox)
+    await act(async () => {
+      await togglePromise
+    })
+    const external = '- [ ] external change\n'
+    writeFileSync(join(workspacePath, '.hive', 'tasks.md'), external)
+    act(() => releaseSnapshot?.(external))
+    await waitFor(() => expect(screen.getByText('external change')).toBeInTheDocument())
+  })
+
+  test('a failed checkbox save restores the last saved task', async () => {
+    suppressUpdates = true
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const value =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (value.endsWith('/tasks') && init?.method === 'PUT') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: 'save failed' }), {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          })
+        )
+      }
+      const headers = new Headers(init?.headers)
+      headers.set('cookie', uiCookie)
+      return nativeFetch(new URL(value, baseUrl), { ...init, headers })
+    })
+    renderTaskDrawer()
+    fireEvent.click(await screen.findByTestId('task-checkbox-0'))
+    await act(async () => {
+      await togglePromise?.catch(() => {})
+    })
+    expect(screen.getByTestId('task-checkbox-0')).not.toBeChecked()
+    const saved = await nativeFetch(`${baseUrl}/api/workspaces/${workspaceId}/tasks`, {
+      headers: { cookie: uiCookie },
+    })
+    await expect(saved.json()).resolves.toEqual({ content: '- [ ] implement login\n' })
   })
 
   test('raw editor save persists edits to .hive/tasks.md', async () => {

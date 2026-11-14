@@ -76,7 +76,7 @@ beforeEach(async () => {
   root = mkdtempSync(join(tmpdir(), 'hive-notification-contract-'))
   const workspacePath = join(root, 'workspace')
   mkdirSync(workspacePath)
-  server = await startTestServer({ dataDir: join(root, 'runtime') })
+  server = await startTestServer({ offlineVersionCheck: true, dataDir: join(root, 'runtime') })
   cookie = await getUiCookie(server.baseUrl)
   const headers = { 'content-type': 'application/json', cookie }
   const created = await fetch(`${server.baseUrl}/api/workspaces`, {

@@ -31,6 +31,7 @@ beforeEach(async () => {
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
 
   server = await startTestServer({
+    offlineVersionCheck: true,
     pickFolderPath: join(sandboxRoot, 'alpha-project'),
   })
   cleanupServer = server.close

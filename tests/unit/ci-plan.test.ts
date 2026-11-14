@@ -12,6 +12,11 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, expect, test } from 'vitest'
+// The executable JavaScript planner has no separate TypeScript declaration.
+// @ts-expect-error -- tested directly as an ES module
+import { createPlan } from '../../scripts/ci-plan.mjs'
+// @ts-expect-error -- tested directly as an ES module
+import { validateResults } from '../../scripts/ci-result.mjs'
 
 const script = resolve('scripts/ci-plan.mjs')
 const roots: string[] = []
@@ -21,7 +26,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true })
 })
 
-const planChange = (
+const planChangeOnDisk = (
   files: Record<string, string | null>,
   extraEnv: Record<string, string> = {}
 ) => {
@@ -61,6 +66,37 @@ const planChange = (
     })
   )
 }
+
+const planChange = (files: Record<string, string | null>, extraEnv: Record<string, string> = {}) =>
+  createPlan({
+    files: Object.keys(files),
+    forced: extraEnv.CI_FULL === 'true',
+    exists: (file: string) => files[file] !== null,
+    oldPackageInput: manifest,
+    newPackageInput: files['package.json'] ? JSON.parse(files['package.json']) : manifest,
+  })
+
+test('planner reads the actual Git base and changed files', () => {
+  expect(planChangeOnDisk({ 'web/src/example.tsx': 'export {}' })).toMatchObject({
+    full: false,
+    inputs: ['web/src/example.tsx'],
+    changed: ['web/src/example.tsx'],
+  })
+})
+
+test.each([
+  'src/server/routes-team.ts',
+  'src/server/team-list-serializer.ts',
+])('%s selects related and real team contract tests', (file) => {
+  expect(planChange({ [file]: 'export {}' })).toMatchObject({
+    full: false,
+    inputs: expect.arrayContaining([
+      file,
+      'tests/server/team-send-contract.test.ts',
+      'tests/server/team-api-authz.test.ts',
+    ]),
+  })
+})
 
 test('gateway-only changes select policy checks without installing the desktop runtime', () => {
   expect(
@@ -148,6 +184,7 @@ test.each([
   'src/server/remote-pairing.ts',
   'src/server/remote-loopback-auth.ts',
   'src/server/team-authz.ts',
+  'src/server/team-operations.ts',
   'src/server/workflow-script-worker.ts',
   '.github/workflows/ci.yml',
 ])('high-risk %s changes keep full tests and platform validation', (file) => {
@@ -239,13 +276,20 @@ test('source deletions force full validation, while removed test files are not e
 
 test.each([
   'scripts/ci-plan.mjs',
-  'scripts/run-tests.mjs',
   'scripts/ci-result.mjs',
 ])('%s selects its executable regression', (file) => {
   expect(planChange({ [file]: 'export {}' })).toMatchObject({
     full: false,
     native: true,
     inputs: ['tests/unit/ci-plan.test.ts'],
+  })
+})
+
+test('test runner changes select planner and execution-policy regressions', () => {
+  expect(planChange({ 'scripts/run-tests.mjs': 'export {}' })).toMatchObject({
+    full: false,
+    native: true,
+    inputs: ['tests/unit/ci-plan.test.ts', 'tests/unit/test-execution-policy.test.ts'],
   })
 })
 
@@ -365,11 +409,19 @@ test('selected', () => { expect(value).toBe(42); writeFileSync('selected.json', 
 
 test('CI result requires all selected jobs and accepts only intentional skips', () => {
   const names = ['verify', 'tests', 'platforms', 'extended', 'legacy-sqlite']
-  const status = (results: Record<string, unknown>) =>
+  const status = (results: Record<string, unknown>) => {
+    try {
+      validateResults(results)
+      return 0
+    } catch {
+      return 1
+    }
+  }
+  const runResult = (results: Record<string, unknown>) =>
     spawnSync(process.execPath, [resolve('scripts/ci-result.mjs')], {
       env: { ...process.env, RESULTS: JSON.stringify(results) },
       encoding: 'utf8',
-    }).status
+    })
   const full = {
     plan: {
       result: 'success',
@@ -387,6 +439,13 @@ test('CI result requires all selected jobs and accepts only intentional skips', 
     'gateway-policy': { result: 'skipped' },
   }
   expect(status(full)).toBe(0)
+  expect(runResult(full).status).toBe(0)
+  const missingJob = runResult({ ...full, tests: undefined })
+  expect(missingJob.status).toBe(1)
+  expect(missingJob.stderr).toContain('tests: expected success, received missing')
+  const missingPlan = runResult({ ...full, plan: undefined })
+  expect(missingPlan.status).toBe(1)
+  expect(missingPlan.stderr).toContain('The CI plan did not succeed')
   for (const name of names) {
     for (const result of ['skipped', 'cancelled', 'failure', undefined]) {
       expect(status({ ...full, [name]: result ? { result } : undefined })).toBe(1)

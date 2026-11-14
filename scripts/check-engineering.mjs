@@ -1,33 +1,13 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
-const args = process.argv.slice(2)
-if (args.length !== 0 && (args.length !== 2 || args[0] !== '--base' || !args[1])) {
-  console.error('Usage: node scripts/check-engineering.mjs [--base <git-ref>]')
-  process.exit(2)
-}
-const base = args[1] ?? 'HEAD'
-const git = (...args) =>
-  execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-try {
-  git('rev-parse', '--verify', `${base}^{commit}`)
-} catch {
-  console.error(`Invalid base commit: ${base}`)
-  process.exit(2)
-}
-const files = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
-  .split('\0')
-  .filter(Boolean)
-const baseFiles = new Set(git('ls-tree', '-r', '--name-only', '-z', base).split('\0'))
 const source = /^(?:src|web\/src|gateway\/src)\/.*\.(?:[cm]?[jt]sx?)$/
 const integration = /^tests\/(?:server|cli|integration)\/.*\.(?:[cm]?[jt]sx?)$/
-let errors = 0
-function report(file, message) {
-  console.log(`${file}: ${message}`)
-  errors++
-}
+
 function lines(text) {
   return text.length === 0 ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
 }
@@ -43,23 +23,18 @@ function isPtyModule(node) {
     /(?:^|\/)mock-node-pty(?:\.[cm]?[jt]s)?$|(?:^|\/)node-pty$/.test(node.text)
   )
 }
-for (const file of files) {
-  if (!source.test(file) && !integration.test(file)) continue
-  let content
-  try {
-    content = readFileSync(file, 'utf8')
-  } catch (error) {
-    if (error.code === 'ENOENT') continue
-    throw error
-  }
+export function checkFile(file, content, previous) {
+  const errors = []
+  const report = (path, message) => errors.push(`${path}: ${message}`)
+  if (!source.test(file) && !integration.test(file)) return errors
   if (source.test(file)) {
     const count = lines(content)
-    if (count > 500 && !baseFiles.has(file))
+    if (count > 500 && previous === undefined)
       report(file, `new source file has ${count} lines (maximum 500)`)
-    if (count > 600 && baseFiles.has(file)) {
-      const previous = lines(git('show', `${base}:${file}`))
-      if (count > previous)
-        report(file, `source file grew from ${previous} to ${count} lines above 600`)
+    if (count > 600 && previous !== undefined) {
+      const previousCount = lines(previous)
+      if (count > previousCount)
+        report(file, `source file grew from ${previousCount} to ${count} lines above 600`)
     }
   }
   const ast = ts.createSourceFile(
@@ -165,6 +140,47 @@ for (const file of files) {
     ts.forEachChild(node, visit)
   }
   visit(ast)
+  return errors
 }
-if (errors) process.exitCode = 1
-else console.log('Engineering policy checks passed.')
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  const args = process.argv.slice(2)
+  if (args.length !== 0 && (args.length !== 2 || args[0] !== '--base' || !args[1])) {
+    console.error('Usage: node scripts/check-engineering.mjs [--base <git-ref>]')
+    process.exit(2)
+  }
+  const base = args[1] ?? 'HEAD'
+  const git = (...args) =>
+    execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  try {
+    git('rev-parse', '--verify', `${base}^{commit}`)
+  } catch {
+    console.error(`Invalid base commit: ${base}`)
+    process.exit(2)
+  }
+  const files = git('ls-files', '-z', '--cached', '--others', '--exclude-standard')
+    .split('\0')
+    .filter(Boolean)
+  const baseFiles = new Set(git('ls-tree', '-r', '--name-only', '-z', base).split('\0'))
+  const errors = []
+  for (const file of files) {
+    if (!source.test(file) && !integration.test(file)) continue
+    let content
+    try {
+      content = readFileSync(file, 'utf8')
+    } catch (error) {
+      if (error.code === 'ENOENT') continue
+      throw error
+    }
+    const previous =
+      baseFiles.has(file) && source.test(file) && lines(content) > 600
+        ? git('show', `${base}:${file}`)
+        : baseFiles.has(file)
+          ? ''
+          : undefined
+    errors.push(...checkFile(file, content, previous))
+  }
+  for (const error of errors) console.log(error)
+  if (errors.length) process.exitCode = 1
+  else console.log('Engineering policy checks passed.')
+}

@@ -3,6 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+// The executable JavaScript checker has no separate TypeScript declaration.
+// @ts-expect-error -- tested directly as an ES module
+import { checkFile } from '../../scripts/check-engineering.mjs'
 
 const script = resolve('scripts/check-engineering.mjs')
 const dirs: string[] = []
@@ -58,33 +61,19 @@ describe('engineering policy checker', () => {
     ['web/src/id.ts', 'const id = Math . random ( ) . toString ( 36 )'],
     ['gateway/src/id.ts', 'const id = Math.random().toString(36)'],
   ])('rejects %s independently', (path, content) => {
-    const dir = repo()
-    write(dir, 'README.md', 'base')
-    commit(dir)
-    write(dir, path, content)
-    const result = run(dir)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain(path)
+    expect(checkFile(path, content, undefined)).toEqual([expect.stringContaining(path)])
   })
   it('accepts real PTY imports, crypto IDs, jitter, comments and unit mocks', () => {
-    const dir = repo()
-    write(dir, 'README.md', 'base')
-    commit(dir)
-    write(dir, 'tests/server/real.test.ts', "import * as pty from '@lydell/node-pty'")
-    write(
-      dir,
-      'tests/server/process.test.ts',
-      "import * as child from 'node:child_process'; vi.spyOn(child, 'spawn'); const x = {spawn: vi.fn()}; x.spawn = vi.fn()"
-    )
-    write(dir, 'tests/unit/mock.test.ts', "vi.mock('node-pty')")
-    write(
-      dir,
-      'src/ok.ts',
-      'const id = crypto.randomUUID(); const jitter = Math.random() * 100; // Math.random().toString(36)'
-    )
-    const result = run(dir)
-    expect(result.status).toBe(0)
-    expect(result.stdout).toContain('Engineering policy checks passed')
+    const fixtures = {
+      'tests/server/real.test.ts': "import * as pty from '@lydell/node-pty'",
+      'tests/server/process.test.ts':
+        "import * as child from 'node:child_process'; vi.spyOn(child, 'spawn'); const x = {spawn: vi.fn()}; x.spawn = vi.fn()",
+      'tests/unit/mock.test.ts': "vi.mock('node-pty')",
+      'src/ok.ts':
+        'const id = crypto.randomUUID(); const jitter = Math.random() * 100; // Math.random().toString(36)',
+    }
+    for (const [path, content] of Object.entries(fixtures))
+      expect(checkFile(path, content, undefined)).toEqual([])
   })
   it('uses the supplied base to reject new large files and growth of existing large files', () => {
     const dir = repo()
@@ -96,15 +85,18 @@ describe('engineering policy checker', () => {
     write(dir, 'src/new.ts', 'x\n'.repeat(501))
     write(dir, 'src/shrink.ts', 'x\n'.repeat(602))
     write(dir, 'src/small.ts', 'x\n'.repeat(500))
+    write(dir, 'tests/server/mock.test.ts', "vi.mock('node-pty')")
     const result = run(dir, '--base', base)
     expect(result.status).toBe(1)
     expect(result.stdout).toContain('src/existing.ts')
     expect(result.stdout).toContain('src/new.ts')
+    expect(result.stdout).toContain('tests/server/mock.test.ts: line 1: PTY module mock')
     expect(result.stdout).not.toContain('src/unchanged.ts')
     expect(result.stdout).not.toContain('src/shrink.ts')
     expect(result.stdout).not.toContain('src/small.ts')
     write(dir, 'src/existing.ts', 'x\n'.repeat(600))
     write(dir, 'src/new.ts', 'x\n'.repeat(500))
+    write(dir, 'tests/server/mock.test.ts', "import * as pty from 'node-pty'")
     expect(run(dir, '--base', base).status).toBe(0)
   })
   it('fails when the requested base does not exist', () => {

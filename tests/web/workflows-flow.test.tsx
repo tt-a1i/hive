@@ -73,7 +73,7 @@ beforeEach(async () => {
       removeEventListener: () => {},
       removeListener: () => {},
     }) as MediaQueryList) as typeof window.matchMedia
-  serverContext = await startTestServer()
+  serverContext = await startTestServer({ offlineVersionCheck: true })
   cleanupServer = serverContext.close
   await nativeFetch(`${serverContext.baseUrl}/api/ui/session`).then((response) => {
     uiCookie = response.headers.get('set-cookie') ?? ''

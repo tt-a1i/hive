@@ -191,7 +191,7 @@ describe('replay failure recovery (review findings)', () => {
     expect(writeSendPrompt).not.toHaveBeenCalled()
   })
 
-  test('startup replay skips dispatches created after the active run started', () => {
+  test('startup replay includes equal-time queued rows without reclaiming equal-time live writes', () => {
     const store = createRuntimeStore()
     const workspace = store.createWorkspace('/tmp/hive-alpha', 'Alpha')
     const worker = store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
@@ -212,7 +212,26 @@ describe('replay failure recovery (review findings)', () => {
       toAgentId: worker.id,
       workspaceId: workspace.id,
     })
-    const dispatches = [oldParked, newDuringStartup]
+    const equalTimeQueued = makeDispatch({
+      ...oldParked,
+      createdAt: 1_500,
+      id: 'dispatch-queued-at-start',
+      sequence: 3,
+    })
+    const equalTimeSubmitted = makeDispatch({
+      ...equalTimeQueued,
+      id: 'dispatch-writing-at-start',
+      sequence: 4,
+      status: 'submitted',
+      submittedAt: 1_500,
+    })
+    const dispatches = [oldParked, newDuringStartup, equalTimeQueued, equalTimeSubmitted]
+    const reparkClaimedDispatch = vi.fn((id: string) => {
+      const item = dispatches.find((candidate) => candidate.id === id)
+      if (!item || item.status !== 'submitted') return false
+      item.status = 'queued'
+      return true
+    })
     const claimQueuedDispatch = (id: string) => {
       const item = dispatches.find((candidate) => candidate.id === id)
       if (!item || item.status !== 'queued') return false
@@ -252,8 +271,8 @@ describe('replay failure recovery (review findings)', () => {
       insertMessage: vi.fn(),
       markDispatchCancelled: vi.fn(),
       claimQueuedDispatch,
-      reparkClaimedDispatch: vi.fn(() => true),
-      listOpenWorkspaceDispatches: vi.fn(() => [oldParked, newDuringStartup]),
+      reparkClaimedDispatch,
+      listOpenWorkspaceDispatches: () => dispatches,
       markDispatchReportedByWorker: vi.fn(),
       reportOutbox: {
         enqueue: vi.fn(),
@@ -269,7 +288,13 @@ describe('replay failure recovery (review findings)', () => {
 
     expect(oldParked.status).toBe('submitted')
     expect(newDuringStartup.status).toBe('queued')
-    expect(received).toEqual([{ id: oldParked.id, text: 'implement login', seen: 4 }])
+    expect(equalTimeQueued.status).toBe('submitted')
+    expect(equalTimeSubmitted.status).toBe('submitted')
+    expect(reparkClaimedDispatch).not.toHaveBeenCalled()
+    expect(received).toEqual([
+      { id: oldParked.id, text: 'implement login', seen: 4 },
+      { id: equalTimeQueued.id, text: 'implement login', seen: 0 },
+    ])
   })
 
   test('late replay write failure does not mutate dispatch state after runtime close begins', async () => {

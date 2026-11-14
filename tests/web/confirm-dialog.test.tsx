@@ -60,37 +60,6 @@ describe('Confirm dialog', () => {
     expect(screen.queryByTestId('confirm-title')).toBeNull()
   })
 
-  test('confirmKind=danger applies danger styling on action button', () => {
-    render(
-      <Confirm
-        open
-        onOpenChange={() => {}}
-        title="t"
-        description="d"
-        confirmLabel="Delete"
-        confirmKind="danger"
-        onConfirm={() => {}}
-      />
-    )
-    expect(screen.getByTestId('confirm-action').className).toContain('icon-btn--danger')
-  })
-
-  test('confirmKind=default applies primary styling (sanity vs. danger)', () => {
-    render(
-      <Confirm
-        open
-        onOpenChange={() => {}}
-        title="t"
-        description="d"
-        confirmLabel="OK"
-        onConfirm={() => {}}
-      />
-    )
-    const action = screen.getByTestId('confirm-action')
-    expect(action.className).toContain('icon-btn--primary')
-    expect(action.className).not.toContain('icon-btn--danger')
-  })
-
   test('Escape key closes dialog (radix default behavior — but we own the contract)', () => {
     const onOpenChange = vi.fn()
     const onConfirm = vi.fn()

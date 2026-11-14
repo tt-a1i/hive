@@ -34,6 +34,7 @@ beforeEach(async () => {
   process.env.HIVE_FS_BROWSE_ROOT = sandboxRoot
 
   const server = await startTestServer({
+    offlineVersionCheck: true,
     pickFolderPath: join(sandboxRoot, 'placeholder'),
   })
   cleanupServer = server.close
@@ -94,6 +95,9 @@ describe('app shell with real server', () => {
     // and the central Welcome CTA.
     expect(screen.queryByTestId('topbar-settings')).toBeNull()
     expect(screen.queryByTestId('topbar-blueprint')).toBeNull()
+    expect(screen.queryByTestId('mobile-shell')).toBeNull()
+    expect(screen.queryByTestId('mobile-bottom-nav')).toBeNull()
+    expect(screen.getByTestId('workspace-sidebar-title')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByText('No Workspaces')).toBeInTheDocument()
@@ -191,6 +195,27 @@ describe('app shell with real server', () => {
     // WelcomePane never renders in this state — the user shouldn't see a
     // disabled "Add Workspace" button when the daemon is plainly missing.
     expect(screen.queryByTestId('welcome-pane-add')).toBeNull()
+  })
+
+  test('wide layout shows the desktop shell for an active workspace', async () => {
+    await nativeFetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        name: 'Alpha',
+        path: join(sandboxRoot, 'placeholder'),
+        autostart_orchestrator: false,
+      }),
+    })
+    render(<App />)
+    expect(await screen.findByTestId('topbar-blueprint')).toBeInTheDocument()
+    expect(screen.getByTestId('workspace-sidebar-title')).toHaveTextContent('Workspaces')
+    expect(screen.getByRole('separator', { name: 'Resize Workspace sidebar' })).toHaveAttribute(
+      'aria-valuenow'
+    )
+    expect(screen.queryByTestId('mobile-shell')).toBeNull()
+    expect(screen.queryByTestId('mobile-bottom-nav')).toBeNull()
+    expect(document.querySelector('[data-mobile-shell]')).toBeNull()
   })
 
   test('workspace sidebar can be resized from its right edge', async () => {
