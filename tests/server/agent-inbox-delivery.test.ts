@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import { buildOrchestratorStatusPayload } from '../../src/server/agent-stdin-dispatcher.js'
+import Database from '../../src/server/sqlite.js'
 import { removeTestPath } from '../helpers/fs-cleanup.js'
 import { expandInboxReferences } from '../helpers/inbox.js'
 import { startTestServer } from '../helpers/test-server.js'
@@ -11,6 +13,74 @@ const references = (text: string) => [
     /\[hive-inbox [a-f0-9-]+[^\]\r\n]*\] Read ("(?:[^"\\]|\\.)*") for the complete Hive system message\./g
   ),
 ]
+
+test('short system envelopes with control characters are file-backed without altering their content', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'hive-inbox-controls-'))
+  const project = join(root, 'project')
+  mkdirSync(project)
+  const server = await startTestServer({ dataDir: join(root, 'data') })
+  try {
+    const workspace = server.store.createWorkspace(project, 'Controls')
+    const orchestrator = `${workspace.id}:orchestrator`
+    const worker = server.store.addWorker(workspace.id, { name: 'Alice', role: 'coder' })
+    const received = join(root, 'received.txt')
+    const script = join(root, 'receive.cjs')
+    writeFileSync(received, '')
+    writeFileSync(
+      script,
+      "const fs=require('node:fs');process.stdin.setRawMode(true);process.stdin.on('data',data=>fs.appendFileSync(process.argv[2],data));process.stdout.write('CONTROLS_RECEIVER_READY')"
+    )
+    for (const agent of [orchestrator, worker.id]) {
+      server.store.configureAgentLaunch(workspace.id, agent, {
+        command: process.execPath,
+        args: [script, received],
+      })
+      await server.store.startAgent(workspace.id, agent, { hivePort: new URL(server.baseUrl).port })
+      await expect
+        .poll(() => server.store.getActiveRunByAgentId(workspace.id, agent)?.output)
+        .toContain('CONTROLS_RECEIVER_READY')
+    }
+    const controls = ['\u0002', '\u0085', '\u2028', '\u2029']
+    const text = `Marker ${controls.join(' preserved ')} end`
+    const payload = buildOrchestratorStatusPayload(worker.name, text, [])
+    expect(payload.length).toBeLessThanOrEqual(400)
+    expect(payload).not.toMatch(/[\r\n]/)
+    const response = await fetch(`${server.baseUrl}/api/team/status`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        project_id: workspace.id,
+        from_agent_id: worker.id,
+        token: server.store.peekAgentToken(worker.id),
+        result: text,
+      }),
+    })
+    expect(response.status).toBe(202)
+    const db = new Database(join(root, 'data', 'runtime.sqlite'), { readOnly: true })
+    try {
+      expect(
+        db
+          .prepare(
+            'SELECT text FROM messages WHERE workspace_id = ? AND worker_id = ? AND type = ?'
+          )
+          .all(workspace.id, worker.id, 'status')
+      ).toEqual([{ text }])
+    } finally {
+      db.close()
+    }
+    await expect.poll(() => readFileSync(received, 'utf8')).toMatch(/\r$/)
+    const raw = readFileSync(received, 'utf8')
+    const refs = references(raw)
+    expect(refs).toHaveLength(1)
+    for (const control of controls) expect(raw).not.toContain(control)
+    const file = JSON.parse(refs[0]?.[1] ?? 'null') as string
+    expect(readFileSync(file, 'utf8')).toBe(payload)
+    expect(expandInboxReferences(raw)).toBe(`${payload}\r`)
+  } finally {
+    await server.close()
+    removeTestPath(root)
+  }
+}, 20000)
 
 test('long tasks use private inbox files and concurrent reports share one durable wakeup with actual byte metrics', async () => {
   const root = mkdtempSync(join(tmpdir(), 'hive-inbox-real-'))

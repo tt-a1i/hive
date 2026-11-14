@@ -35,7 +35,7 @@ export const createAgentInbox = (dataDir?: string) => {
         metadata.dispatchIds?.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))
       )
         throw new Error('Invalid inbox metadata')
-      if (payload.length <= 400 && !/[\r\n]/.test(payload)) return payload
+      if (payload.length <= 400 && !/[\p{Cc}\u2028\u2029]/u.test(payload)) return payload
       const directory = workspacePath(workspaceId)
       const id = randomUUID()
       const path = join(directory, `${id}.md`)

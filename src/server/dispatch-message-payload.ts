@@ -24,8 +24,11 @@ export const buildDispatchMessagePayload = (
     const seenSuffix = needsSeenSeq
       ? ` | required_seen_seq: ${requiredSeenSeq} (read \`team messages --dispatch ${text(message.dispatchId)}\`, use \`--seen ${requiredSeenSeq}\`)`
       : ''
+    const sourceSuffix = message.sourceDispatchId
+      ? ` | source_dispatch_id: ${text(message.sourceDispatchId)}`
+      : ''
     const replyToAttr = message.replyTo ? ` reply_to:${text(message.replyTo)}` : ''
-    const inline = `<hive-message kind="${attribute(message.kind)}" message="${attribute(message.id)}" dispatch="${attribute(message.dispatchId)}">from:${text(message.fromAgentId)} #${message.sequence}${replyToAttr} | ${text(message.text)}${replySuffix}${seenSuffix}</hive-message>`
+    const inline = `<hive-message kind="${attribute(message.kind)}" message="${attribute(message.id)}" dispatch="${attribute(message.dispatchId)}">from:${text(message.fromAgentId)} #${message.sequence}${sourceSuffix}${replyToAttr} | ${text(message.text)}${replySuffix}${seenSuffix}</hive-message>`
     if (inline.length <= INLINE_MESSAGE_MAX_CHARS) return inline
   }
 

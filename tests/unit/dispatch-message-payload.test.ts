@@ -32,6 +32,25 @@ describe('buildDispatchMessagePayload', () => {
     expect(payload).toContain('team messages --dispatch d1')
   })
 
+  test('keeps the sender responsibility in a short peer envelope', () => {
+    const payload = buildDispatchMessagePayload(
+      message({ fromAgentId: 'alice', recipientAgentId: 'bob', sourceDispatchId: 'alice-task-2' }),
+      0
+    )
+    expect(payload).not.toMatch(/[\r\n]/)
+    expect(payload).toContain('dispatch="d1"')
+    expect(payload).toContain('source_dispatch_id: alice-task-2')
+    expect(payload.length).toBeLessThanOrEqual(400)
+  })
+
+  test('retains a source dispatch that makes the complete envelope exceed the inline limit', () => {
+    const source = 'a'.repeat(300)
+    const payload = buildDispatchMessagePayload(message({ sourceDispatchId: source }), 0)
+    expect(payload).toContain('\n')
+    expect(payload).toContain(`source_dispatch_id: ${source}`)
+    expect(payload).toContain('please also cover logout')
+  })
+
   test('omits required_seen_seq when 0 or when the recipient is the orchestrator', () => {
     const toOrch = buildDispatchMessagePayload(
       message({ kind: 'question', fromAgentId: 'worker-1', recipientAgentId: 'ws:orchestrator' }),
