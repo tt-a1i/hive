@@ -10,7 +10,7 @@ import {
   WORKSPACE_UPLOAD_JSON_BODY_LIMIT_BYTES,
   WORKSPACE_UPLOAD_MAX_BYTES,
 } from './upload-limits.js'
-import type { WorkspaceUploadRecord } from './workspace-upload-store.js'
+import { truncateUploadFilename, type WorkspaceUploadRecord } from './workspace-upload-store.js'
 
 interface WorkspaceUploadBody {
   data?: unknown
@@ -68,7 +68,7 @@ const decodeUploadData = (value: unknown): Buffer => {
 const readFilename = (value: unknown): string => {
   if (value === undefined || value === null) return 'upload'
   if (typeof value !== 'string') throw new BadRequestError('filename must be a string')
-  return value.slice(0, MAX_FILENAME_INPUT_LENGTH)
+  return truncateUploadFilename(value, MAX_FILENAME_INPUT_LENGTH)
 }
 
 const readMimeType = (value: unknown): string | null => {
