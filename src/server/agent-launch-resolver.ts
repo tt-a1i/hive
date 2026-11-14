@@ -42,7 +42,7 @@ export const resolveStartupCommandLaunchConfig = (
 ): AgentLaunchConfigInput | undefined => {
   const trimmedStartupCommand = startupCommand.trim()
   if (!trimmedStartupCommand) return undefined
-  const parsed = createStartupCommandLaunch(trimmedStartupCommand)
+  const parsed = createStartupCommandLaunch(startupCommand)
   const preset = findPresetForStartupCommand(settings, trimmedStartupCommand, commandPresetId)
   return {
     command: parsed.command,

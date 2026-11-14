@@ -24,7 +24,7 @@ export const createStartupCommandLaunch = (
   env: NodeJS.ProcessEnv = process.env,
   platform = process.platform
 ) => {
-  const command = startupCommand.trim()
+  const command = startupCommand
   if (platform === 'win32') {
     return {
       args: ['/d', '/s', '/c', command],
