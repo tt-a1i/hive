@@ -18,6 +18,24 @@ export interface ChangelogEntry {
 // Newest first.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '3.0.0',
+    date: '2026-11-14',
+    en: [
+      'Switch an existing Orchestrator or member to another CLI while preserving open work and handing over current task context.',
+      'Ask blocking questions with team ask, recover saved questions after timeouts, and start configured stopped members on demand.',
+      'Short messages can arrive inline; long, control-bearing or combined reports use private files. Idle native session resumes stay quiet.',
+      'Codex App external control, MCP servers, Team Memory and Dream have been removed. Codex CLI and team recall remain available.',
+      'Back up your Hive data before upgrading: migration deletes retired controller and memory tables. Terminal reliability and local request validation have also improved.',
+    ],
+    zh: [
+      '已有主控和成员可以切换到其他 CLI，保留未完成责任，并把当前任务上下文交给新进程。',
+      'team ask 可等待答复，超时后可续查已保存的问题；已配置但停止的成员可按需启动。',
+      '短消息可直接送达，长消息、含控制字符的消息或合并汇报可使用私有文件；空闲原生会话恢复保持安静。',
+      '已移除 Codex App 外部主控、MCP 服务、Team Memory 和 Dream，保留 Codex CLI 与 team recall 历史检索。',
+      '升级前请备份 Hive 数据：迁移会删除旧主控和记忆表。本版还改善了终端稳定性和本机请求校验。',
+    ],
+  },
+  {
     version: '2.2.1',
     date: '2026-09-08',
     en: [

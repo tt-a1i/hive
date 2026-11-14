@@ -23,9 +23,9 @@ import { WhatsNewDialog } from '../../web/src/whats-new/WhatsNewDialog.js'
 import { startTestServer } from '../helpers/test-server.js'
 
 const KEY = 'hive.last-seen-version'
-const LEGACY_2X_VERSIONS = CHANGELOG.filter((entry) => entry.version.startsWith('2.')).map(
-  (entry) => entry.version
-)
+const POST_LEGACY_VERSIONS = CHANGELOG.filter(
+  (entry) => Number(entry.version.split('.')[0]) >= 2
+).map((entry) => entry.version)
 
 afterEach(() => cleanup())
 
@@ -81,7 +81,7 @@ test('fresh install seeds the version silently and does not show', () => {
   expect(window.localStorage.getItem(KEY)).toBe(APP_VERSION)
 })
 
-test('existing 1.7 users with workspaces but no last-seen key still see cumulative 2.x notes', () => {
+test('existing 1.7 users with workspaces but no last-seen key still see cumulative notes since 1.7', () => {
   window.localStorage.clear()
 
   const { result } = renderHook(() =>
@@ -89,7 +89,7 @@ test('existing 1.7 users with workspaces but no last-seen key still see cumulati
   )
 
   expect(result.current.open).toBe(true)
-  expect(result.current.entries.map((entry) => entry.version)).toEqual(LEGACY_2X_VERSIONS)
+  expect(result.current.entries.map((entry) => entry.version)).toEqual(POST_LEGACY_VERSIONS)
   expect(window.localStorage.getItem(KEY)).toBeNull()
 })
 
@@ -107,7 +107,7 @@ test('workspace bootstrap pending does not seed last-seen before legacy detectio
   rerender({ hasExistingWorkspace: true })
 
   expect(result.current.open).toBe(true)
-  expect(result.current.entries.map((entry) => entry.version)).toEqual(LEGACY_2X_VERSIONS)
+  expect(result.current.entries.map((entry) => entry.version)).toEqual(POST_LEGACY_VERSIONS)
   expect(window.localStorage.getItem(KEY)).toBeNull()
 })
 
@@ -201,7 +201,7 @@ test('App treats existing workspaces without last-seen as a 1.7 upgrade and show
 
   const dialog = await screen.findByRole('dialog', { name: /what’s new|what's new/i })
   expect(dialog).toBeInTheDocument()
-  for (const version of LEGACY_2X_VERSIONS) {
+  for (const version of POST_LEGACY_VERSIONS) {
     expect(
       screen.getByText(new RegExp(`^version ${version.replaceAll('.', '\\.')}$`, 'i'))
     ).toBeInTheDocument()

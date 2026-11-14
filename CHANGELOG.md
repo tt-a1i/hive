@@ -2,6 +2,40 @@
 
 All notable user-facing changes will be documented in this file.
 
+## 3.0.0 - 2026-11-14
+
+A smaller desktop team workbench with CLI switching and quieter collaboration.
+
+### Breaking changes
+
+- Remove Codex App external control, Hive MCP servers and Supervisor goal commands.
+  Run the Orchestrator as a CLI inside Hive; Codex CLI remains supported.
+- Remove Team Memory, Dream, their commands and UI. Keep `team recall` for message
+  and report history. Schema v46 deletes retired controller and memory tables;
+  v47 refreshes unchanged built-in Orchestrator templates and preserves customized text.
+- Stop Hive and its agents gracefully, then back up the entire Hive data directory
+  before the first launch after upgrading. Restoring removed data requires the
+  complete pre-upgrade backup and the matching older executable. See
+  [upgrade steps](docs/release.md#upgrading-to-300).
+
+### Added and improved
+
+- Switch an existing Orchestrator or member to another CLI from the desktop UI.
+  Preserve open responsibilities and temporary members, clear the previous engine's
+  session binding, and hand current ledger context to the replacement.
+- Ask blocking questions with `team ask`, receive the answer as text, and resume saved
+  questions after a timeout or interruption. Start configured stopped members on demand.
+- Send short messages inline, keep long, multiline or control-bearing messages in
+  private inbox files, and combine nearby reports. Reduce repeated role instructions
+  and omit unnecessary zero-watermark reminders.
+- Keep idle native session resumes silent. When work remains, synchronize current
+  responsibilities, pending questions, role instructions, task summaries and members.
+- Improve terminal paste submission after large output, stopped-process cleanup,
+  workspace switching, acknowledgement flow control and hidden WebGL resource use.
+- Strengthen local HTTP/WebSocket origin checks, JSON request validation and private
+  data-file permissions. Remove the gateway's production test-header override.
+- Include Kimi Code CLI support and Windows terminal scrolling fixes merged since 2.2.1.
+
 ## 2.2.1 - 2026-09-08
 
 Task-focused collaboration guidance and reliable role instructions.
