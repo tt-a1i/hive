@@ -16,6 +16,7 @@ describe('CliAgentAvatar — known preset renders the brand logo', () => {
     ['codex', '/cli-icons/codex.png'],
     ['gemini', '/cli-icons/gemini.png'],
     ['hermes', '/cli-icons/hermes.png'],
+    ['kimi', '/cli-icons/kimi.png'],
     ['opencode', '/cli-icons/opencode.svg'],
   ])('preset %s → %s', (presetId, expectedSrc) => {
     render(<CliAgentAvatar commandPresetId={presetId} workerRole="coder" />)

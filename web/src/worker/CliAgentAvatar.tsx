@@ -46,6 +46,7 @@ const LOGO_REGISTRY: Record<string, LogoSpec> = {
   gemini: { src: '/cli-icons/gemini.png', surface: '#f4f4f4' },
   grok: { src: '/cli-icons/grok.ico', surface: '#ffffff' },
   hermes: { src: '/cli-icons/hermes.png', surface: '#ffffff' },
+  kimi: { src: '/cli-icons/kimi.png', surface: '#f4f8ff' },
   opencode: { src: '/cli-icons/opencode.svg', surface: '#f4f4f4' },
   pi: { src: '/cli-icons/pi.svg', surface: '#1a1a1a' },
   qwen: { src: '/cli-icons/qwen.png', surface: '#f4f8ff' },

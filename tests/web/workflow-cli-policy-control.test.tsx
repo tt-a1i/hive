@@ -23,12 +23,12 @@ test('loads the policy, lets the user pick default + allowlist, and saves the se
   getPolicy.mockResolvedValue({
     default: 'claude',
     allowed: ['claude', 'codex', 'opencode', 'gemini', 'hermes'],
-    supported: ['claude', 'codex', 'opencode', 'gemini', 'hermes'],
+    supported: ['claude', 'codex', 'opencode', 'gemini', 'hermes', 'kimi'],
   })
   savePolicy.mockResolvedValue({
     default: 'codex',
     allowed: ['codex'],
-    supported: ['claude', 'codex', 'opencode', 'gemini', 'hermes'],
+    supported: ['claude', 'codex', 'opencode', 'gemini', 'hermes', 'kimi'],
   })
 
   render(<WorkflowCliPolicyControl />)
@@ -38,6 +38,9 @@ test('loads the policy, lets the user pick default + allowlist, and saves the se
   expect(screen.getByRole('checkbox', { name: 'Claude Code' })).toBeChecked()
   expect(screen.getByRole('checkbox', { name: 'Codex' })).toBeChecked()
   expect(screen.getByRole('checkbox', { name: 'Hermes' })).toBeChecked()
+  expect(
+    screen.getByRole('radio', { name: 'Kimi Code' }).closest('label')?.querySelector('img')
+  ).toHaveAttribute('src', '/cli-icons/kimi.png')
 
   // Make Codex the default, then drop Claude Code from the allowlist.
   fireEvent.click(screen.getByRole('radio', { name: 'Codex' }))

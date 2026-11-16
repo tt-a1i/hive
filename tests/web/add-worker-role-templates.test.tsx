@@ -109,6 +109,7 @@ describe('Agent CLI picker', () => {
       { id: 'codex', displayName: 'Codex', command: 'codex', args: [], available: true },
       { id: 'opencode', displayName: 'OpenCode', command: 'opencode', args: [], available: true },
       { id: 'gemini', displayName: 'Gemini', command: 'gemini', args: [], available: true },
+      { id: 'kimi', displayName: 'Kimi Code', command: 'kimi', args: ['--auto'], available: true },
     ]
 
     render(
@@ -124,6 +125,11 @@ describe('Agent CLI picker', () => {
       const logo = within(card).getByTestId('cli-agent-logo')
       expect(logo.getAttribute('data-command-preset')).toBe(preset.id)
     }
+    expect(
+      within(screen.getByTestId('agent-radio-kimi'))
+        .getByTestId('cli-agent-logo')
+        .querySelector('img')
+    ).toHaveAttribute('src', '/cli-icons/kimi.png')
     expect(
       within(screen.getByTestId('agent-radio-generic')).getByTestId(
         'agent-radio-generic-generic-icon'

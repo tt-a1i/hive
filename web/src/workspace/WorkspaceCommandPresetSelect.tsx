@@ -10,6 +10,7 @@ const CLI_ICON_MAP: Record<string, string> = {
   opencode: '/cli-icons/opencode.svg',
   gemini: '/cli-icons/gemini.png',
   hermes: '/cli-icons/hermes.png',
+  kimi: '/cli-icons/kimi.png',
   qwen: '/cli-icons/qwen.png',
   pi: '/cli-icons/pi.svg',
   agy: '/cli-icons/agy.png',
