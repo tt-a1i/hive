@@ -65,6 +65,7 @@ const json = (body: unknown): Response =>
 const commandPresets = [
   { args: [], available: true, command: 'claude', display_name: 'Claude Code (CC)', id: 'claude' },
   { args: [], available: true, command: 'codex', display_name: 'Codex', id: 'codex' },
+  { args: ['--auto'], available: true, command: 'kimi', display_name: 'Kimi Code', id: 'kimi' },
 ]
 
 type PickHandler = () => PickFolderResponse
@@ -278,6 +279,9 @@ describe('AddWorkspaceDialog — native folder picker default flow', () => {
 
     const confirm = await screen.findByTestId('confirm-workspace-dialog')
     fireEvent.click(within(confirm).getByTestId('workspace-command-preset'))
+    expect(
+      within(confirm).getByTestId('workspace-command-preset-option-kimi').querySelector('img')
+    ).toHaveAttribute('src', '/cli-icons/kimi.png')
     fireEvent.click(within(confirm).getByTestId('workspace-command-preset-option-codex'))
     fireEvent.click(within(confirm).getByTestId('confirm-workspace-create'))
 
