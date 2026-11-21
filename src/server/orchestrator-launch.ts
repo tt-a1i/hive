@@ -47,9 +47,8 @@ export const resolveOrchestratorLaunchConfig = (
   commandPresetId: string | null = null,
   startupCommand: string | null = null
 ): AgentLaunchConfigInput | undefined => {
-  const trimmedStartupCommand = startupCommand?.trim()
-  if (trimmedStartupCommand) {
-    return resolveStartupCommandLaunchConfig(settings, trimmedStartupCommand, commandPresetId)
+  if (startupCommand?.trim()) {
+    return resolveStartupCommandLaunchConfig(settings, startupCommand, commandPresetId)
   }
   if (commandPresetId) {
     return resolveCommandPresetLaunchConfig(settings, commandPresetId)
